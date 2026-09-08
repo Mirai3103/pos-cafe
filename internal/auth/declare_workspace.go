@@ -18,6 +18,20 @@ func NewDeclareWorkspaceHandler(queries sqlc.Querier) *DeclareWorkspaceHandler {
 	return &DeclareWorkspaceHandler{queries: queries}
 }
 
+// HandleHTTP godoc
+//
+//	@Summary		Chọn khu vực làm việc (Workspace)
+//	@Description	Khai báo khu vực làm việc (cashier, manager, preparation) cho phiên làm việc hiện tại
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		DeclareWorkspaceRequest	true	"Khu vực làm việc"
+//	@Success		200		{object}	response.APIResponse{data=map[string]string}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/auth/workspace [post]
 func (h *DeclareWorkspaceHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {

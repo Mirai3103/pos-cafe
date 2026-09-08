@@ -91,18 +91,19 @@ func (h *StaffCreateHandler) Handle(ctx context.Context, actor *StaffClaims, req
 }
 
 // HandleHTTP godoc
-// @Summary Tạo tài khoản nhân viên mới
-// @Description Quản lý tạo nhân viên mới với mã đăng nhập, mã PIN và danh sách vai trò
-// @Tags Staff
-// @Accept json
-// @Produce json
-// @Param request body CreateStaffRequest true "Thông tin nhân viên mới"
-// @Success 201 {object} response.APIResponse{data=StaffDetailResponse}
-// @Failure 400 {object} response.APIResponse
-// @Failure 403 {object} response.APIResponse
-// @Failure 409 {object} response.APIResponse
-// @Failure 500 {object} response.APIResponse
-// @Router /staff [post]
+//
+//	@Summary		Tạo tài khoản nhân viên mới
+//	@Description	Quản lý tạo nhân viên mới với mã đăng nhập, mã PIN và danh sách vai trò
+//	@Tags			Staff
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		CreateStaffRequest	true	"Thông tin nhân viên mới"
+//	@Success		201		{object}	response.APIResponse{data=StaffDetailResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/staff [post]
 func (h *StaffCreateHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {

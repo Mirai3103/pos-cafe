@@ -90,17 +90,18 @@ func (h *BootstrapManagerHandler) Handle(ctx context.Context, req BootstrapManag
 }
 
 // HandleHTTP godoc
-// @Summary Khởi tạo tài khoản Quản lý đầu tiên (Bootstrap)
-// @Description Thiết lập tài khoản quản lý đầu tiên cho hệ thống POS. Chỉ thực hiện được khi chưa có quản lý nào.
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param request body BootstrapManagerRequest true "Bootstrap manager credentials"
-// @Success 201 {object} response.APIResponse{data=StaffProfileResponse}
-// @Failure 400 {object} response.APIResponse
-// @Failure 409 {object} response.APIResponse
-// @Failure 500 {object} response.APIResponse
-// @Router /auth/bootstrap [post]
+//
+//	@Summary		Khởi tạo tài khoản Quản lý đầu tiên (Bootstrap)
+//	@Description	Thiết lập tài khoản quản lý đầu tiên cho hệ thống POS. Chỉ thực hiện được khi chưa có quản lý nào.
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		BootstrapManagerRequest	true	"Bootstrap manager credentials"
+//	@Success		201		{object}	response.APIResponse{data=StaffProfileResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/auth/bootstrap [post]
 func (h *BootstrapManagerHandler) HandleHTTP(c echo.Context) error {
 	var req BootstrapManagerRequest
 	if err := c.Bind(&req); err != nil {

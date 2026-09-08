@@ -75,6 +75,19 @@ func (h *UnlockSessionHandler) Handle(ctx context.Context, token string, pin str
 	}, nil
 }
 
+// HandleHTTP godoc
+//
+//	@Summary		Mở khóa phiên làm việc
+//	@Description	Mở khóa phiên làm việc đang bị khóa (locked) bằng mã PIN của nhân viên
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		UnlockRequest	true	"Mã PIN mở khóa"
+//	@Success		200		{object}	response.APIResponse{data=SignInResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/auth/unlock [post]
 func (h *UnlockSessionHandler) HandleHTTP(c echo.Context) error {
 	token := extractToken(c)
 	var req UnlockRequest

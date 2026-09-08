@@ -87,6 +87,15 @@ func (h *GetSessionHandler) Handle(ctx context.Context, token string) (*SessionS
 	}, nil
 }
 
+// HandleHTTP godoc
+//
+//	@Summary		Lấy trạng thái phiên làm việc hiện tại
+//	@Description	Kiểm tra và trả về trạng thái phiên làm việc hiện tại (authenticated, locked, signed_out) qua Bearer token hoặc cookie
+//	@Tags			Auth
+//	@Produce		json
+//	@Success		200	{object}	response.APIResponse{data=SessionStateResponse}
+//	@Failure		500	{object}	response.APIResponse
+//	@Router			/auth/session [get]
 func (h *GetSessionHandler) HandleHTTP(c echo.Context) error {
 	token := extractToken(c)
 	res, err := h.Handle(c.Request().Context(), token)

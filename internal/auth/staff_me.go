@@ -14,13 +14,14 @@ func NewStaffMeHandler() *StaffMeHandler {
 }
 
 // HandleHTTP godoc
-// @Summary Lấy thông tin tài khoản hiện tại
-// @Description Trả về thông tin hồ sơ và quyền hạn của nhân viên đang đăng nhập
-// @Tags Staff
-// @Produce json
-// @Success 200 {object} response.APIResponse{data=StaffProfileResponse}
-// @Failure 403 {object} response.APIResponse
-// @Router /staff/me [get]
+//
+//	@Summary		Lấy thông tin tài khoản hiện tại
+//	@Description	Trả về thông tin hồ sơ và quyền hạn của nhân viên đang đăng nhập
+//	@Tags			Staff
+//	@Produce		json
+//	@Success		200	{object}	response.APIResponse{data=StaffProfileResponse}
+//	@Failure		403	{object}	response.APIResponse
+//	@Router			/staff/me [get]
 func (h *StaffMeHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {

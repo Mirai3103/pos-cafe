@@ -16,6 +16,16 @@ func NewLockSessionHandler(queries sqlc.Querier) *LockSessionHandler {
 	return &LockSessionHandler{queries: queries}
 }
 
+// HandleHTTP godoc
+//
+//	@Summary		Khóa phiên làm việc
+//	@Description	Chuyển trạng thái phiên làm việc hiện tại sang locked
+//	@Tags			Auth
+//	@Produce		json
+//	@Success		200	{object}	response.APIResponse{data=map[string]string}
+//	@Failure		401	{object}	response.APIResponse
+//	@Failure		500	{object}	response.APIResponse
+//	@Router			/auth/lock [post]
 func (h *LockSessionHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {

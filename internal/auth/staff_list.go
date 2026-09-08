@@ -54,14 +54,15 @@ func (h *StaffListHandler) Handle(ctx context.Context) ([]StaffDetailResponse, e
 }
 
 // HandleHTTP godoc
-// @Summary Danh sách tất cả nhân viên
-// @Description Trả về danh sách tất cả nhân viên kèm vai trò
-// @Tags Staff
-// @Produce json
-// @Success 200 {object} response.APIResponse{data=[]StaffDetailResponse}
-// @Failure 403 {object} response.APIResponse
-// @Failure 500 {object} response.APIResponse
-// @Router /staff [get]
+//
+//	@Summary		Danh sách tất cả nhân viên
+//	@Description	Trả về danh sách tất cả nhân viên kèm vai trò
+//	@Tags			Staff
+//	@Produce		json
+//	@Success		200	{object}	response.APIResponse{data=[]StaffDetailResponse}
+//	@Failure		403	{object}	response.APIResponse
+//	@Failure		500	{object}	response.APIResponse
+//	@Router			/staff [get]
 func (h *StaffListHandler) HandleHTTP(c echo.Context) error {
 	res, err := h.Handle(c.Request().Context())
 	if err != nil {

@@ -100,16 +100,18 @@ func (h *SignInHandler) Handle(ctx context.Context, req SignInRequest) (*SignInR
 }
 
 // HandleHTTP godoc
-// @Summary Đăng nhập bằng mã PIN
-// @Description Xác thực nhân viên bằng login_code và pin 4-8 số
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param request body SignInRequest true "Sign in credentials"
-// @Success 200 {object} response.APIResponse{data=SignInResponse}
-// @Failure 400 {object} response.APIResponse
-// @Failure 401 {object} response.APIResponse
-// @Router /auth/sign-in [post]
+//
+//	@Summary		Đăng nhập bằng mã PIN
+//	@Description	Xác thực nhân viên bằng login_code và pin 4-8 số
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		SignInRequest	true	"Sign in credentials"
+//	@Success		200		{object}	response.APIResponse{data=SignInResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/auth/sign-in [post]
 func (h *SignInHandler) HandleHTTP(c echo.Context) error {
 	var req SignInRequest
 	if err := c.Bind(&req); err != nil {
