@@ -97,9 +97,11 @@ func (h *StaffCreateHandler) Handle(ctx context.Context, actor *StaffClaims, req
 //	@Tags			Staff
 //	@Accept			json
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Param			request	body		CreateStaffRequest	true	"Thông tin nhân viên mới"
 //	@Success		201		{object}	response.APIResponse{data=StaffDetailResponse}
 //	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
 //	@Failure		403		{object}	response.APIResponse
 //	@Failure		409		{object}	response.APIResponse
 //	@Failure		500		{object}	response.APIResponse

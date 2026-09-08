@@ -25,6 +25,7 @@ func NewDeclareWorkspaceHandler(queries sqlc.Querier) *DeclareWorkspaceHandler {
 //	@Tags			Auth
 //	@Accept			json
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Param			request	body		DeclareWorkspaceRequest	true	"Khu vực làm việc"
 //	@Success		200		{object}	response.APIResponse{data=map[string]string}
 //	@Failure		400		{object}	response.APIResponse

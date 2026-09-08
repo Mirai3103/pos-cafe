@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -63,10 +64,12 @@ func (h *GetSessionHandler) Handle(ctx context.Context, token string) (*SessionS
 	// Inactivity Check
 	timeout := GetInactivityTimeout(workspace)
 	if sess.SessionState == SessionStateActive && time.Now().UTC().Sub(sess.LastHumanActivityAt) >= timeout {
-		_ = h.queries.UpdateSessionState(ctx, sqlc.UpdateSessionStateParams{
+		if err := h.queries.UpdateSessionState(ctx, sqlc.UpdateSessionStateParams{
 			ID:    sess.SessionID,
 			State: SessionStateLocked,
-		})
+		}); err != nil {
+			slog.Error("failed to update session state to locked", "session_id", sess.SessionID, "error", err)
+		}
 		sess.SessionState = SessionStateLocked
 	}
 

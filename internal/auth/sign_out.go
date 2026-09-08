@@ -20,6 +20,7 @@ func NewSignOutHandler(queries sqlc.Querier) *SignOutHandler {
 //	@Description	Thu hồi phiên làm việc hiện tại và xóa cookie phiên
 //	@Tags			Auth
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Success		200	{object}	response.APIResponse{data=map[string]string}
 //	@Failure		401	{object}	response.APIResponse
 //	@Failure		500	{object}	response.APIResponse

@@ -30,6 +30,10 @@ import (
 // @description Backend API for Cafe Point of Sale System built with Vertical Slice Architecture and Idiomatic Go.
 // @host localhost:8080
 // @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer " followed by token
 func main() {
 	// 1. Structured Logging Setup (Idiomatic slog)
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{

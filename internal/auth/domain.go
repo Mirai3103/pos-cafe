@@ -102,7 +102,7 @@ func VerifyPin(pinHash, attemptedPin string) bool {
 
 func DeriveCapabilities(roles []string) []string {
 	seen := make(map[string]struct{})
-	var result []string
+	result := make([]string, 0)
 	for _, role := range roles {
 		caps, ok := RoleCapabilities[role]
 		if !ok {

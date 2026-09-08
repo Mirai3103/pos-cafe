@@ -41,56 +41,35 @@ func (h *StaffResetPinHandler) Handle(ctx context.Context, actor *StaffClaims, t
 			return 0, nil, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
 		}
 
-		if h.db != nil {
-			tx, err := h.db.BeginTx(ctx, nil)
-			if err != nil {
-				return 0, nil, fmt.Errorf("begin tx: %w", err)
-			}
-			defer func() { _ = tx.Rollback() }()
+		tx, err := h.db.BeginTx(ctx, nil)
+		if err != nil {
+			return 0, nil, fmt.Errorf("begin tx: %w", err)
+		}
+		defer func() { _ = tx.Rollback() }()
 
-			qtx := h.queries.WithTx(tx)
+		qtx := h.queries.WithTx(tx)
 
-			target, err := qtx.GetStaffByID(ctx, targetID)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return 0, nil, fmt.Errorf("%w: không tìm thấy nhân viên", response.ErrNotFound)
-				}
-				return 0, nil, fmt.Errorf("get target: %w", err)
+		target, err := qtx.GetStaffByID(ctx, targetID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return 0, nil, fmt.Errorf("%w: không tìm thấy nhân viên", response.ErrNotFound)
 			}
+			return 0, nil, fmt.Errorf("get target: %w", err)
+		}
 
-			if err := qtx.UpdateStaffPin(ctx, sqlc.UpdateStaffPinParams{
-				ID:      target.ID,
-				PinHash: pinHash,
-			}); err != nil {
-				return 0, nil, fmt.Errorf("update pin: %w", err)
-			}
+		if err := qtx.UpdateStaffPin(ctx, sqlc.UpdateStaffPinParams{
+			ID:      target.ID,
+			PinHash: pinHash,
+		}); err != nil {
+			return 0, nil, fmt.Errorf("update pin: %w", err)
+		}
 
-			if err := qtx.RevokeAllStaffSessions(ctx, targetID); err != nil {
-				return 0, nil, fmt.Errorf("revoke sessions: %w", err)
-			}
+		if err := qtx.RevokeAllStaffSessions(ctx, targetID); err != nil {
+			return 0, nil, fmt.Errorf("revoke sessions: %w", err)
+		}
 
-			if err := tx.Commit(); err != nil {
-				return 0, nil, fmt.Errorf("commit tx: %w", err)
-			}
-		} else {
-			target, err := h.queries.GetStaffByID(ctx, targetID)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return 0, nil, fmt.Errorf("%w: không tìm thấy nhân viên", response.ErrNotFound)
-				}
-				return 0, nil, fmt.Errorf("get target: %w", err)
-			}
-
-			if err := h.queries.UpdateStaffPin(ctx, sqlc.UpdateStaffPinParams{
-				ID:      target.ID,
-				PinHash: pinHash,
-			}); err != nil {
-				return 0, nil, fmt.Errorf("update pin: %w", err)
-			}
-
-			if err := h.queries.RevokeAllStaffSessions(ctx, targetID); err != nil {
-				return 0, nil, fmt.Errorf("revoke sessions: %w", err)
-			}
+		if err := tx.Commit(); err != nil {
+			return 0, nil, fmt.Errorf("commit tx: %w", err)
 		}
 
 		return http.StatusOK, map[string]string{"message": "đổi mã PIN thành công"}, nil
@@ -104,10 +83,12 @@ func (h *StaffResetPinHandler) Handle(ctx context.Context, actor *StaffClaims, t
 //	@Tags			Staff
 //	@Accept			json
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Param			id		path		string					true	"Staff ID"
 //	@Param			request	body		ResetStaffPinRequest	true	"Mã PIN mới"
 //	@Success		200		{object}	response.APIResponse{data=map[string]string}
 //	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
 //	@Failure		403		{object}	response.APIResponse
 //	@Failure		404		{object}	response.APIResponse
 //	@Failure		500		{object}	response.APIResponse

@@ -19,7 +19,9 @@ func NewStaffMeHandler() *StaffMeHandler {
 //	@Description	Trả về thông tin hồ sơ và quyền hạn của nhân viên đang đăng nhập
 //	@Tags			Staff
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Success		200	{object}	response.APIResponse{data=StaffProfileResponse}
+//	@Failure		401	{object}	response.APIResponse
 //	@Failure		403	{object}	response.APIResponse
 //	@Router			/staff/me [get]
 func (h *StaffMeHandler) HandleHTTP(c echo.Context) error {

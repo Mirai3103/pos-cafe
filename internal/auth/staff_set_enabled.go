@@ -120,10 +120,12 @@ func (h *StaffSetEnabledHandler) Handle(ctx context.Context, actor *StaffClaims,
 //	@Tags			Staff
 //	@Accept			json
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Param			id		path		string					true	"Staff ID"
 //	@Param			request	body		SetStaffEnabledRequest	true	"Thông tin trạng thái"
 //	@Success		200		{object}	response.APIResponse{data=StaffDetailResponse}
 //	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
 //	@Failure		403		{object}	response.APIResponse
 //	@Failure		404		{object}	response.APIResponse
 //	@Failure		409		{object}	response.APIResponse
