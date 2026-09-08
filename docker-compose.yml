@@ -3,7 +3,7 @@ name: cafe-pos
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: cafe-pos-db
+    container_name: pos-cafe-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: cafe_pos
