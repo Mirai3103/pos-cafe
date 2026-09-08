@@ -22,6 +22,7 @@ func NewLockSessionHandler(queries sqlc.Querier) *LockSessionHandler {
 //	@Description	Chuyển trạng thái phiên làm việc hiện tại sang locked
 //	@Tags			Auth
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Success		200	{object}	response.APIResponse{data=map[string]string}
 //	@Failure		401	{object}	response.APIResponse
 //	@Failure		500	{object}	response.APIResponse

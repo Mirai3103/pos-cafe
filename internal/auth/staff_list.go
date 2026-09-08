@@ -59,7 +59,9 @@ func (h *StaffListHandler) Handle(ctx context.Context) ([]StaffDetailResponse, e
 //	@Description	Trả về danh sách tất cả nhân viên kèm vai trò
 //	@Tags			Staff
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Success		200	{object}	response.APIResponse{data=[]StaffDetailResponse}
+//	@Failure		401	{object}	response.APIResponse
 //	@Failure		403	{object}	response.APIResponse
 //	@Failure		500	{object}	response.APIResponse
 //	@Router			/staff [get]

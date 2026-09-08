@@ -311,6 +311,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Ghi nhận hoạt động người dùng
       tags:
       - Auth
@@ -404,6 +406,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Khóa phiên làm việc
       tags:
       - Auth
@@ -494,6 +498,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Đăng xuất phiên làm việc
       tags:
       - Auth
@@ -580,6 +586,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Chọn khu vực làm việc (Workspace)
       tags:
       - Auth
@@ -758,6 +766,10 @@ paths:
                     $ref: '#/definitions/auth.StaffDetailResponse'
                   type: array
               type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
         "403":
           description: Forbidden
           schema:
@@ -766,6 +778,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Danh sách tất cả nhân viên
       tags:
       - Staff
@@ -797,6 +811,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
         "403":
           description: Forbidden
           schema:
@@ -809,6 +827,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Tạo tài khoản nhân viên mới
       tags:
       - Staff
@@ -845,6 +865,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
         "403":
           description: Forbidden
           schema:
@@ -861,6 +885,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Bật hoặc vô hiệu hóa tài khoản nhân viên
       tags:
       - Staff
@@ -900,6 +926,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
         "403":
           description: Forbidden
           schema:
@@ -912,6 +942,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Đặt lại mã PIN nhân viên
       tags:
       - Staff
@@ -948,6 +980,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
         "403":
           description: Forbidden
           schema:
@@ -964,6 +1000,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Cập nhật danh sách vai trò nhân viên
       tags:
       - Staff
@@ -982,11 +1020,23 @@ paths:
                 data:
                   $ref: '#/definitions/auth.StaffProfileResponse'
               type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
         "403":
           description: Forbidden
           schema:
             $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Lấy thông tin tài khoản hiện tại
       tags:
       - Staff
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer " followed by token
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

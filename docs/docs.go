@@ -17,6 +17,11 @@ const docTemplate = `{
     "paths": {
         "/auth/activity": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Cập nhật thời điểm hoạt động gần nhất để gia hạn tự động khóa do không hoạt động (inactivity timeout)",
                 "produces": [
                     "application/json"
@@ -169,6 +174,11 @@ const docTemplate = `{
         },
         "/auth/lock": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Chuyển trạng thái phiên làm việc hiện tại sang locked",
                 "produces": [
                     "application/json"
@@ -318,6 +328,11 @@ const docTemplate = `{
         },
         "/auth/sign-out": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Thu hồi phiên làm việc hiện tại và xóa cookie phiên",
                 "produces": [
                     "application/json"
@@ -429,6 +444,11 @@ const docTemplate = `{
         },
         "/auth/workspace": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Khai báo khu vực làm việc (cashier, manager, preparation) cho phiên làm việc hiện tại",
                 "consumes": [
                     "application/json"
@@ -759,6 +779,11 @@ const docTemplate = `{
         },
         "/staff": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Trả về danh sách tất cả nhân viên kèm vai trò",
                 "produces": [
                     "application/json"
@@ -789,6 +814,12 @@ const docTemplate = `{
                             ]
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
@@ -804,6 +835,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Quản lý tạo nhân viên mới với mã đăng nhập, mã PIN và danh sách vai trò",
                 "consumes": [
                     "application/json"
@@ -851,6 +887,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.APIResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
@@ -874,6 +916,11 @@ const docTemplate = `{
         },
         "/staff/me": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Trả về thông tin hồ sơ và quyền hạn của nhân viên đang đăng nhập",
                 "produces": [
                     "application/json"
@@ -901,6 +948,12 @@ const docTemplate = `{
                             ]
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
@@ -912,6 +965,11 @@ const docTemplate = `{
         },
         "/staff/{id}/enabled": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Kích hoạt hoặc ngưng kích hoạt tài khoản nhân viên",
                 "consumes": [
                     "application/json"
@@ -966,6 +1024,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.APIResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
@@ -995,6 +1059,11 @@ const docTemplate = `{
         },
         "/staff/{id}/reset-pin": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Quản lý đặt lại mã PIN cho nhân viên và thu hồi các phiên đăng nhập hiện tại",
                 "consumes": [
                     "application/json"
@@ -1052,6 +1121,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.APIResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
@@ -1075,6 +1150,11 @@ const docTemplate = `{
         },
         "/staff/{id}/roles": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Thay thế toàn bộ vai trò của nhân viên bằng danh sách mới",
                 "consumes": [
                     "application/json"
@@ -1125,6 +1205,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -1554,6 +1640,14 @@ const docTemplate = `{
                     "type": "boolean"
                 }
             }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Type \"Bearer \" followed by token",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

@@ -36,6 +36,11 @@ CREATE INDEX IF NOT EXISTS idx_staff_access_sessions_lookup
     ON staff_access_sessions (token_hash) 
     WHERE revoked_at IS NULL;
 
+CREATE INDEX IF NOT EXISTS idx_staff_access_sessions_identity 
+    ON staff_access_sessions (staff_identity_id) 
+    WHERE revoked_at IS NULL;
+
+
 -- 4. Unified Idempotency Table (ADR-005)
 CREATE TABLE IF NOT EXISTS idempotency_keys (
     key UUID NOT NULL,

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -71,10 +72,12 @@ func (m *Middleware) RequireAuth(allowedRoles ...string) echo.MiddlewareFunc {
 			// Inactivity lock check
 			timeout := GetInactivityTimeout(workspace)
 			if sess.SessionState == SessionStateActive && time.Now().UTC().Sub(sess.LastHumanActivityAt) >= timeout {
-				_ = m.queries.UpdateSessionState(c.Request().Context(), sqlc.UpdateSessionStateParams{
+				if err := m.queries.UpdateSessionState(c.Request().Context(), sqlc.UpdateSessionStateParams{
 					ID:    sess.SessionID,
 					State: SessionStateLocked,
-				})
+				}); err != nil {
+					slog.Error("failed to update session state to locked", "session_id", sess.SessionID, "error", err)
+				}
 				sess.SessionState = SessionStateLocked
 			}
 

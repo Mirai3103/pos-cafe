@@ -23,6 +23,7 @@ func NewRecordActivityHandler(queries sqlc.Querier) *RecordActivityHandler {
 //	@Description	Cập nhật thời điểm hoạt động gần nhất để gia hạn tự động khóa do không hoạt động (inactivity timeout)
 //	@Tags			Auth
 //	@Produce		json
+//	@Security		BearerAuth
 //	@Success		200	{object}	response.APIResponse{data=map[string]bool}
 //	@Failure		401	{object}	response.APIResponse
 //	@Failure		500	{object}	response.APIResponse
