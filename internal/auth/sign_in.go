@@ -33,10 +33,10 @@ func clearSessionCookie(c echo.Context) {
 }
 
 type SignInHandler struct {
-	queries *sqlc.Queries
+	queries sqlc.Querier
 }
 
-func NewSignInHandler(queries *sqlc.Queries) *SignInHandler {
+func NewSignInHandler(queries sqlc.Querier) *SignInHandler {
 	return &SignInHandler{queries: queries}
 }
 
@@ -45,13 +45,13 @@ func (h *SignInHandler) Handle(ctx context.Context, req SignInRequest) (*SignInR
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			VerifyPin("", req.Pin) // Constant time check
-			return nil, fmt.Errorf("%w: thông tin đăng nhập không chính xác", response.ErrInvalid)
+			return nil, fmt.Errorf("%w: thông tin đăng nhập không chính xác", response.ErrUnauthorized)
 		}
 		return nil, fmt.Errorf("lookup staff: %w", err)
 	}
 
 	if !VerifyPin(staff.PinHash, req.Pin) {
-		return nil, fmt.Errorf("%w: thông tin đăng nhập không chính xác", response.ErrInvalid)
+		return nil, fmt.Errorf("%w: thông tin đăng nhập không chính xác", response.ErrUnauthorized)
 	}
 
 	if !staff.Enabled {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
@@ -12,40 +13,48 @@ import (
 )
 
 type UnlockSessionHandler struct {
-	queries *sqlc.Queries
+	queries sqlc.Querier
 }
 
-func NewUnlockSessionHandler(queries *sqlc.Queries) *UnlockSessionHandler {
+func NewUnlockSessionHandler(queries sqlc.Querier) *UnlockSessionHandler {
 	return &UnlockSessionHandler{queries: queries}
 }
 
 func (h *UnlockSessionHandler) Handle(ctx context.Context, token string, pin string) (*SignInResponse, error) {
 	if token == "" {
-		return nil, fmt.Errorf("%w: session không tồn tại", response.ErrForbidden)
+		return nil, fmt.Errorf("%w: session không tồn tại", response.ErrUnauthorized)
 	}
 
 	tokenHash := HashToken(token)
 	sess, err := h.queries.GetSessionByTokenHash(ctx, tokenHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("%w: session không hợp lệ", response.ErrForbidden)
+			return nil, fmt.Errorf("%w: session không hợp lệ", response.ErrUnauthorized)
 		}
 		return nil, fmt.Errorf("lookup session: %w", err)
 	}
 
-	if sess.RevokedAt.Valid || !sess.IdentityEnabled {
-		return nil, fmt.Errorf("%w: session đã hết hạn", response.ErrForbidden)
+	if sess.RevokedAt.Valid || !sess.IdentityEnabled || time.Now().UTC().After(sess.ExpiresAt) {
+		return nil, fmt.Errorf("%w: session đã hết hạn", response.ErrUnauthorized)
 	}
 
 	if !VerifyPin(sess.PinHash, pin) {
-		return nil, fmt.Errorf("%w: mã PIN không đúng", response.ErrInvalid)
+		return nil, fmt.Errorf("%w: mã PIN không đúng", response.ErrUnauthorized)
 	}
 
+	now := time.Now().UTC()
 	if err := h.queries.UpdateSessionState(ctx, sqlc.UpdateSessionStateParams{
 		ID:    sess.SessionID,
 		State: SessionStateActive,
 	}); err != nil {
 		return nil, fmt.Errorf("unlock session: %w", err)
+	}
+
+	if err := h.queries.UpdateSessionActivity(ctx, sqlc.UpdateSessionActivityParams{
+		ID:                  sess.SessionID,
+		LastHumanActivityAt: now,
+	}); err != nil {
+		return nil, fmt.Errorf("update session activity: %w", err)
 	}
 
 	roles, err := h.queries.GetStaffRoles(ctx, sess.StaffIdentityID)
