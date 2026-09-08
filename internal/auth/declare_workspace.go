@@ -11,17 +11,17 @@ import (
 )
 
 type DeclareWorkspaceHandler struct {
-	queries *sqlc.Queries
+	queries sqlc.Querier
 }
 
-func NewDeclareWorkspaceHandler(queries *sqlc.Queries) *DeclareWorkspaceHandler {
+func NewDeclareWorkspaceHandler(queries sqlc.Querier) *DeclareWorkspaceHandler {
 	return &DeclareWorkspaceHandler{queries: queries}
 }
 
 func (h *DeclareWorkspaceHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {
-		return response.Error(c, fmt.Errorf("%w: unauthorized", response.ErrForbidden))
+		return response.Error(c, fmt.Errorf("%w: unauthorized", response.ErrUnauthorized))
 	}
 
 	var req DeclareWorkspaceRequest

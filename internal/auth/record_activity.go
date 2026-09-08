@@ -10,17 +10,17 @@ import (
 )
 
 type RecordActivityHandler struct {
-	queries *sqlc.Queries
+	queries sqlc.Querier
 }
 
-func NewRecordActivityHandler(queries *sqlc.Queries) *RecordActivityHandler {
+func NewRecordActivityHandler(queries sqlc.Querier) *RecordActivityHandler {
 	return &RecordActivityHandler{queries: queries}
 }
 
 func (h *RecordActivityHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {
-		return response.Error(c, fmt.Errorf("%w: unauthorized", response.ErrForbidden))
+		return response.Error(c, fmt.Errorf("%w: unauthorized", response.ErrUnauthorized))
 	}
 
 	err := h.queries.UpdateSessionActivity(c.Request().Context(), sqlc.UpdateSessionActivityParams{

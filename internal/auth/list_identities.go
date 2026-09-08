@@ -10,10 +10,10 @@ import (
 )
 
 type ListIdentitiesHandler struct {
-	queries *sqlc.Queries
+	queries sqlc.Querier
 }
 
-func NewListIdentitiesHandler(queries *sqlc.Queries) *ListIdentitiesHandler {
+func NewListIdentitiesHandler(queries sqlc.Querier) *ListIdentitiesHandler {
 	return &ListIdentitiesHandler{queries: queries}
 }
 

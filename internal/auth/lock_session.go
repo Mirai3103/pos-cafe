@@ -9,17 +9,17 @@ import (
 )
 
 type LockSessionHandler struct {
-	queries *sqlc.Queries
+	queries sqlc.Querier
 }
 
-func NewLockSessionHandler(queries *sqlc.Queries) *LockSessionHandler {
+func NewLockSessionHandler(queries sqlc.Querier) *LockSessionHandler {
 	return &LockSessionHandler{queries: queries}
 }
 
 func (h *LockSessionHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {
-		return response.Error(c, fmt.Errorf("%w: unauthorized", response.ErrForbidden))
+		return response.Error(c, fmt.Errorf("%w: unauthorized", response.ErrUnauthorized))
 	}
 
 	err := h.queries.UpdateSessionState(c.Request().Context(), sqlc.UpdateSessionStateParams{

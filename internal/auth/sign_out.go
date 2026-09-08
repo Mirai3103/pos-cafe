@@ -7,10 +7,10 @@ import (
 )
 
 type SignOutHandler struct {
-	queries *sqlc.Queries
+	queries sqlc.Querier
 }
 
-func NewSignOutHandler(queries *sqlc.Queries) *SignOutHandler {
+func NewSignOutHandler(queries sqlc.Querier) *SignOutHandler {
 	return &SignOutHandler{queries: queries}
 }
 

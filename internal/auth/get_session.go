@@ -25,10 +25,10 @@ func extractToken(c echo.Context) string {
 }
 
 type GetSessionHandler struct {
-	queries *sqlc.Queries
+	queries sqlc.Querier
 }
 
-func NewGetSessionHandler(queries *sqlc.Queries) *GetSessionHandler {
+func NewGetSessionHandler(queries sqlc.Querier) *GetSessionHandler {
 	return &GetSessionHandler{queries: queries}
 }
 
