@@ -9,9 +9,11 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("resource not found")
-	ErrConflict = errors.New("resource already exists")
-	ErrInvalid  = errors.New("invalid input data")
+	ErrNotFound     = errors.New("resource not found")
+	ErrConflict     = errors.New("resource already exists")
+	ErrInvalid      = errors.New("invalid input data")
+	ErrForbidden    = errors.New("forbidden")
+	ErrUnauthorized = errors.New("unauthorized")
 )
 
 type APIResponse struct {
@@ -74,6 +76,22 @@ func Error(c echo.Context, err error) error {
 			Success: false,
 			Error: &APIError{
 				Code:    "BAD_REQUEST",
+				Message: err.Error(),
+			},
+		})
+	case errors.Is(err, ErrUnauthorized):
+		return c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "UNAUTHORIZED",
+				Message: err.Error(),
+			},
+		})
+	case errors.Is(err, ErrForbidden):
+		return c.JSON(http.StatusForbidden, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "FORBIDDEN",
 				Message: err.Error(),
 			},
 		})
