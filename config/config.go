@@ -36,10 +36,10 @@ func Load() (*Config, error) {
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos?sslmode=disable"),
 		Environment:        getEnv("APP_ENV", "development"),
 		CORSAllowedOrigins: corsOrigins,
-		ReadTimeout:        15 * time.Second,
-		WriteTimeout:       15 * time.Second,
-		IdleTimeout:        60 * time.Second,
-		ReadHeaderTimeout:  5 * time.Second,
+		ReadTimeout:        getEnvDuration("HTTP_READ_TIMEOUT", 15*time.Second),
+		WriteTimeout:       getEnvDuration("HTTP_WRITE_TIMEOUT", 15*time.Second),
+		IdleTimeout:        getEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
+		ReadHeaderTimeout:  getEnvDuration("HTTP_READ_HEADER_TIMEOUT", 5*time.Second),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -59,7 +59,39 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("PORT must be a valid port number (1-65535), got: %s", c.Port)
 	}
 
+	// A non-positive timeout means "no timeout" in net/http, which silently
+	// removes the protection these settings exist to provide.
+	for _, t := range []struct {
+		name  string
+		value time.Duration
+	}{
+		{"HTTP_READ_TIMEOUT", c.ReadTimeout},
+		{"HTTP_WRITE_TIMEOUT", c.WriteTimeout},
+		{"HTTP_IDLE_TIMEOUT", c.IdleTimeout},
+		{"HTTP_READ_HEADER_TIMEOUT", c.ReadHeaderTimeout},
+	} {
+		if t.value <= 0 {
+			return fmt.Errorf("%s must be a positive duration, got: %s", t.name, t.value)
+		}
+	}
+
 	return nil
+}
+
+// getEnvDuration reads a Go duration string such as "15s" or "2m". An
+// unparseable value falls back to the default rather than failing startup: the
+// Validate pass below is what rejects genuinely unusable values.
+func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
+		return defaultValue
+	}
+
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
 }
 
 func getEnv(key, defaultValue string) string {

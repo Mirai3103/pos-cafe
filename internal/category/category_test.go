@@ -13,8 +13,8 @@ import (
 
 	"github.com/Mirai3103/pos-cafe/internal/category"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
 	"github.com/Mirai3103/pos-cafe/internal/response"
-	"github.com/Mirai3103/pos-cafe/internal/validator"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -101,7 +101,7 @@ func (m *mockPublisher) Publish(topic string, payload any) error {
 
 func setupEcho() *echo.Echo {
 	e := echo.New()
-	e.Validator = validator.New()
+	e.Validator = httpvalidator.New()
 	return e
 }
 

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
-	"sort"
 	"strings"
 	"time"
 
@@ -87,15 +86,12 @@ func runMigrations(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("iterate applied migrations: %w", err)
 	}
 
-	// 4. Read embedded migration directory and sort files
+	// 4. Read embedded migration files. fs.ReadDir already returns them sorted by
+	// filename, which is why migrations are numbered: 000001, 000002, ...
 	entries, err := fs.ReadDir(migrationFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("read embedded migrations: %w", err)
 	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Name() < entries[j].Name()
-	})
 
 	// 5. Apply each pending migration inside a transaction
 	for _, entry := range entries {

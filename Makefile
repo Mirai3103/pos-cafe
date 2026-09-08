@@ -52,13 +52,16 @@ vuln: ## Scan dependencies for known vulnerabilities
 test: ## Run unit tests with the race detector
 	go test -race ./...
 
+# -p 1 is required, not an optimisation: every integration package TRUNCATEs the
+# same tables in the one test database, so running packages in parallel makes
+# them wipe each other's fixtures mid-test.
 test-integration: ## Run integration tests (needs docker-up)
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -race -tags=integration ./...
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -race -p 1 -tags=integration ./...
 
 test-all: test test-integration ## Run unit + integration tests
 
 coverage: ## Report test coverage across unit + integration tests
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -cover -tags=integration ./...
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -cover -p 1 -tags=integration ./...
 
 check: fmt vet lint test ## Everything CI enforces, before you push
 
