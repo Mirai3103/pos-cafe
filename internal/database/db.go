@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	// Registers the "pgx" driver with database/sql; imported for side effects only.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

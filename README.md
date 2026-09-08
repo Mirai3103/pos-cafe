@@ -1,6 +1,6 @@
 # POS Cafe Backend - Idiomatic Go Vertical Slice Starter
 
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![Architecture](https://img.shields.io/badge/Architecture-Vertical%20Slice%20%2B%20CQRS-orange?style=flat)](https://jimmybogard.com/vertical-slice-architecture/)
 [![Database](https://img.shields.io/badge/Database-PostgreSQL%20(pgx%2Fv5)-blue?style=flat&logo=postgresql)](https://github.com/jackc/pgx)
 [![Tests](https://img.shields.io/badge/Tests-Passing%20(with%20--race)-brightgreen?style=flat)](https://github.com/stretchr/testify)
@@ -26,7 +26,7 @@ A production-ready, highly maintainable, and **Idiomatic Golang** backend boiler
 
 | Component | Technology | Description |
 | :--- | :--- | :--- |
-| **Language** | Go 1.22+ | Modern Go features |
+| **Language** | Go 1.26+ | Modern Go features |
 | **HTTP Framework** | [Echo v4](https://echo.labstack.com/) | High-performance, minimalist HTTP router |
 | **Database Driver** | [jackc/pgx/v5](https://github.com/jackc/pgx) | High-performance PostgreSQL driver and toolkit |
 | **Data Access** | [sqlc](https://sqlc.dev/) | Compile SQL to type-safe Go code |
@@ -108,7 +108,8 @@ pos-cafe/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- **Go**: Version 1.22 or higher.
+- **Go**: Version 1.26 or higher (see the `go` directive in `go.mod`).
+- **Docker + Docker Compose**: for the local PostgreSQL instance.
 - **sqlc** (optional, only needed when editing SQL queries):
   ```bash
   go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
@@ -118,16 +119,25 @@ pos-cafe/
   go install github.com/swaggo/swag/cmd/swag@latest
   ```
 
+`golangci-lint` and `govulncheck` are installed on demand by `make lint` and
+`make vuln`, so there is nothing to set up by hand.
+
 ### Quick Run
 
 ```bash
 # 1. Clone or navigate to the project directory
 cd pos-cafe
 
-# 2. Run the application
+# 2. Start PostgreSQL (creates both cafe_pos and cafe_pos_test on first boot)
+make docker-up
+make db-wait
+
+# 3. Run the application
 make run
-# or: go run cmd/api/main.go
+# or: go run ./cmd/api
 ```
+
+Run `make help` to see every available target.
 
 The application will:
 1. Automatically read `.env` (fallback to system environment variables).
@@ -155,8 +165,25 @@ make test-integration
 # or: TEST_DATABASE_URL="postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable" go test -v -race -tags=integration ./...
 ```
 
+The `cafe_pos_test` database is created automatically by `sql/init/` the first
+time the Postgres volume is initialised. If you have a volume that predates that
+script, the hook will not re-run — create the database once with:
+
+```bash
+docker compose exec postgres createdb -U cafe_pos cafe_pos_test
+# or start from scratch: docker compose down -v && make docker-up
+```
+
 > [!IMPORTANT]
 > **Zero-Risk Test Safety Guard:** The integration test runner strictly requires `TEST_DATABASE_URL` and enforces that the target database name ends with `_test` (e.g. `cafe_pos_test`). It **never** falls back to your development database and will instantly abort if a non-test database is provided.
+
+### 3. Lint & Vulnerability Scan
+
+```bash
+make lint    # golangci-lint, config in .golangci.yml (schema v2)
+make vuln    # govulncheck against the module graph
+make check   # fmt + vet + lint + unit tests, i.e. what CI enforces
+```
 
 ---
 
@@ -348,6 +375,7 @@ productSlices.RegisterRoutes(v1)
 | `make docker-up` | Start background PostgreSQL container (`cafe-pos-db`) |
 | `make docker-down` | Stop background PostgreSQL container |
 | `make docker-logs` | Stream PostgreSQL logs |
+| `make db-wait` | Block until PostgreSQL accepts connections |
 | `make run` | Start the API server |
 | `make build` | Compile the binary into `bin/api` |
 | `make test` | Run fast, isolated in-memory unit tests (`-race`) |
@@ -356,6 +384,10 @@ productSlices.RegisterRoutes(v1)
 | `make coverage` | Calculate statement test coverage |
 | `make fmt` | Format all Go source files with `gofmt` |
 | `make vet` | Run standard Go static code analysis |
+| `make lint` | Run `golangci-lint` (installed on demand) |
+| `make vuln` | Scan dependencies with `govulncheck` |
+| `make check` | Run every gate CI enforces, before pushing |
+| `make help` | List all available targets |
 | `make sqlc` | Generate type-safe database queries from SQL |
 | `make swagger` | Generate Swagger UI / OpenAPI documentation |
 | `make tidy` | Run `go mod tidy` to clean up dependencies |

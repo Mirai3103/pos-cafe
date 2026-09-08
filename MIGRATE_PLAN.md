@@ -1,7 +1,7 @@
 # POS Cafe Backend Migration Plan: TypeScript to Golang
 
 > **Source Project:** `/home/laffy/cafe-pos/src` (Fullstack TS: React 19 + tRPC + Drizzle ORM + PostgreSQL)  
-> **Target Project:** `/home/laffy/Desktop/go-vertical-slice-template-main/pos-cafe` (Go 1.22+ + Echo v4 + PostgreSQL + pgx/v5 + sqlc + Watermill)  
+> **Target Project:** `/home/laffy/Desktop/go-vertical-slice-template-main/pos-cafe` (Go 1.26+ + Echo v4 + PostgreSQL + pgx/v5 + sqlc + Watermill)  
 > **Primary Goal:** Eliminate lag on low-spec POS terminals (Celeron, 2–4GB RAM), reduce RAM usage from ~500MB to < 30MB, achieve instant boot (< 20ms)
 
 ---

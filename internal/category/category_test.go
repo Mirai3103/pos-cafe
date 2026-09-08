@@ -116,10 +116,10 @@ func TestCreateCategory_Handle(t *testing.T) {
 	t.Run("success with event published", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByNameFunc: func(ctx context.Context, name string) (sqlc.Category, error) {
+			getByNameFunc: func(_ context.Context, _ string) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
-			createFunc: func(ctx context.Context, arg sqlc.CreateCategoryParams) (sqlc.Category, error) {
+			createFunc: func(_ context.Context, arg sqlc.CreateCategoryParams) (sqlc.Category, error) {
 				return sqlc.Category{
 					ID:           1,
 					Name:         arg.Name,
@@ -151,7 +151,7 @@ func TestCreateCategory_Handle(t *testing.T) {
 	t.Run("conflict on pre-check", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByNameFunc: func(ctx context.Context, name string) (sqlc.Category, error) {
+			getByNameFunc: func(_ context.Context, name string) (sqlc.Category, error) {
 				return sqlc.Category{ID: 10, Name: name}, nil
 			},
 		}
@@ -165,10 +165,10 @@ func TestCreateCategory_Handle(t *testing.T) {
 	t.Run("conflict on database race condition (PostgreSQL 23505)", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByNameFunc: func(ctx context.Context, name string) (sqlc.Category, error) {
+			getByNameFunc: func(_ context.Context, _ string) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
-			createFunc: func(ctx context.Context, arg sqlc.CreateCategoryParams) (sqlc.Category, error) {
+			createFunc: func(_ context.Context, _ sqlc.CreateCategoryParams) (sqlc.Category, error) {
 				return sqlc.Category{}, &pgconn.PgError{Code: "23505"}
 			},
 		}
@@ -182,10 +182,10 @@ func TestCreateCategory_Handle(t *testing.T) {
 	t.Run("database error on creation", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByNameFunc: func(ctx context.Context, name string) (sqlc.Category, error) {
+			getByNameFunc: func(_ context.Context, _ string) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
-			createFunc: func(ctx context.Context, arg sqlc.CreateCategoryParams) (sqlc.Category, error) {
+			createFunc: func(_ context.Context, _ sqlc.CreateCategoryParams) (sqlc.Category, error) {
 				return sqlc.Category{}, errors.New("db disk failure")
 			},
 		}
@@ -205,7 +205,7 @@ func TestGetByID_Handle(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, id int64) (sqlc.Category, error) {
 				return sqlc.Category{ID: id, Name: "Cold Brew"}, nil
 			},
 		}
@@ -220,7 +220,7 @@ func TestGetByID_Handle(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, _ int64) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
 		}
@@ -240,7 +240,7 @@ func TestList_Handle(t *testing.T) {
 	t.Run("list all", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			listFunc: func(ctx context.Context) ([]sqlc.Category, error) {
+			listFunc: func(_ context.Context) ([]sqlc.Category, error) {
 				return []sqlc.Category{
 					{ID: 1, Name: "Tea"},
 					{ID: 2, Name: "Coffee"},
@@ -257,7 +257,7 @@ func TestList_Handle(t *testing.T) {
 	t.Run("list active only", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			listActiveFunc: func(ctx context.Context) ([]sqlc.Category, error) {
+			listActiveFunc: func(_ context.Context) ([]sqlc.Category, error) {
 				return []sqlc.Category{
 					{ID: 1, Name: "Tea", IsActive: true},
 				}, nil
@@ -279,13 +279,13 @@ func TestUpdateCategory_Handle(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, id int64) (sqlc.Category, error) {
 				return sqlc.Category{ID: id, Name: "Old Name"}, nil
 			},
-			getByNameFunc: func(ctx context.Context, name string) (sqlc.Category, error) {
+			getByNameFunc: func(_ context.Context, _ string) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
-			updateFunc: func(ctx context.Context, arg sqlc.UpdateCategoryParams) (sqlc.Category, error) {
+			updateFunc: func(_ context.Context, arg sqlc.UpdateCategoryParams) (sqlc.Category, error) {
 				return sqlc.Category{ID: arg.ID, Name: arg.Name}, nil
 			},
 		}
@@ -302,7 +302,7 @@ func TestUpdateCategory_Handle(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, _ int64) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
 		}
@@ -316,10 +316,10 @@ func TestUpdateCategory_Handle(t *testing.T) {
 	t.Run("conflict with another category", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, id int64) (sqlc.Category, error) {
 				return sqlc.Category{ID: id, Name: "My Category"}, nil
 			},
-			getByNameFunc: func(ctx context.Context, name string) (sqlc.Category, error) {
+			getByNameFunc: func(_ context.Context, name string) (sqlc.Category, error) {
 				return sqlc.Category{ID: 2, Name: name}, nil
 			},
 		}
@@ -333,13 +333,13 @@ func TestUpdateCategory_Handle(t *testing.T) {
 	t.Run("conflict from postgresql race (23505)", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, id int64) (sqlc.Category, error) {
 				return sqlc.Category{ID: id, Name: "Name A"}, nil
 			},
-			getByNameFunc: func(ctx context.Context, name string) (sqlc.Category, error) {
+			getByNameFunc: func(_ context.Context, _ string) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
-			updateFunc: func(ctx context.Context, arg sqlc.UpdateCategoryParams) (sqlc.Category, error) {
+			updateFunc: func(_ context.Context, _ sqlc.UpdateCategoryParams) (sqlc.Category, error) {
 				return sqlc.Category{}, &pgconn.PgError{Code: "23505"}
 			},
 		}
@@ -359,10 +359,10 @@ func TestDeleteCategory_Handle(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, id int64) (sqlc.Category, error) {
 				return sqlc.Category{ID: id, Name: "To Delete"}, nil
 			},
-			deleteFunc: func(ctx context.Context, id int64) error {
+			deleteFunc: func(_ context.Context, _ int64) error {
 				return nil
 			},
 		}
@@ -375,7 +375,7 @@ func TestDeleteCategory_Handle(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		t.Parallel()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, _ int64) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
 		}
@@ -413,10 +413,10 @@ func TestCategoryHTTP_Endpoints(t *testing.T) {
 		t.Parallel()
 		e := setupEcho()
 		store := &mockCategoryStore{
-			getByNameFunc: func(ctx context.Context, name string) (sqlc.Category, error) {
+			getByNameFunc: func(_ context.Context, _ string) (sqlc.Category, error) {
 				return sqlc.Category{}, sql.ErrNoRows
 			},
-			createFunc: func(ctx context.Context, arg sqlc.CreateCategoryParams) (sqlc.Category, error) {
+			createFunc: func(_ context.Context, arg sqlc.CreateCategoryParams) (sqlc.Category, error) {
 				return sqlc.Category{ID: 1, Name: arg.Name}, nil
 			},
 		}
@@ -456,10 +456,10 @@ func TestCategoryHTTP_Endpoints(t *testing.T) {
 		t.Parallel()
 		e := setupEcho()
 		store := &mockCategoryStore{
-			getByIDFunc: func(ctx context.Context, id int64) (sqlc.Category, error) {
+			getByIDFunc: func(_ context.Context, id int64) (sqlc.Category, error) {
 				return sqlc.Category{ID: id}, nil
 			},
-			deleteFunc: func(ctx context.Context, id int64) error {
+			deleteFunc: func(_ context.Context, _ int64) error {
 				return nil
 			},
 		}

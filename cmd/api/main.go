@@ -80,8 +80,13 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		}
 	}()
 
-	// Domain Event Listener: Log category events
-	if err := bus.Subscribe(context.Background(), category.TopicCategoryCreated, func(ctx context.Context, payload []byte) error {
+	// Domain Event Listener: Log category events.
+	//
+	// Deliberately NOT the signal-aware ctx: that would kill this consumer the
+	// instant SIGTERM lands, before e.Shutdown drains in-flight requests, so
+	// events emitted by those requests would be silently dropped. The deferred
+	// bus.Close above is the stop signal, and it waits for in-flight handlers.
+	if err := bus.Subscribe(context.Background(), category.TopicCategoryCreated, func(_ context.Context, payload []byte) error {
 		var evt category.CreatedEvent
 		if err := json.Unmarshal(payload, &evt); err != nil {
 			return err
@@ -118,7 +123,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		LogLatency:  true,
 		LogError:    true,
 		HandleError: true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+		LogValuesFunc: func(_ echo.Context, v middleware.RequestLoggerValues) error {
 			if v.Error == nil {
 				slog.Info("request",
 					"method", v.Method,
