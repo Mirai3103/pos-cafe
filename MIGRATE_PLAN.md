@@ -1,8 +1,8 @@
 # POS Cafe Backend Migration Plan: TypeScript to Golang
 
 > **Source Project:** `/home/laffy/cafe-pos/src` (Fullstack TS: React 19 + tRPC + Drizzle ORM + PostgreSQL)  
-> **Target Project:** `/home/laffy/Desktop/go-vertical-slice-template-main/pos-cafe` (Go 1.22+ + Echo v4 + SQLite + sqlc + Watermill)  
-> **Primary Goal:** Eliminate lag on low-spec POS terminals (Celeron, 2–4GB RAM), reduce RAM usage from ~500MB to < 30MB, achieve instant boot (< 20ms), and support 100% offline-first reliability.
+> **Target Project:** `/home/laffy/Desktop/go-vertical-slice-template-main/pos-cafe` (Go 1.22+ + Echo v4 + PostgreSQL + pgx/v5 + sqlc + Watermill)  
+> **Primary Goal:** Eliminate lag on low-spec POS terminals (Celeron, 2–4GB RAM), reduce RAM usage from ~500MB to < 30MB, achieve instant boot (< 20ms)
 
 ---
 
@@ -27,7 +27,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 
 ### Phase 0: Infrastructure & Boilerplate (✅ COMPLETED)
 - [x] **Echo HTTP Server:** Robust routing, recover middleware, structured access logging (`slog`), CORS.
-- [x] **Pure Go SQLite:** WAL mode, busy timeout (`5000ms`), single-connection writer pool, foreign keys enabled.
+- [x] **Production-Ready PostgreSQL:** Powered by `jackc/pgx/v5` with connection pool, query cancellation, and type-safe scanning.
 - [x] **Embedded Auto-Migrations:** Embedded SQL files via `embed.FS`, runs automatically on startup.
 - [x] **Data Access Layer (sqlc):** Type-safe SQL compilation, `Querier` interface enabled for mocking.
 - [x] **Event Bus (Watermill):** In-memory Pub/Sub for background side-effects.
@@ -126,7 +126,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 - [ ] **5.3 Business Slices:**
   - `start_session.go`: Open Dine-in (assign table) or Takeaway order.
   - `submit_order_round.go`:
-    - Save items to database within SQLite transaction.
+    - Save items to database within PostgreSQL transaction.
     - **Publish Event:** `h.bus.Publish("order.submitted", OrderSubmittedEvent{...})`.
   - `check_splitting.go`: Split items across multiple bills for split payments.
   - `settle_payment.go`: Record cash/QR payment, mark check as PAID, close session if all checks paid.
@@ -190,8 +190,8 @@ The source project is already cleanly structured around domain boundaries. We ma
 1. **Keep Slices Completely Independent:**
    - When migrating `internal/sales`, do not import structs from `internal/tables`. Use queries or interfaces.
 2. **Use Integer for Money in Vietnam (VND):**
-   - In SQLite, store amounts as `INTEGER` (VND has no decimals). Avoid `REAL` for financial calculations to prevent floating-point rounding errors.
-3. **One SQLite Transaction Per Order:**
-   - Wrap order items and session status changes in a single SQLite transaction (`queries.WithTx(tx)`).
+   - In PostgreSQL, store amounts as `BIGINT` (VND has no decimals, `BIGINT` prevents floating-point rounding errors). Avoid `REAL`/`FLOAT`.
+3. **One Database Transaction Per Order:**
+   - Wrap order items and session status changes in a single PostgreSQL transaction (`queries.WithTx(tx)`).
 4. **Leverage Watermill for Peripheral Actions:**
    - Never let receipt printing or kitchen screen notifications block the main payment HTTP response. Always publish an event!

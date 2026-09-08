@@ -18,7 +18,7 @@ INSERT INTO categories (
     created_at,
     updated_at
 ) VALUES (
-    ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    $1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 RETURNING id, name, description, display_order, is_active, created_at, updated_at
 `
@@ -27,7 +27,7 @@ type CreateCategoryParams struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	DisplayOrder int64  `json:"display_order"`
-	IsActive     int64  `json:"is_active"`
+	IsActive     bool   `json:"is_active"`
 }
 
 func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error) {
@@ -52,7 +52,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 
 const deleteCategory = `-- name: DeleteCategory :exec
 DELETE FROM categories
-WHERE id = ?
+WHERE id = $1
 `
 
 func (q *Queries) DeleteCategory(ctx context.Context, id int64) error {
@@ -62,7 +62,7 @@ func (q *Queries) DeleteCategory(ctx context.Context, id int64) error {
 
 const getCategoryByID = `-- name: GetCategoryByID :one
 SELECT id, name, description, display_order, is_active, created_at, updated_at FROM categories
-WHERE id = ? LIMIT 1
+WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetCategoryByID(ctx context.Context, id int64) (Category, error) {
@@ -82,7 +82,7 @@ func (q *Queries) GetCategoryByID(ctx context.Context, id int64) (Category, erro
 
 const getCategoryByName = `-- name: GetCategoryByName :one
 SELECT id, name, description, display_order, is_active, created_at, updated_at FROM categories
-WHERE name = ? LIMIT 1
+WHERE name = $1 LIMIT 1
 `
 
 func (q *Queries) GetCategoryByName(ctx context.Context, name string) (Category, error) {
@@ -102,7 +102,7 @@ func (q *Queries) GetCategoryByName(ctx context.Context, name string) (Category,
 
 const listActiveCategories = `-- name: ListActiveCategories :many
 SELECT id, name, description, display_order, is_active, created_at, updated_at FROM categories
-WHERE is_active = 1
+WHERE is_active = TRUE
 ORDER BY display_order ASC, name ASC
 `
 
@@ -176,12 +176,12 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 const updateCategory = `-- name: UpdateCategory :one
 UPDATE categories
 SET
-    name = ?,
-    description = ?,
-    display_order = ?,
-    is_active = ?,
+    name = $1,
+    description = $2,
+    display_order = $3,
+    is_active = $4,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
+WHERE id = $5
 RETURNING id, name, description, display_order, is_active, created_at, updated_at
 `
 
@@ -189,7 +189,7 @@ type UpdateCategoryParams struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	DisplayOrder int64  `json:"display_order"`
-	IsActive     int64  `json:"is_active"`
+	IsActive     bool   `json:"is_active"`
 	ID           int64  `json:"id"`
 }
 

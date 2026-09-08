@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![Architecture](https://img.shields.io/badge/Architecture-Vertical%20Slice%20%2B%20CQRS-orange?style=flat)](https://jimmybogard.com/vertical-slice-architecture/)
-[![Database](https://img.shields.io/badge/Database-SQLite%20(Pure%20Go)-blue?style=flat&logo=sqlite)](https://gitlab.com/cznic/sqlite)
+[![Database](https://img.shields.io/badge/Database-PostgreSQL%20(pgx%2Fv5)-blue?style=flat&logo=postgresql)](https://github.com/jackc/pgx)
 [![Tests](https://img.shields.io/badge/Tests-Passing%20(with%20--race)-brightgreen?style=flat)](https://github.com/stretchr/testify)
 [![Swagger](https://img.shields.io/badge/Swagger-OpenAPI%202.0-green?style=flat&logo=swagger)](https://swagger.io)
 
@@ -14,7 +14,7 @@ A production-ready, highly maintainable, and **Idiomatic Golang** backend boiler
 
 - **Idiomatic Go First:** No heavy enterprise C#/Java porting baggage. No reflection-based DI containers (`dig`/`fx`), no opaque mediator layers (`go-mediatr`), no `//go:linkname` runtime hacks.
 - **Vertical Slice Architecture (VSA):** Code is sliced vertically by business operation (Command/Query). Each slice encapsulates its request contract, validation, domain logic, database interaction, and HTTP transport.
-- **Pure Go SQLite (Zero CGO):** Powered by `modernc.org/sqlite`. Compiles anywhere without gcc/CGO dependencies. Configured with optimal connection pooling, WAL mode, and busy timeout handlers.
+- **Production-Ready PostgreSQL (`pgx/v5`):** Powered by `jackc/pgx/v5` via standard library compatibility. Robust connection pooling, high throughput, and full support for PostgreSQL types and transactions.
 - **Type-Safe SQL with `sqlc`:** Write clean, standard SQL. `sqlc` compiles queries into type-safe Go structs and interfaces with zero runtime reflection.
 - **Event-Driven with Watermill:** Built-in in-memory event bus powered by `ThreeDotsLabs/watermill`. Decouple background side-effects (kitchen display, receipt printing, loyalty points) without external message broker setup.
 - **Zero-Setup Auto-Migrations:** Schema migrations are embedded directly into the binary via Go's standard `embed.FS` and applied on startup.
@@ -28,7 +28,7 @@ A production-ready, highly maintainable, and **Idiomatic Golang** backend boiler
 | :--- | :--- | :--- |
 | **Language** | Go 1.22+ | Modern Go features |
 | **HTTP Framework** | [Echo v4](https://echo.labstack.com/) | High-performance, minimalist HTTP router |
-| **Database Driver** | [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) | CGO-free pure Go SQLite driver |
+| **Database Driver** | [jackc/pgx/v5](https://github.com/jackc/pgx) | High-performance PostgreSQL driver and toolkit |
 | **Data Access** | [sqlc](https://sqlc.dev/) | Compile SQL to type-safe Go code |
 | **Event Bus** | [ThreeDotsLabs/watermill](https://github.com/ThreeDotsLabs/watermill) | Industry standard Pub/Sub event bus |
 | **Validation** | [go-playground/validator v10](https://github.com/go-playground/validator) | Struct and field validation |
@@ -63,7 +63,7 @@ pos-cafe/
 │   │   ├── routes.go               # Route registry for Category slices
 │   │   └── category_test.go        # End-to-end integration & unit tests
 │   ├── database/
-│   │   ├── db.go                   # SQLite connection pool setup (WAL, busy timeout)
+│   │   ├── db.go                   # PostgreSQL connection pool setup (pgx/v5)
 │   │   ├── migrations/             # Embedded SQL migration files (embed.FS)
 │   │   │   └── 000001_init_schema.sql
 │   │   └── sqlc/                   # sqlc generated type-safe models & queries
@@ -131,7 +131,7 @@ make run
 
 The application will:
 1. Automatically read `.env` (fallback to system environment variables).
-2. Create SQLite database `pos_cafe.db` if it doesn't exist.
+2. Connect to PostgreSQL via `DATABASE_URL` (configured in `.env`).
 3. Automatically execute embedded SQL migrations.
 4. Start the HTTP server at `http://localhost:8080`.
 
@@ -146,7 +146,7 @@ make test
 # or: go test -v -race ./...
 ```
 
-Tests run against an in-memory/temporary SQLite instance, executing in **< 0.05 seconds** with 100% isolation.
+Tests run against PostgreSQL (configurable via `TEST_DATABASE_URL` or defaulting to standard local development credentials), executing fast with 100% test isolation.
 
 ---
 
@@ -291,12 +291,12 @@ Adding a new feature (e.g. `Product` or `Order`) requires **zero modifications**
 Create `internal/database/migrations/000002_create_products.sql`:
 ```sql
 CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    category_id INTEGER NOT NULL REFERENCES categories(id),
-    name TEXT NOT NULL,
-    price REAL NOT NULL,
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    category_id BIGINT NOT NULL REFERENCES categories(id),
+    name VARCHAR(255) NOT NULL,
+    price NUMERIC(12, 2) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -305,7 +305,7 @@ Create `sql/queries/products.sql`:
 ```sql
 -- name: CreateProduct :one
 INSERT INTO products (category_id, name, price, is_active)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: ListProducts :many

@@ -40,11 +40,11 @@ func main() {
 	cfg := config.Load()
 	slog.Info("starting pos-cafe backend", "env", cfg.Environment, "port", cfg.Port)
 
-	// 3. Database Initialization (SQLite + Embedded Auto-Migrations)
+	// 3. Database Initialization (PostgreSQL + Embedded Auto-Migrations)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	db, err := database.Open(ctx, cfg.DBPath)
+	db, err := database.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("failed to connect database", "error", err)
 		os.Exit(1)

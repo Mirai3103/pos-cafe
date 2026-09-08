@@ -54,11 +54,7 @@ func (h *UpdateHandler) Handle(ctx context.Context, cmd UpdateCommand) (*Respons
 
 	isActive := current.IsActive
 	if cmd.IsActive != nil {
-		if *cmd.IsActive {
-			isActive = 1
-		} else {
-			isActive = 0
-		}
+		isActive = *cmd.IsActive
 	}
 
 	category, err := h.queries.UpdateCategory(ctx, sqlc.UpdateCategoryParams{

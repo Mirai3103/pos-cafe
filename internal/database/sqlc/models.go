@@ -13,7 +13,7 @@ type Category struct {
 	Name         string    `json:"name"`
 	Description  string    `json:"description"`
 	DisplayOrder int64     `json:"display_order"`
-	IsActive     int64     `json:"is_active"`
+	IsActive     bool      `json:"is_active"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

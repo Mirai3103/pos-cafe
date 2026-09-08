@@ -22,7 +22,7 @@ func toResponse(c sqlc.Category) Response {
 		Name:         c.Name,
 		Description:  c.Description,
 		DisplayOrder: c.DisplayOrder,
-		IsActive:     c.IsActive == 1,
+		IsActive:     c.IsActive,
 		CreatedAt:    c.CreatedAt,
 		UpdatedAt:    c.UpdatedAt,
 	}

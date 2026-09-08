@@ -1,0 +1,23 @@
+name: cafe-pos
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: cafe-pos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cafe_pos
+      POSTGRES_PASSWORD: cafe_pos_dev
+      POSTGRES_DB: cafe_pos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cafe_pos -d cafe_pos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

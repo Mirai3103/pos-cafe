@@ -11,31 +11,28 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 //go:embed migrations/*.sql
 var migrationFS embed.FS
 
-// Open creates and configures a SQLite connection pool with embedded migrations.
-func Open(ctx context.Context, dbPath string) (*sql.DB, error) {
-	// DSN parameters: busy_timeout=5000ms helps avoid SQLITE_BUSY under concurrency
-	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)&_pragma=synchronous(NORMAL)", dbPath)
-
-	db, err := sql.Open("sqlite", dsn)
+// Open creates and configures a PostgreSQL connection pool with embedded migrations.
+func Open(ctx context.Context, databaseURL string) (*sql.DB, error) {
+	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite database: %w", err)
+		return nil, fmt.Errorf("open postgres database: %w", err)
 	}
 
-	// SQLite handles concurrent reads well in WAL mode, but serializes writes.
-	// Limiting max open connections to 1 prevents database lock contention across multiple goroutines.
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// Configure connection pool for production
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(time.Hour)
+	db.SetConnMaxIdleTime(15 * time.Minute)
 
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("ping sqlite database: %w", err)
+		return nil, fmt.Errorf("ping postgres database: %w", err)
 	}
 
 	if err := runMigrations(ctx, db); err != nil {
@@ -52,7 +49,6 @@ func runMigrations(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("read embedded migrations: %w", err)
 	}
 
-	// Sort files to ensure ascending execution order (e.g., 000001, 000002)
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].Name() < entries[j].Name()
 	})

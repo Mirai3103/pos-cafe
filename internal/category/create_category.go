@@ -51,9 +51,9 @@ func (h *CreateHandler) Handle(ctx context.Context, cmd CreateCommand) (*Respons
 	}
 
 	// 2. Defaulting logic
-	isActive := int64(1)
-	if cmd.IsActive != nil && !*cmd.IsActive {
-		isActive = 0
+	isActive := true
+	if cmd.IsActive != nil {
+		isActive = *cmd.IsActive
 	}
 
 	// 3. Thực thi lưu trữ (Database Mutation)
