@@ -20,6 +20,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,6 +100,12 @@ func (c *testMockConn) BeginTx(_ context.Context, _ driver.TxOptions) (driver.Tx
 }
 
 func (c *testMockConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	if strings.Contains(query, "pg_advisory_xact_lock") {
+		if c.cfg.lockErr != nil {
+			return nil, c.cfg.lockErr
+		}
+		return driver.RowsAffected(1), nil
+	}
 	if strings.Contains(query, "AddStaffRole") || strings.Contains(query, "staff_operational_roles") {
 		if c.cfg.addRoleErr != nil {
 			return nil, c.cfg.addRoleErr
@@ -109,16 +116,6 @@ func (c *testMockConn) ExecContext(_ context.Context, query string, _ []driver.N
 }
 
 func (c *testMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	if strings.Contains(query, "pg_advisory_xact_lock") {
-		if c.cfg.lockErr != nil {
-			return nil, c.cfg.lockErr
-		}
-		return &testMockRows{
-			cols: []string{"lock"},
-			rows: [][]driver.Value{{true}},
-		}, nil
-	}
-
 	if strings.Contains(query, "CountActiveManagers") || strings.Contains(query, "count(DISTINCT si.id)") {
 		if c.cfg.countErr != nil {
 			return nil, c.cfg.countErr
@@ -372,6 +369,35 @@ func TestBootstrapManagerHandler_CreateStaffIdentityFailure(t *testing.T) {
 	assert.True(t, cfg.rolledBack)
 }
 
+func TestBootstrapManagerHandler_CreateStaffIdentityUniqueViolation(t *testing.T) {
+	e := setupEcho()
+	cfg := &mockConnConfig{
+		countManagers: 0,
+		createErr:     &pgconn.PgError{Code: "23505"},
+	}
+	db, queries := setupMockDB(t, cfg)
+	h := auth.NewBootstrapManagerHandler(db, queries)
+
+	reqBody := `{"display_name":"Quản Lý Trùng","login_code":"ql01","pin":"123456"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/bootstrap", bytes.NewReader([]byte(reqBody)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := h.HandleHTTP(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+
+	var resp response.APIResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "CONFLICT", resp.Error.Code)
+	assert.Contains(t, resp.Error.Message, "mã đăng nhập đã được sử dụng")
+
+	assert.True(t, cfg.rolledBack)
+	assert.False(t, cfg.committed)
+}
+
 func TestBootstrapManagerHandler_AddStaffRoleFailure(t *testing.T) {
 	e := setupEcho()
 	cfg := &mockConnConfig{
@@ -458,6 +484,24 @@ func TestBootstrapManagerHandler_DirectHandle(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, response.ErrConflict))
 		assert.Contains(t, err.Error(), "hệ thống đã có Quản lý được cài đặt")
+	})
+
+	t.Run("login code unique violation returns ErrConflict", func(t *testing.T) {
+		cfg := &mockConnConfig{
+			countManagers: 0,
+			createErr:     &pgconn.PgError{Code: "23505"},
+		}
+		db, queries := setupMockDB(t, cfg)
+		h := auth.NewBootstrapManagerHandler(db, queries)
+
+		_, err := h.Handle(context.Background(), auth.BootstrapManagerRequest{
+			DisplayName: "Manager",
+			LoginCode:   "MGR01",
+			Pin:         "123456",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, response.ErrConflict))
+		assert.Contains(t, err.Error(), "mã đăng nhập đã được sử dụng")
 	})
 }
 

@@ -3,11 +3,13 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
 )
 
@@ -35,8 +37,7 @@ func (h *BootstrapManagerHandler) Handle(ctx context.Context, req BootstrapManag
 	defer func() { _ = tx.Rollback() }()
 
 	// Acquire transactional advisory lock to prevent concurrent initialization
-	var locked bool
-	if err := tx.QueryRowContext(ctx, "SELECT pg_advisory_xact_lock($1)", BootstrapManagerAdvisoryLockID).Scan(&locked); err != nil && err != sql.ErrNoRows {
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", BootstrapManagerAdvisoryLockID); err != nil {
 		return nil, fmt.Errorf("acquire bootstrap advisory lock: %w", err)
 	}
 
@@ -59,6 +60,10 @@ func (h *BootstrapManagerHandler) Handle(ctx context.Context, req BootstrapManag
 		Enabled:     true,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, fmt.Errorf("%w: mã đăng nhập đã được sử dụng", response.ErrConflict)
+		}
 		return nil, fmt.Errorf("create manager identity: %w", err)
 	}
 
@@ -84,6 +89,18 @@ func (h *BootstrapManagerHandler) Handle(ctx context.Context, req BootstrapManag
 	}, nil
 }
 
+// HandleHTTP godoc
+// @Summary Khởi tạo tài khoản Quản lý đầu tiên (Bootstrap)
+// @Description Thiết lập tài khoản quản lý đầu tiên cho hệ thống POS. Chỉ thực hiện được khi chưa có quản lý nào.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body BootstrapManagerRequest true "Bootstrap manager credentials"
+// @Success 201 {object} response.APIResponse{data=StaffProfileResponse}
+// @Failure 400 {object} response.APIResponse
+// @Failure 409 {object} response.APIResponse
+// @Failure 500 {object} response.APIResponse
+// @Router /auth/bootstrap [post]
 func (h *BootstrapManagerHandler) HandleHTTP(c echo.Context) error {
 	var req BootstrapManagerRequest
 	if err := c.Bind(&req); err != nil {
