@@ -1,26 +1,35 @@
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
   enable:
-    - govet
-    - staticcheck
-    - unused
-    - errcheck
-    - ineffassign
-    - revive
+    - durationcheck
     - gosec
     - misspell
+    - revive
     - unconvert
-    - durationcheck
-
-issues:
-  exclude-dirs:
-    - docs
-    - internal/database/sqlc
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-        - errcheck
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - gosec
+        path: _test\.go
+    paths:
+      - docs
+      - internal/database/sqlc
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

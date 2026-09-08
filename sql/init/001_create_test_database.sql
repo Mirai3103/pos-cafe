@@ -1,0 +1,12 @@
+-- Bootstrap script for the local PostgreSQL container.
+--
+-- Runs once, on first boot of an empty data volume (docker-entrypoint-initdb.d).
+-- POSTGRES_DB already created cafe_pos; this adds the database that the
+-- integration test suite expects, so `make test-integration` works on a fresh
+-- clone without any manual psql step.
+--
+-- Note: if you already have a postgres_data volume from before this file
+-- existed, it will NOT re-run. Either create the DB by hand:
+--   docker compose exec postgres createdb -U cafe_pos cafe_pos_test
+-- or reset the volume with: docker compose down -v && make docker-up
+CREATE DATABASE cafe_pos_test OWNER cafe_pos;

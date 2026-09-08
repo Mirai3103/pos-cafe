@@ -4,9 +4,9 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// CategoryStore bundles the storage operations needed by all category slices.
+// Store bundles the storage operations needed by all category slices.
 // sqlc.Queries implements this interface implicitly.
-type CategoryStore interface {
+type Store interface {
 	categoryCreator
 	categoryGetter
 	categoryLister
@@ -22,7 +22,7 @@ type EventPublisher interface {
 // NoopPublisher is a null object pattern implementation of EventPublisher.
 type NoopPublisher struct{}
 
-func (NoopPublisher) Publish(topic string, payload any) error {
+func (NoopPublisher) Publish(_ string, _ any) error {
 	return nil
 }
 
@@ -34,7 +34,7 @@ type Slices struct {
 	Delete *DeleteHandler
 }
 
-func NewSlices(store CategoryStore, publisher EventPublisher) *Slices {
+func NewSlices(store Store, publisher EventPublisher) *Slices {
 	if publisher == nil {
 		publisher = NoopPublisher{}
 	}

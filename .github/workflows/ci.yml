@@ -31,10 +31,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          # Single source of truth: the go directive in go.mod.
+          go-version-file: go.mod
           check-latest: true
+          cache: true
 
       - name: Verify Formatting (gofmt)
         run: |
@@ -42,6 +44,14 @@ jobs:
           if [ -n "$diffs" ]; then
             echo "Unformatted files found:"
             echo "$diffs"
+            exit 1
+          fi
+
+      - name: Verify Generated Code Is In Sync (go mod tidy)
+        run: |
+          go mod tidy
+          if ! git diff --exit-code -- go.mod go.sum; then
+            echo "go.mod/go.sum are stale. Run 'go mod tidy' and commit the result."
             exit 1
           fi
 
@@ -58,3 +68,28 @@ jobs:
 
       - name: Verify Build
         run: go build -v ./cmd/api
+
+  lint:
+    name: Lint & Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.2
+
+      - name: Vulnerability Scan (govulncheck)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

@@ -13,6 +13,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Runs only on first boot of an empty volume. Creates cafe_pos_test so the
+      # integration suite works without a manual setup step.
+      - ./sql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cafe_pos -d cafe_pos"]
       interval: 5s

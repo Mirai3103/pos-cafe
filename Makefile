@@ -1,45 +1,77 @@
-.PHONY: run build test test-integration test-all coverage fmt vet sqlc swagger tidy clean docker-up docker-down docker-logs
+.PHONY: help run build test test-integration test-all coverage fmt vet lint vuln check sqlc swagger tidy clean \
+	docker-up docker-down docker-logs db-wait
 
-docker-up:
+# Single source of truth for the integration-test database.
+TEST_DATABASE_URL ?= postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
+GOLANGCI_VERSION  ?= v2.13.2
+
+help:
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+## --- Local infrastructure ---
+
+docker-up: ## Start PostgreSQL (creates cafe_pos + cafe_pos_test on first boot)
 	docker compose up -d
 
-docker-down:
+docker-down: ## Stop PostgreSQL (keeps the data volume)
 	docker compose down
 
-docker-logs:
+docker-logs: ## Tail PostgreSQL logs
 	docker compose logs -f postgres
 
-run:
-	go run cmd/api/main.go
+db-wait: ## Block until PostgreSQL is accepting connections
+	@echo "waiting for postgres to become healthy..."
+	@until docker compose exec -T postgres pg_isready -U cafe_pos -d cafe_pos >/dev/null 2>&1; do sleep 1; done
+	@echo "postgres is ready"
 
-build:
-	go build -o bin/api cmd/api/main.go
+## --- Application ---
 
-fmt:
+run: ## Run the API server
+	go run ./cmd/api
+
+build: ## Build the API binary into bin/
+	go build -o bin/api ./cmd/api
+
+## --- Quality gates ---
+
+fmt: ## Format all Go code
 	gofmt -w .
 
-vet:
+vet: ## Run go vet
 	go vet ./...
 
-test:
-	go test -v -race ./...
+lint: ## Run golangci-lint (installs it on demand)
+	@command -v golangci-lint >/dev/null 2>&1 || \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	golangci-lint run ./...
 
-test-integration:
-	TEST_DATABASE_URL="postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable" go test -v -race -tags=integration ./...
+vuln: ## Scan dependencies for known vulnerabilities
+	@command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+	govulncheck ./...
 
-test-all: test test-integration
+test: ## Run unit tests with the race detector
+	go test -race ./...
 
-coverage:
-	TEST_DATABASE_URL="postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable" go test -cover -tags=integration ./...
+test-integration: ## Run integration tests (needs docker-up)
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -race -tags=integration ./...
 
-sqlc:
+test-all: test test-integration ## Run unit + integration tests
+
+coverage: ## Report test coverage across unit + integration tests
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -cover -tags=integration ./...
+
+check: fmt vet lint test ## Everything CI enforces, before you push
+
+## --- Code generation ---
+
+sqlc: ## Regenerate type-safe SQL bindings
 	sqlc generate
 
-swagger:
+swagger: ## Regenerate Swagger/OpenAPI docs
 	swag init -g cmd/api/main.go -o docs
 
-tidy:
+tidy: ## Tidy go.mod / go.sum
 	go mod tidy
 
-clean:
+clean: ## Remove build artifacts
 	rm -rf bin/ *.db*
