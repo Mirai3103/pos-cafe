@@ -110,7 +110,7 @@ func (h *StaffResetPinHandler) Handle(ctx context.Context, actor *StaffClaims, t
 // @Failure 403 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /staff/{id}/pin [put]
+// @Router /staff/{id}/reset-pin [post]
 func (h *StaffResetPinHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {

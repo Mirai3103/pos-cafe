@@ -127,7 +127,7 @@ func (h *StaffSetEnabledHandler) Handle(ctx context.Context, actor *StaffClaims,
 // @Failure 404 {object} response.APIResponse
 // @Failure 409 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /staff/{id}/enabled [put]
+// @Router /staff/{id}/enabled [patch]
 func (h *StaffSetEnabledHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {
