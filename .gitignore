@@ -27,4 +27,5 @@ bin/
 .DS_Store
 
 # Worktrees
+.worktrees
 .worktrees/
