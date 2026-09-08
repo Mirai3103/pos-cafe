@@ -25,3 +25,6 @@ bin/
 *.swp
 *~
 .DS_Store
+
+# Worktrees
+.worktrees/
