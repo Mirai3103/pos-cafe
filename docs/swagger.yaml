@@ -1,0 +1,235 @@
+basePath: /api/v1
+definitions:
+  category.CreateCommand:
+    properties:
+      description:
+        maxLength: 500
+        type: string
+      display_order:
+        minimum: 0
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    required:
+    - name
+    type: object
+  category.Response:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      display_order:
+        type: integer
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  category.UpdateCommand:
+    properties:
+      description:
+        maxLength: 500
+        type: string
+      display_order:
+        minimum: 0
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    required:
+    - name
+    type: object
+  response.APIError:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+    type: object
+  response.APIResponse:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/response.APIError'
+      success:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Backend API for Cafe Point of Sale System built with Vertical Slice
+    Architecture and Idiomatic Go.
+  title: POS Cafe API
+  version: "1.0"
+paths:
+  /categories:
+    get:
+      description: Retrieve a list of all categories or active categories only
+      parameters:
+      - description: Filter active categories only (true/false)
+        in: query
+        name: active_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/category.Response'
+                  type: array
+              type: object
+      summary: List categories
+      tags:
+      - Categories
+    post:
+      consumes:
+      - application/json
+      description: Create a new drink/food category for POS Cafe
+      parameters:
+      - description: Category payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/category.CreateCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/category.Response'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Create a new category
+      tags:
+      - Categories
+  /categories/{id}:
+    delete:
+      description: Delete a category by its ID
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Delete category
+      tags:
+      - Categories
+    get:
+      description: Retrieve details of a specific category by its ID
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/category.Response'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Get category by ID
+      tags:
+      - Categories
+    put:
+      consumes:
+      - application/json
+      description: Update an existing category by its ID
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Category update payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/category.UpdateCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/category.Response'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Update category
+      tags:
+      - Categories
+swagger: "2.0"
