@@ -42,7 +42,7 @@ func NewUpdateHandler(store categoryUpdater) *UpdateHandler {
 }
 
 func (h *UpdateHandler) Handle(ctx context.Context, cmd UpdateCommand) (*Response, error) {
-	// 1. Kiểm tra tồn tại
+	// 1. Load the current row (also gives us the defaults for optional fields)
 	current, err := h.store.GetCategoryByID(ctx, cmd.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -51,7 +51,7 @@ func (h *UpdateHandler) Handle(ctx context.Context, cmd UpdateCommand) (*Respons
 		return nil, fmt.Errorf("find category: %w", err)
 	}
 
-	// 2. Kiểm tra trùng tên với category khác (pre-check)
+	// 2. Reject a rename that collides with another category
 	if cmd.Name != current.Name {
 		existing, err := h.store.GetCategoryByName(ctx, cmd.Name)
 		if err == nil && existing.ID != cmd.ID {
