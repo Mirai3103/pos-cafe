@@ -8,7 +8,7 @@ import (
 
 type Config struct {
 	Port        string
-	DBPath      string
+	DatabaseURL string
 	Environment string
 }
 
@@ -18,7 +18,7 @@ func Load() *Config {
 
 	return &Config{
 		Port:        getEnv("PORT", "8080"),
-		DBPath:      getEnv("DB_PATH", "pos_cafe.db"),
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos?sslmode=disable"),
 		Environment: getEnv("APP_ENV", "development"),
 	}
 }

@@ -22,14 +22,17 @@ import (
 func setupTestApp(t *testing.T) (*echo.Echo, func()) {
 	t.Helper()
 
-	tmpDB, err := os.CreateTemp("", "pos_cafe_test_*.db")
-	require.NoError(t, err)
-	dbPath := tmpDB.Name()
-	_ = tmpDB.Close()
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos?sslmode=disable"
+	}
 
 	ctx := context.Background()
-	db, err := database.Open(ctx, dbPath)
+	db, err := database.Open(ctx, dbURL)
 	require.NoError(t, err)
+
+	// Clean table before test suite
+	_, _ = db.ExecContext(ctx, "TRUNCATE TABLE categories RESTART IDENTITY CASCADE")
 
 	queries := sqlc.New(db)
 	slices := category.NewSlices(queries, nil)
@@ -41,8 +44,8 @@ func setupTestApp(t *testing.T) (*echo.Echo, func()) {
 	slices.RegisterRoutes(v1)
 
 	cleanup := func() {
+		_, _ = db.ExecContext(ctx, "TRUNCATE TABLE categories RESTART IDENTITY CASCADE")
 		_ = db.Close()
-		_ = os.Remove(dbPath)
 	}
 
 	return e, cleanup
