@@ -36,7 +36,7 @@ func NewDeleteHandler(store categoryDeleter) *DeleteHandler {
 }
 
 func (h *DeleteHandler) Handle(ctx context.Context, cmd DeleteCommand) error {
-	// Kiểm tra tồn tại trước khi xóa
+	// Check existence first so a missing row maps to 404, not a silent no-op
 	_, err := h.store.GetCategoryByID(ctx, cmd.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

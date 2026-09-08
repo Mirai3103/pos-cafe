@@ -15,9 +15,9 @@ var (
 )
 
 type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   *APIError   `json:"error,omitempty"`
+	Success bool      `json:"success"`
+	Data    any       `json:"data,omitempty"`
+	Error   *APIError `json:"error,omitempty"`
 }
 
 type APIError struct {
@@ -26,7 +26,7 @@ type APIError struct {
 }
 
 // OK sends a 200 OK success response.
-func OK(c echo.Context, data interface{}) error {
+func OK(c echo.Context, data any) error {
 	return c.JSON(http.StatusOK, APIResponse{
 		Success: true,
 		Data:    data,
@@ -34,7 +34,7 @@ func OK(c echo.Context, data interface{}) error {
 }
 
 // Created sends a 201 Created success response.
-func Created(c echo.Context, data interface{}) error {
+func Created(c echo.Context, data any) error {
 	return c.JSON(http.StatusCreated, APIResponse{
 		Success: true,
 		Data:    data,

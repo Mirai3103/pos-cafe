@@ -53,7 +53,7 @@ func NewCreateHandler(store categoryCreator, publisher EventPublisher) *CreateHa
 }
 
 func (h *CreateHandler) Handle(ctx context.Context, cmd CreateCommand) (*Response, error) {
-	// 1. Business Rule: Tên danh mục không được trùng lặp (pre-check)
+	// 1. Business rule: category names are unique (pre-check for a friendly 409)
 	existing, err := h.store.GetCategoryByName(ctx, cmd.Name)
 	if err == nil && existing.ID > 0 {
 		return nil, fmt.Errorf("%w: category with name '%s'", response.ErrConflict, cmd.Name)
@@ -67,7 +67,7 @@ func (h *CreateHandler) Handle(ctx context.Context, cmd CreateCommand) (*Respons
 		isActive = *cmd.IsActive
 	}
 
-	// 3. Thực thi lưu trữ (Database Mutation)
+	// 3. Persist (database mutation)
 	category, err := h.store.CreateCategory(ctx, sqlc.CreateCategoryParams{
 		Name:         cmd.Name,
 		Description:  cmd.Description,
@@ -75,7 +75,8 @@ func (h *CreateHandler) Handle(ctx context.Context, cmd CreateCommand) (*Respons
 		IsActive:     isActive,
 	})
 	if err != nil {
-		// Bắt lỗi Unique Violation từ PostgreSQL (SQLSTATE 23505) để tránh race condition
+		// The pre-check above can lose a race, so the unique violation
+		// (SQLSTATE 23505) is the authoritative conflict signal.
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, fmt.Errorf("%w: category with name '%s'", response.ErrConflict, cmd.Name)
@@ -85,7 +86,7 @@ func (h *CreateHandler) Handle(ctx context.Context, cmd CreateCommand) (*Respons
 
 	res := toResponse(category)
 
-	// 4. Bắn Domain Event ra EventBus
+	// 4. Emit the domain event; a failed publish must not fail the request
 	if err := h.publisher.Publish(TopicCategoryCreated, CreatedEvent{
 		ID:   res.ID,
 		Name: res.Name,
