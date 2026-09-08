@@ -14,6 +14,7 @@ import (
 
 	"github.com/Mirai3103/pos-cafe/config"
 	_ "github.com/Mirai3103/pos-cafe/docs"
+	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/category"
 	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
@@ -172,6 +173,9 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 	// 6. Register Vertical Slices
 	v1 := e.Group("/api/v1")
+	authSlices := auth.NewSlices(db, queries)
+	authSlices.RegisterRoutes(v1)
+
 	categorySlices := category.NewSlices(queries, bus)
 	categorySlices.RegisterRoutes(v1)
 
