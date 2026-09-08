@@ -15,14 +15,21 @@ type ListQuery struct {
 	ActiveOnly bool
 }
 
+// === Dependency Boundary ===
+
+type categoryLister interface {
+	ListCategories(ctx context.Context) ([]sqlc.Category, error)
+	ListActiveCategories(ctx context.Context) ([]sqlc.Category, error)
+}
+
 // === Query Handler (Read Logic) ===
 
 type ListHandler struct {
-	queries *sqlc.Queries
+	store categoryLister
 }
 
-func NewListHandler(queries *sqlc.Queries) *ListHandler {
-	return &ListHandler{queries: queries}
+func NewListHandler(store categoryLister) *ListHandler {
+	return &ListHandler{store: store}
 }
 
 func (h *ListHandler) Handle(ctx context.Context, q ListQuery) ([]Response, error) {
@@ -30,9 +37,9 @@ func (h *ListHandler) Handle(ctx context.Context, q ListQuery) ([]Response, erro
 	var err error
 
 	if q.ActiveOnly {
-		categories, err = h.queries.ListActiveCategories(ctx)
+		categories, err = h.store.ListActiveCategories(ctx)
 	} else {
-		categories, err = h.queries.ListCategories(ctx)
+		categories, err = h.store.ListCategories(ctx)
 	}
 
 	if err != nil {

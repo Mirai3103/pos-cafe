@@ -1,0 +1,26 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - errcheck
+    - ineffassign
+    - revive
+    - gosec
+    - misspell
+    - unconvert
+    - durationcheck
+
+issues:
+  exclude-dirs:
+    - docs
+    - internal/database/sqlc
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck

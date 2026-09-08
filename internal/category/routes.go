@@ -1,10 +1,30 @@
 package category
 
 import (
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
-	"github.com/Mirai3103/pos-cafe/internal/eventbus"
 	"github.com/labstack/echo/v4"
 )
+
+// CategoryStore bundles the storage operations needed by all category slices.
+// sqlc.Queries implements this interface implicitly.
+type CategoryStore interface {
+	categoryCreator
+	categoryGetter
+	categoryLister
+	categoryUpdater
+	categoryDeleter
+}
+
+// EventPublisher decouples slices from the concrete event bus implementation.
+type EventPublisher interface {
+	Publish(topic string, payload any) error
+}
+
+// NoopPublisher is a null object pattern implementation of EventPublisher.
+type NoopPublisher struct{}
+
+func (NoopPublisher) Publish(topic string, payload any) error {
+	return nil
+}
 
 type Slices struct {
 	Create *CreateHandler
@@ -14,13 +34,16 @@ type Slices struct {
 	Delete *DeleteHandler
 }
 
-func NewSlices(queries *sqlc.Queries, bus *eventbus.Bus) *Slices {
+func NewSlices(store CategoryStore, publisher EventPublisher) *Slices {
+	if publisher == nil {
+		publisher = NoopPublisher{}
+	}
 	return &Slices{
-		Create: NewCreateHandler(queries, bus),
-		Get:    NewGetByIDHandler(queries),
-		List:   NewListHandler(queries),
-		Update: NewUpdateHandler(queries),
-		Delete: NewDeleteHandler(queries),
+		Create: NewCreateHandler(store, publisher),
+		Get:    NewGetByIDHandler(store),
+		List:   NewListHandler(store),
+		Update: NewUpdateHandler(store),
+		Delete: NewDeleteHandler(store),
 	}
 }
 

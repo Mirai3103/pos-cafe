@@ -9,6 +9,7 @@ import (
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
 )
 
@@ -22,19 +23,27 @@ type UpdateCommand struct {
 	IsActive     *bool  `json:"is_active"`
 }
 
+// === Dependency Boundary ===
+
+type categoryUpdater interface {
+	GetCategoryByID(ctx context.Context, id int64) (sqlc.Category, error)
+	GetCategoryByName(ctx context.Context, name string) (sqlc.Category, error)
+	UpdateCategory(ctx context.Context, arg sqlc.UpdateCategoryParams) (sqlc.Category, error)
+}
+
 // === Command Handler (Business Logic) ===
 
 type UpdateHandler struct {
-	queries *sqlc.Queries
+	store categoryUpdater
 }
 
-func NewUpdateHandler(queries *sqlc.Queries) *UpdateHandler {
-	return &UpdateHandler{queries: queries}
+func NewUpdateHandler(store categoryUpdater) *UpdateHandler {
+	return &UpdateHandler{store: store}
 }
 
 func (h *UpdateHandler) Handle(ctx context.Context, cmd UpdateCommand) (*Response, error) {
 	// 1. Kiểm tra tồn tại
-	current, err := h.queries.GetCategoryByID(ctx, cmd.ID)
+	current, err := h.store.GetCategoryByID(ctx, cmd.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: category id %d", response.ErrNotFound, cmd.ID)
@@ -42,9 +51,9 @@ func (h *UpdateHandler) Handle(ctx context.Context, cmd UpdateCommand) (*Respons
 		return nil, fmt.Errorf("find category: %w", err)
 	}
 
-	// 2. Kiểm tra trùng tên với category khác
+	// 2. Kiểm tra trùng tên với category khác (pre-check)
 	if cmd.Name != current.Name {
-		existing, err := h.queries.GetCategoryByName(ctx, cmd.Name)
+		existing, err := h.store.GetCategoryByName(ctx, cmd.Name)
 		if err == nil && existing.ID != cmd.ID {
 			return nil, fmt.Errorf("%w: category with name '%s'", response.ErrConflict, cmd.Name)
 		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -57,7 +66,7 @@ func (h *UpdateHandler) Handle(ctx context.Context, cmd UpdateCommand) (*Respons
 		isActive = *cmd.IsActive
 	}
 
-	category, err := h.queries.UpdateCategory(ctx, sqlc.UpdateCategoryParams{
+	category, err := h.store.UpdateCategory(ctx, sqlc.UpdateCategoryParams{
 		ID:           cmd.ID,
 		Name:         cmd.Name,
 		Description:  cmd.Description,
@@ -65,6 +74,10 @@ func (h *UpdateHandler) Handle(ctx context.Context, cmd UpdateCommand) (*Respons
 		IsActive:     isActive,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, fmt.Errorf("%w: category with name '%s'", response.ErrConflict, cmd.Name)
+		}
 		return nil, fmt.Errorf("update category: %w", err)
 	}
 
