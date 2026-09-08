@@ -5,7 +5,11 @@
 package sqlc
 
 import (
+	"database/sql"
+	"encoding/json"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Category struct {
@@ -16,4 +20,41 @@ type Category struct {
 	IsActive     bool      `json:"is_active"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type IdempotencyKey struct {
+	Key          uuid.UUID       `json:"key"`
+	ActorID      uuid.UUID       `json:"actor_id"`
+	Action       string          `json:"action"`
+	RequestHash  string          `json:"request_hash"`
+	ResponseCode int32           `json:"response_code"`
+	ResponseBody json.RawMessage `json:"response_body"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+type StaffAccessSession struct {
+	ID                  uuid.UUID      `json:"id"`
+	TokenHash           string         `json:"token_hash"`
+	StaffIdentityID     uuid.UUID      `json:"staff_identity_id"`
+	State               string         `json:"state"`
+	ActiveWorkspace     sql.NullString `json:"active_workspace"`
+	LastAuthenticatedAt time.Time      `json:"last_authenticated_at"`
+	LastHumanActivityAt time.Time      `json:"last_human_activity_at"`
+	ExpiresAt           time.Time      `json:"expires_at"`
+	RevokedAt           sql.NullTime   `json:"revoked_at"`
+	CreatedAt           time.Time      `json:"created_at"`
+}
+
+type StaffIdentity struct {
+	ID          uuid.UUID `json:"id"`
+	DisplayName string    `json:"display_name"`
+	LoginCode   string    `json:"login_code"`
+	PinHash     string    `json:"pin_hash"`
+	Enabled     bool      `json:"enabled"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type StaffOperationalRole struct {
+	StaffIdentityID uuid.UUID `json:"staff_identity_id"`
+	Role            string    `json:"role"`
 }
