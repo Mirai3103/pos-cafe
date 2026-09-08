@@ -15,8 +15,8 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/category"
 	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
 	"github.com/Mirai3103/pos-cafe/internal/response"
-	"github.com/Mirai3103/pos-cafe/internal/validator"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,7 +47,7 @@ func setupTestApp(t *testing.T) (*echo.Echo, func()) {
 	slices := category.NewSlices(queries, nil)
 
 	e := echo.New()
-	e.Validator = validator.New()
+	e.Validator = httpvalidator.New()
 
 	v1 := e.Group("/api/v1")
 	slices.RegisterRoutes(v1)

@@ -18,7 +18,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/eventbus"
-	"github.com/Mirai3103/pos-cafe/internal/validator"
+	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoSwagger "github.com/swaggo/echo-swagger"
@@ -100,7 +100,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	// 5. Setup Echo Web Server & HTTP Timeouts
 	e := echo.New()
 	e.HideBanner = true
-	e.Validator = validator.New()
+	e.Validator = httpvalidator.New()
 
 	// Enforce HTTP connection timeouts on the underlying http.Server
 	e.Server.ReadTimeout = cfg.ReadTimeout

@@ -54,10 +54,10 @@ func NewCreateHandler(store categoryCreator, publisher EventPublisher) *CreateHa
 
 func (h *CreateHandler) Handle(ctx context.Context, cmd CreateCommand) (*Response, error) {
 	// 1. Business rule: category names are unique (pre-check for a friendly 409)
-	existing, err := h.store.GetCategoryByName(ctx, cmd.Name)
-	if err == nil && existing.ID > 0 {
+	switch _, err := h.store.GetCategoryByName(ctx, cmd.Name); {
+	case err == nil:
 		return nil, fmt.Errorf("%w: category with name '%s'", response.ErrConflict, cmd.Name)
-	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	case !errors.Is(err, sql.ErrNoRows):
 		return nil, fmt.Errorf("check category uniqueness: %w", err)
 	}
 

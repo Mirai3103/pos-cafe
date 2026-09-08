@@ -1,9 +1,10 @@
-package validator_test
+package httpvalidator_test
 
 import (
 	"testing"
 
-	"github.com/Mirai3103/pos-cafe/internal/validator"
+	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
+	"github.com/go-playground/validator/v10"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,7 +17,7 @@ type sampleStruct struct {
 
 func TestValidator(t *testing.T) {
 	t.Parallel()
-	v := validator.New()
+	v := httpvalidator.New()
 
 	t.Run("valid struct", func(t *testing.T) {
 		t.Parallel()
@@ -64,4 +65,17 @@ func TestValidator(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "must be less than or equal to 65")
 	})
+}
+
+func TestValidatorNonStructInput(t *testing.T) {
+	t.Parallel()
+
+	// A non-struct argument is a programming error, not a client error, so the
+	// library's own *InvalidValidationError must surface unchanged rather than
+	// being reformatted into a field message.
+	err := httpvalidator.New().Validate("not a struct")
+
+	require.Error(t, err)
+	var invalid *validator.InvalidValidationError
+	assert.ErrorAs(t, err, &invalid)
 }
