@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
-	"github.com/Mirai3103/pos-cafe/internal/eventbus"
 	"github.com/Mirai3103/pos-cafe/internal/response"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
 )
 
@@ -30,20 +31,30 @@ type CreatedEvent struct {
 	Name string `json:"name"`
 }
 
+// === Dependency Boundary (Consumer-defined interface) ===
+
+type categoryCreator interface {
+	GetCategoryByName(ctx context.Context, name string) (sqlc.Category, error)
+	CreateCategory(ctx context.Context, arg sqlc.CreateCategoryParams) (sqlc.Category, error)
+}
+
 // === Command Handler (Business Logic) ===
 
 type CreateHandler struct {
-	queries *sqlc.Queries
-	bus     *eventbus.Bus
+	store     categoryCreator
+	publisher EventPublisher
 }
 
-func NewCreateHandler(queries *sqlc.Queries, bus *eventbus.Bus) *CreateHandler {
-	return &CreateHandler{queries: queries, bus: bus}
+func NewCreateHandler(store categoryCreator, publisher EventPublisher) *CreateHandler {
+	if publisher == nil {
+		publisher = NoopPublisher{}
+	}
+	return &CreateHandler{store: store, publisher: publisher}
 }
 
 func (h *CreateHandler) Handle(ctx context.Context, cmd CreateCommand) (*Response, error) {
-	// 1. Business Rule: Tên danh mục không được trùng lặp
-	existing, err := h.queries.GetCategoryByName(ctx, cmd.Name)
+	// 1. Business Rule: Tên danh mục không được trùng lặp (pre-check)
+	existing, err := h.store.GetCategoryByName(ctx, cmd.Name)
 	if err == nil && existing.ID > 0 {
 		return nil, fmt.Errorf("%w: category with name '%s'", response.ErrConflict, cmd.Name)
 	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -57,24 +68,33 @@ func (h *CreateHandler) Handle(ctx context.Context, cmd CreateCommand) (*Respons
 	}
 
 	// 3. Thực thi lưu trữ (Database Mutation)
-	category, err := h.queries.CreateCategory(ctx, sqlc.CreateCategoryParams{
+	category, err := h.store.CreateCategory(ctx, sqlc.CreateCategoryParams{
 		Name:         cmd.Name,
 		Description:  cmd.Description,
 		DisplayOrder: cmd.DisplayOrder,
 		IsActive:     isActive,
 	})
 	if err != nil {
+		// Bắt lỗi Unique Violation từ PostgreSQL (SQLSTATE 23505) để tránh race condition
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, fmt.Errorf("%w: category with name '%s'", response.ErrConflict, cmd.Name)
+		}
 		return nil, fmt.Errorf("create category in database: %w", err)
 	}
 
 	res := toResponse(category)
 
-	// 4. Bắn Domain Event ra EventBus (nếu bus được truyền vào)
-	if h.bus != nil {
-		_ = h.bus.Publish(TopicCategoryCreated, CreatedEvent{
-			ID:   res.ID,
-			Name: res.Name,
-		})
+	// 4. Bắn Domain Event ra EventBus
+	if err := h.publisher.Publish(TopicCategoryCreated, CreatedEvent{
+		ID:   res.ID,
+		Name: res.Name,
+	}); err != nil {
+		slog.ErrorContext(ctx, "failed to publish category created event",
+			"error", err,
+			"category_id", res.ID,
+			"topic", TopicCategoryCreated,
+		)
 	}
 
 	return &res, nil

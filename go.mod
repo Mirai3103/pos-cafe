@@ -1,6 +1,6 @@
 module github.com/Mirai3103/pos-cafe
 
-go 1.27.1
+go 1.25.0
 
 require (
 	github.com/ThreeDotsLabs/watermill v1.4.4

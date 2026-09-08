@@ -18,19 +18,26 @@ type DeleteCommand struct {
 	ID int64
 }
 
+// === Dependency Boundary ===
+
+type categoryDeleter interface {
+	GetCategoryByID(ctx context.Context, id int64) (sqlc.Category, error)
+	DeleteCategory(ctx context.Context, id int64) error
+}
+
 // === Command Handler (Business Logic) ===
 
 type DeleteHandler struct {
-	queries *sqlc.Queries
+	store categoryDeleter
 }
 
-func NewDeleteHandler(queries *sqlc.Queries) *DeleteHandler {
-	return &DeleteHandler{queries: queries}
+func NewDeleteHandler(store categoryDeleter) *DeleteHandler {
+	return &DeleteHandler{store: store}
 }
 
 func (h *DeleteHandler) Handle(ctx context.Context, cmd DeleteCommand) error {
 	// Kiểm tra tồn tại trước khi xóa
-	_, err := h.queries.GetCategoryByID(ctx, cmd.ID)
+	_, err := h.store.GetCategoryByID(ctx, cmd.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: category id %d", response.ErrNotFound, cmd.ID)
@@ -38,7 +45,7 @@ func (h *DeleteHandler) Handle(ctx context.Context, cmd DeleteCommand) error {
 		return fmt.Errorf("find category: %w", err)
 	}
 
-	if err := h.queries.DeleteCategory(ctx, cmd.ID); err != nil {
+	if err := h.store.DeleteCategory(ctx, cmd.ID); err != nil {
 		return fmt.Errorf("delete category from database: %w", err)
 	}
 

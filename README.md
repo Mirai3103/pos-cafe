@@ -137,16 +137,26 @@ The application will:
 
 ---
 
-## 🧪 Testing
+## 🧪 Testing Strategy & Safety
 
-Run all unit and integration tests with Go's race detector:
+We separate fast in-memory **Unit Tests** from database-backed **Integration Tests** using Go build tags, with strict safety controls protecting development data:
 
+### 1. Pure Unit Tests (Fast & Independent)
+Runs completely in-memory using consumer-defined mock interfaces, executing all tests in parallel in **< 0.01s**:
 ```bash
 make test
 # or: go test -v -race ./...
 ```
 
-Tests run against PostgreSQL (configurable via `TEST_DATABASE_URL` or defaulting to standard local development credentials), executing fast with 100% test isolation.
+### 2. Integration Tests (PostgreSQL Required)
+Tests run against a dedicated test database (isolated with `//go:build integration` tags):
+```bash
+make test-integration
+# or: TEST_DATABASE_URL="postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable" go test -v -race -tags=integration ./...
+```
+
+> [!IMPORTANT]
+> **Zero-Risk Test Safety Guard:** The integration test runner strictly requires `TEST_DATABASE_URL` and enforces that the target database name ends with `_test` (e.g. `cafe_pos_test`). It **never** falls back to your development database and will instantly abort if a non-test database is provided.
 
 ---
 
@@ -335,10 +345,18 @@ productSlices.RegisterRoutes(v1)
 
 | Command | Description |
 | :--- | :--- |
+| `make docker-up` | Start background PostgreSQL container (`cafe-pos-db`) |
+| `make docker-down` | Stop background PostgreSQL container |
+| `make docker-logs` | Stream PostgreSQL logs |
 | `make run` | Start the API server |
 | `make build` | Compile the binary into `bin/api` |
-| `make test` | Run tests with race detection (`-race`) |
-| `make sqlc` | Generate type-safe database queries |
+| `make test` | Run fast, isolated in-memory unit tests (`-race`) |
+| `make test-integration`| Run integration tests against `cafe_pos_test` |
+| `make test-all` | Run both unit and integration test suites |
+| `make coverage` | Calculate statement test coverage |
+| `make fmt` | Format all Go source files with `gofmt` |
+| `make vet` | Run standard Go static code analysis |
+| `make sqlc` | Generate type-safe database queries from SQL |
 | `make swagger` | Generate Swagger UI / OpenAPI documentation |
 | `make tidy` | Run `go mod tidy` to clean up dependencies |
 | `make clean` | Clean build artifacts and local test databases |

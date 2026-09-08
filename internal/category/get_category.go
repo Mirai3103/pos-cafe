@@ -18,18 +18,24 @@ type GetByIDQuery struct {
 	ID int64
 }
 
+// === Dependency Boundary ===
+
+type categoryGetter interface {
+	GetCategoryByID(ctx context.Context, id int64) (sqlc.Category, error)
+}
+
 // === Query Handler (Read Logic) ===
 
 type GetByIDHandler struct {
-	queries *sqlc.Queries
+	store categoryGetter
 }
 
-func NewGetByIDHandler(queries *sqlc.Queries) *GetByIDHandler {
-	return &GetByIDHandler{queries: queries}
+func NewGetByIDHandler(store categoryGetter) *GetByIDHandler {
+	return &GetByIDHandler{store: store}
 }
 
 func (h *GetByIDHandler) Handle(ctx context.Context, q GetByIDQuery) (*Response, error) {
-	category, err := h.queries.GetCategoryByID(ctx, q.ID)
+	category, err := h.store.GetCategoryByID(ctx, q.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: category id %d", response.ErrNotFound, q.ID)
