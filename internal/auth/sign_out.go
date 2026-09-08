@@ -14,6 +14,16 @@ func NewSignOutHandler(queries sqlc.Querier) *SignOutHandler {
 	return &SignOutHandler{queries: queries}
 }
 
+// HandleHTTP godoc
+//
+//	@Summary		Đăng xuất phiên làm việc
+//	@Description	Thu hồi phiên làm việc hiện tại và xóa cookie phiên
+//	@Tags			Auth
+//	@Produce		json
+//	@Success		200	{object}	response.APIResponse{data=map[string]string}
+//	@Failure		401	{object}	response.APIResponse
+//	@Failure		500	{object}	response.APIResponse
+//	@Router			/auth/sign-out [post]
 func (h *SignOutHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff != nil {

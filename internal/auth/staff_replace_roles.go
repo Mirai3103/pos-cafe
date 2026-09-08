@@ -104,20 +104,21 @@ func (h *StaffReplaceRolesHandler) Handle(ctx context.Context, actor *StaffClaim
 }
 
 // HandleHTTP godoc
-// @Summary Cập nhật danh sách vai trò nhân viên
-// @Description Thay thế toàn bộ vai trò của nhân viên bằng danh sách mới
-// @Tags Staff
-// @Accept json
-// @Produce json
-// @Param id path string true "Staff ID"
-// @Param request body ReplaceStaffRolesRequest true "Danh sách vai trò mới"
-// @Success 200 {object} response.APIResponse{data=StaffDetailResponse}
-// @Failure 400 {object} response.APIResponse
-// @Failure 403 {object} response.APIResponse
-// @Failure 404 {object} response.APIResponse
-// @Failure 409 {object} response.APIResponse
-// @Failure 500 {object} response.APIResponse
-// @Router /staff/{id}/roles [put]
+//
+//	@Summary		Cập nhật danh sách vai trò nhân viên
+//	@Description	Thay thế toàn bộ vai trò của nhân viên bằng danh sách mới
+//	@Tags			Staff
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string						true	"Staff ID"
+//	@Param			request	body		ReplaceStaffRolesRequest	true	"Danh sách vai trò mới"
+//	@Success		200		{object}	response.APIResponse{data=StaffDetailResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/staff/{id}/roles [put]
 func (h *StaffReplaceRolesHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {

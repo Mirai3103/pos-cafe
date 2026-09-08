@@ -114,20 +114,21 @@ func (h *StaffSetEnabledHandler) Handle(ctx context.Context, actor *StaffClaims,
 }
 
 // HandleHTTP godoc
-// @Summary Bật hoặc vô hiệu hóa tài khoản nhân viên
-// @Description Kích hoạt hoặc ngưng kích hoạt tài khoản nhân viên
-// @Tags Staff
-// @Accept json
-// @Produce json
-// @Param id path string true "Staff ID"
-// @Param request body SetStaffEnabledRequest true "Thông tin trạng thái"
-// @Success 200 {object} response.APIResponse{data=StaffDetailResponse}
-// @Failure 400 {object} response.APIResponse
-// @Failure 403 {object} response.APIResponse
-// @Failure 404 {object} response.APIResponse
-// @Failure 409 {object} response.APIResponse
-// @Failure 500 {object} response.APIResponse
-// @Router /staff/{id}/enabled [patch]
+//
+//	@Summary		Bật hoặc vô hiệu hóa tài khoản nhân viên
+//	@Description	Kích hoạt hoặc ngưng kích hoạt tài khoản nhân viên
+//	@Tags			Staff
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string					true	"Staff ID"
+//	@Param			request	body		SetStaffEnabledRequest	true	"Thông tin trạng thái"
+//	@Success		200		{object}	response.APIResponse{data=StaffDetailResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/staff/{id}/enabled [patch]
 func (h *StaffSetEnabledHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {

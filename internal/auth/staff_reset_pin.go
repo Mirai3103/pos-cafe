@@ -98,19 +98,20 @@ func (h *StaffResetPinHandler) Handle(ctx context.Context, actor *StaffClaims, t
 }
 
 // HandleHTTP godoc
-// @Summary Đặt lại mã PIN nhân viên
-// @Description Quản lý đặt lại mã PIN cho nhân viên và thu hồi các phiên đăng nhập hiện tại
-// @Tags Staff
-// @Accept json
-// @Produce json
-// @Param id path string true "Staff ID"
-// @Param request body ResetStaffPinRequest true "Mã PIN mới"
-// @Success 200 {object} response.APIResponse{data=map[string]string}
-// @Failure 400 {object} response.APIResponse
-// @Failure 403 {object} response.APIResponse
-// @Failure 404 {object} response.APIResponse
-// @Failure 500 {object} response.APIResponse
-// @Router /staff/{id}/reset-pin [post]
+//
+//	@Summary		Đặt lại mã PIN nhân viên
+//	@Description	Quản lý đặt lại mã PIN cho nhân viên và thu hồi các phiên đăng nhập hiện tại
+//	@Tags			Staff
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string					true	"Staff ID"
+//	@Param			request	body		ResetStaffPinRequest	true	"Mã PIN mới"
+//	@Success		200		{object}	response.APIResponse{data=map[string]string}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/staff/{id}/reset-pin [post]
 func (h *StaffResetPinHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff == nil {

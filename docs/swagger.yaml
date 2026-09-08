@@ -1,5 +1,216 @@
 basePath: /api/v1
 definitions:
+  auth.BootstrapManagerRequest:
+    properties:
+      display_name:
+        maxLength: 120
+        minLength: 2
+        type: string
+      login_code:
+        maxLength: 24
+        minLength: 2
+        type: string
+      pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+    required:
+    - display_name
+    - login_code
+    - pin
+    type: object
+  auth.CreateStaffRequest:
+    properties:
+      display_name:
+        maxLength: 120
+        minLength: 1
+        type: string
+      enabled:
+        type: boolean
+      login_code:
+        maxLength: 24
+        minLength: 1
+        type: string
+      manager_pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+      pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+      request_id:
+        type: string
+      roles:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - display_name
+    - login_code
+    - manager_pin
+    - pin
+    - request_id
+    - roles
+    type: object
+  auth.DeclareWorkspaceRequest:
+    properties:
+      workspace:
+        enum:
+        - cashier
+        - manager
+        - preparation
+        type: string
+    required:
+    - workspace
+    type: object
+  auth.IdentitySummaryResponse:
+    properties:
+      display_name:
+        type: string
+      login_code:
+        type: string
+    type: object
+  auth.ReplaceStaffRolesRequest:
+    properties:
+      manager_pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+      request_id:
+        type: string
+      roles:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - manager_pin
+    - request_id
+    - roles
+    type: object
+  auth.ResetStaffPinRequest:
+    properties:
+      manager_pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+      pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+      request_id:
+        type: string
+    required:
+    - manager_pin
+    - pin
+    - request_id
+    type: object
+  auth.SessionStateResponse:
+    properties:
+      capabilities:
+        items:
+          type: string
+        type: array
+      display_name:
+        type: string
+      login_code:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      staff_id:
+        type: string
+      state:
+        description: '"authenticated", "locked", "signed_out"'
+        type: string
+      workspace:
+        type: string
+    type: object
+  auth.SetStaffEnabledRequest:
+    properties:
+      enabled:
+        type: boolean
+      expected_enabled:
+        type: boolean
+      manager_pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+      request_id:
+        type: string
+    required:
+    - manager_pin
+    - request_id
+    type: object
+  auth.SignInRequest:
+    properties:
+      login_code:
+        maxLength: 24
+        minLength: 1
+        type: string
+      pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+    required:
+    - login_code
+    - pin
+    type: object
+  auth.SignInResponse:
+    properties:
+      staff:
+        $ref: '#/definitions/auth.StaffProfileResponse'
+      token:
+        type: string
+    type: object
+  auth.StaffDetailResponse:
+    properties:
+      created_at:
+        type: string
+      display_name:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: string
+      login_code:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  auth.StaffProfileResponse:
+    properties:
+      capabilities:
+        items:
+          type: string
+        type: array
+      display_name:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: string
+      login_code:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  auth.UnlockRequest:
+    properties:
+      pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+    required:
+    - pin
+    type: object
   category.CreateCommand:
     properties:
       description:
@@ -74,6 +285,304 @@ info:
   title: POS Cafe API
   version: "1.0"
 paths:
+  /auth/activity:
+    post:
+      description: Cập nhật thời điểm hoạt động gần nhất để gia hạn tự động khóa do
+        không hoạt động (inactivity timeout)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: boolean
+                  type: object
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Ghi nhận hoạt động người dùng
+      tags:
+      - Auth
+  /auth/bootstrap:
+    post:
+      consumes:
+      - application/json
+      description: Thiết lập tài khoản quản lý đầu tiên cho hệ thống POS. Chỉ thực
+        hiện được khi chưa có quản lý nào.
+      parameters:
+      - description: Bootstrap manager credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.BootstrapManagerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.StaffProfileResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Khởi tạo tài khoản Quản lý đầu tiên (Bootstrap)
+      tags:
+      - Auth
+  /auth/identities:
+    get:
+      description: Trả về danh sách tên hiển thị và mã đăng nhập của nhân viên đang
+        hoạt động (dùng cho màn hình chọn nhân viên POS)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/auth.IdentitySummaryResponse'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Danh sách định danh nhân viên đang hoạt động
+      tags:
+      - Auth
+  /auth/lock:
+    post:
+      description: Chuyển trạng thái phiên làm việc hiện tại sang locked
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Khóa phiên làm việc
+      tags:
+      - Auth
+  /auth/session:
+    get:
+      description: Kiểm tra và trả về trạng thái phiên làm việc hiện tại (authenticated,
+        locked, signed_out) qua Bearer token hoặc cookie
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.SessionStateResponse'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Lấy trạng thái phiên làm việc hiện tại
+      tags:
+      - Auth
+  /auth/sign-in:
+    post:
+      consumes:
+      - application/json
+      description: Xác thực nhân viên bằng login_code và pin 4-8 số
+      parameters:
+      - description: Sign in credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.SignInRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.SignInResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Đăng nhập bằng mã PIN
+      tags:
+      - Auth
+  /auth/sign-out:
+    post:
+      description: Thu hồi phiên làm việc hiện tại và xóa cookie phiên
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Đăng xuất phiên làm việc
+      tags:
+      - Auth
+  /auth/unlock:
+    post:
+      consumes:
+      - application/json
+      description: Mở khóa phiên làm việc đang bị khóa (locked) bằng mã PIN của nhân
+        viên
+      parameters:
+      - description: Mã PIN mở khóa
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.UnlockRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.SignInResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Mở khóa phiên làm việc
+      tags:
+      - Auth
+  /auth/workspace:
+    post:
+      consumes:
+      - application/json
+      description: Khai báo khu vực làm việc (cashier, manager, preparation) cho phiên
+        làm việc hiện tại
+      parameters:
+      - description: Khu vực làm việc
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.DeclareWorkspaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Chọn khu vực làm việc (Workspace)
+      tags:
+      - Auth
   /categories:
     get:
       description: Retrieve a list of all categories or active categories only
@@ -232,4 +741,252 @@ paths:
       summary: Update category
       tags:
       - Categories
+  /staff:
+    get:
+      description: Trả về danh sách tất cả nhân viên kèm vai trò
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/auth.StaffDetailResponse'
+                  type: array
+              type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Danh sách tất cả nhân viên
+      tags:
+      - Staff
+    post:
+      consumes:
+      - application/json
+      description: Quản lý tạo nhân viên mới với mã đăng nhập, mã PIN và danh sách
+        vai trò
+      parameters:
+      - description: Thông tin nhân viên mới
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.CreateStaffRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.StaffDetailResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Tạo tài khoản nhân viên mới
+      tags:
+      - Staff
+  /staff/{id}/enabled:
+    patch:
+      consumes:
+      - application/json
+      description: Kích hoạt hoặc ngưng kích hoạt tài khoản nhân viên
+      parameters:
+      - description: Staff ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Thông tin trạng thái
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.SetStaffEnabledRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.StaffDetailResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Bật hoặc vô hiệu hóa tài khoản nhân viên
+      tags:
+      - Staff
+  /staff/{id}/reset-pin:
+    post:
+      consumes:
+      - application/json
+      description: Quản lý đặt lại mã PIN cho nhân viên và thu hồi các phiên đăng
+        nhập hiện tại
+      parameters:
+      - description: Staff ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Mã PIN mới
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ResetStaffPinRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Đặt lại mã PIN nhân viên
+      tags:
+      - Staff
+  /staff/{id}/roles:
+    put:
+      consumes:
+      - application/json
+      description: Thay thế toàn bộ vai trò của nhân viên bằng danh sách mới
+      parameters:
+      - description: Staff ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Danh sách vai trò mới
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ReplaceStaffRolesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.StaffDetailResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Cập nhật danh sách vai trò nhân viên
+      tags:
+      - Staff
+  /staff/me:
+    get:
+      description: Trả về thông tin hồ sơ và quyền hạn của nhân viên đang đăng nhập
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.StaffProfileResponse'
+              type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Lấy thông tin tài khoản hiện tại
+      tags:
+      - Staff
 swagger: "2.0"

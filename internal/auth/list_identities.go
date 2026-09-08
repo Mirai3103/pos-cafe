@@ -33,6 +33,15 @@ func (h *ListIdentitiesHandler) Handle(ctx context.Context) ([]IdentitySummaryRe
 	return res, nil
 }
 
+// HandleHTTP godoc
+//
+//	@Summary		Danh sách định danh nhân viên đang hoạt động
+//	@Description	Trả về danh sách tên hiển thị và mã đăng nhập của nhân viên đang hoạt động (dùng cho màn hình chọn nhân viên POS)
+//	@Tags			Auth
+//	@Produce		json
+//	@Success		200	{object}	response.APIResponse{data=[]IdentitySummaryResponse}
+//	@Failure		500	{object}	response.APIResponse
+//	@Router			/auth/identities [get]
 func (h *ListIdentitiesHandler) HandleHTTP(c echo.Context) error {
 	res, err := h.Handle(c.Request().Context())
 	if err != nil {
