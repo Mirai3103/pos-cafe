@@ -42,18 +42,10 @@ func (h *StaffSetEnabledHandler) Handle(ctx context.Context, actor *StaffClaims,
 		return 0, nil, fmt.Errorf("%w: PIN Quản lý không đúng", response.ErrForbidden)
 	}
 
-	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.set_enabled", idempotencyPayload{TargetID: targetID, Body: req}, func() (int, *StaffDetailResponse, error) {
-		tx, err := h.db.BeginTx(ctx, nil)
-		if err != nil {
-			return 0, nil, fmt.Errorf("begin tx: %w", err)
-		}
-		defer func() { _ = tx.Rollback() }()
-
+	return ExecuteWithIdempotency(ctx, h.db, h.queries, actor.StaffID, req.RequestID, "staff.set_enabled", idempotencyPayload{TargetID: targetID, Body: req}, func(tx *sql.Tx, qtx *sqlc.Queries) (int, *StaffDetailResponse, error) {
 		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", EnabledManagerInvariantLockID); err != nil {
 			return 0, nil, fmt.Errorf("acquire invariant lock: %w", err)
 		}
-
-		qtx := h.queries.WithTx(tx)
 
 		target, err := qtx.GetStaffByID(ctx, targetID)
 		if err != nil {
@@ -96,10 +88,6 @@ func (h *StaffSetEnabledHandler) Handle(ctx context.Context, actor *StaffClaims,
 			if err := qtx.RevokeAllStaffSessions(ctx, targetID); err != nil {
 				return 0, nil, fmt.Errorf("revoke sessions: %w", err)
 			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			return 0, nil, fmt.Errorf("commit tx: %w", err)
 		}
 
 		return http.StatusOK, &StaffDetailResponse{

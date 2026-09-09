@@ -35,19 +35,11 @@ func (h *StaffResetPinHandler) Handle(ctx context.Context, actor *StaffClaims, t
 		return 0, nil, fmt.Errorf("%w: PIN Quản lý không đúng", response.ErrForbidden)
 	}
 
-	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.reset_pin", idempotencyPayload{TargetID: targetID, Body: req}, func() (int, map[string]string, error) {
+	return ExecuteWithIdempotency(ctx, h.db, h.queries, actor.StaffID, req.RequestID, "staff.reset_pin", idempotencyPayload{TargetID: targetID, Body: req}, func(_ *sql.Tx, qtx *sqlc.Queries) (int, map[string]string, error) {
 		pinHash, err := HashPin(req.Pin)
 		if err != nil {
 			return 0, nil, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
 		}
-
-		tx, err := h.db.BeginTx(ctx, nil)
-		if err != nil {
-			return 0, nil, fmt.Errorf("begin tx: %w", err)
-		}
-		defer func() { _ = tx.Rollback() }()
-
-		qtx := h.queries.WithTx(tx)
 
 		target, err := qtx.GetStaffByID(ctx, targetID)
 		if err != nil {
@@ -66,10 +58,6 @@ func (h *StaffResetPinHandler) Handle(ctx context.Context, actor *StaffClaims, t
 
 		if err := qtx.RevokeAllStaffSessions(ctx, targetID); err != nil {
 			return 0, nil, fmt.Errorf("revoke sessions: %w", err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			return 0, nil, fmt.Errorf("commit tx: %w", err)
 		}
 
 		return http.StatusOK, map[string]string{"message": "đổi mã PIN thành công"}, nil

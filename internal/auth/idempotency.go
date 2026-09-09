@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -34,18 +35,29 @@ func ComputeRequestHashWithTarget(action string, targetID uuid.UUID, payload any
 // ExecuteWithIdempotency wraps a mutating operation in an idempotency check and stores replayable response.
 func ExecuteWithIdempotency[T any](
 	ctx context.Context,
+	db *sql.DB,
 	q *sqlc.Queries,
 	actorID uuid.UUID,
 	key uuid.UUID,
 	action string,
 	payload any,
-	fn func() (int, T, error),
+	fn func(tx *sql.Tx, qtx *sqlc.Queries) (int, T, error),
 ) (int, T, error) {
 	var zero T
 	reqHash := ComputeRequestHash(action, payload)
 
-	// Check if already executed
-	existing, err := q.GetIdempotencyKey(ctx, sqlc.GetIdempotencyKeyParams{
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, zero, fmt.Errorf("begin idempotency tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := q.WithTx(tx)
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", idempotencyLockID(actorID, key)); err != nil {
+		return 0, zero, fmt.Errorf("acquire idempotency lock: %w", err)
+	}
+
+	existing, err := qtx.GetIdempotencyKey(ctx, sqlc.GetIdempotencyKeyParams{
 		ActorID: actorID,
 		Key:     key,
 	})
@@ -62,15 +74,13 @@ func ExecuteWithIdempotency[T any](
 		return 0, zero, fmt.Errorf("check idempotency key: %w", err)
 	}
 
-	// Execute operation
-	code, result, err := fn()
+	code, result, err := fn(tx, qtx)
 	if err != nil {
 		return code, result, err
 	}
 
-	// Save result
 	resultBytes, _ := json.Marshal(result)
-	_ = q.InsertIdempotencyKey(ctx, sqlc.InsertIdempotencyKeyParams{
+	if err := qtx.InsertIdempotencyKey(ctx, sqlc.InsertIdempotencyKeyParams{
 		Key:         key,
 		ActorID:     actorID,
 		Action:      action,
@@ -78,7 +88,19 @@ func ExecuteWithIdempotency[T any](
 		//nolint:gosec // G115: HTTP status code (100-599) fits within int32
 		ResponseCode: int32(code),
 		ResponseBody: json.RawMessage(resultBytes),
-	})
+	}); err != nil {
+		return 0, zero, fmt.Errorf("save idempotency key: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, zero, fmt.Errorf("commit idempotency tx: %w", err)
+	}
 
 	return code, result, nil
+}
+
+// idempotencyLockID derives a stable non-negative PostgreSQL advisory-lock ID.
+func idempotencyLockID(actorID, key uuid.UUID) int64 {
+	h := sha256.Sum256([]byte(actorID.String() + ":" + key.String()))
+	return int64(binary.BigEndian.Uint64(h[:8]) & (1<<63 - 1))
 }

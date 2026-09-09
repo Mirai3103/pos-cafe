@@ -105,6 +105,7 @@ type idempMockConfig struct {
 	keys      map[string]storedKey
 	getErr    error
 	insertErr error
+	lockCalls int
 }
 
 func (c *idempMockConfig) getKey(actorID, key uuid.UUID) (storedKey, bool) {
@@ -121,6 +122,18 @@ func (c *idempMockConfig) setKey(k storedKey) {
 		c.keys = make(map[string]storedKey)
 	}
 	c.keys[k.ActorID.String()+":"+k.Key.String()] = k
+}
+
+func (c *idempMockConfig) recordLock() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lockCalls++
+}
+
+func (c *idempMockConfig) getLockCalls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lockCalls
 }
 
 type idempMockConn struct {
@@ -148,6 +161,11 @@ func (s *idempMockStmt) Close() error  { return nil }
 func (s *idempMockStmt) NumInput() int { return -1 }
 
 func (s *idempMockStmt) Exec(args []driver.Value) (driver.Result, error) {
+	if strings.Contains(s.query, "pg_advisory_xact_lock") {
+		s.conn.cfg.recordLock()
+		return driver.RowsAffected(1), nil
+	}
+
 	if strings.Contains(s.query, "InsertIdempotencyKey") || strings.Contains(s.query, "idempotency_keys") {
 		if s.conn.cfg.insertErr != nil {
 			return nil, s.conn.cfg.insertErr
@@ -246,10 +264,10 @@ func TestExecuteWithIdempotency(t *testing.T) {
 
 	t.Run("initial execution runs fn and caches result", func(t *testing.T) {
 		cfg := &idempMockConfig{}
-		_, queries := setupIdempDB(t, cfg)
+		db, queries := setupIdempDB(t, cfg)
 
 		callCount := 0
-		code, res, err := auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, payload, func() (int, map[string]string, error) {
+		code, res, err := auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, action, payload, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
 			callCount++
 			return 201, map[string]string{"status": "created"}, nil
 		})
@@ -268,11 +286,11 @@ func TestExecuteWithIdempotency(t *testing.T) {
 
 	t.Run("replay with identical payload returns cached result without calling fn", func(t *testing.T) {
 		cfg := &idempMockConfig{}
-		_, queries := setupIdempDB(t, cfg)
+		db, queries := setupIdempDB(t, cfg)
 
 		callCount := 0
 		run := func() (int, map[string]string, error) {
-			return auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, payload, func() (int, map[string]string, error) {
+			return auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, action, payload, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
 				callCount++
 				return 201, map[string]string{"status": "created"}, nil
 			})
@@ -295,18 +313,18 @@ func TestExecuteWithIdempotency(t *testing.T) {
 
 	t.Run("replay with same key but different payload returns ErrConflict", func(t *testing.T) {
 		cfg := &idempMockConfig{}
-		_, queries := setupIdempDB(t, cfg)
+		db, queries := setupIdempDB(t, cfg)
 
 		// First call with payload1
 		p1 := map[string]string{"name": "first"}
-		_, _, err := auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, p1, func() (int, map[string]string, error) {
+		_, _, err := auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, action, p1, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
 			return 201, map[string]string{"status": "ok"}, nil
 		})
 		require.NoError(t, err)
 
 		// Second call with payload2 (different hash)
 		p2 := map[string]string{"name": "second"}
-		_, _, err2 := auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, p2, func() (int, map[string]string, error) {
+		_, _, err2 := auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, action, p2, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
 			t.Fatal("fn should not be called")
 			return 200, nil, nil
 		})
@@ -318,10 +336,10 @@ func TestExecuteWithIdempotency(t *testing.T) {
 
 	t.Run("operation error does not save idempotency key", func(t *testing.T) {
 		cfg := &idempMockConfig{}
-		_, queries := setupIdempDB(t, cfg)
+		db, queries := setupIdempDB(t, cfg)
 
 		opErr := errors.New("business failure")
-		code, _, err := auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, payload, func() (int, map[string]string, error) {
+		code, _, err := auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, action, payload, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
 			return 400, nil, opErr
 		})
 
@@ -337,9 +355,9 @@ func TestExecuteWithIdempotency(t *testing.T) {
 		cfg := &idempMockConfig{
 			getErr: errors.New("connection failed"),
 		}
-		_, queries := setupIdempDB(t, cfg)
+		db, queries := setupIdempDB(t, cfg)
 
-		_, _, err := auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, payload, func() (int, map[string]string, error) {
+		_, _, err := auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, action, payload, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
 			t.Fatal("fn should not be called")
 			return 200, nil, nil
 		})
@@ -358,9 +376,9 @@ func TestExecuteWithIdempotency(t *testing.T) {
 			ResponseCode: 200,
 			ResponseBody: []byte("invalid-json{"),
 		})
-		_, queries := setupIdempDB(t, cfg)
+		db, queries := setupIdempDB(t, cfg)
 
-		_, _, err := auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, payload, func() (int, map[string]string, error) {
+		_, _, err := auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, action, payload, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
 			t.Fatal("fn should not be called")
 			return 200, nil, nil
 		})
@@ -368,6 +386,33 @@ func TestExecuteWithIdempotency(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unmarshal cached response")
 	})
+}
+
+func TestExecuteWithIdempotency_Concurrent(t *testing.T) {
+	actorID := uuid.New()
+	key := uuid.New()
+	cfg := &idempMockConfig{}
+	db, queries := setupIdempDB(t, cfg)
+
+	callCount := 0
+	run := func() (int, map[string]string, error) {
+		return auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, "test.concurrent", map[string]string{"name": "test"}, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
+			callCount++
+			return http.StatusCreated, map[string]string{"status": "created"}, nil
+		})
+	}
+
+	code, result, err := run()
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, code)
+	assert.Equal(t, "created", result["status"])
+
+	code, result, err = run()
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, code)
+	assert.Equal(t, "created", result["status"])
+	assert.Equal(t, 1, callCount)
+	assert.Equal(t, 2, cfg.getLockCalls())
 }
 
 func TestComputeRequestHashWithTarget(t *testing.T) {
@@ -394,12 +439,12 @@ func TestIdempotency_TargetSpecific(t *testing.T) {
 	body := map[string]bool{"enabled": false}
 	targetID := uuid.New()
 	cfg := &idempMockConfig{}
-	_, queries := setupIdempDB(t, cfg)
+	db, queries := setupIdempDB(t, cfg)
 
 	callCount := 0
 	run := func(targetID uuid.UUID) (int, map[string]string, error) {
 		payload := targetPayload{TargetID: targetID, Body: body}
-		return auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, payload, func() (int, map[string]string, error) {
+		return auth.ExecuteWithIdempotency(context.Background(), db, queries, actorID, key, action, payload, func(_ *sql.Tx, _ *sqlc.Queries) (int, map[string]string, error) {
 			callCount++
 			return http.StatusOK, map[string]string{"status": "updated"}, nil
 		})

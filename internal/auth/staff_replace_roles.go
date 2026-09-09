@@ -36,18 +36,10 @@ func (h *StaffReplaceRolesHandler) Handle(ctx context.Context, actor *StaffClaim
 		return 0, nil, fmt.Errorf("%w: PIN Quản lý không đúng", response.ErrForbidden)
 	}
 
-	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.replace_roles", idempotencyPayload{TargetID: targetID, Body: req}, func() (int, *StaffDetailResponse, error) {
-		tx, err := h.db.BeginTx(ctx, nil)
-		if err != nil {
-			return 0, nil, fmt.Errorf("begin tx: %w", err)
-		}
-		defer func() { _ = tx.Rollback() }()
-
+	return ExecuteWithIdempotency(ctx, h.db, h.queries, actor.StaffID, req.RequestID, "staff.replace_roles", idempotencyPayload{TargetID: targetID, Body: req}, func(tx *sql.Tx, qtx *sqlc.Queries) (int, *StaffDetailResponse, error) {
 		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", EnabledManagerInvariantLockID); err != nil {
 			return 0, nil, fmt.Errorf("acquire invariant lock: %w", err)
 		}
-
-		qtx := h.queries.WithTx(tx)
 
 		target, err := qtx.GetStaffByID(ctx, targetID)
 		if err != nil {
@@ -86,10 +78,6 @@ func (h *StaffReplaceRolesHandler) Handle(ctx context.Context, actor *StaffClaim
 			}); err != nil {
 				return 0, nil, fmt.Errorf("add role: %w", err)
 			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			return 0, nil, fmt.Errorf("commit tx: %w", err)
 		}
 
 		return http.StatusOK, &StaffDetailResponse{

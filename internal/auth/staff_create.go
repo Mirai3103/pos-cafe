@@ -38,19 +38,11 @@ func (h *StaffCreateHandler) Handle(ctx context.Context, actor *StaffClaims, req
 	}
 
 	// 2. Execute with Idempotency
-	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.create", req, func() (int, *StaffDetailResponse, error) {
+	return ExecuteWithIdempotency(ctx, h.db, h.queries, actor.StaffID, req.RequestID, "staff.create", req, func(_ *sql.Tx, qtx *sqlc.Queries) (int, *StaffDetailResponse, error) {
 		pinHash, err := HashPin(req.Pin)
 		if err != nil {
 			return 0, nil, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
 		}
-
-		tx, err := h.db.BeginTx(ctx, nil)
-		if err != nil {
-			return 0, nil, fmt.Errorf("begin tx: %w", err)
-		}
-		defer func() { _ = tx.Rollback() }()
-
-		qtx := h.queries.WithTx(tx)
 
 		created, err := qtx.CreateStaffIdentity(ctx, sqlc.CreateStaffIdentityParams{
 			DisplayName: req.DisplayName,
@@ -73,10 +65,6 @@ func (h *StaffCreateHandler) Handle(ctx context.Context, actor *StaffClaims, req
 			}); err != nil {
 				return 0, nil, fmt.Errorf("add role: %w", err)
 			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			return 0, nil, fmt.Errorf("commit tx: %w", err)
 		}
 
 		return http.StatusCreated, &StaffDetailResponse{
