@@ -42,7 +42,7 @@ func (h *StaffSetEnabledHandler) Handle(ctx context.Context, actor *StaffClaims,
 		return 0, nil, fmt.Errorf("%w: PIN Quản lý không đúng", response.ErrForbidden)
 	}
 
-	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.set_enabled", req, func() (int, *StaffDetailResponse, error) {
+	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.set_enabled", idempotencyPayload{TargetID: targetID, Body: req}, func() (int, *StaffDetailResponse, error) {
 		tx, err := h.db.BeginTx(ctx, nil)
 		if err != nil {
 			return 0, nil, fmt.Errorf("begin tx: %w", err)

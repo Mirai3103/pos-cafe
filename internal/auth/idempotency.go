@@ -14,11 +14,21 @@ import (
 	"github.com/google/uuid"
 )
 
+type idempotencyPayload struct {
+	TargetID uuid.UUID `json:"target_id"`
+	Body     any       `json:"body"`
+}
+
 // ComputeRequestHash computes a deterministic SHA256 hex string for an action and payload.
 func ComputeRequestHash(action string, payload any) string {
 	b, _ := json.Marshal(payload)
 	sum := sha256.Sum256(append([]byte(action+":"), b...))
 	return hex.EncodeToString(sum[:])
+}
+
+// ComputeRequestHashWithTarget includes a target resource in an idempotency fingerprint.
+func ComputeRequestHashWithTarget(action string, targetID uuid.UUID, payload any) string {
+	return ComputeRequestHash(action, idempotencyPayload{TargetID: targetID, Body: payload})
 }
 
 // ExecuteWithIdempotency wraps a mutating operation in an idempotency check and stores replayable response.

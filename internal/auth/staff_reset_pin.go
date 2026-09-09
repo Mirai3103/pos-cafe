@@ -35,7 +35,7 @@ func (h *StaffResetPinHandler) Handle(ctx context.Context, actor *StaffClaims, t
 		return 0, nil, fmt.Errorf("%w: PIN Quản lý không đúng", response.ErrForbidden)
 	}
 
-	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.reset_pin", req, func() (int, map[string]string, error) {
+	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.reset_pin", idempotencyPayload{TargetID: targetID, Body: req}, func() (int, map[string]string, error) {
 		pinHash, err := HashPin(req.Pin)
 		if err != nil {
 			return 0, nil, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())

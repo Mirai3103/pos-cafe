@@ -36,7 +36,7 @@ func (h *StaffReplaceRolesHandler) Handle(ctx context.Context, actor *StaffClaim
 		return 0, nil, fmt.Errorf("%w: PIN Quản lý không đúng", response.ErrForbidden)
 	}
 
-	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.replace_roles", req, func() (int, *StaffDetailResponse, error) {
+	return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.replace_roles", idempotencyPayload{TargetID: targetID, Body: req}, func() (int, *StaffDetailResponse, error) {
 		tx, err := h.db.BeginTx(ctx, nil)
 		if err != nil {
 			return 0, nil, fmt.Errorf("begin tx: %w", err)

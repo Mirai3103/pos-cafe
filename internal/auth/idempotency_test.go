@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -367,4 +368,56 @@ func TestExecuteWithIdempotency(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unmarshal cached response")
 	})
+}
+
+func TestComputeRequestHashWithTarget(t *testing.T) {
+	t.Parallel()
+
+	action := "staff.set_enabled"
+	body := map[string]bool{"enabled": false}
+	targetID := uuid.New()
+
+	sameTargetHash := auth.ComputeRequestHashWithTarget(action, targetID, body)
+	assert.Equal(t, sameTargetHash, auth.ComputeRequestHashWithTarget(action, targetID, body))
+	assert.NotEqual(t, sameTargetHash, auth.ComputeRequestHashWithTarget(action, uuid.New(), body))
+}
+
+func TestIdempotency_TargetSpecific(t *testing.T) {
+	type targetPayload struct {
+		TargetID uuid.UUID `json:"target_id"`
+		Body     any       `json:"body"`
+	}
+
+	actorID := uuid.New()
+	key := uuid.New()
+	action := "staff.set_enabled"
+	body := map[string]bool{"enabled": false}
+	targetID := uuid.New()
+	cfg := &idempMockConfig{}
+	_, queries := setupIdempDB(t, cfg)
+
+	callCount := 0
+	run := func(targetID uuid.UUID) (int, map[string]string, error) {
+		payload := targetPayload{TargetID: targetID, Body: body}
+		return auth.ExecuteWithIdempotency(context.Background(), queries, actorID, key, action, payload, func() (int, map[string]string, error) {
+			callCount++
+			return http.StatusOK, map[string]string{"status": "updated"}, nil
+		})
+	}
+
+	code, result, err := run(targetID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "updated", result["status"])
+
+	code, result, err = run(targetID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "updated", result["status"])
+	assert.Equal(t, 1, callCount)
+
+	_, _, err = run(uuid.New())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, response.ErrConflict)
+	assert.Equal(t, 1, callCount)
 }
