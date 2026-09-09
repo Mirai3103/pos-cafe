@@ -9,11 +9,12 @@ import (
 )
 
 var (
-	ErrNotFound     = errors.New("resource not found")
-	ErrConflict     = errors.New("resource already exists")
-	ErrInvalid      = errors.New("invalid input data")
-	ErrForbidden    = errors.New("forbidden")
-	ErrUnauthorized = errors.New("unauthorized")
+	ErrNotFound         = errors.New("resource not found")
+	ErrConflict         = errors.New("resource already exists")
+	ErrInvalid          = errors.New("invalid input data")
+	ErrForbidden        = errors.New("forbidden")
+	ErrUnauthorized     = errors.New("unauthorized")
+	ErrManagerInvariant = errors.New("manager invariant violation")
 )
 
 type APIResponse struct {
@@ -68,6 +69,14 @@ func Error(c echo.Context, err error) error {
 			Success: false,
 			Error: &APIError{
 				Code:    "CONFLICT",
+				Message: err.Error(),
+			},
+		})
+	case errors.Is(err, ErrManagerInvariant):
+		return c.JSON(http.StatusConflict, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "FINAL_ENABLED_MANAGER_REQUIRED",
 				Message: err.Error(),
 			},
 		})

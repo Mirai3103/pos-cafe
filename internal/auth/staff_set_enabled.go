@@ -79,7 +79,7 @@ func (h *StaffSetEnabledHandler) Handle(ctx context.Context, actor *StaffClaims,
 				return 0, nil, fmt.Errorf("count active managers: %w", err)
 			}
 			if activeManagers <= 1 {
-				return 0, nil, fmt.Errorf("%w: phải còn ít nhất một Quản lý đang hoạt động", response.ErrConflict)
+				return 0, nil, fmt.Errorf("%w: phải còn ít nhất một Quản lý đang hoạt động", response.ErrManagerInvariant)
 			}
 		}
 

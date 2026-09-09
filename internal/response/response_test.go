@@ -88,6 +88,12 @@ func TestErrorMapping(t *testing.T) {
 			expectedKey:  "CONFLICT",
 		},
 		{
+			name:         "ErrManagerInvariant maps to 409",
+			err:          fmt.Errorf("%w: final enabled manager", response.ErrManagerInvariant),
+			expectedCode: http.StatusConflict,
+			expectedKey:  "FINAL_ENABLED_MANAGER_REQUIRED",
+		},
+		{
 			name:         "ErrInvalid maps to 400",
 			err:          fmt.Errorf("%w: bad input", response.ErrInvalid),
 			expectedCode: http.StatusBadRequest,
