@@ -1,16 +1,23 @@
 package auth
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
+	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
-type StaffMeHandler struct{}
+type StaffMeHandler struct {
+	queries sqlc.Querier
+}
 
-func NewStaffMeHandler() *StaffMeHandler {
-	return &StaffMeHandler{}
+func NewStaffMeHandler(queries sqlc.Querier) *StaffMeHandler {
+	return &StaffMeHandler{queries: queries}
 }
 
 // HandleHTTP godoc
@@ -39,12 +46,28 @@ func (h *StaffMeHandler) HandleHTTP(c echo.Context) error {
 		caps = []string{}
 	}
 
+	enabled, err := h.getEnabled(c.Request().Context(), staff.StaffID)
+	if err != nil {
+		return fmt.Errorf("lookup enabled: %w", err)
+	}
+
 	return response.OK(c, StaffProfileResponse{
 		ID:           staff.StaffID,
 		DisplayName:  staff.DisplayName,
 		LoginCode:    staff.LoginCode,
-		Enabled:      true,
+		Enabled:      enabled,
 		Roles:        roles,
 		Capabilities: caps,
 	})
+}
+
+func (h *StaffMeHandler) getEnabled(ctx context.Context, staffID uuid.UUID) (bool, error) {
+	row, err := h.queries.GetStaffByID(ctx, staffID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return row.Enabled, nil
 }

@@ -66,7 +66,7 @@ jobs:
       - name: Run Integration Tests (-tags=integration)
         env:
           TEST_DATABASE_URL: postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
-        run: go test -v -race -p 1 -tags=integration -coverprofile=coverage-int.out -covermode=atomic ./internal/auth/...
+        run: go test -v -race -p 1 -tags=integration -coverprofile=coverage-int.out -covermode=atomic ./...
 
       - name: Upload Unit Test Coverage to Codecov
         if: hashFiles('coverage-unit.out') != ''

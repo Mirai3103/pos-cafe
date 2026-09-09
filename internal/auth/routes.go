@@ -36,6 +36,8 @@ type Slices struct {
 func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 	signInLimiter := NewRateLimiter(5, 15*time.Minute)
 	unlockLimiter := NewRateLimiter(3, 5*time.Minute)
+	signInLimiter.StartCleanup()
+	unlockLimiter.StartCleanup()
 
 	return &Slices{
 		Middleware:       NewMiddleware(queries),
@@ -50,7 +52,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		DeclareWorkspace: NewDeclareWorkspaceHandler(queries),
 		RecordActivity:   NewRecordActivityHandler(queries),
 		ListIdentities:   NewListIdentitiesHandler(queries),
-		StaffMe:          NewStaffMeHandler(),
+		StaffMe:          NewStaffMeHandler(queries),
 		StaffList:        NewStaffListHandler(queries),
 		StaffCreate:      NewStaffCreateHandler(db, queries),
 		StaffSetEnabled:  NewStaffSetEnabledHandler(db, queries),

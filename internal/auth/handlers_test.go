@@ -25,6 +25,7 @@ import (
 
 type mockAuthQuerier struct {
 	sqlc.Querier
+	getStaffByIDFunc           func(ctx context.Context, id uuid.UUID) (sqlc.StaffIdentity, error)
 	getStaffByLoginCodeFunc    func(ctx context.Context, btrim string) (sqlc.StaffIdentity, error)
 	getStaffRolesFunc          func(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	createStaffSessionFunc     func(ctx context.Context, arg sqlc.CreateStaffSessionParams) (sqlc.CreateStaffSessionRow, error)
@@ -34,6 +35,13 @@ type mockAuthQuerier struct {
 	updateSessionWorkspaceFunc func(ctx context.Context, arg sqlc.UpdateSessionWorkspaceParams) error
 	revokeSessionFunc          func(ctx context.Context, id uuid.UUID) error
 	listActiveIdentitiesFunc   func(ctx context.Context) ([]sqlc.ListActiveIdentitiesRow, error)
+}
+
+func (m *mockAuthQuerier) GetStaffByID(ctx context.Context, id uuid.UUID) (sqlc.StaffIdentity, error) {
+	if m.getStaffByIDFunc != nil {
+		return m.getStaffByIDFunc(ctx, id)
+	}
+	return sqlc.StaffIdentity{}, sql.ErrNoRows
 }
 
 func (m *mockAuthQuerier) GetStaffByLoginCode(ctx context.Context, btrim string) (sqlc.StaffIdentity, error) {
@@ -126,7 +134,7 @@ func TestGetSessionHandler(t *testing.T) {
 
 	result, err := auth.NewGetSessionHandler(mockQ).Handle(context.Background(), "test-token")
 	require.NoError(t, err)
-	assert.Equal(t, auth.SessionStateActive, result.State)
+	assert.Equal(t, auth.SessionStateAuthenticated, result.State)
 }
 
 func TestGetStaffClaims(t *testing.T) {

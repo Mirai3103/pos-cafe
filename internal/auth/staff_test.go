@@ -455,7 +455,12 @@ func createActorManager(pin string) (uuid.UUID, *sqlc.StaffIdentity, *auth.Staff
 
 func TestStaffMeHandler(t *testing.T) {
 	e := setupEcho()
-	h := auth.NewStaffMeHandler()
+	mockQ := &mockAuthQuerier{
+		getStaffByIDFunc: func(_ context.Context, id uuid.UUID) (sqlc.StaffIdentity, error) {
+			return sqlc.StaffIdentity{Enabled: true}, nil
+		},
+	}
+	h := auth.NewStaffMeHandler(mockQ)
 
 	t.Run("returns 403 Forbidden when unauthenticated", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/staff/me", nil)
@@ -1225,7 +1230,7 @@ func TestStaffResetPinHandler(t *testing.T) {
 }
 
 func TestStaffConstructors(t *testing.T) {
-	assert.NotNil(t, auth.NewStaffMeHandler())
+	assert.NotNil(t, auth.NewStaffMeHandler(nil))
 	assert.NotNil(t, auth.NewStaffListHandler(nil))
 	assert.NotNil(t, auth.NewStaffCreateHandler(nil, nil))
 	assert.NotNil(t, auth.NewStaffSetEnabledHandler(nil, nil))
