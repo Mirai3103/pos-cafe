@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -173,6 +174,29 @@ func TestGetStaffClaims(t *testing.T) {
 		assert.Equal(t, expected.Roles, claims.Roles)
 		assert.Equal(t, expected.Capabilities, claims.Capabilities)
 	})
+}
+
+func TestSignOutHandler_RevocationFailure(t *testing.T) {
+	e := setupEcho()
+	sessionID := uuid.New()
+	h := auth.NewSignOutHandler(&mockAuthQuerier{
+		revokeSessionFunc: func(_ context.Context, id uuid.UUID) error {
+			assert.Equal(t, sessionID, id)
+			return errors.New("database unavailable")
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/auth/sign-out", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set(auth.StaffContextKey, &auth.StaffClaims{SessionID: sessionID})
+
+	err := h.HandleHTTP(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	var resp response.APIResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "INTERNAL_ERROR", resp.Error.Code)
 }
 
 func TestSignInHandler(t *testing.T) {

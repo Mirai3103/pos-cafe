@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"fmt"
+
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/labstack/echo/v4"
@@ -28,7 +30,9 @@ func NewSignOutHandler(queries sqlc.Querier) *SignOutHandler {
 func (h *SignOutHandler) HandleHTTP(c echo.Context) error {
 	staff := GetStaff(c)
 	if staff != nil {
-		_ = h.queries.RevokeSession(c.Request().Context(), staff.SessionID)
+		if err := h.queries.RevokeSession(c.Request().Context(), staff.SessionID); err != nil {
+			return response.Error(c, fmt.Errorf("revoke session: %w", err))
+		}
 	}
 	clearSessionCookie(c)
 	return response.OK(c, map[string]string{"state": "signed_out"})
