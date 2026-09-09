@@ -59,14 +59,32 @@ jobs:
         run: go vet ./...
 
       - name: Run Unit Tests (-race)
-        run: go test -v -race ./...
+        run: go test -v -race -coverprofile=coverage-unit.out -covermode=atomic ./...
 
       # -p 1: integration packages share one database and TRUNCATE the same
       # tables, so they must not run in parallel with each other.
       - name: Run Integration Tests (-tags=integration)
         env:
           TEST_DATABASE_URL: postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
-        run: go test -v -race -p 1 -tags=integration ./...
+        run: go test -v -race -p 1 -tags=integration -coverprofile=coverage-int.out -covermode=atomic ./...
+
+      - name: Upload Unit Test Coverage to Codecov
+        if: hashFiles('coverage-unit.out') != ''
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-unit.out
+          flags: unittests
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload Integration Test Coverage to Codecov
+        if: hashFiles('coverage-int.out') != ''
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-int.out
+          flags: integration
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Verify Build
         run: go build -v ./cmd/api
