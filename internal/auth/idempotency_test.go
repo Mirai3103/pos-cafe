@@ -100,9 +100,9 @@ type storedKey struct {
 }
 
 type idempMockConfig struct {
-	mu       sync.Mutex
-	keys     map[string]storedKey
-	getErr   error
+	mu        sync.Mutex
+	keys      map[string]storedKey
+	getErr    error
 	insertErr error
 }
 
@@ -130,7 +130,7 @@ func (c *idempMockConn) Prepare(query string) (driver.Stmt, error) {
 	return &idempMockStmt{conn: c, query: query}, nil
 }
 
-func (c *idempMockConn) Close() error { return nil }
+func (c *idempMockConn) Close() error              { return nil }
 func (c *idempMockConn) Begin() (driver.Tx, error) { return &idempMockTx{}, nil }
 
 type idempMockTx struct{}

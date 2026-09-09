@@ -61,10 +61,10 @@ func ExecuteWithIdempotency[T any](
 	// Save result
 	resultBytes, _ := json.Marshal(result)
 	_ = q.InsertIdempotencyKey(ctx, sqlc.InsertIdempotencyKeyParams{
-		Key:          key,
-		ActorID:      actorID,
-		Action:       action,
-		RequestHash:  reqHash,
+		Key:         key,
+		ActorID:     actorID,
+		Action:      action,
+		RequestHash: reqHash,
 		//nolint:gosec // G115: HTTP status code (100-599) fits within int32
 		ResponseCode: int32(code),
 		ResponseBody: json.RawMessage(resultBytes),

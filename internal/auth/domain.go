@@ -38,8 +38,8 @@ const (
 // Inactivity Timeouts
 const (
 	CashierManagerInactivityTimeout = 5 * time.Minute
-	PreparationInactivityTimeout   = 15 * time.Minute
-	SessionDuration                = 12 * time.Hour
+	PreparationInactivityTimeout    = 15 * time.Minute
+	SessionDuration                 = 12 * time.Hour
 )
 
 // Capabilities
