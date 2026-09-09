@@ -159,7 +159,7 @@ type testMockStmt struct {
 	query string
 }
 
-func (s *testMockStmt) Close() error { return nil }
+func (s *testMockStmt) Close() error  { return nil }
 func (s *testMockStmt) NumInput() int { return -1 }
 func (s *testMockStmt) Exec(args []driver.Value) (driver.Result, error) {
 	named := make([]driver.NamedValue, len(args))

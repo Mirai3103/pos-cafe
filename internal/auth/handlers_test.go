@@ -24,15 +24,15 @@ import (
 
 type mockAuthQuerier struct {
 	sqlc.Querier
-	getStaffByLoginCodeFunc   func(ctx context.Context, btrim string) (sqlc.StaffIdentity, error)
-	getStaffRolesFunc         func(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
-	createStaffSessionFunc    func(ctx context.Context, arg sqlc.CreateStaffSessionParams) (sqlc.CreateStaffSessionRow, error)
-	getSessionByTokenHashFunc func(ctx context.Context, tokenHash string) (sqlc.GetSessionByTokenHashRow, error)
-	updateSessionStateFunc    func(ctx context.Context, arg sqlc.UpdateSessionStateParams) error
-	updateSessionActivityFunc func(ctx context.Context, arg sqlc.UpdateSessionActivityParams) error
+	getStaffByLoginCodeFunc    func(ctx context.Context, btrim string) (sqlc.StaffIdentity, error)
+	getStaffRolesFunc          func(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	createStaffSessionFunc     func(ctx context.Context, arg sqlc.CreateStaffSessionParams) (sqlc.CreateStaffSessionRow, error)
+	getSessionByTokenHashFunc  func(ctx context.Context, tokenHash string) (sqlc.GetSessionByTokenHashRow, error)
+	updateSessionStateFunc     func(ctx context.Context, arg sqlc.UpdateSessionStateParams) error
+	updateSessionActivityFunc  func(ctx context.Context, arg sqlc.UpdateSessionActivityParams) error
 	updateSessionWorkspaceFunc func(ctx context.Context, arg sqlc.UpdateSessionWorkspaceParams) error
-	revokeSessionFunc         func(ctx context.Context, id uuid.UUID) error
-	listActiveIdentitiesFunc  func(ctx context.Context) ([]sqlc.ListActiveIdentitiesRow, error)
+	revokeSessionFunc          func(ctx context.Context, id uuid.UUID) error
+	listActiveIdentitiesFunc   func(ctx context.Context) ([]sqlc.ListActiveIdentitiesRow, error)
 }
 
 func (m *mockAuthQuerier) GetStaffByLoginCode(ctx context.Context, btrim string) (sqlc.StaffIdentity, error) {

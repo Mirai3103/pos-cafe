@@ -11,7 +11,7 @@ import (
 func TestValidatePinFormat(t *testing.T) {
 	assert.NoError(t, ValidatePinFormat("1234"))
 	assert.NoError(t, ValidatePinFormat("12345678"))
-	assert.Error(t, ValidatePinFormat("123"))      // too short
+	assert.Error(t, ValidatePinFormat("123"))       // too short
 	assert.Error(t, ValidatePinFormat("123456789")) // too long
 	assert.Error(t, ValidatePinFormat("123a"))      // non-digit
 	assert.Error(t, ValidatePinFormat(""))          // empty
