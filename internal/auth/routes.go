@@ -31,7 +31,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		Middleware:       NewMiddleware(queries),
 		Bootstrap:        NewBootstrapManagerHandler(db, queries),
 		SignIn:           NewSignInHandler(queries),
-		Unlock:           NewUnlockSessionHandler(queries),
+		Unlock:           NewUnlockSessionHandler(db, queries),
 		GetSession:       NewGetSessionHandler(queries),
 		Lock:             NewLockSessionHandler(queries),
 		SignOut:          NewSignOutHandler(queries),

@@ -13,11 +13,12 @@ import (
 )
 
 type UnlockSessionHandler struct {
-	queries sqlc.Querier
+	db      *sql.DB
+	queries *sqlc.Queries
 }
 
-func NewUnlockSessionHandler(queries sqlc.Querier) *UnlockSessionHandler {
-	return &UnlockSessionHandler{queries: queries}
+func NewUnlockSessionHandler(db *sql.DB, queries *sqlc.Queries) *UnlockSessionHandler {
+	return &UnlockSessionHandler{db: db, queries: queries}
 }
 
 func (h *UnlockSessionHandler) Handle(ctx context.Context, token string, pin string) (*SignInResponse, error) {
@@ -43,18 +44,29 @@ func (h *UnlockSessionHandler) Handle(ctx context.Context, token string, pin str
 	}
 
 	now := time.Now().UTC()
-	if err := h.queries.UpdateSessionState(ctx, sqlc.UpdateSessionStateParams{
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin unlock transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := h.queries.WithTx(tx)
+	if err := qtx.UpdateSessionState(ctx, sqlc.UpdateSessionStateParams{
 		ID:    sess.SessionID,
 		State: SessionStateActive,
 	}); err != nil {
 		return nil, fmt.Errorf("unlock session: %w", err)
 	}
 
-	if err := h.queries.UpdateSessionActivity(ctx, sqlc.UpdateSessionActivityParams{
+	if err := qtx.UpdateSessionActivity(ctx, sqlc.UpdateSessionActivityParams{
 		ID:                  sess.SessionID,
 		LastHumanActivityAt: now,
 	}); err != nil {
 		return nil, fmt.Errorf("update session activity: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit unlock transaction: %w", err)
 	}
 
 	roles, err := h.queries.GetStaffRoles(ctx, sess.StaffIdentityID)

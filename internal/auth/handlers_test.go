@@ -368,7 +368,7 @@ func TestUnlockSessionHandler(t *testing.T) {
 	}
 
 	t.Run("missing token returns 401 Unauthorized", func(t *testing.T) {
-		h := auth.NewUnlockSessionHandler(&mockAuthQuerier{})
+		h := auth.NewUnlockSessionHandler(nil, nil)
 		body := []byte(`{"pin":"4321"}`)
 		req := httptest.NewRequest(http.MethodPost, "/auth/unlock", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -383,12 +383,8 @@ func TestUnlockSessionHandler(t *testing.T) {
 	t.Run("expired session returns 401 Unauthorized", func(t *testing.T) {
 		expiredSession := baseSession
 		expiredSession.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute) // EXPIRED
-		mockQ := &mockAuthQuerier{
-			getSessionByTokenHashFunc: func(_ context.Context, _ string) (sqlc.GetSessionByTokenHashRow, error) {
-				return expiredSession, nil
-			},
-		}
-		h := auth.NewUnlockSessionHandler(mockQ)
+		db, queries := setupMockDB(t, &mockConnConfig{session: expiredSession})
+		h := auth.NewUnlockSessionHandler(db, queries)
 		body := []byte(`{"pin":"4321"}`)
 		req := httptest.NewRequest(http.MethodPost, "/auth/unlock", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -408,12 +404,8 @@ func TestUnlockSessionHandler(t *testing.T) {
 	t.Run("revoked session returns 401 Unauthorized", func(t *testing.T) {
 		revokedSession := baseSession
 		revokedSession.RevokedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
-		mockQ := &mockAuthQuerier{
-			getSessionByTokenHashFunc: func(_ context.Context, _ string) (sqlc.GetSessionByTokenHashRow, error) {
-				return revokedSession, nil
-			},
-		}
-		h := auth.NewUnlockSessionHandler(mockQ)
+		db, queries := setupMockDB(t, &mockConnConfig{session: revokedSession})
+		h := auth.NewUnlockSessionHandler(db, queries)
 		body := []byte(`{"pin":"4321"}`)
 		req := httptest.NewRequest(http.MethodPost, "/auth/unlock", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -427,12 +419,8 @@ func TestUnlockSessionHandler(t *testing.T) {
 	})
 
 	t.Run("incorrect PIN returns 401 Unauthorized", func(t *testing.T) {
-		mockQ := &mockAuthQuerier{
-			getSessionByTokenHashFunc: func(_ context.Context, _ string) (sqlc.GetSessionByTokenHashRow, error) {
-				return baseSession, nil
-			},
-		}
-		h := auth.NewUnlockSessionHandler(mockQ)
+		db, queries := setupMockDB(t, &mockConnConfig{session: baseSession})
+		h := auth.NewUnlockSessionHandler(db, queries)
 		body := []byte(`{"pin":"0000"}`)
 		req := httptest.NewRequest(http.MethodPost, "/auth/unlock", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -449,29 +437,31 @@ func TestUnlockSessionHandler(t *testing.T) {
 		assert.Equal(t, "UNAUTHORIZED", resp.Error.Code)
 	})
 
-	t.Run("successful unlock refreshes LastHumanActivityAt and activates state", func(t *testing.T) {
-		var updatedState string
-		var activityUpdated bool
-
-		mockQ := &mockAuthQuerier{
-			getSessionByTokenHashFunc: func(_ context.Context, _ string) (sqlc.GetSessionByTokenHashRow, error) {
-				return baseSession, nil
-			},
-			updateSessionStateFunc: func(_ context.Context, arg sqlc.UpdateSessionStateParams) error {
-				updatedState = arg.State
-				return nil
-			},
-			updateSessionActivityFunc: func(_ context.Context, arg sqlc.UpdateSessionActivityParams) error {
-				activityUpdated = true
-				assert.WithinDuration(t, time.Now().UTC(), arg.LastHumanActivityAt, 2*time.Second)
-				return nil
-			},
-			getStaffRolesFunc: func(_ context.Context, _ uuid.UUID) ([]string, error) {
-				return []string{auth.RoleCashier}, nil
-			},
+	t.Run("activity update failure rolls back session state", func(t *testing.T) {
+		cfg := &mockConnConfig{
+			session:           baseSession,
+			sessionState:      auth.SessionStateLocked,
+			updateActivityErr: errors.New("activity update failed"),
 		}
+		db, queries := setupMockDB(t, cfg)
+		h := auth.NewUnlockSessionHandler(db, queries)
+		_, err := h.Handle(context.Background(), validToken, validPin)
 
-		h := auth.NewUnlockSessionHandler(mockQ)
+		require.Error(t, err)
+		assert.True(t, cfg.sessionStateUpdated)
+		assert.Equal(t, auth.SessionStateLocked, cfg.sessionState)
+		assert.True(t, cfg.rolledBack)
+		assert.False(t, cfg.committed)
+	})
+
+	t.Run("successful unlock refreshes LastHumanActivityAt and activates state", func(t *testing.T) {
+		cfg := &mockConnConfig{
+			session:      baseSession,
+			sessionState: auth.SessionStateLocked,
+			roles:        []string{auth.RoleCashier},
+		}
+		db, queries := setupMockDB(t, cfg)
+		h := auth.NewUnlockSessionHandler(db, queries)
 		body := []byte(`{"pin":"4321"}`)
 		req := httptest.NewRequest(http.MethodPost, "/auth/unlock", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -482,8 +472,9 @@ func TestUnlockSessionHandler(t *testing.T) {
 		err := h.HandleHTTP(c)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, auth.SessionStateActive, updatedState)
-		assert.True(t, activityUpdated, "expected LastHumanActivityAt to be refreshed")
+		assert.Equal(t, auth.SessionStateActive, cfg.sessionState)
+		assert.WithinDuration(t, time.Now().UTC(), cfg.activityAt, 2*time.Second)
+		assert.True(t, cfg.committed)
 	})
 }
 
@@ -553,7 +544,7 @@ func TestConstructors(t *testing.T) {
 	assert.NotNil(t, auth.NewSignInHandler(nil))
 	assert.NotNil(t, auth.NewGetSessionHandler(nil))
 	assert.NotNil(t, auth.NewLockSessionHandler(nil))
-	assert.NotNil(t, auth.NewUnlockSessionHandler(nil))
+	assert.NotNil(t, auth.NewUnlockSessionHandler(nil, nil))
 	assert.NotNil(t, auth.NewSignOutHandler(nil))
 	assert.NotNil(t, auth.NewDeclareWorkspaceHandler(nil))
 	assert.NotNil(t, auth.NewRecordActivityHandler(nil))

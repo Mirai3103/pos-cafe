@@ -64,16 +64,27 @@ func (d *testMockDriver) Open(name string) (driver.Conn, error) {
 }
 
 type mockConnConfig struct {
-	beginErr      error
-	lockErr       error
-	countManagers int64
-	countErr      error
-	createErr     error
-	createdID     uuid.UUID
-	addRoleErr    error
-	commitErr     error
-	rolledBack    bool
-	committed     bool
+	beginErr              error
+	lockErr               error
+	countManagers         int64
+	countErr              error
+	createErr             error
+	createdID             uuid.UUID
+	addRoleErr            error
+	commitErr             error
+	session               sqlc.GetSessionByTokenHashRow
+	sessionErr            error
+	sessionState          string
+	pendingSessionState   string
+	sessionStateUpdated   bool
+	updateSessionStateErr error
+	updateActivityErr     error
+	activityAt            time.Time
+	pendingActivityAt     time.Time
+	roles                 []string
+	rolesErr              error
+	rolledBack            bool
+	committed             bool
 }
 
 type testMockConn struct {
@@ -99,7 +110,22 @@ func (c *testMockConn) BeginTx(_ context.Context, _ driver.TxOptions) (driver.Tx
 	return &testMockTx{cfg: c.cfg}, nil
 }
 
-func (c *testMockConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+func (c *testMockConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if strings.Contains(query, "UpdateSessionState") || strings.Contains(query, "SET state = $2") {
+		if c.cfg.updateSessionStateErr != nil {
+			return nil, c.cfg.updateSessionStateErr
+		}
+		c.cfg.sessionStateUpdated = true
+		c.cfg.pendingSessionState = args[1].Value.(string)
+		return driver.RowsAffected(1), nil
+	}
+	if strings.Contains(query, "UpdateSessionActivity") || strings.Contains(query, "SET last_human_activity_at = $2") {
+		if c.cfg.updateActivityErr != nil {
+			return nil, c.cfg.updateActivityErr
+		}
+		c.cfg.pendingActivityAt = args[1].Value.(time.Time)
+		return driver.RowsAffected(1), nil
+	}
 	if strings.Contains(query, "pg_advisory_xact_lock") {
 		if c.cfg.lockErr != nil {
 			return nil, c.cfg.lockErr
@@ -116,6 +142,34 @@ func (c *testMockConn) ExecContext(_ context.Context, query string, _ []driver.N
 }
 
 func (c *testMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "GetSessionByTokenHash") || strings.Contains(query, "WHERE s.token_hash = $1") {
+		if c.cfg.sessionErr != nil {
+			return nil, c.cfg.sessionErr
+		}
+		sess := c.cfg.session
+		var activeWorkspace driver.Value
+		if sess.ActiveWorkspace.Valid {
+			activeWorkspace = sess.ActiveWorkspace.String
+		}
+		var revokedAt driver.Value
+		if sess.RevokedAt.Valid {
+			revokedAt = sess.RevokedAt.Time
+		}
+		return &testMockRows{
+			cols: []string{"session_id", "token_hash", "staff_identity_id", "session_state", "active_workspace", "last_authenticated_at", "last_human_activity_at", "expires_at", "revoked_at", "display_name", "login_code", "pin_hash", "identity_enabled"},
+			rows: [][]driver.Value{{sess.SessionID.String(), sess.TokenHash, sess.StaffIdentityID.String(), sess.SessionState, activeWorkspace, sess.LastAuthenticatedAt, sess.LastHumanActivityAt, sess.ExpiresAt, revokedAt, sess.DisplayName, sess.LoginCode, sess.PinHash, sess.IdentityEnabled}},
+		}, nil
+	}
+	if strings.Contains(query, "GetStaffRoles") || strings.Contains(query, "FROM staff_operational_roles") {
+		if c.cfg.rolesErr != nil {
+			return nil, c.cfg.rolesErr
+		}
+		rows := make([][]driver.Value, len(c.cfg.roles))
+		for i, role := range c.cfg.roles {
+			rows[i] = []driver.Value{role}
+		}
+		return &testMockRows{cols: []string{"role"}, rows: rows}, nil
+	}
 	if strings.Contains(query, "CountActiveManagers") || strings.Contains(query, "count(DISTINCT si.id)") {
 		if c.cfg.countErr != nil {
 			return nil, c.cfg.countErr
@@ -185,11 +239,19 @@ func (t *testMockTx) Commit() error {
 	if t.cfg.commitErr != nil {
 		return t.cfg.commitErr
 	}
+	if t.cfg.pendingSessionState != "" {
+		t.cfg.sessionState = t.cfg.pendingSessionState
+	}
+	if !t.cfg.pendingActivityAt.IsZero() {
+		t.cfg.activityAt = t.cfg.pendingActivityAt
+	}
 	return nil
 }
 
 func (t *testMockTx) Rollback() error {
 	t.cfg.rolledBack = true
+	t.cfg.pendingSessionState = ""
+	t.cfg.pendingActivityAt = time.Time{}
 	return nil
 }
 
