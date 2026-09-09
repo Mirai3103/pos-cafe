@@ -43,6 +43,17 @@ func NewMiddleware(queries sqlc.Querier) *Middleware {
 	return &Middleware{queries: queries}
 }
 
+func (m *Middleware) RateLimit(limiter *RateLimiter, keyFunc func(echo.Context) string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if !limiter.Allow(keyFunc(c)) {
+				return response.Error(c, fmt.Errorf("%w: quá nhiều lần thử, vui lòng thử lại sau", response.ErrTooManyRequests))
+			}
+			return next(c)
+		}
+	}
+}
+
 func (m *Middleware) RequireAuth(allowedRoles ...string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

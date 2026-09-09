@@ -14,6 +14,7 @@ var (
 	ErrInvalid          = errors.New("invalid input data")
 	ErrForbidden        = errors.New("forbidden")
 	ErrUnauthorized     = errors.New("unauthorized")
+	ErrTooManyRequests  = errors.New("too many requests")
 	ErrManagerInvariant = errors.New("manager invariant violation")
 )
 
@@ -101,6 +102,14 @@ func Error(c echo.Context, err error) error {
 			Success: false,
 			Error: &APIError{
 				Code:    "FORBIDDEN",
+				Message: err.Error(),
+			},
+		})
+	case errors.Is(err, ErrTooManyRequests):
+		return c.JSON(http.StatusTooManyRequests, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "TOO_MANY_REQUESTS",
 				Message: err.Error(),
 			},
 		})

@@ -112,6 +112,12 @@ func TestErrorMapping(t *testing.T) {
 			expectedKey:  "FORBIDDEN",
 		},
 		{
+			name:         "ErrTooManyRequests maps to 429",
+			err:          fmt.Errorf("%w: retry later", response.ErrTooManyRequests),
+			expectedCode: http.StatusTooManyRequests,
+			expectedKey:  "TOO_MANY_REQUESTS",
+		},
+		{
 			name:         "Generic error maps to 500",
 			err:          errors.New("something catastrophic"),
 			expectedCode: http.StatusInternalServerError,

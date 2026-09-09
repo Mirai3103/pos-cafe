@@ -13,12 +13,17 @@ import (
 )
 
 type UnlockSessionHandler struct {
-	db      *sql.DB
-	queries *sqlc.Queries
+	db          *sql.DB
+	queries     *sqlc.Queries
+	rateLimiter *RateLimiter
 }
 
-func NewUnlockSessionHandler(db *sql.DB, queries *sqlc.Queries) *UnlockSessionHandler {
-	return &UnlockSessionHandler{db: db, queries: queries}
+func NewUnlockSessionHandler(db *sql.DB, queries *sqlc.Queries, rateLimiters ...*RateLimiter) *UnlockSessionHandler {
+	handler := &UnlockSessionHandler{db: db, queries: queries}
+	if len(rateLimiters) > 0 {
+		handler.rateLimiter = rateLimiters[0]
+	}
+	return handler
 }
 
 func (h *UnlockSessionHandler) Handle(ctx context.Context, token string, pin string) (*SignInResponse, error) {
@@ -98,6 +103,7 @@ func (h *UnlockSessionHandler) Handle(ctx context.Context, token string, pin str
 //	@Success		200		{object}	response.APIResponse{data=SignInResponse}
 //	@Failure		400		{object}	response.APIResponse
 //	@Failure		401		{object}	response.APIResponse
+//	@Failure		429		{object}	response.APIResponse
 //	@Failure		500		{object}	response.APIResponse
 //	@Router			/auth/unlock [post]
 func (h *UnlockSessionHandler) HandleHTTP(c echo.Context) error {
@@ -113,6 +119,9 @@ func (h *UnlockSessionHandler) HandleHTTP(c echo.Context) error {
 	res, err := h.Handle(c.Request().Context(), token, req.Pin)
 	if err != nil {
 		return response.Error(c, err)
+	}
+	if h.rateLimiter != nil {
+		h.rateLimiter.Reset(unlockRateLimitKey(token))
 	}
 
 	return response.OK(c, res)

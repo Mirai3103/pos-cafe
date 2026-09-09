@@ -33,11 +33,16 @@ func clearSessionCookie(c echo.Context) {
 }
 
 type SignInHandler struct {
-	queries sqlc.Querier
+	queries     sqlc.Querier
+	rateLimiter *RateLimiter
 }
 
-func NewSignInHandler(queries sqlc.Querier) *SignInHandler {
-	return &SignInHandler{queries: queries}
+func NewSignInHandler(queries sqlc.Querier, rateLimiters ...*RateLimiter) *SignInHandler {
+	handler := &SignInHandler{queries: queries}
+	if len(rateLimiters) > 0 {
+		handler.rateLimiter = rateLimiters[0]
+	}
+	return handler
 }
 
 func (h *SignInHandler) Handle(ctx context.Context, req SignInRequest) (*SignInResponse, error) {
@@ -110,6 +115,7 @@ func (h *SignInHandler) Handle(ctx context.Context, req SignInRequest) (*SignInR
 //	@Success		200		{object}	response.APIResponse{data=SignInResponse}
 //	@Failure		400		{object}	response.APIResponse
 //	@Failure		401		{object}	response.APIResponse
+//	@Failure		429		{object}	response.APIResponse
 //	@Failure		500		{object}	response.APIResponse
 //	@Router			/auth/sign-in [post]
 func (h *SignInHandler) HandleHTTP(c echo.Context) error {
@@ -124,6 +130,9 @@ func (h *SignInHandler) HandleHTTP(c echo.Context) error {
 	res, err := h.Handle(c.Request().Context(), req)
 	if err != nil {
 		return response.Error(c, err)
+	}
+	if h.rateLimiter != nil {
+		h.rateLimiter.Reset(signInRateLimitKey(req.LoginCode))
 	}
 
 	setSessionCookie(c, res.Token, int(SessionDuration.Seconds()))
