@@ -60,20 +60,21 @@ func TestRateLimitMiddleware(t *testing.T) {
 }
 
 func TestPINRoutesRateLimitInvalidRequests(t *testing.T) {
-	t.Run("sign-in preserves the request body and blocks the sixth attempt", func(t *testing.T) {
+	t.Run("sign-in normalizes login code and blocks the sixth attempt", func(t *testing.T) {
 		e := setupEcho()
 		slices := auth.NewSlices(nil, nil)
 		slices.RegisterRoutes(e.Group("/api/v1"))
 
-		for attempt := 1; attempt <= 6; attempt++ {
-			body := []byte(`{"login_code":"RATE-LIMITED","pin":"1"}`)
+		loginCodes := []string{"RATE-LIMITED", "rate-limited", "Rate-Limited", " RATE-LIMITED", "rate-limited ", " RATE-limited "}
+		for attempt, loginCode := range loginCodes {
+			body := []byte(`{"login_code":"` + loginCode + `","pin":"1"}`)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(body))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 
 			e.ServeHTTP(rec, req)
-			if attempt <= 5 {
-				assert.Equal(t, http.StatusBadRequest, rec.Code, "attempt %d", attempt)
+			if attempt < 5 {
+				assert.Equal(t, http.StatusBadRequest, rec.Code, "attempt %d", attempt+1)
 			} else {
 				assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 			}

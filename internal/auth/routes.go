@@ -101,7 +101,7 @@ func signInRequestRateLimitKey(c echo.Context) string {
 }
 
 func signInRateLimitKey(loginCode string) string {
-	return "sign-in:" + strings.TrimSpace(loginCode)
+	return "sign-in:" + strings.ToUpper(strings.TrimSpace(loginCode))
 }
 
 func unlockRateLimitKey(token string) string {
