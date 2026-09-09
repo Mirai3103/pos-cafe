@@ -30,6 +30,8 @@ comment:
   hide_project_coverage: false
 
 ignore:
+  - "cmd/**"
   - "docs/**"
   - "internal/database/sqlc/**"
   - "**/*_mock.go"
+  - "**/*.pb.go"
