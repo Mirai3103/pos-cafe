@@ -14,6 +14,7 @@ import (
 
 	"github.com/Mirai3103/pos-cafe/config"
 	_ "github.com/Mirai3103/pos-cafe/docs"
+	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/category"
 	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
@@ -29,6 +30,10 @@ import (
 // @description Backend API for Cafe Point of Sale System built with Vertical Slice Architecture and Idiomatic Go.
 // @host localhost:8080
 // @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer " followed by token
 func main() {
 	// 1. Structured Logging Setup (Idiomatic slog)
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -113,7 +118,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	e.Use(middleware.RequestID())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: cfg.CORSAllowedOrigins,
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
 	}))
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
@@ -172,6 +177,9 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 	// 6. Register Vertical Slices
 	v1 := e.Group("/api/v1")
+	authSlices := auth.NewSlices(db, queries)
+	authSlices.RegisterRoutes(v1)
+
 	categorySlices := category.NewSlices(queries, bus)
 	categorySlices.RegisterRoutes(v1)
 

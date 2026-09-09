@@ -9,9 +9,13 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("resource not found")
-	ErrConflict = errors.New("resource already exists")
-	ErrInvalid  = errors.New("invalid input data")
+	ErrNotFound         = errors.New("resource not found")
+	ErrConflict         = errors.New("resource already exists")
+	ErrInvalid          = errors.New("invalid input data")
+	ErrForbidden        = errors.New("forbidden")
+	ErrUnauthorized     = errors.New("unauthorized")
+	ErrTooManyRequests  = errors.New("too many requests")
+	ErrManagerInvariant = errors.New("manager invariant violation")
 )
 
 type APIResponse struct {
@@ -69,11 +73,43 @@ func Error(c echo.Context, err error) error {
 				Message: err.Error(),
 			},
 		})
+	case errors.Is(err, ErrManagerInvariant):
+		return c.JSON(http.StatusConflict, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "FINAL_ENABLED_MANAGER_REQUIRED",
+				Message: err.Error(),
+			},
+		})
 	case errors.Is(err, ErrInvalid):
 		return c.JSON(http.StatusBadRequest, APIResponse{
 			Success: false,
 			Error: &APIError{
 				Code:    "BAD_REQUEST",
+				Message: err.Error(),
+			},
+		})
+	case errors.Is(err, ErrUnauthorized):
+		return c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "UNAUTHORIZED",
+				Message: err.Error(),
+			},
+		})
+	case errors.Is(err, ErrForbidden):
+		return c.JSON(http.StatusForbidden, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "FORBIDDEN",
+				Message: err.Error(),
+			},
+		})
+	case errors.Is(err, ErrTooManyRequests):
+		return c.JSON(http.StatusTooManyRequests, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "TOO_MANY_REQUESTS",
 				Message: err.Error(),
 			},
 		})

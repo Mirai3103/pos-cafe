@@ -6,16 +6,40 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
+	AddStaffRole(ctx context.Context, arg AddStaffRoleParams) error
+	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
+	CountActiveManagers(ctx context.Context) (int64, error)
+	CountManagers(ctx context.Context) (int64, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
+	CreateStaffIdentity(ctx context.Context, arg CreateStaffIdentityParams) (CreateStaffIdentityRow, error)
+	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	DeleteCategory(ctx context.Context, id int64) error
 	GetCategoryByID(ctx context.Context, id int64) (Category, error)
 	GetCategoryByName(ctx context.Context, name string) (Category, error)
+	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
+	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
+	GetStaffByID(ctx context.Context, id uuid.UUID) (StaffIdentity, error)
+	GetStaffByLoginCode(ctx context.Context, btrim string) (StaffIdentity, error)
+	GetStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	ListActiveCategories(ctx context.Context) ([]Category, error)
+	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
+	ListAllStaff(ctx context.Context) ([]ListAllStaffRow, error)
+	ListAllStaffRoles(ctx context.Context) ([]StaffOperationalRole, error)
 	ListCategories(ctx context.Context) ([]Category, error)
+	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
+	RevokeSession(ctx context.Context, id uuid.UUID) error
+	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
+	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
+	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
+	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error
+	UpdateStaffPin(ctx context.Context, arg UpdateStaffPinParams) error
 }
 
 var _ Querier = (*Queries)(nil)

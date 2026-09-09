@@ -88,10 +88,34 @@ func TestErrorMapping(t *testing.T) {
 			expectedKey:  "CONFLICT",
 		},
 		{
+			name:         "ErrManagerInvariant maps to 409",
+			err:          fmt.Errorf("%w: final enabled manager", response.ErrManagerInvariant),
+			expectedCode: http.StatusConflict,
+			expectedKey:  "FINAL_ENABLED_MANAGER_REQUIRED",
+		},
+		{
 			name:         "ErrInvalid maps to 400",
 			err:          fmt.Errorf("%w: bad input", response.ErrInvalid),
 			expectedCode: http.StatusBadRequest,
 			expectedKey:  "BAD_REQUEST",
+		},
+		{
+			name:         "ErrUnauthorized maps to 401",
+			err:          fmt.Errorf("%w: auth required", response.ErrUnauthorized),
+			expectedCode: http.StatusUnauthorized,
+			expectedKey:  "UNAUTHORIZED",
+		},
+		{
+			name:         "ErrForbidden maps to 403",
+			err:          fmt.Errorf("%w: access forbidden", response.ErrForbidden),
+			expectedCode: http.StatusForbidden,
+			expectedKey:  "FORBIDDEN",
+		},
+		{
+			name:         "ErrTooManyRequests maps to 429",
+			err:          fmt.Errorf("%w: retry later", response.ErrTooManyRequests),
+			expectedCode: http.StatusTooManyRequests,
+			expectedKey:  "TOO_MANY_REQUESTS",
 		},
 		{
 			name:         "Generic error maps to 500",
