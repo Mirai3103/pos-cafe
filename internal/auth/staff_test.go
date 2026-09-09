@@ -456,7 +456,7 @@ func createActorManager(pin string) (uuid.UUID, *sqlc.StaffIdentity, *auth.Staff
 func TestStaffMeHandler(t *testing.T) {
 	e := setupEcho()
 	mockQ := &mockAuthQuerier{
-		getStaffByIDFunc: func(_ context.Context, id uuid.UUID) (sqlc.StaffIdentity, error) {
+		getStaffByIDFunc: func(_ context.Context, _ uuid.UUID) (sqlc.StaffIdentity, error) {
 			return sqlc.StaffIdentity{Enabled: true}, nil
 		},
 	}

@@ -48,7 +48,7 @@ func (h *StaffMeHandler) HandleHTTP(c echo.Context) error {
 
 	enabled, err := h.getEnabled(c.Request().Context(), staff.StaffID)
 	if err != nil {
-		return fmt.Errorf("lookup enabled: %w", err)
+		return response.Error(c, fmt.Errorf("lookup enabled: %w", err))
 	}
 
 	return response.OK(c, StaffProfileResponse{

@@ -544,7 +544,7 @@ func TestManagerInvariant(t *testing.T) {
 	deactRes := parseResponse[any](t, recDeact)
 	assert.False(t, deactRes.Success)
 	require.NotNil(t, deactRes.Error)
-	assert.Equal(t, "CONFLICT", deactRes.Error.Code)
+	assert.Equal(t, "FINAL_ENABLED_MANAGER_REQUIRED", deactRes.Error.Code)
 
 	// 2. Removing MANAGER role from the only active manager returns 409 Conflict
 	removeMgrRoleReq := auth.ReplaceStaffRolesRequest{
@@ -557,7 +557,7 @@ func TestManagerInvariant(t *testing.T) {
 	removeRoleRes := parseResponse[any](t, recRemoveRole)
 	assert.False(t, removeRoleRes.Success)
 	require.NotNil(t, removeRoleRes.Error)
-	assert.Equal(t, "CONFLICT", removeRoleRes.Error.Code)
+	assert.Equal(t, "FINAL_ENABLED_MANAGER_REQUIRED", removeRoleRes.Error.Code)
 
 	// 3. Adding a second manager allows deactivating the first
 	createMgr2Req := auth.CreateStaffRequest{
