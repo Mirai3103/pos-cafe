@@ -104,6 +104,30 @@ func setupEcho() *echo.Echo {
 	return e
 }
 
+func TestGetSessionHandler(t *testing.T) {
+	staffID := uuid.New()
+	sessionID := uuid.New()
+	mockQ := &mockAuthQuerier{
+		getSessionByTokenHashFunc: func(_ context.Context, _ string) (sqlc.GetSessionByTokenHashRow, error) {
+			return sqlc.GetSessionByTokenHashRow{
+				SessionID:           sessionID,
+				StaffIdentityID:     staffID,
+				SessionState:        "active",
+				LastHumanActivityAt: time.Now().UTC(),
+				ExpiresAt:           time.Now().UTC().Add(time.Hour),
+				IdentityEnabled:     true,
+			}, nil
+		},
+		getStaffRolesFunc: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return []string{auth.RoleCashier}, nil
+		},
+	}
+
+	result, err := auth.NewGetSessionHandler(mockQ).Handle(context.Background(), "test-token")
+	require.NoError(t, err)
+	assert.Equal(t, auth.SessionStateActive, result.State)
+}
+
 func TestGetStaffClaims(t *testing.T) {
 	e := setupEcho()
 

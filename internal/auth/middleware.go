@@ -71,7 +71,7 @@ func (m *Middleware) RequireAuth(allowedRoles ...string) echo.MiddlewareFunc {
 
 			// Inactivity lock check
 			timeout := GetInactivityTimeout(workspace)
-			if sess.SessionState == SessionStateActive && time.Now().UTC().Sub(sess.LastHumanActivityAt) >= timeout {
+			if (sess.SessionState == SessionStateActive || sess.SessionState == "active") && time.Now().UTC().Sub(sess.LastHumanActivityAt) >= timeout {
 				if err := m.queries.UpdateSessionState(c.Request().Context(), sqlc.UpdateSessionStateParams{
 					ID:    sess.SessionID,
 					State: SessionStateLocked,
@@ -81,7 +81,7 @@ func (m *Middleware) RequireAuth(allowedRoles ...string) echo.MiddlewareFunc {
 				sess.SessionState = SessionStateLocked
 			}
 
-			if sess.SessionState != SessionStateActive {
+			if sess.SessionState != SessionStateActive && sess.SessionState != "active" {
 				return response.Error(c, fmt.Errorf("%w: phiên đang bị khóa, vui lòng mở khóa", response.ErrForbidden))
 			}
 

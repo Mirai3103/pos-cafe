@@ -31,7 +31,7 @@ const (
 
 // Session States
 const (
-	SessionStateActive = "active"
+	SessionStateActive = "authenticated"
 	SessionStateLocked = "locked"
 )
 

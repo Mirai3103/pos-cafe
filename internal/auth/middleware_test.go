@@ -56,7 +56,7 @@ func makeSessionRow(staffID, sessionID uuid.UUID, workspace *string) sqlc.GetSes
 		SessionID:           sessionID,
 		TokenHash:           auth.HashToken("test-token"),
 		StaffIdentityID:     staffID,
-		SessionState:        auth.SessionStateActive,
+		SessionState:        "active",
 		ActiveWorkspace:     ws,
 		LastAuthenticatedAt: time.Now().UTC().Add(-10 * time.Minute),
 		LastHumanActivityAt: time.Now().UTC().Add(-1 * time.Minute),
@@ -284,7 +284,7 @@ func TestRequireAuth(t *testing.T) {
 
 	t.Run("inactivity auto-lock transition updates state to locked and returns 403 Forbidden", func(t *testing.T) {
 		row := makeSessionRow(staffID, sessionID, nil)
-		row.SessionState = auth.SessionStateActive
+		row.SessionState = "active"
 		row.LastHumanActivityAt = time.Now().UTC().Add(-6 * time.Minute) // default timeout is 5 min
 
 		var updatedParams sqlc.UpdateSessionStateParams
