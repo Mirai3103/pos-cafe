@@ -38,23 +38,14 @@ The source project is already cleanly structured around domain boundaries. We ma
 
 ---
 
-### Phase 1: Authentication & Staff Management (`internal/auth`)
+### Phase 1: Authentication & Staff Management (`internal/auth`) (✅ COMPLETED — PR #2 #5195b5c, review fixes applied)
 *Focus: Secure, fast PIN-based login for POS terminals without heavy OAuth/JWT overhead.*
 
-- [ ] **1.1 Database Schema Migration:**
-  - Create table `staff_identities` (`id`, `name`, `role` [MANAGER, CASHIER, BARISTA], `pin_hash`, `is_active`, `created_at`).
-  - Create table `staff_sessions` (`token`, `staff_id`, `role`, `expires_at`, `created_at`).
-- [ ] **1.2 SQL Queries (`sql/queries/auth.sql`):**
-  - `GetStaffByPIN`, `GetStaffByID`, `ListActiveStaff`, `CreateStaff`, `UpdateStaffPIN`, `ToggleStaffStatus`.
-- [ ] **1.3 Business Slices:**
-  - `sign_in_pin.go`: Verify numeric PIN (using `golang.org/x/crypto/bcrypt`), return session token.
-  - `sign_out.go`: Invalidate session.
-  - `bootstrap_manager.go`: CLI or startup check to ensure at least one manager exists.
-  - `staff_admin.go`: Manager-only actions: Create staff, reset PIN, deactivate staff.
-- [ ] **1.4 Middleware:**
-  - `RequireAuth(roles ...string)`: Echo middleware validating session token and checking RBAC.
-- [ ] **1.5 Testing:**
-  - Unit & Integration tests for PIN verification, wrong PIN lockout, role permissions.
+- [x] **1.1 Database Schema Migration:** `000002_create_auth_tables.sql` — `staff_identities`, `staff_operational_roles`, `staff_access_sessions`, `idempotency_keys` (ADR-001..005).
+- [x] **1.2 SQL Queries (`sql/queries/auth.sql`):** `GetStaffByLoginCode/ByID`, `ListActiveIdentities/ListAllStaff`, `GetStaffRoles/ListAllStaffRoles`, `CreateStaffIdentity`, `SetStaffEnabled`, `UpdateStaffPin`, `Add/ClearStaffRoles`, `CountActiveManagers`+`CountManagers`, session & idempotency queries (`sqlc` generated).
+- [x] **1.3 Business Slices:** `sign_in`/`sign_out`, `bootstrap_manager` (advisory lock 739201), `staff_create/list/me/set_enabled/replace_roles/reset_pin` (lock 1247091103), `get_session/lock/unlock/declare_workspace/record_activity/list_identities`, `idempotency` (tx+advisory lock, targetID fingerprint), `ratelimit` (5/15m sign-in, 3/5m unlock).
+- [x] **1.4 Middleware:** `RequireAuth(roles...)` + `RequireCapability` + `RateLimit`, hybrid Bearer/Cookie (`staff_session_token`), inactivity auto-lock (5m cashier/manager, 15m preparation), API state `authenticated` (DB `active` → API `authenticated`).
+- [x] **1.5 Testing:** Unit (`domain_test`, `dto_test`, `handlers_test`, `middleware_test`, `ratelimit_test`, `idempotency_test`) + Integration (`auth_integration_test`, `staff_test`, `bootstrap_manager_test`); review fixes: sign-out error propagation, unlock atomic tx, `FINAL_ENABLED_MANAGER_REQUIRED` (`ErrManagerInvariant`), CORS PATCH, idempotency atomicity, bootstrap `CountManagers`.
 
 ---
 
@@ -175,7 +166,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 | Module | Status | Estimated Slices | Completed | Target Completion |
 | :--- | :---: | :---: | :---: | :---: |
 | **0. Core Boilerplate** | ✅ DONE | 5 | 5 / 5 | 2026-09-08 |
-| **1. Auth & Staff** | ⏳ PENDING | 4 | 0 / 4 | Phase 1 |
+| **1. Auth & Staff** | ✅ DONE | 4 | 4 / 4 | 2026-09-09 (PR #2) |
 | **2. Catalog & Menu** | ⏳ PENDING | 5 | 1 / 5 | Phase 2 |
 | **3. Tables & Layout** | ⏳ PENDING | 3 | 0 / 3 | Phase 3 |
 | **4. Sales Shift & Cash** | ⏳ PENDING | 3 | 0 / 3 | Phase 4 |

@@ -35,7 +35,7 @@
 - Consumes: PostgreSQL schema embedded via `internal/database/migrations`
 - Produces: `sqlc.Querier` methods for auth & staff management
 
-- [ ] **Step 1: Write database migration SQL**
+- [x] **Step 1: Write database migration SQL**
 
 Create `internal/database/migrations/000002_create_auth_tables.sql`:
 ```sql
@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created_at
     ON idempotency_keys (created_at);
 ```
 
-- [ ] **Step 2: Write sqlc queries for auth**
+- [x] **Step 2: Write sqlc queries for auth**
 
 Create `sql/queries/auth.sql`:
 ```sql
@@ -226,17 +226,17 @@ INSERT INTO idempotency_keys (key, actor_id, action, request_hash, response_code
 VALUES ($1, $2, $3, $4, $5, $6);
 ```
 
-- [ ] **Step 3: Run `sqlc generate`**
+- [x] **Step 3: Run `sqlc generate`**
 
 Run: `sqlc generate` in `.worktrees/auth-slice/`  
 Expected: Generates `internal/database/sqlc/auth.sql.go` without error.
 
-- [ ] **Step 4: Verify migration & sqlc compile**
+- [x] **Step 4: Verify migration & sqlc compile**
 
 Run: `go test ./...` in `.worktrees/auth-slice/`  
 Expected: PASS (Existing category tests continue to pass).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/database/migrations/000002_create_auth_tables.sql sql/queries/auth.sql internal/database/sqlc/
@@ -255,7 +255,7 @@ git commit -m "feat(auth): add database migrations and sqlc queries"
 - Consumes: standard library `crypto/rand`, `crypto/sha256`, `golang.org/x/crypto/bcrypt`
 - Produces: `Role*` constants, `Capability*` constants, `DeriveCapabilities`, `ValidatePinFormat`, `HashPin`, `VerifyPin`, `GenerateToken`, `HashToken`, `InactivityTimeout`
 
-- [ ] **Step 1: Write failing unit test for domain helpers**
+- [x] **Step 1: Write failing unit test for domain helpers**
 
 Create `internal/auth/domain_test.go`:
 ```go
@@ -331,12 +331,12 @@ func TestInactivityTimeout(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/auth/...` in `.worktrees/auth-slice/`  
 Expected: FAIL (types and functions not defined).
 
-- [ ] **Step 3: Implement domain logic**
+- [x] **Step 3: Implement domain logic**
 
 Create `internal/auth/domain.go`:
 ```go
@@ -484,12 +484,12 @@ func GetInactivityTimeout(workspace string) time.Duration {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `go test -v ./internal/auth/...` in `.worktrees/auth-slice/`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/auth/domain.go internal/auth/domain_test.go
@@ -508,7 +508,7 @@ git commit -m "feat(auth): implement domain models, capabilities, and security h
 - Consumes: `github.com/google/uuid`, `internal/httpvalidator`
 - Produces: Request & Response structs for all auth & staff endpoints
 
-- [ ] **Step 1: Write unit test for DTO validation**
+- [x] **Step 1: Write unit test for DTO validation**
 
 Create `internal/auth/dto_test.go`:
 ```go
@@ -562,12 +562,12 @@ func TestCreateStaffRequestValidation(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/auth/...`  
 Expected: FAIL.
 
-- [ ] **Step 3: Implement DTOs**
+- [x] **Step 3: Implement DTOs**
 
 Create `internal/auth/dto.go`:
 ```go
@@ -670,12 +670,12 @@ type StaffDetailResponse struct {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `go test -v ./internal/auth/...`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/auth/dto.go internal/auth/dto_test.go
@@ -700,7 +700,7 @@ git commit -m "feat(auth): define DTO models and validation rules"
 - Consumes: `sqlc.Querier`, `database.TxManager`, `internal/response`
 - Produces: HTTP Handlers for `/api/v1/auth/*`
 
-- [ ] **Step 1: Write `sign_in.go` handler & cookie helper**
+- [x] **Step 1: Write `sign_in.go` handler & cookie helper**
 
 Create `internal/auth/sign_in.go`:
 ```go
@@ -835,7 +835,7 @@ func (h *SignInHandler) HandleHTTP(c echo.Context) error {
 }
 ```
 
-- [ ] **Step 2: Implement `get_session.go`, `lock_session.go`, `unlock_session.go`, `sign_out.go`**
+- [x] **Step 2: Implement `get_session.go`, `lock_session.go`, `unlock_session.go`, `sign_out.go`**
 
 Create `internal/auth/get_session.go`:
 ```go
@@ -1244,12 +1244,12 @@ func (h *ListIdentitiesHandler) HandleHTTP(c echo.Context) error {
 }
 ```
 
-- [ ] **Step 3: Run `go test ./internal/auth/...`**
+- [x] **Step 3: Run `go test ./internal/auth/...`**
 
 Run: `go test ./internal/auth/...`  
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/auth/
@@ -1267,7 +1267,7 @@ git commit -m "feat(auth): implement public authentication handlers"
 - Consumes: `*sql.DB`, `sqlc.Querier`, `internal/response`
 - Produces: `BootstrapManagerHandler` for `POST /api/v1/auth/bootstrap`
 
-- [ ] **Step 1: Implement `bootstrap_manager.go` with advisory lock**
+- [x] **Step 1: Implement `bootstrap_manager.go` with advisory lock**
 
 Create `internal/auth/bootstrap_manager.go`:
 ```go
@@ -1375,12 +1375,12 @@ func (h *BootstrapManagerHandler) HandleHTTP(c echo.Context) error {
 }
 ```
 
-- [ ] **Step 2: Verify compile**
+- [x] **Step 2: Verify compile**
 
 Run: `go test ./internal/auth/...`  
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/auth/bootstrap_manager.go
@@ -1404,7 +1404,7 @@ git commit -m "feat(auth): add manager bootstrap handler with advisory lock"
 - Consumes: `*sql.DB`, `sqlc.Querier`, `idempotency_keys` table
 - Produces: HTTP Handlers for `/api/v1/staff/*`
 
-- [ ] **Step 1: Write `idempotency.go` helper**
+- [x] **Step 1: Write `idempotency.go` helper**
 
 Create `internal/auth/idempotency.go`:
 ```go
@@ -1482,7 +1482,7 @@ func ExecuteWithIdempotency[T any](
 }
 ```
 
-- [ ] **Step 2: Implement `staff_me.go` & `staff_list.go`**
+- [x] **Step 2: Implement `staff_me.go` & `staff_list.go`**
 
 Create `internal/auth/staff_me.go`:
 ```go
@@ -1584,7 +1584,7 @@ func (h *StaffListHandler) HandleHTTP(c echo.Context) error {
 }
 ```
 
-- [ ] **Step 3: Implement `staff_create.go`**
+- [x] **Step 3: Implement `staff_create.go`**
 
 Create `internal/auth/staff_create.go`:
 ```go
@@ -1701,7 +1701,7 @@ func (h *StaffCreateHandler) HandleHTTP(c echo.Context) error {
 }
 ```
 
-- [ ] **Step 4: Implement `staff_set_enabled.go`, `staff_replace_roles.go`, `staff_reset_pin.go`**
+- [x] **Step 4: Implement `staff_set_enabled.go`, `staff_replace_roles.go`, `staff_reset_pin.go`**
 
 Create `internal/auth/staff_set_enabled.go`:
 ```go
@@ -2066,12 +2066,12 @@ func (h *StaffResetPinHandler) HandleHTTP(c echo.Context) error {
 }
 ```
 
-- [ ] **Step 5: Verify compile**
+- [x] **Step 5: Verify compile**
 
 Run: `go test ./internal/auth/...`  
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/auth/
@@ -2090,7 +2090,7 @@ git commit -m "feat(auth): implement staff administration handlers with idempote
 - Consumes: `sqlc.Queries`, `echo.Context`
 - Produces: `RequireAuth(allowedRoles ...string)`, `RequireCapability(cap string)`, `GetStaff(c echo.Context) *StaffClaims`
 
-- [ ] **Step 1: Implement `middleware.go`**
+- [x] **Step 1: Implement `middleware.go`**
 
 Create `internal/auth/middleware.go`:
 ```go
@@ -2234,12 +2234,12 @@ func (m *Middleware) RequireCapability(capability string) echo.MiddlewareFunc {
 }
 ```
 
-- [ ] **Step 2: Verify compile and unit test**
+- [x] **Step 2: Verify compile and unit test**
 
 Run: `go test ./internal/auth/...`  
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/auth/middleware.go
@@ -2258,7 +2258,7 @@ git commit -m "feat(auth): implement RequireAuth and RequireCapability Echo midd
 - Consumes: `*sql.DB`, `*sqlc.Queries`, `eventbus.Bus`, `echo.Group`
 - Produces: `auth.NewSlices`, `RegisterRoutes`
 
-- [ ] **Step 1: Write `routes.go`**
+- [x] **Step 1: Write `routes.go`**
 
 Create `internal/auth/routes.go`:
 ```go
@@ -2335,17 +2335,17 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group) {
 }
 ```
 
-- [ ] **Step 2: Wire in `cmd/api/main.go`**
+- [x] **Step 2: Wire in `cmd/api/main.go`**
 
 In `cmd/api/main.go`:
 Register `authSlices := auth.NewSlices(db, queries)` and `authSlices.RegisterRoutes(v1)`.
 
-- [ ] **Step 3: Verify compile**
+- [x] **Step 3: Verify compile**
 
 Run: `go test ./...` in `.worktrees/auth-slice/`  
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/auth/routes.go cmd/api/main.go
@@ -2363,7 +2363,7 @@ git commit -m "feat(auth): register auth and staff routes in api v1"
 - Consumes: Real test PostgreSQL instance via `TEST_DATABASE_URL`
 - Produces: Complete automated integration test covering bootstrap, login, lock, unlock, staff CRUD, idempotency, and invariant enforcement.
 
-- [ ] **Step 1: Write integration tests**
+- [x] **Step 1: Write integration tests**
 
 Create `internal/auth/auth_integration_test.go`:
 Test scenarios:
@@ -2374,12 +2374,12 @@ Test scenarios:
 5. `TestManagerInvariant`: attempting to deactivate the last remaining manager returns 409 `FINAL_ENABLED_MANAGER_REQUIRED`.
 6. `TestSessionRevocationOnDeactivation`: deactivating staff revokes their active sessions.
 
-- [ ] **Step 2: Run integration tests**
+- [x] **Step 2: Run integration tests**
 
 Run: `go test -v ./internal/auth/...`  
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/auth/auth_integration_test.go
@@ -2393,17 +2393,17 @@ git commit -m "test(auth): add comprehensive integration test suite"
 **Files:**
 - Modify: `docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml`
 
-- [ ] **Step 1: Generate updated swagger docs**
+- [x] **Step 1: Generate updated swagger docs**
 
 Run: `swag init -g cmd/api/main.go -o docs` in `.worktrees/auth-slice/`  
 Expected: Successfully generates OpenAPI spec including all `/api/v1/auth/*` and `/api/v1/staff/*` endpoints.
 
-- [ ] **Step 2: Run complete test suite**
+- [x] **Step 2: Run complete test suite**
 
 Run: `go test -v ./...` in `.worktrees/auth-slice/`  
 Expected: All packages pass with 0 errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/

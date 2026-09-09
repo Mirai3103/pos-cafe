@@ -29,7 +29,7 @@
 - Consumes: `SessionStateActive` constant, `SessionStateLocked` constant
 - Produces: API returns `"authenticated"` instead of `"active"` for active sessions
 
-- [ ] **Step 1: Update SessionStateActive constant**
+- [x] **Step 1: Update SessionStateActive constant**
 
 ```go
 // In internal/auth/domain.go
@@ -39,7 +39,7 @@ const (
 )
 ```
 
-- [ ] **Step 2: Verify GetSession returns correct state**
+- [x] **Step 2: Verify GetSession returns correct state**
 
 The `get_session.go` uses `sess.SessionState` which comes from the DB. The DB stores `'active'` as the state value. We need to map DB state to API state.
 
@@ -51,19 +51,19 @@ if apiState == "active" {
 }
 ```
 
-- [ ] **Step 3: Update middleware to check for DB state value**
+- [x] **Step 3: Update middleware to check for DB state value**
 
 ```go
 // In internal/auth/middleware.go, line 84
 if sess.SessionState != SessionStateActive && sess.SessionState != "active" {
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `go test ./internal/auth/...`
 Expected: All tests pass
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/auth/domain.go internal/auth/get_session.go internal/auth/middleware.go
@@ -81,7 +81,7 @@ git commit -m "fix(auth): return 'authenticated' instead of 'active' in session 
 - Consumes: `GetStaff(c)`, `RevokeSession()`
 - Produces: Error response if revocation fails
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```go
 // In internal/auth/handlers_test.go, add test case
@@ -92,7 +92,7 @@ func TestSignOutHandler_RevocationFailure(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Fix sign_out.go**
+- [x] **Step 2: Fix sign_out.go**
 
 ```go
 func (h *SignOutHandler) HandleHTTP(c echo.Context) error {
@@ -107,12 +107,12 @@ func (h *SignOutHandler) HandleHTTP(c echo.Context) error {
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `go test ./internal/auth/...`
 Expected: New test passes, existing tests pass
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/auth/sign_out.go internal/auth/handlers_test.go
@@ -130,7 +130,7 @@ git commit -m "fix(auth): propagate revocation errors in sign-out"
 - Consumes: `UpdateSessionState()`, `UpdateSessionActivity()`
 - Produces: Atomic unlock operation
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```go
 // In internal/auth/handlers_test.go, add test case
@@ -141,7 +141,7 @@ func TestUnlockHandler_PartialFailure(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Fix unlock_session.go**
+- [x] **Step 2: Fix unlock_session.go**
 
 ```go
 func (h *UnlockSessionHandler) Handle(ctx context.Context, token string, pin string) (*SignInResponse, error) {
@@ -181,7 +181,7 @@ func (h *UnlockSessionHandler) Handle(ctx context.Context, token string, pin str
 }
 ```
 
-- [ ] **Step 3: Update constructor to accept db**
+- [x] **Step 3: Update constructor to accept db**
 
 ```go
 // In internal/auth/unlock_session.go
@@ -195,19 +195,19 @@ func NewUnlockSessionHandler(db *sql.DB, queries *sqlc.Queries) *UnlockSessionHa
 }
 ```
 
-- [ ] **Step 4: Update routes.go to pass db**
+- [x] **Step 4: Update routes.go to pass db**
 
 ```go
 // In internal/auth/routes.go, line 35
 Unlock: NewUnlockSessionHandler(db, queries),
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `go test ./internal/auth/...`
 Expected: All tests pass
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/auth/unlock_session.go internal/auth/routes.go internal/auth/handlers_test.go
@@ -225,19 +225,19 @@ git commit -m "fix(auth): make unlock operation atomic with transaction"
 - Consumes: Echo CORS middleware config
 - Produces: PATCH method allowed in CORS preflight
 
-- [ ] **Step 1: Fix CORS config**
+- [x] **Step 1: Fix CORS config**
 
 ```go
 // In cmd/api/main.go, line 121
 AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
 ```
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `go test ./...`
 Expected: All tests pass
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add cmd/api/main.go
@@ -257,7 +257,7 @@ git commit -m "fix(api): add PATCH to CORS allowed methods"
 - Consumes: `response.Error()`
 - Produces: New error type `ErrManagerInvariant`
 
-- [ ] **Step 1: Add new error type**
+- [x] **Step 1: Add new error type**
 
 ```go
 // In internal/response/response.go, after line 17
@@ -267,7 +267,7 @@ var (
 )
 ```
 
-- [ ] **Step 2: Add error code mapping**
+- [x] **Step 2: Add error code mapping**
 
 ```go
 // In internal/response/response.go, in the Error function, add case before default
@@ -281,7 +281,7 @@ case errors.Is(err, ErrManagerInvariant):
     })
 ```
 
-- [ ] **Step 3: Update staff_set_enabled.go**
+- [x] **Step 3: Update staff_set_enabled.go**
 
 ```go
 // Line 82, change from:
@@ -290,7 +290,7 @@ return 0, nil, fmt.Errorf("%w: phải còn ít nhất một Quản lý đang ho�
 return 0, nil, fmt.Errorf("%w: phải còn ít nhất một Quản lý đang hoạt động", response.ErrManagerInvariant)
 ```
 
-- [ ] **Step 4: Update staff_replace_roles.go**
+- [x] **Step 4: Update staff_replace_roles.go**
 
 ```go
 // Line 74, change from:
@@ -299,7 +299,7 @@ return 0, nil, fmt.Errorf("%w: phải còn ít nhất một Quản lý đang ho�
 return 0, nil, fmt.Errorf("%w: phải còn ít nhất một Quản lý đang hoạt động", response.ErrManagerInvariant)
 ```
 
-- [ ] **Step 5: Update response_test.go**
+- [x] **Step 5: Update response_test.go**
 
 ```go
 // Add test case for ErrManagerInvariant
@@ -308,12 +308,12 @@ func TestError_ManagerInvariant(t *testing.T) {
 }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `go test ./internal/response/... ./internal/auth/...`
 Expected: All tests pass
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/response/response.go internal/response/response_test.go internal/auth/staff_set_enabled.go internal/auth/staff_replace_roles.go
@@ -333,7 +333,7 @@ git commit -m "fix(auth): add FINAL_ENABLED_MANAGER_REQUIRED error code"
 - Consumes: `ComputeRequestHash()`
 - Produces: Idempotency key includes target resource ID
 
-- [ ] **Step 1: Create composite payload struct**
+- [x] **Step 1: Create composite payload struct**
 
 ```go
 // In internal/auth/idempotency.go, add helper
@@ -347,7 +347,7 @@ func ComputeRequestHashWithTarget(action string, targetID uuid.UUID, payload any
 }
 ```
 
-- [ ] **Step 2: Update staff_replace_roles.go**
+- [x] **Step 2: Update staff_replace_roles.go**
 
 ```go
 // Line 39, change from:
@@ -356,7 +356,7 @@ return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "sta
 return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.replace_roles", idempotencyPayload{TargetID: targetID, Body: req}, func() ...
 ```
 
-- [ ] **Step 3: Update staff_set_enabled.go**
+- [x] **Step 3: Update staff_set_enabled.go**
 
 ```go
 // Line 45, change from:
@@ -365,7 +365,7 @@ return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "sta
 return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.set_enabled", idempotencyPayload{TargetID: targetID, Body: req}, func() ...
 ```
 
-- [ ] **Step 4: Update staff_reset_pin.go**
+- [x] **Step 4: Update staff_reset_pin.go**
 
 ```go
 // Line 38, change from:
@@ -374,7 +374,7 @@ return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "sta
 return ExecuteWithIdempotency(ctx, h.queries, actor.StaffID, req.RequestID, "staff.reset_pin", idempotencyPayload{TargetID: targetID, Body: req}, func() ...
 ```
 
-- [ ] **Step 5: Add test for target-specific idempotency**
+- [x] **Step 5: Add test for target-specific idempotency**
 
 ```go
 // In internal/auth/idempotency_test.go
@@ -384,12 +384,12 @@ func TestIdempotency_TargetSpecific(t *testing.T) {
 }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `go test ./internal/auth/...`
 Expected: All tests pass
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/auth/idempotency.go internal/auth/idempotency_test.go internal/auth/staff_replace_roles.go internal/auth/staff_set_enabled.go internal/auth/staff_reset_pin.go
@@ -408,7 +408,7 @@ git commit -m "fix(auth): include targetID in idempotency fingerprint"
 - Consumes: `CountActiveManagers` query
 - Produces: Bootstrap only when zero managers exist (any enabled or disabled)
 
-- [ ] **Step 1: Fix SQL query**
+- [x] **Step 1: Fix SQL query**
 
 ```sql
 -- In sql/queries/auth.sql, line 60-64, change from:
@@ -426,12 +426,12 @@ JOIN staff_operational_roles sor ON sor.staff_identity_id = si.id
 WHERE sor.role = 'MANAGER';
 ```
 
-- [ ] **Step 2: Regenerate sqlc**
+- [x] **Step 2: Regenerate sqlc**
 
 Run: `sqlc generate`
 Expected: Updated `auth.sql.go` with `CountManagers` method
 
-- [ ] **Step 3: Update bootstrap_manager.go**
+- [x] **Step 3: Update bootstrap_manager.go**
 
 ```go
 // In internal/auth/bootstrap_manager.go, line 47, change from:
@@ -440,7 +440,7 @@ activeCount, err := qtx.CountActiveManagers(ctx)
 activeCount, err := qtx.CountManagers(ctx)
 ```
 
-- [ ] **Step 4: Update staff_set_enabled.go**
+- [x] **Step 4: Update staff_set_enabled.go**
 
 ```go
 // In internal/auth/staff_set_enabled.go, line 77, change from:
@@ -449,7 +449,7 @@ activeManagers, err := qtx.CountActiveManagers(ctx)
 activeManagers, err := qtx.CountManagers(ctx)
 ```
 
-- [ ] **Step 5: Update staff_replace_roles.go**
+- [x] **Step 5: Update staff_replace_roles.go**
 
 ```go
 // In internal/auth/staff_replace_roles.go, line 69, change from:
@@ -458,16 +458,16 @@ activeManagers, err := qtx.CountActiveManagers(ctx)
 activeManagers, err := qtx.CountManagers(ctx)
 ```
 
-- [ ] **Step 6: Update querier interface**
+- [x] **Step 6: Update querier interface**
 
 The `CountManagers` method should be added to the `Querier` interface. Verify `sqlc generate` handles this.
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run: `go test ./internal/auth/...`
 Expected: All tests pass
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add sql/queries/auth.sql internal/database/sqlc/ internal/auth/bootstrap_manager.go internal/auth/staff_set_enabled.go internal/auth/staff_replace_roles.go
@@ -485,7 +485,7 @@ git commit -m "fix(auth): bootstrap checks all managers, not just enabled"
 - Consumes: `*sql.DB`, transaction
 - Produces: Atomic mutation + idempotency record insertion
 
-- [ ] **Step 1: Write failing concurrent test**
+- [x] **Step 1: Write failing concurrent test**
 
 ```go
 // In internal/auth/idempotency_test.go
@@ -496,7 +496,7 @@ func TestExecuteWithIdempotency_Concurrent(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Refactor ExecuteWithIdempotency to use transaction**
+- [x] **Step 2: Refactor ExecuteWithIdempotency to use transaction**
 
 ```go
 func ExecuteWithIdempotency[T any](
@@ -562,7 +562,7 @@ func ExecuteWithIdempotency[T any](
 }
 ```
 
-- [ ] **Step 3: Update all callers of ExecuteWithIdempotency**
+- [x] **Step 3: Update all callers of ExecuteWithIdempotency**
 
 Each caller must be updated to pass `db` and use the new signature `fn(tx *sql.Tx, qtx *sqlc.Queries)`:
 
@@ -571,12 +571,12 @@ Each caller must be updated to pass `db` and use the new signature `fn(tx *sql.T
 - `internal/auth/staff_reset_pin.go`
 - `internal/auth/staff_create.go`
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `go test ./internal/auth/...`
 Expected: All tests pass including new concurrent test
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/auth/idempotency.go internal/auth/idempotency_test.go internal/auth/staff_replace_roles.go internal/auth/staff_set_enabled.go internal/auth/staff_reset_pin.go internal/auth/staff_create.go
@@ -597,7 +597,7 @@ git commit -m "fix(auth): make idempotency atomic with transaction"
 - Consumes: Rate limiter middleware
 - Produces: 429 Too Many Requests after N failed attempts
 
-- [ ] **Step 1: Create in-memory rate limiter**
+- [x] **Step 1: Create in-memory rate limiter**
 
 ```go
 // internal/auth/ratelimit.go
@@ -655,7 +655,7 @@ func (r *RateLimiter) Reset(key string) {
 }
 ```
 
-- [ ] **Step 2: Create rate limit middleware**
+- [x] **Step 2: Create rate limit middleware**
 
 ```go
 // In internal/auth/middleware.go, add
@@ -672,7 +672,7 @@ func (m *Middleware) RateLimit(limiter *RateLimiter, keyFunc func(c echo.Context
 }
 ```
 
-- [ ] **Step 3: Apply rate limiter to sign-in**
+- [x] **Step 3: Apply rate limiter to sign-in**
 
 ```go
 // In internal/auth/routes.go
@@ -684,7 +684,7 @@ authGroup.POST("/signIn", s.SignIn.HandleHTTP, s.Middleware.RateLimit(signInLimi
 }))
 ```
 
-- [ ] **Step 4: Apply rate limiter to unlock**
+- [x] **Step 4: Apply rate limiter to unlock**
 
 ```go
 // In internal/auth/routes.go
@@ -695,7 +695,7 @@ authGroup.POST("/unlock", s.Unlock.HandleHTTP, s.Middleware.RateLimit(unlockLimi
 }))
 ```
 
-- [ ] **Step 5: Reset rate limit on successful auth**
+- [x] **Step 5: Reset rate limit on successful auth**
 
 ```go
 // In sign_in.go, after successful auth (line 53)
@@ -705,7 +705,7 @@ signInLimiter.Reset("signIn:" + req.LoginCode)
 unlockLimiter.Reset("unlock:" + token)
 ```
 
-- [ ] **Step 6: Add tests**
+- [x] **Step 6: Add tests**
 
 ```go
 // In internal/auth/idempotency_test.go or new file
@@ -722,12 +722,12 @@ func TestRateLimiter(t *testing.T) {
 }
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run: `go test ./internal/auth/...`
 Expected: All tests pass
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add internal/auth/ratelimit.go internal/auth/middleware.go internal/auth/sign_in.go internal/auth/unlock_session.go internal/auth/routes.go
@@ -745,7 +745,7 @@ git commit -m "fix(auth): add brute-force protection for PIN endpoints"
 - Consumes: Go test commands
 - Produces: Integration tests run separately with correct build tags
 
-- [ ] **Step 1: Add integration test job**
+- [x] **Step 1: Add integration test job**
 
 ```yaml
 # In .github/workflows/ci.yml
@@ -756,13 +756,13 @@ git commit -m "fix(auth): add brute-force protection for PIN endpoints"
     TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
 ```
 
-- [ ] **Step 2: Verify unit tests still run without integration tag**
+- [x] **Step 2: Verify unit tests still run without integration tag**
 
 ```bash
 go test ./internal/auth/...
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/
