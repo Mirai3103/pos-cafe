@@ -54,6 +54,20 @@ func (q *Queries) CountActiveManagers(ctx context.Context) (int64, error) {
 	return column_1, err
 }
 
+const countManagers = `-- name: CountManagers :one
+SELECT count(DISTINCT si.id)::bigint
+FROM staff_identities si
+JOIN staff_operational_roles sor ON sor.staff_identity_id = si.id
+WHERE sor.role = 'MANAGER'
+`
+
+func (q *Queries) CountManagers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countManagers)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createStaffIdentity = `-- name: CreateStaffIdentity :one
 INSERT INTO staff_identities (display_name, login_code, pin_hash, enabled)
 VALUES ($1, upper(btrim($2)), $3, $4)

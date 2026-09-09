@@ -63,6 +63,12 @@ FROM staff_identities si
 JOIN staff_operational_roles sor ON sor.staff_identity_id = si.id
 WHERE si.enabled = true AND sor.role = 'MANAGER';
 
+-- name: CountManagers :one
+SELECT count(DISTINCT si.id)::bigint
+FROM staff_identities si
+JOIN staff_operational_roles sor ON sor.staff_identity_id = si.id
+WHERE sor.role = 'MANAGER';
+
 -- name: CreateStaffSession :one
 INSERT INTO staff_access_sessions (
     token_hash, staff_identity_id, state, active_workspace, 

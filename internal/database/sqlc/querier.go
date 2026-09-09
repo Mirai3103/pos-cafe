@@ -14,6 +14,7 @@ type Querier interface {
 	AddStaffRole(ctx context.Context, arg AddStaffRoleParams) error
 	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
 	CountActiveManagers(ctx context.Context) (int64, error)
+	CountManagers(ctx context.Context) (int64, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateStaffIdentity(ctx context.Context, arg CreateStaffIdentityParams) (CreateStaffIdentityRow, error)
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)

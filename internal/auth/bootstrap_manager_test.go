@@ -67,6 +67,7 @@ type mockConnConfig struct {
 	beginErr              error
 	lockErr               error
 	countManagers         int64
+	countQuery            string
 	countErr              error
 	createErr             error
 	createdID             uuid.UUID
@@ -171,6 +172,7 @@ func (c *testMockConn) QueryContext(_ context.Context, query string, args []driv
 		return &testMockRows{cols: []string{"role"}, rows: rows}, nil
 	}
 	if strings.Contains(query, "CountActiveManagers") || strings.Contains(query, "count(DISTINCT si.id)") {
+		c.cfg.countQuery = query
 		if c.cfg.countErr != nil {
 			return nil, c.cfg.countErr
 		}
@@ -357,6 +359,7 @@ func TestBootstrapManagerHandler_HandleHTTP_Conflict_ManagerAlreadyExists(t *tes
 	assert.False(t, resp.Success)
 	assert.Equal(t, "CONFLICT", resp.Error.Code)
 	assert.Contains(t, resp.Error.Message, "hệ thống đã có Quản lý được cài đặt")
+	assert.NotContains(t, cfg.countQuery, "si.enabled", "bootstrap must count disabled managers")
 
 	assert.True(t, cfg.rolledBack)
 	assert.False(t, cfg.committed)

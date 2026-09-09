@@ -44,11 +44,11 @@ func (h *BootstrapManagerHandler) Handle(ctx context.Context, req BootstrapManag
 	qtx := h.queries.WithTx(tx)
 
 	// Check if any manager already exists
-	activeCount, err := qtx.CountActiveManagers(ctx)
+	managerCount, err := qtx.CountManagers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("check existing managers: %w", err)
 	}
-	if activeCount > 0 {
+	if managerCount > 0 {
 		return nil, fmt.Errorf("%w: hệ thống đã có Quản lý được cài đặt", response.ErrConflict)
 	}
 
