@@ -31,8 +31,9 @@ const (
 
 // Session States
 const (
-	SessionStateActive = "authenticated"
-	SessionStateLocked = "locked"
+	SessionStateActive        = "active"
+	SessionStateAuthenticated = "authenticated"
+	SessionStateLocked        = "locked"
 )
 
 // Inactivity Timeouts

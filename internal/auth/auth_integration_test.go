@@ -198,7 +198,7 @@ func TestSignInAndSession(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recBearer.Code)
 	sessBearerRes := parseResponse[auth.SessionStateResponse](t, recBearer)
 	assert.True(t, sessBearerRes.Success)
-	assert.Equal(t, auth.SessionStateActive, sessBearerRes.Data.State)
+	assert.Equal(t, auth.SessionStateAuthenticated, sessBearerRes.Data.State)
 	assert.Equal(t, "QL01", sessBearerRes.Data.LoginCode)
 
 	// 4. GET /api/v1/auth/session with cookie
@@ -206,7 +206,7 @@ func TestSignInAndSession(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recCookie.Code)
 	sessCookieRes := parseResponse[auth.SessionStateResponse](t, recCookie)
 	assert.True(t, sessCookieRes.Success)
-	assert.Equal(t, auth.SessionStateActive, sessCookieRes.Data.State)
+	assert.Equal(t, auth.SessionStateAuthenticated, sessCookieRes.Data.State)
 	assert.Equal(t, "QL01", sessCookieRes.Data.LoginCode)
 
 	// 5. GET /api/v1/auth/session without token (returns signed_out)
@@ -292,7 +292,7 @@ func TestSessionLockAndUnlock(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recSessionUnlocked.Code)
 	sessUnlockedRes := parseResponse[auth.SessionStateResponse](t, recSessionUnlocked)
 	assert.True(t, sessUnlockedRes.Success)
-	assert.Equal(t, auth.SessionStateActive, sessUnlockedRes.Data.State)
+	assert.Equal(t, auth.SessionStateAuthenticated, sessUnlockedRes.Data.State)
 
 	// 6. Workspace declaration
 	recWorkspace := doJSONRequest(e, http.MethodPost, "/api/v1/auth/workspace", auth.DeclareWorkspaceRequest{
@@ -637,7 +637,7 @@ func TestSessionRevocationOnDeactivation(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recSessBefore.Code)
 	sessBeforeRes := parseResponse[auth.SessionStateResponse](t, recSessBefore)
 	assert.True(t, sessBeforeRes.Success)
-	assert.Equal(t, auth.SessionStateActive, sessBeforeRes.Data.State)
+	assert.Equal(t, auth.SessionStateAuthenticated, sessBeforeRes.Data.State)
 
 	// Manager deactivates cashier
 	deactReq := auth.SetStaffEnabledRequest{

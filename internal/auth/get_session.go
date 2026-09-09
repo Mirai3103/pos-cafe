@@ -63,7 +63,7 @@ func (h *GetSessionHandler) Handle(ctx context.Context, token string) (*SessionS
 
 	// Inactivity Check
 	timeout := GetInactivityTimeout(workspace)
-	if (sess.SessionState == SessionStateActive || sess.SessionState == "active") && time.Now().UTC().Sub(sess.LastHumanActivityAt) >= timeout {
+	if sess.SessionState == SessionStateActive && time.Now().UTC().Sub(sess.LastHumanActivityAt) >= timeout {
 		if err := h.queries.UpdateSessionState(ctx, sqlc.UpdateSessionStateParams{
 			ID:    sess.SessionID,
 			State: SessionStateLocked,
@@ -80,8 +80,8 @@ func (h *GetSessionHandler) Handle(ctx context.Context, token string) (*SessionS
 
 	caps := DeriveCapabilities(roles)
 	apiState := sess.SessionState
-	if apiState == "active" {
-		apiState = SessionStateActive
+	if apiState == SessionStateActive {
+		apiState = SessionStateAuthenticated
 	}
 	return &SessionStateResponse{
 		State:        apiState,

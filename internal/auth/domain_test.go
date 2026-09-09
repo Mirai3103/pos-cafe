@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSessionStateActive(t *testing.T) {
-	assert.Equal(t, "authenticated", SessionStateActive)
+func TestSessionStates(t *testing.T) {
+	assert.Equal(t, "active", SessionStateActive)
+	assert.Equal(t, "authenticated", SessionStateAuthenticated)
 }
 
 func TestValidatePinFormat(t *testing.T) {
