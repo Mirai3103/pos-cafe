@@ -1419,18 +1419,19 @@ func (q *Queries) ListModifierOptionsByGroup(ctx context.Context, modifierGroupI
 
 const renameMenuCategory = `-- name: RenameMenuCategory :one
 UPDATE menu_categories
-SET name = $2
+SET name = $2, normalized_name = $3
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at
 `
 
 type RenameMenuCategoryParams struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	NormalizedName string    `json:"normalized_name"`
 }
 
 func (q *Queries) RenameMenuCategory(ctx context.Context, arg RenameMenuCategoryParams) (MenuCategory, error) {
-	row := q.db.QueryRowContext(ctx, renameMenuCategory, arg.ID, arg.Name)
+	row := q.db.QueryRowContext(ctx, renameMenuCategory, arg.ID, arg.Name, arg.NormalizedName)
 	var i MenuCategory
 	err := row.Scan(
 		&i.ID,
@@ -1443,7 +1444,7 @@ func (q *Queries) RenameMenuCategory(ctx context.Context, arg RenameMenuCategory
 
 const renameMenuItem = `-- name: RenameMenuItem :one
 UPDATE menu_items
-SET name = $2, updated_at = now()
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
@@ -1451,12 +1452,13 @@ RETURNING id, category_id, name, normalized_name, price_vnd,
 `
 
 type RenameMenuItemParams struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	NormalizedName string    `json:"normalized_name"`
 }
 
 func (q *Queries) RenameMenuItem(ctx context.Context, arg RenameMenuItemParams) (MenuItem, error) {
-	row := q.db.QueryRowContext(ctx, renameMenuItem, arg.ID, arg.Name)
+	row := q.db.QueryRowContext(ctx, renameMenuItem, arg.ID, arg.Name, arg.NormalizedName)
 	var i MenuItem
 	err := row.Scan(
 		&i.ID,
@@ -1476,7 +1478,7 @@ func (q *Queries) RenameMenuItem(ctx context.Context, arg RenameMenuItemParams) 
 
 const renameMenuItemSize = `-- name: RenameMenuItemSize :one
 UPDATE menu_item_sizes
-SET name = $2, updated_at = now()
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, menu_item_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
@@ -1484,12 +1486,13 @@ RETURNING id, menu_item_id, name, normalized_name, price_vnd,
 `
 
 type RenameMenuItemSizeParams struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	NormalizedName string    `json:"normalized_name"`
 }
 
 func (q *Queries) RenameMenuItemSize(ctx context.Context, arg RenameMenuItemSizeParams) (MenuItemSize, error) {
-	row := q.db.QueryRowContext(ctx, renameMenuItemSize, arg.ID, arg.Name)
+	row := q.db.QueryRowContext(ctx, renameMenuItemSize, arg.ID, arg.Name, arg.NormalizedName)
 	var i MenuItemSize
 	err := row.Scan(
 		&i.ID,
@@ -1509,7 +1512,7 @@ func (q *Queries) RenameMenuItemSize(ctx context.Context, arg RenameMenuItemSize
 
 const renameModifierGroup = `-- name: RenameModifierGroup :one
 UPDATE modifier_groups
-SET name = $2, updated_at = now()
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, min_selections, max_selections,
           retired_at, retirement_reason, retirement_note,
@@ -1517,12 +1520,13 @@ RETURNING id, name, normalized_name, min_selections, max_selections,
 `
 
 type RenameModifierGroupParams struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	NormalizedName string    `json:"normalized_name"`
 }
 
 func (q *Queries) RenameModifierGroup(ctx context.Context, arg RenameModifierGroupParams) (ModifierGroup, error) {
-	row := q.db.QueryRowContext(ctx, renameModifierGroup, arg.ID, arg.Name)
+	row := q.db.QueryRowContext(ctx, renameModifierGroup, arg.ID, arg.Name, arg.NormalizedName)
 	var i ModifierGroup
 	err := row.Scan(
 		&i.ID,
@@ -1541,7 +1545,7 @@ func (q *Queries) RenameModifierGroup(ctx context.Context, arg RenameModifierGro
 
 const renameModifierOption = `-- name: RenameModifierOption :one
 UPDATE modifier_options
-SET name = $2, updated_at = now()
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, modifier_group_id, name, normalized_name, surcharge_vnd,
           available, retired_at, retirement_reason, retirement_note,
@@ -1549,12 +1553,13 @@ RETURNING id, modifier_group_id, name, normalized_name, surcharge_vnd,
 `
 
 type RenameModifierOptionParams struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	NormalizedName string    `json:"normalized_name"`
 }
 
 func (q *Queries) RenameModifierOption(ctx context.Context, arg RenameModifierOptionParams) (ModifierOption, error) {
-	row := q.db.QueryRowContext(ctx, renameModifierOption, arg.ID, arg.Name)
+	row := q.db.QueryRowContext(ctx, renameModifierOption, arg.ID, arg.Name, arg.NormalizedName)
 	var i ModifierOption
 	err := row.Scan(
 		&i.ID,

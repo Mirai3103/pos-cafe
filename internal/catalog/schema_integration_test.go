@@ -73,4 +73,21 @@ func TestCatalogMigrationConstraints(t *testing.T) {
 		(category_id, name, normalized_name, price_vnd)
 		VALUES (gen_random_uuid(), 'Expensive', 'expensive', 0)`)
 	require.Error(t, err, "price_vnd = 0 must be rejected")
+
+	// modifier_groups: normalized_name uniqueness must fail
+	_, err = db.Exec(`INSERT INTO modifier_groups
+		(name, normalized_name, min_selections, max_selections)
+		VALUES ('Sugar', 'sugar', 1, 1)`)
+	require.NoError(t, err, "first modifier_group with normalized_name 'sugar' should succeed")
+
+	_, err = db.Exec(`INSERT INTO modifier_groups
+		(name, normalized_name, min_selections, max_selections)
+		VALUES ('Sweetener', 'sugar', 1, 1)`)
+	require.Error(t, err, "second modifier_group with same normalized_name must be rejected")
+
+	// menu_items: retirement_consistency_check must fail if retired_at set without retirement_reason
+	_, err = db.Exec(`INSERT INTO menu_items
+		(category_id, name, normalized_name, price_vnd, retired_at, retirement_reason)
+		VALUES (gen_random_uuid(), 'RetiredItem', 'retireditem', 10000, now(), NULL)`)
+	require.Error(t, err, "retired_at with null retirement_reason must be rejected")
 }

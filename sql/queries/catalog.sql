@@ -63,7 +63,7 @@ FOR UPDATE;
 
 -- name: RenameMenuCategory :one
 UPDATE menu_categories
-SET name = $2
+SET name = $2, normalized_name = $3
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at;
 
@@ -99,7 +99,7 @@ FOR UPDATE;
 
 -- name: RenameMenuItem :one
 UPDATE menu_items
-SET name = $2, updated_at = now()
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
@@ -164,7 +164,7 @@ FOR UPDATE;
 
 -- name: RenameMenuItemSize :one
 UPDATE menu_item_sizes
-SET name = $2, updated_at = now()
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, menu_item_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
@@ -228,7 +228,7 @@ FOR UPDATE;
 
 -- name: RenameModifierGroup :one
 UPDATE modifier_groups
-SET name = $2, updated_at = now()
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, min_selections, max_selections,
           retired_at, retirement_reason, retirement_note,
@@ -276,7 +276,7 @@ FOR UPDATE;
 
 -- name: RenameModifierOption :one
 UPDATE modifier_options
-SET name = $2, updated_at = now()
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, modifier_group_id, name, normalized_name, surcharge_vnd,
           available, retired_at, retirement_reason, retirement_note,
