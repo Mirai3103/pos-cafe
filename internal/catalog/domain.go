@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -108,6 +109,10 @@ func EffectiveGroupIDs(inheritedGroups, excludedGroupIDs, directGroups []uuid.UU
 			result = append(result, id)
 		}
 	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].String() < result[j].String()
+	})
 
 	return result
 }

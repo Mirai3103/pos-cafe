@@ -339,6 +339,15 @@ func TestIsSellable(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "both direct price and available sizes is not sellable",
+			state: catalog.ItemState{
+				Available:          true,
+				HasDirectPrice:     true,
+				AvailableSizeCount: 1,
+			},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
