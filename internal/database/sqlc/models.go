@@ -12,6 +12,25 @@ import (
 	"github.com/google/uuid"
 )
 
+type AuditEvent struct {
+	ID         uuid.UUID       `json:"id"`
+	EventType  string          `json:"event_type"`
+	ActorID    uuid.NullUUID   `json:"actor_id"`
+	SessionID  uuid.NullUUID   `json:"session_id"`
+	Details    json.RawMessage `json:"details"`
+	OccurredAt time.Time       `json:"occurred_at"`
+}
+
+type CatalogMutationRequest struct {
+	ActorID      uuid.UUID       `json:"actor_id"`
+	RequestID    uuid.UUID       `json:"request_id"`
+	Operation    string          `json:"operation"`
+	RequestHash  string          `json:"request_hash"`
+	ResponseCode int32           `json:"response_code"`
+	ResponseBody json.RawMessage `json:"response_body"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
 type Category struct {
 	ID           int64     `json:"id"`
 	Name         string    `json:"name"`
@@ -22,6 +41,12 @@ type Category struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type CategoryModifierGroup struct {
+	MenuCategoryID  uuid.UUID `json:"menu_category_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 type IdempotencyKey struct {
 	Key          uuid.UUID       `json:"key"`
 	ActorID      uuid.UUID       `json:"actor_id"`
@@ -30,6 +55,86 @@ type IdempotencyKey struct {
 	ResponseCode int32           `json:"response_code"`
 	ResponseBody json.RawMessage `json:"response_body"`
 	CreatedAt    time.Time       `json:"created_at"`
+}
+
+type ItemModifierGroup struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type ItemModifierGroupExclusion struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type MenuCategory struct {
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	NormalizedName string    `json:"normalized_name"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type MenuItem struct {
+	ID               uuid.UUID      `json:"id"`
+	CategoryID       uuid.UUID      `json:"category_id"`
+	Name             string         `json:"name"`
+	NormalizedName   string         `json:"normalized_name"`
+	PriceVnd         sql.NullInt64  `json:"price_vnd"`
+	Available        bool           `json:"available"`
+	RetiredAt        sql.NullTime   `json:"retired_at"`
+	RetirementReason sql.NullString `json:"retirement_reason"`
+	RetirementNote   sql.NullString `json:"retirement_note"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+}
+
+type MenuItemSize struct {
+	ID               uuid.UUID      `json:"id"`
+	MenuItemID       uuid.UUID      `json:"menu_item_id"`
+	Name             string         `json:"name"`
+	NormalizedName   string         `json:"normalized_name"`
+	PriceVnd         int64          `json:"price_vnd"`
+	Available        bool           `json:"available"`
+	RetiredAt        sql.NullTime   `json:"retired_at"`
+	RetirementReason sql.NullString `json:"retirement_reason"`
+	RetirementNote   sql.NullString `json:"retirement_note"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+}
+
+type ModifierGroup struct {
+	ID               uuid.UUID      `json:"id"`
+	Name             string         `json:"name"`
+	NormalizedName   string         `json:"normalized_name"`
+	MinSelections    int32          `json:"min_selections"`
+	MaxSelections    int32          `json:"max_selections"`
+	RetiredAt        sql.NullTime   `json:"retired_at"`
+	RetirementReason sql.NullString `json:"retirement_reason"`
+	RetirementNote   sql.NullString `json:"retirement_note"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+}
+
+type ModifierGroupDefaultOption struct {
+	ModifierGroupID  uuid.UUID `json:"modifier_group_id"`
+	ModifierOptionID uuid.UUID `json:"modifier_option_id"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+type ModifierOption struct {
+	ID               uuid.UUID      `json:"id"`
+	ModifierGroupID  uuid.UUID      `json:"modifier_group_id"`
+	Name             string         `json:"name"`
+	NormalizedName   string         `json:"normalized_name"`
+	SurchargeVnd     int64          `json:"surcharge_vnd"`
+	Available        bool           `json:"available"`
+	RetiredAt        sql.NullTime   `json:"retired_at"`
+	RetirementReason sql.NullString `json:"retirement_reason"`
+	RetirementNote   sql.NullString `json:"retirement_note"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
 type StaffAccessSession struct {

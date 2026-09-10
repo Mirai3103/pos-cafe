@@ -1,0 +1,76 @@
+//go:build integration
+
+package catalog_test
+
+import (
+	"context"
+	"database/sql"
+	"os"
+	"testing"
+
+	"github.com/Mirai3103/pos-cafe/internal/database"
+	"github.com/stretchr/testify/require"
+)
+
+func openCatalogTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	url := os.Getenv("TEST_DATABASE_URL")
+	require.Contains(t, url, "_test")
+	db, err := database.Open(context.Background(), url)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	return db
+}
+
+func requireTableExists(t *testing.T, db *sql.DB, tableName string) {
+	t.Helper()
+	var table string
+	err := db.QueryRow(`SELECT $1::regclass::text`, tableName).Scan(&table)
+	require.NoError(t, err, "table %s must exist", tableName)
+}
+
+func TestCatalogMigrationConstraints(t *testing.T) {
+	db := openCatalogTestDB(t)
+
+	// Verify all eleven Catalog and supporting tables exist.
+	catalogTables := []string{
+		"menu_categories",
+		"menu_items",
+		"menu_item_sizes",
+		"modifier_groups",
+		"modifier_options",
+		"item_modifier_groups",
+		"category_modifier_groups",
+		"item_modifier_group_exclusions",
+		"modifier_group_default_options",
+		"catalog_mutation_requests",
+		"audit_events",
+	}
+	for _, tbl := range catalogTables {
+		requireTableExists(t, db, tbl)
+	}
+
+	// modifier_groups: min_selections > max_selections must fail
+	_, err := db.Exec(`INSERT INTO modifier_groups
+		(name, normalized_name, min_selections, max_selections)
+		VALUES ('Sugar', 'sugar', 2, 1)`)
+	require.Error(t, err, "min_selections > max_selections must be rejected")
+
+	// modifier_groups: max_selections < 1 must fail
+	_, err = db.Exec(`INSERT INTO modifier_groups
+		(name, normalized_name, min_selections, max_selections)
+		VALUES ('Bad', 'bad', 0, 0)`)
+	require.Error(t, err, "max_selections < 1 must be rejected")
+
+	// modifier_options: negative surcharge must fail
+	_, err = db.Exec(`INSERT INTO modifier_options
+		(id, modifier_group_id, name, normalized_name, surcharge_vnd)
+		VALUES (gen_random_uuid(), gen_random_uuid(), 'Test', 'test', -1)`)
+	require.Error(t, err, "negative surcharge must be rejected")
+
+	// menu_items: price_vnd out of range must fail
+	_, err = db.Exec(`INSERT INTO menu_items
+		(category_id, name, normalized_name, price_vnd)
+		VALUES (gen_random_uuid(), 'Expensive', 'expensive', 0)`)
+	require.Error(t, err, "price_vnd = 0 must be rejected")
+}
