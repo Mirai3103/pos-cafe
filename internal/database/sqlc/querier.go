@@ -37,6 +37,8 @@ type Querier interface {
 	CreateStaffIdentity(ctx context.Context, arg CreateStaffIdentityParams) (CreateStaffIdentityRow, error)
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	DeleteCategory(ctx context.Context, id int64) error
+	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
+	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
 	GetCatalogMutationRequest(ctx context.Context, arg GetCatalogMutationRequestParams) (CatalogMutationRequest, error)
 	// Catalog sqlc queries
 	// Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
