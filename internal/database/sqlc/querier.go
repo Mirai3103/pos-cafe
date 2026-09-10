@@ -102,6 +102,7 @@ type Querier interface {
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
+	StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error

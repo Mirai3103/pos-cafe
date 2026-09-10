@@ -1933,3 +1933,26 @@ func (q *Queries) SetModifierOptionAvailability(ctx context.Context, arg SetModi
 	)
 	return i, err
 }
+
+const storeCatalogRequestResult = `-- name: StoreCatalogRequestResult :exec
+UPDATE catalog_mutation_requests
+SET response_code = $3, response_body = $4
+WHERE actor_id = $1 AND request_id = $2
+`
+
+type StoreCatalogRequestResultParams struct {
+	ActorID      uuid.UUID       `json:"actor_id"`
+	RequestID    uuid.UUID       `json:"request_id"`
+	ResponseCode int32           `json:"response_code"`
+	ResponseBody json.RawMessage `json:"response_body"`
+}
+
+func (q *Queries) StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error {
+	_, err := q.db.ExecContext(ctx, storeCatalogRequestResult,
+		arg.ActorID,
+		arg.RequestID,
+		arg.ResponseCode,
+		arg.ResponseBody,
+	)
+	return err
+}

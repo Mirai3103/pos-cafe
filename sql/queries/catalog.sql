@@ -31,6 +31,11 @@ SELECT actor_id, request_id, operation, request_hash,
 FROM catalog_mutation_requests
 WHERE actor_id = $1 AND request_id = $2;
 
+-- name: StoreCatalogRequestResult :exec
+UPDATE catalog_mutation_requests
+SET response_code = $3, response_body = $4
+WHERE actor_id = $1 AND request_id = $2;
+
 -- name: InsertAuditEvent :one
 INSERT INTO audit_events (event_type, actor_id, session_id, details, occurred_at)
 VALUES ($1, $2, $3, $4, $5)

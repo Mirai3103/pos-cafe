@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
@@ -63,11 +62,14 @@ func idToLockKey(id uuid.UUID) int64 {
 	return int64(binary.BigEndian.Uint64(id[:8]))
 }
 
-// fpHash computes SHA-256 of the operation + JSON-encoded fingerprint.
-func fpHash(operation string, v any) string {
-	b, _ := json.Marshal(v)
-	h := sha256.Sum256(append([]byte(operation), b...))
-	return fmt.Sprintf("%x", h)
+// fpHash computes SHA-256 of the JSON-encoded business fingerprint.
+func fpHash(v any) (string, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", fmt.Errorf("marshal mutation fingerprint: %w", err)
+	}
+	h := sha256.Sum256(b)
+	return fmt.Sprintf("%x", h), nil
 }
 
 // reloadAuthority loads the current session, roles, and capabilities within the transaction.
@@ -94,6 +96,13 @@ func reloadAuthority(ctx context.Context, q *sqlc.Queries, actor Actor) (sqlc.Ge
 	}
 	if !authRow.IdentityEnabled {
 		return authRow, nil, nil, fmt.Errorf("%w: identity disabled", ErrForbidden)
+	}
+	workspace := ""
+	if authRow.ActiveWorkspace.Valid {
+		workspace = authRow.ActiveWorkspace.String
+	}
+	if time.Since(authRow.LastHumanActivityAt) >= auth.GetInactivityTimeout(workspace) {
+		return authRow, nil, nil, fmt.Errorf("%w: session inactive", ErrUnauthorized)
 	}
 
 	roles, err := q.GetCatalogSessionRoles(ctx, authRow.StaffIdentityID)
@@ -131,17 +140,26 @@ func verifyManagerPIN(ctx context.Context, q *sqlc.Queries, staffID uuid.UUID, p
 	return nil
 }
 
-// commitDenial inserts a denial audit event and returns a committedDenial error.
-// The caller must return this error from ExecuteMutation to trigger commit.
-func commitDenial(ctx context.Context, q *sqlc.Queries, actor Actor, operation string, denialErr error) error {
+// recordDenial inserts a denial audit event and returns an outcome that must be committed.
+func recordDenial(ctx context.Context, q *sqlc.Queries, actor Actor,
+	authority sqlc.GetCatalogSessionAuthorityRow, operation string, denialErr error,
+) error {
 	details, _ := json.Marshal(map[string]string{
 		"operation": operation,
 		"reason":    denialErr.Error(),
 	})
+	actorID := uuid.NullUUID{}
+	sessionID := uuid.NullUUID{}
+	if authority.StaffIdentityID == actor.StaffID {
+		actorID = uuid.NullUUID{UUID: actor.StaffID, Valid: true}
+	}
+	if authority.SessionID == actor.SessionID {
+		sessionID = uuid.NullUUID{UUID: actor.SessionID, Valid: true}
+	}
 	_, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-		EventType:  "catalog.denial",
-		ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-		SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
+		EventType:  "catalog.authorization_denied",
+		ActorID:    actorID,
+		SessionID:  sessionID,
 		Details:    details,
 		OccurredAt: time.Now(),
 	})
@@ -149,6 +167,23 @@ func commitDenial(ctx context.Context, q *sqlc.Queries, actor Actor, operation s
 		return fmt.Errorf("insert denial audit event: %w", err)
 	}
 	return &committedDenial{err: denialErr}
+}
+
+func finishDenial(tx *sql.Tx, outcome error) error {
+	var denial *committedDenial
+	if !errors.As(outcome, &denial) {
+		return outcome
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit authorization denial: %w", err)
+	}
+	return denial.err
+}
+
+func isSecurityDenial(err error) bool {
+	return errors.Is(err, ErrUnauthorized) ||
+		errors.Is(err, ErrForbidden) ||
+		errors.Is(err, ErrInvalidManagerPin)
 }
 
 // ExecuteMutation runs a mutation inside a transaction with authorization,
@@ -170,41 +205,36 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 	// 1. Reload current authority
 	authRow, _, caps, err := reloadAuthority(ctx, q, actor)
 	if err != nil {
-		if errors.As(err, new(*committedDenial)) {
-			if commitErr := tx.Commit(); commitErr != nil {
-				return 0, zero, fmt.Errorf("commit denial: %w", commitErr)
-			}
-			return 0, zero, err
+		if isSecurityDenial(err) {
+			outcome := recordDenial(ctx, q, actor, authRow, spec.Operation, err)
+			return 0, zero, finishDenial(tx, outcome)
 		}
 		return 0, zero, err
 	}
 
 	// 2. Verify capabilities
 	if err := verifyCapabilities(spec.Required, caps); err != nil {
-		if commitErr := commitDenial(ctx, q, actor, spec.Operation, err); commitErr != nil {
-			if commitErr := tx.Commit(); commitErr != nil {
-				return 0, zero, fmt.Errorf("commit denial: %w", commitErr)
-			}
-			return 0, zero, commitErr
-		}
-		return 0, zero, err
+		outcome := recordDenial(ctx, q, actor, authRow, spec.Operation, err)
+		return 0, zero, finishDenial(tx, outcome)
 	}
 
 	// 3. Verify fresh Manager PIN when price-sensitive
 	if spec.RequireManagerPIN {
+		if err := verifyCapabilities([]string{"catalog.change_price"}, caps); err != nil {
+			outcome := recordDenial(ctx, q, actor, authRow, spec.Operation, err)
+			return 0, zero, finishDenial(tx, outcome)
+		}
 		if err := verifyManagerPIN(ctx, q, authRow.StaffIdentityID, spec.ManagerPIN); err != nil {
-			if commitErr := commitDenial(ctx, q, actor, spec.Operation, err); commitErr != nil {
-				if commitErr := tx.Commit(); commitErr != nil {
-					return 0, zero, fmt.Errorf("commit denial: %w", commitErr)
-				}
-				return 0, zero, commitErr
-			}
-			return 0, zero, err
+			outcome := recordDenial(ctx, q, actor, authRow, spec.Operation, err)
+			return 0, zero, finishDenial(tx, outcome)
 		}
 	}
 
 	// 4. Compute request hash (PIN excluded by design)
-	reqHash := fpHash(spec.Operation, spec.Fingerprint)
+	reqHash, err := fpHash(spec.Fingerprint)
+	if err != nil {
+		return 0, zero, err
+	}
 
 	// 5. Advisory lock to serialize concurrent duplicate execution
 	lockKey := idToLockKey(actor.StaffID) ^ idToLockKey(spec.RequestID)
@@ -223,7 +253,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 
 	// If found, check for exact replay or conflict
 	if err == nil {
-		if existing.RequestHash != reqHash {
+		if existing.Operation != spec.Operation || existing.RequestHash != reqHash {
 			return 0, zero, fmt.Errorf("%w: operation %q hash mismatch (stored: %s, current: %s)",
 				ErrRequestConflict, existing.Operation, existing.RequestHash, reqHash)
 		}
@@ -235,7 +265,23 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return int(existing.ResponseCode), result, nil
 	}
 
-	// 7-9. Execute mutation, insert audit, and store idempotent result
+	// 7. Claim the request before any business mutation.
+	claimed, err := q.ClaimCatalogRequest(ctx, sqlc.ClaimCatalogRequestParams{
+		ActorID:      actor.StaffID,
+		RequestID:    spec.RequestID,
+		Operation:    spec.Operation,
+		RequestHash:  reqHash,
+		ResponseCode: 0,
+		ResponseBody: json.RawMessage("null"),
+	})
+	if err != nil {
+		return 0, zero, fmt.Errorf("claim idempotency request: %w", err)
+	}
+	if claimed.Operation != spec.Operation || claimed.RequestHash != reqHash {
+		return 0, zero, fmt.Errorf("%w: request was claimed concurrently", ErrRequestConflict)
+	}
+
+	// 8-10. Execute mutation, insert audit, and store idempotent result.
 	resultCode, result, audit, err := fn(q)
 	if err != nil {
 		return 0, zero, err
@@ -254,8 +300,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		OccurredAt: time.Now(),
 	})
 	if err != nil {
-		slog.Error("audit event insert failed, rolling back mutation", "error", err, "operation", spec.Operation)
-		return 0, zero, fmt.Errorf("insert audit event: %w", err)
+		return 0, zero, fmt.Errorf("insert audit event for %q: %w", spec.Operation, err)
 	}
 
 	bodyBytes, err := json.Marshal(result)
@@ -263,16 +308,12 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return 0, zero, fmt.Errorf("marshal response body: %w", err)
 	}
 
-	// Store idempotent result
-	_, err = q.ClaimCatalogRequest(ctx, sqlc.ClaimCatalogRequestParams{
+	if err := q.StoreCatalogRequestResult(ctx, sqlc.StoreCatalogRequestResultParams{
 		ActorID:      actor.StaffID,
 		RequestID:    spec.RequestID,
-		Operation:    spec.Operation,
-		RequestHash:  reqHash,
 		ResponseCode: int32(resultCode),
 		ResponseBody: bodyBytes,
-	})
-	if err != nil {
+	}); err != nil {
 		return 0, zero, fmt.Errorf("store idempotent result: %w", err)
 	}
 

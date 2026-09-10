@@ -3,15 +3,16 @@
 package catalog_test
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
-	"encoding/json"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func openExecutorTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 }
 
 type testIdentity struct {
-	StaffID  uuid.UUID
+	StaffID   uuid.UUID
 	SessionID uuid.UUID
 }
 
@@ -82,10 +83,17 @@ func createTestIdentity(t *testing.T, db *sql.DB, q *sqlc.Queries, roles []strin
 	return testIdentity{StaffID: staffID, SessionID: actualSessionID}
 }
 
-func sha256Hash(v any) string {
-	b, _ := json.Marshal(v)
-	h := sha256.Sum256(b)
-	return hex.EncodeToString(h[:])
+func countAuthorizationDenials(t *testing.T, db *sql.DB, operation string) int {
+	t.Helper()
+
+	var count int
+	err := db.QueryRowContext(t.Context(), `
+		SELECT count(*)
+		FROM audit_events
+		WHERE event_type = 'catalog.authorization_denied'
+		  AND details->>'operation' = $1`, operation).Scan(&count)
+	require.NoError(t, err)
+	return count
 }
 
 // --- Test: ExecuteMutation basic success ---
@@ -137,10 +145,11 @@ func TestExecuteMutation_SessionNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	ident := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
+	operation := fmt.Sprintf("test.session_not_found.%s", uuid.New())
 
 	spec := catalog.MutationSpec{
 		RequestID: uuid.New(),
-		Operation: "test.noop",
+		Operation: operation,
 		Required:  []string{"catalog.administer_structure"},
 	}
 
@@ -156,6 +165,7 @@ func TestExecuteMutation_SessionNotFound(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, catalog.ErrUnauthorized), "expected ErrUnauthorized, got: %v", err)
+	assert.Equal(t, 1, countAuthorizationDenials(t, db, operation))
 }
 
 // --- Test: Session revoked → UNAUTHORIZED ---
@@ -167,16 +177,13 @@ func TestExecuteMutation_SessionRevoked(t *testing.T) {
 
 	ident := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
 
-	// Revoke the session
-	err := q.UpdateSessionState(ctx, sqlc.UpdateSessionStateParams{
-		State: auth.SessionStateLocked,
-		ID:    ident.SessionID,
-	})
+	err := q.RevokeSession(ctx, ident.SessionID)
 	require.NoError(t, err)
 
+	operation := fmt.Sprintf("test.revoked.%s", uuid.New())
 	spec := catalog.MutationSpec{
 		RequestID: uuid.New(),
-		Operation: "test.noop",
+		Operation: operation,
 		Required:  []string{"catalog.administer_structure"},
 	}
 
@@ -190,6 +197,37 @@ func TestExecuteMutation_SessionRevoked(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, catalog.ErrUnauthorized), "expected ErrUnauthorized, got: %v", err)
+	assert.Equal(t, 1, countAuthorizationDenials(t, db, operation))
+}
+
+func TestExecuteMutation_SessionLocked(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+	ident := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
+
+	err := q.UpdateSessionState(ctx, sqlc.UpdateSessionStateParams{
+		State: auth.SessionStateLocked,
+		ID:    ident.SessionID,
+	})
+	require.NoError(t, err)
+
+	operation := fmt.Sprintf("test.locked.%s", uuid.New())
+	_, _, err = catalog.ExecuteMutation(ctx, runner,
+		catalog.Actor{StaffID: ident.StaffID, SessionID: ident.SessionID},
+		catalog.MutationSpec{
+			RequestID: uuid.New(),
+			Operation: operation,
+			Required:  []string{"catalog.administer_structure"},
+		},
+		func(q *sqlc.Queries) (int, struct{}, catalog.AuditRecord, error) {
+			t.Fatal("callback should not be called")
+			return 0, struct{}{}, catalog.AuditRecord{}, nil
+		},
+	)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, catalog.ErrUnauthorized)
+	assert.Equal(t, 1, countAuthorizationDenials(t, db, operation))
 }
 
 // --- Test: Session expired → UNAUTHORIZED ---
@@ -224,6 +262,39 @@ func TestExecuteMutation_SessionExpired(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, catalog.ErrUnauthorized), "expected ErrUnauthorized, got: %v", err)
+}
+
+func TestExecuteMutation_InactiveSessionDenied(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+	ident := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
+
+	_, err := db.ExecContext(ctx, `
+		UPDATE staff_access_sessions
+		SET active_workspace = $2, last_human_activity_at = $3
+		WHERE id = $1`, ident.SessionID, auth.WorkspacePreparation,
+		time.Now().Add(-auth.PreparationInactivityTimeout-time.Minute))
+	require.NoError(t, err)
+
+	operation := fmt.Sprintf("test.inactive.%s", uuid.New())
+	called := false
+	_, _, err = catalog.ExecuteMutation(ctx, runner,
+		catalog.Actor{StaffID: ident.StaffID, SessionID: ident.SessionID},
+		catalog.MutationSpec{
+			RequestID: uuid.New(),
+			Operation: operation,
+			Required:  []string{"catalog.administer_structure"},
+		},
+		func(q *sqlc.Queries) (int, struct{}, catalog.AuditRecord, error) {
+			called = true
+			return 200, struct{}{}, catalog.AuditRecord{EventType: "test.unexpected"}, nil
+		},
+	)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, catalog.ErrUnauthorized)
+	assert.False(t, called)
+	assert.Equal(t, 1, countAuthorizationDenials(t, db, operation))
 }
 
 // --- Test: Identity disabled → UNAUTHORIZED ---
@@ -331,12 +402,12 @@ func TestExecuteMutation_InvalidManagerPin(t *testing.T) {
 	require.NoError(t, err)
 
 	spec := catalog.MutationSpec{
-		RequestID:           uuid.New(),
-		Operation:           "test.price_sensitive",
-		Required:            []string{"catalog.change_price"},
-		RequireManagerPIN:   true,
-		ManagerPIN:          "9999", // wrong PIN
-		Fingerprint:         struct{}{},
+		RequestID:         uuid.New(),
+		Operation:         "test.price_sensitive",
+		Required:          []string{"catalog.change_price"},
+		RequireManagerPIN: true,
+		ManagerPIN:        "9999", // wrong PIN
+		Fingerprint:       struct{}{},
 	}
 
 	_, _, err = catalog.ExecuteMutation(ctx, runner,
@@ -349,6 +420,40 @@ func TestExecuteMutation_InvalidManagerPin(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, catalog.ErrInvalidManagerPin), "expected ErrInvalidManagerPin, got: %v", err)
+}
+
+func TestExecuteMutation_ManagerPINImplicitlyRequiresPriceCapability(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+	ident := createTestIdentity(t, db, q, []string{auth.RoleCashier}, true)
+
+	pinHash, err := auth.HashPin("1234")
+	require.NoError(t, err)
+	err = q.UpdateStaffPin(ctx, sqlc.UpdateStaffPinParams{ID: ident.StaffID, PinHash: pinHash})
+	require.NoError(t, err)
+
+	operation := fmt.Sprintf("test.implicit_price_capability.%s", uuid.New())
+	called := false
+	_, _, err = catalog.ExecuteMutation(ctx, runner,
+		catalog.Actor{StaffID: ident.StaffID, SessionID: ident.SessionID},
+		catalog.MutationSpec{
+			RequestID:         uuid.New(),
+			Operation:         operation,
+			Fingerprint:       struct{}{},
+			Required:          []string{"catalog.manage_availability"},
+			ManagerPIN:        "1234",
+			RequireManagerPIN: true,
+		},
+		func(q *sqlc.Queries) (int, struct{}, catalog.AuditRecord, error) {
+			called = true
+			return 200, struct{}{}, catalog.AuditRecord{EventType: "test.unexpected"}, nil
+		},
+	)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, catalog.ErrForbidden)
+	assert.False(t, called)
+	assert.Equal(t, 1, countAuthorizationDenials(t, db, operation))
 }
 
 // --- Test: Exact replay → same status+body, callback called once ---
@@ -367,10 +472,10 @@ func TestExecuteMutation_ExactReplay(t *testing.T) {
 	want := Res{ID: "cat-1"}
 
 	spec := catalog.MutationSpec{
-		RequestID: uuid.New(),
-		Operation: "test.replay",
+		RequestID:   uuid.New(),
+		Operation:   "test.replay",
 		Fingerprint: struct{ Name string }{Name: "ReplayTest"},
-		Required:  []string{"catalog.administer_structure"},
+		Required:    []string{"catalog.administer_structure"},
 	}
 
 	audit := catalog.AuditRecord{EventType: "test.replay_done", Details: map[string]string{"id": "cat-1"}}
@@ -494,6 +599,39 @@ func TestExecuteMutation_CorruptedStoredResult(t *testing.T) {
 	assert.True(t, errors.Is(err, catalog.ErrInvalidStoredResult), "expected ErrInvalidStoredResult, got: %v", err)
 }
 
+func TestExecuteMutation_FingerprintMarshalFailure(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+	ident := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
+	requestID := uuid.New()
+	called := false
+
+	_, _, err := catalog.ExecuteMutation(ctx, runner,
+		catalog.Actor{StaffID: ident.StaffID, SessionID: ident.SessionID},
+		catalog.MutationSpec{
+			RequestID:   requestID,
+			Operation:   "test.invalid_fingerprint",
+			Fingerprint: make(chan int),
+			Required:    []string{"catalog.administer_structure"},
+		},
+		func(q *sqlc.Queries) (int, struct{}, catalog.AuditRecord, error) {
+			called = true
+			return 200, struct{}{}, catalog.AuditRecord{EventType: "test.unexpected"}, nil
+		},
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "marshal mutation fingerprint")
+	assert.False(t, called)
+
+	var count int
+	err = db.QueryRowContext(ctx, `
+		SELECT count(*) FROM catalog_mutation_requests
+		WHERE actor_id = $1 AND request_id = $2`, ident.StaffID, requestID).Scan(&count)
+	require.NoError(t, err)
+	assert.Zero(t, count)
+}
+
 // --- Test: Authorization-before-replay (denied after role removal) ---
 
 func TestExecuteMutation_AuthorizationBeforeReplay(t *testing.T) {
@@ -551,11 +689,39 @@ func TestExecuteMutation_AuditFailureRollback(t *testing.T) {
 
 	ident := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
 
-	type Res struct{}
+	type Res struct{ CategoryID uuid.UUID }
 	actor := catalog.Actor{StaffID: ident.StaffID, SessionID: ident.SessionID}
 	requestID := uuid.New()
+	uniqueOp := fmt.Sprintf("test.audit_failure.%s", requestID)
+	categoryName := fmt.Sprintf("Audit rollback %s", requestID)
+	normalizedName := requestID.String()
 
-	uniqueOp := fmt.Sprintf("test.audit_rollback_%s", requestID.String()[:8])
+	_, err := db.ExecContext(ctx, `
+		CREATE OR REPLACE FUNCTION fail_catalog_test_audit() RETURNS trigger AS $$
+		BEGIN
+			IF NEW.event_type LIKE 'test.audit_failure.%' THEN
+				RAISE EXCEPTION 'forced catalog audit failure';
+			END IF;
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		DROP TRIGGER IF EXISTS fail_catalog_test_audit ON audit_events;
+		CREATE TRIGGER fail_catalog_test_audit
+		BEFORE INSERT ON audit_events
+		FOR EACH ROW EXECUTE FUNCTION fail_catalog_test_audit();`)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, cleanupErr := db.ExecContext(context.Background(), `
+			DROP TRIGGER IF EXISTS fail_catalog_test_audit ON audit_events;
+			DROP FUNCTION IF EXISTS fail_catalog_test_audit();`)
+		require.NoError(t, cleanupErr)
+	})
+
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
 	spec := catalog.MutationSpec{
 		RequestID:   requestID,
 		Operation:   uniqueOp,
@@ -563,33 +729,44 @@ func TestExecuteMutation_AuditFailureRollback(t *testing.T) {
 		Required:    []string{"catalog.administer_structure"},
 	}
 
-	_, _, err := catalog.ExecuteMutation(ctx, runner, actor, spec,
-		func(q *sqlc.Queries) (int, Res, catalog.AuditRecord, error) {
-			return 0, Res{}, catalog.AuditRecord{}, fmt.Errorf("simulated mutation failure")
-		},
-	)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "simulated mutation failure")
-
-	events, err := q.ListAuditEvents(ctx, sqlc.ListAuditEventsParams{
-		Column1: sql.NullString{String: uniqueOp, Valid: true},
-		Limit:   10,
-	})
-	require.NoError(t, err)
-	assert.Empty(t, events, "no audit events should exist for failed mutation")
-
-	var calls int
 	_, _, err = catalog.ExecuteMutation(ctx, runner, actor, spec,
 		func(q *sqlc.Queries) (int, Res, catalog.AuditRecord, error) {
-			calls++
-			return 201, Res{}, catalog.AuditRecord{
+			_, claimErr := q.GetCatalogMutationRequest(ctx, sqlc.GetCatalogMutationRequestParams{
+				ActorID:   ident.StaffID,
+				RequestID: requestID,
+			})
+			if claimErr != nil {
+				return 0, Res{}, catalog.AuditRecord{}, fmt.Errorf("idempotency claim missing before mutation: %w", claimErr)
+			}
+			created, createErr := q.CreateMenuCategory(ctx, sqlc.CreateMenuCategoryParams{
+				Name:           categoryName,
+				NormalizedName: normalizedName,
+			})
+			if createErr != nil {
+				return 0, Res{}, catalog.AuditRecord{}, createErr
+			}
+			return 201, Res{CategoryID: created.ID}, catalog.AuditRecord{
 				EventType: uniqueOp,
-				Details:   map[string]string{"op": "test"},
+				Details:   map[string]any{"category_id": created.ID},
 			}, nil
 		},
 	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "insert audit event")
+	assert.Empty(t, logs.String(), "executor must return audit errors without logging them")
+
+	var categoryCount int
+	err = db.QueryRowContext(ctx, `SELECT count(*) FROM menu_categories WHERE normalized_name = $1`, normalizedName).
+		Scan(&categoryCount)
 	require.NoError(t, err)
-	assert.Equal(t, 1, calls)
+	assert.Zero(t, categoryCount)
+
+	var requestCount int
+	err = db.QueryRowContext(ctx, `
+		SELECT count(*) FROM catalog_mutation_requests
+		WHERE actor_id = $1 AND request_id = $2`, ident.StaffID, requestID).Scan(&requestCount)
+	require.NoError(t, err)
+	assert.Zero(t, requestCount)
 }
 
 // --- Test: Denial event committed without business changes ---
@@ -601,10 +778,11 @@ func TestExecuteMutation_DenialEventCommitted(t *testing.T) {
 
 	ident := createTestIdentity(t, db, q, []string{auth.RoleBarista}, true)
 	actor := catalog.Actor{StaffID: ident.StaffID, SessionID: ident.SessionID}
+	operation := fmt.Sprintf("test.denial.%s", uuid.New())
 
 	spec := catalog.MutationSpec{
 		RequestID: uuid.New(),
-		Operation: "test.denial",
+		Operation: operation,
 		Required:  []string{"catalog.administer_structure"},
 	}
 
@@ -617,21 +795,14 @@ func TestExecuteMutation_DenialEventCommitted(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, catalog.ErrForbidden))
 
-	// A denial audit event should have been committed
-	events, err := q.ListAuditEvents(ctx, sqlc.ListAuditEventsParams{
-		Column1: sql.NullString{String: "catalog.denial", Valid: true},
-		Limit:   10,
-	})
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(events), 1, "at least one denial event expected")
+	assert.Equal(t, 1, countAuthorizationDenials(t, db, spec.Operation))
 }
 
 // --- Test: Two-goroutine concurrent duplicate → only one succeeds ---
 
 func TestExecuteMutation_ConcurrentDuplicate(t *testing.T) {
 	db, q := openExecutorTestDB(t)
-	// Ensure both goroutines use the same connection for advisory lock serialization
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(4)
 	runner := catalog.NewRunner(db, q)
 	ctx := context.Background()
 
@@ -648,37 +819,60 @@ func TestExecuteMutation_ConcurrentDuplicate(t *testing.T) {
 		Required:    []string{"catalog.administer_structure"},
 	}
 
-	var mu sync.Mutex
-	var successCount int
-	var errCount int
+	var calls atomic.Int32
+	firstEntered := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	results := make(chan error, 2)
+
+	callback := func(q *sqlc.Queries) (int, Res, catalog.AuditRecord, error) {
+		if calls.Add(1) == 1 {
+			close(firstEntered)
+			<-releaseFirst
+		}
+		return 201, Res{N: 1}, catalog.AuditRecord{EventType: "test.concurrent"}, nil
+	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, _, err := catalog.ExecuteMutation(ctx, runner, actor, spec,
-				func(q *sqlc.Queries) (int, Res, catalog.AuditRecord, error) {
-					mu.Lock()
-					successCount++
-					mu.Unlock()
-					// Simulate work
-					time.Sleep(50 * time.Millisecond)
-					return 201, Res{N: 1}, catalog.AuditRecord{EventType: "test.concurrent"}, nil
-				},
-			)
-			mu.Lock()
-			if err != nil {
-				errCount++
-			}
-			mu.Unlock()
-		}()
-	}
-	wg.Wait()
+	wg.Go(func() {
+		_, _, err := catalog.ExecuteMutation(ctx, runner, actor, spec, callback)
+		results <- err
+	})
+	<-firstEntered
+	wg.Go(func() {
+		_, _, err := catalog.ExecuteMutation(ctx, runner, actor, spec, callback)
+		results <- err
+	})
 
-	// Exactly one goroutine should execute the callback; the other replays
-	assert.Equal(t, 1, successCount, "callback should be called exactly once")
-	assert.Equal(t, 0, errCount, "both goroutines should succeed (one executes, one replays)")
+	deadline := time.Now().Add(3 * time.Second)
+	waitingOnAdvisoryLock := false
+	lockBits := binary.BigEndian.Uint64(actor.StaffID[:8]) ^ binary.BigEndian.Uint64(requestID[:8])
+	classID := int64(uint32(lockBits >> 32))
+	objectID := int64(uint32(lockBits))
+	for time.Now().Before(deadline) {
+		var waiting int
+		err := db.QueryRowContext(ctx, `
+			SELECT count(*) FROM pg_locks
+			WHERE locktype = 'advisory'
+			  AND classid = $1::oid
+			  AND objid = $2::oid
+			  AND objsubid = 1
+			  AND NOT granted`, classID, objectID).Scan(&waiting)
+		require.NoError(t, err)
+		if waiting > 0 && db.Stats().InUse >= 2 {
+			waitingOnAdvisoryLock = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	close(releaseFirst)
+	wg.Wait()
+	close(results)
+
+	require.True(t, waitingOnAdvisoryLock, "second transaction must overlap and wait on the advisory lock")
+	for err := range results {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, int32(1), calls.Load(), "callback should be called exactly once")
 }
 
 // --- Test: ExecuteRead basic success ---
