@@ -1,0 +1,141 @@
+package catalog
+
+import (
+	"fmt"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
+)
+
+// Retirement holds optional retirement metadata.
+type Retirement struct {
+	Reason string
+	Note   string
+}
+
+// EffectiveGroup carries a group ID with its minimum selection requirement.
+type EffectiveGroup struct {
+	ID            uuid.UUID
+	MinSelections int32
+}
+
+// ItemState describes the current projection facts needed for sellability.
+type ItemState struct {
+	Available             bool
+	HasDirectPrice        bool
+	AvailableSizeCount    int
+	EffectiveGroups       []EffectiveGroup
+	AvailableOptionCounts map[uuid.UUID]int
+}
+
+var validRetirementReasons = map[string]bool{
+	"NO_LONGER_OFFERED": true,
+	"MENU_RESTRUCTURE":  true,
+	"OTHER":             true,
+}
+
+// NormalizeName trims surrounding whitespace and returns the display form
+// and a Unicode-lowercase key. Internal whitespace is preserved.
+func NormalizeName(s string) (display, key string) {
+	display = strings.TrimSpace(s)
+	key = strings.ToLower(display)
+	return display, key
+}
+
+// ValidatePrice checks that price is in range [1, 2_147_483_647].
+func ValidatePrice(price int64) error {
+	if price < 1 || price > 2_147_483_647 {
+		return fmt.Errorf("price %d is out of range [1, 2147483647]", price)
+	}
+	return nil
+}
+
+// ValidateSurcharge checks that surcharge is in range [0, 2_147_483_647].
+func ValidateSurcharge(surcharge int64) error {
+	if surcharge < 0 || surcharge > 2_147_483_647 {
+		return fmt.Errorf("surcharge %d is out of range [0, 2147483647]", surcharge)
+	}
+	return nil
+}
+
+// ValidateRetirement checks that the retirement value is valid.
+// A nil Retirement is valid (no retirement).
+// OTHER requires a non-empty trimmed note of at most 500 runes.
+func ValidateRetirement(r Retirement) error {
+	if r.Reason == "" {
+		return nil
+	}
+	if !validRetirementReasons[r.Reason] {
+		return fmt.Errorf("unknown retirement reason %q", r.Reason)
+	}
+	if r.Reason == "OTHER" {
+		note := strings.TrimSpace(r.Note)
+		if note == "" {
+			return fmt.Errorf("OTHER retirement reason requires a non-empty note")
+		}
+		if utf8.RuneCountInString(note) > 500 {
+			return fmt.Errorf("retirement note must be at most 500 characters")
+		}
+	}
+	return nil
+}
+
+// EffectiveGroupIDs computes the effective set of modifier groups as
+// (inherited - exclusions) + direct, deduplicated.
+func EffectiveGroupIDs(inheritedGroups, excludedGroupIDs, directGroups []uuid.UUID) []uuid.UUID {
+	excluded := make(map[uuid.UUID]bool, len(excludedGroupIDs))
+	for _, id := range excludedGroupIDs {
+		excluded[id] = true
+	}
+
+	seen := make(map[uuid.UUID]bool, len(inheritedGroups)+len(directGroups))
+	var result []uuid.UUID
+
+	for _, id := range inheritedGroups {
+		if excluded[id] {
+			continue
+		}
+		if !seen[id] {
+			seen[id] = true
+			result = append(result, id)
+		}
+	}
+
+	for _, id := range directGroups {
+		if !seen[id] {
+			seen[id] = true
+			result = append(result, id)
+		}
+	}
+
+	return result
+}
+
+// IsSellable determines whether an item can currently be sold based on its
+// projection state. The item must be available, have exactly one valid pricing
+// form, have at least one available size if sized, and every required group
+// must have at least min available options.
+func IsSellable(state ItemState) bool {
+	if !state.Available {
+		return false
+	}
+
+	if !state.HasDirectPrice && state.AvailableSizeCount == 0 {
+		return false
+	}
+
+	if state.HasDirectPrice && state.AvailableSizeCount > 0 {
+		return false
+	}
+
+	for _, g := range state.EffectiveGroups {
+		if g.MinSelections > 0 {
+			if state.AvailableOptionCounts[g.ID] < int(g.MinSelections) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
