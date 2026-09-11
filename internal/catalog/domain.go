@@ -21,12 +21,14 @@ const (
 const (
 	OpCategoryCreate = "catalog.category.create"
 	OpCategoryRename = "catalog.category.rename"
+	OpItemCreate     = "catalog.item.create"
 )
 
 // Audit event types emitted by catalog operations.
 const (
 	EventCategoryCreated = "catalog.category.created"
 	EventCategoryRenamed = "catalog.category.renamed"
+	EventItemCreated     = "catalog.item.created"
 )
 
 // Retirement holds optional retirement metadata.

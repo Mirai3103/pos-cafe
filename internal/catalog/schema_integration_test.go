@@ -75,6 +75,10 @@ func TestCatalogMigrationConstraints(t *testing.T) {
 	require.Error(t, err, "price_vnd = 0 must be rejected")
 
 	// modifier_groups: normalized_name uniqueness must fail
+	_, _ = db.Exec(`DELETE FROM modifier_groups WHERE normalized_name = 'sugar'`)
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM modifier_groups WHERE normalized_name = 'sugar'`)
+	})
 	_, err = db.Exec(`INSERT INTO modifier_groups
 		(name, normalized_name, min_selections, max_selections)
 		VALUES ('Sugar', 'sugar', 1, 1)`)
