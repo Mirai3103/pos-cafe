@@ -287,20 +287,22 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return 0, zero, err
 	}
 
-	detailsBytes, err := json.Marshal(audit.Details)
-	if err != nil {
-		return 0, zero, fmt.Errorf("marshal audit details: %w", err)
-	}
+	if audit.EventType != "" {
+		detailsBytes, err := json.Marshal(audit.Details)
+		if err != nil {
+			return 0, zero, fmt.Errorf("marshal audit details: %w", err)
+		}
 
-	_, err = q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-		EventType:  audit.EventType,
-		ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-		SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-		Details:    detailsBytes,
-		OccurredAt: time.Now(),
-	})
-	if err != nil {
-		return 0, zero, fmt.Errorf("insert audit event for %q: %w", spec.Operation, err)
+		_, err = q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
+			EventType:  audit.EventType,
+			ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
+			SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
+			Details:    detailsBytes,
+			OccurredAt: time.Now(),
+		})
+		if err != nil {
+			return 0, zero, fmt.Errorf("insert audit event for %q: %w", spec.Operation, err)
+		}
 	}
 
 	bodyBytes, err := json.Marshal(result)

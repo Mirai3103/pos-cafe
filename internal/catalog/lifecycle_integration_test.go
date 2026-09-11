@@ -2033,3 +2033,908 @@ func TestRepriceModifierOption(t *testing.T) {
 	})
 }
 
+// ============================================================================
+// Set Availability Item Tests
+// ============================================================================
+
+func TestSetAvailabilityItem(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success_StateChange_Audit_Timestamp", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetItemAvailabilityHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		price := int64(45000)
+		itemID := createTestItemDirect(t, db, catID, "Americano", &price, false)
+
+		var origCreatedAt, origUpdatedAt time.Time
+		err := db.QueryRowContext(ctx, `SELECT created_at, updated_at FROM menu_items WHERE id = $1`, itemID).Scan(&origCreatedAt, &origUpdatedAt)
+		require.NoError(t, err)
+
+		time.Sleep(10 * time.Millisecond)
+
+		reqID := uuid.New()
+		cmd := catalog.SetItemAvailabilityCommand{
+			RequestID: reqID,
+			ItemID:    itemID,
+			Available: false,
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, itemID, res.ID)
+		assert.Equal(t, catID, res.CategoryID)
+		assert.Equal(t, "Americano", res.Name)
+		require.NotNil(t, res.PriceVND)
+		assert.Equal(t, price, *res.PriceVND)
+		assert.False(t, res.Available)
+
+		// Verify database row
+		var dbAvailable bool
+		var dbUpdatedAt time.Time
+		err = db.QueryRowContext(ctx, `SELECT available, updated_at FROM menu_items WHERE id = $1`, itemID).Scan(&dbAvailable, &dbUpdatedAt)
+		require.NoError(t, err)
+		assert.False(t, dbAvailable)
+		assert.True(t, dbUpdatedAt.After(origUpdatedAt), "updated_at should be updated")
+
+		// Verify audit event
+		var eventType string
+		var actorID, sessionID uuid.UUID
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `
+			SELECT event_type, actor_id, session_id, details
+			FROM audit_events
+			WHERE event_type = 'catalog.item.availability_changed' AND actor_id = $1
+		`, actor.StaffID).Scan(&eventType, &actorID, &sessionID, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, "catalog.item.availability_changed", eventType)
+		assert.Equal(t, actor.StaffID, actorID)
+		assert.Equal(t, actor.SessionID, sessionID)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, itemID.String(), details["item_id"])
+		assert.Equal(t, true, details["old_available"])
+		assert.Equal(t, false, details["new_available"])
+
+		// Toggle back with Cashier role
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "5678")
+		cashierActor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+
+		reqID2 := uuid.New()
+		status2, res2, err2 := handler.Handle(ctx, cashierActor, catalog.SetItemAvailabilityCommand{
+			RequestID: reqID2,
+			ItemID:    itemID,
+			Available: true,
+		})
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.True(t, res2.Available)
+
+		err = db.QueryRowContext(ctx, `SELECT available FROM menu_items WHERE id = $1`, itemID).Scan(&dbAvailable)
+		require.NoError(t, err)
+		assert.True(t, dbAvailable)
+
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.item.availability_changed'`).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count)
+	})
+
+	t.Run("Success_SizedItem", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetItemAvailabilityHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		itemID := createTestItemDirect(t, db, catID, "Milk Tea", nil, false)
+		_ = createTestSizeDirect(t, db, itemID, "Regular", 30000, false)
+		_ = createTestSizeDirect(t, db, itemID, "Large", 40000, false)
+
+		status, res, err := handler.Handle(ctx, actor, catalog.SetItemAvailabilityCommand{
+			RequestID: uuid.New(),
+			ItemID:    itemID,
+			Available: false,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, itemID, res.ID)
+		assert.Nil(t, res.PriceVND)
+		assert.False(t, res.Available)
+		assert.Len(t, res.Sizes, 2)
+
+		var dbAvailable bool
+		err = db.QueryRowContext(ctx, `SELECT available FROM menu_items WHERE id = $1`, itemID).Scan(&dbAvailable)
+		require.NoError(t, err)
+		assert.False(t, dbAvailable)
+	})
+
+	t.Run("SameState_NoOp_NoTimestampOrAuditEventChange", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewSetItemAvailabilityHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		price := int64(45000)
+		itemID := createTestItemDirect(t, db, catID, "Americano", &price, false) // created with available = true
+
+		var origUpdatedAt time.Time
+		err := db.QueryRowContext(ctx, `SELECT updated_at FROM menu_items WHERE id = $1`, itemID).Scan(&origUpdatedAt)
+		require.NoError(t, err)
+
+		time.Sleep(10 * time.Millisecond)
+
+		reqID := uuid.New()
+		cmd := catalog.SetItemAvailabilityCommand{
+			RequestID: reqID,
+			ItemID:    itemID,
+			Available: true, // same state!
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.True(t, res.Available)
+
+		// Verify database row timestamp was NOT updated
+		var dbUpdatedAt time.Time
+		err = db.QueryRowContext(ctx, `SELECT updated_at FROM menu_items WHERE id = $1`, itemID).Scan(&dbUpdatedAt)
+		require.NoError(t, err)
+		assert.True(t, dbUpdatedAt.Equal(origUpdatedAt), "updated_at must NOT change on same-state no-op")
+
+		// Verify NO business audit event was emitted
+		var auditCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.item.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, auditCount, "no audit event should be emitted on same-state no-op")
+
+		// Replay of same-state call succeeds with exact response and still no audit event
+		statusReplay, resReplay, errReplay := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, errReplay)
+		assert.Equal(t, 200, statusReplay)
+		assert.Equal(t, res, resReplay)
+
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.item.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, auditCount)
+	})
+
+	t.Run("Authority_CashierAndBarista", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		price := int64(45000)
+		itemID := createTestItemDirect(t, db, catID, "Americano", &price, false)
+
+		handler := catalog.NewSetItemAvailabilityHandler(runner)
+
+		// Cashier succeeds
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		status1, res1, err1 := handler.Handle(ctx, catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}, catalog.SetItemAvailabilityCommand{
+			RequestID: uuid.New(),
+			ItemID:    itemID,
+			Available: false,
+		})
+		require.NoError(t, err1)
+		assert.Equal(t, 200, status1)
+		assert.False(t, res1.Available)
+
+		// Barista succeeds
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "5678")
+		status2, res2, err2 := handler.Handle(ctx, catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}, catalog.SetItemAvailabilityCommand{
+			RequestID: uuid.New(),
+			ItemID:    itemID,
+			Available: true,
+		})
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.True(t, res2.Available)
+	})
+
+	t.Run("Forbidden_MissingCapabilities", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		price := int64(45000)
+		itemID := createTestItemDirect(t, db, catID, "Americano", &price, false)
+
+		staffWithoutRole := createCatalogTestIdentity(t, db, q, []string{}, true, "1234")
+		handler := catalog.NewSetItemAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, catalog.Actor{StaffID: staffWithoutRole.StaffID, SessionID: staffWithoutRole.SessionID}, catalog.SetItemAvailabilityCommand{
+			RequestID: uuid.New(),
+			ItemID:    itemID,
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrForbidden))
+		assert.Equal(t, 0, status)
+		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.item.set_availability"))
+	})
+
+	t.Run("TargetRetirement", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		price := int64(45000)
+		retiredItem := createTestItemDirect(t, db, catID, "Old Brew", &price, true)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetItemAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.SetItemAvailabilityCommand{
+			RequestID: uuid.New(),
+			ItemID:    retiredItem,
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetItemAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.SetItemAvailabilityCommand{
+			RequestID: uuid.New(),
+			ItemID:    uuid.New(),
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrNotFound))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Replay", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetItemAvailabilityHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		price := int64(45000)
+		itemID := createTestItemDirect(t, db, catID, "Americano", &price, false)
+
+		reqID := uuid.New()
+		cmd := catalog.SetItemAvailabilityCommand{
+			RequestID: reqID,
+			ItemID:    itemID,
+			Available: false,
+		}
+
+		status1, res1, err1 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err1)
+		assert.Equal(t, 200, status1)
+
+		// Exact replay returns identical result
+		status2, res2, err2 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.Equal(t, res1, res2)
+
+		var auditCount int
+		err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.item.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount)
+
+		// Conflicting replay with different availability value returns ErrRequestConflict
+		conflictCmd := cmd
+		conflictCmd.Available = true
+		statusConflict, _, errConflict := handler.Handle(ctx, actor, conflictCmd)
+		require.Error(t, errConflict)
+		assert.True(t, errors.Is(errConflict, catalog.ErrRequestConflict))
+		assert.Equal(t, 0, statusConflict)
+	})
+}
+
+// ============================================================================
+// Set Availability Size Tests
+// ============================================================================
+
+func TestSetAvailabilitySize(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success_StateChange_Audit_Timestamp", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetSizeAvailabilityHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		itemID := createTestItemDirect(t, db, catID, "Latte", nil, false)
+		sizeID := createTestSizeDirect(t, db, itemID, "Regular", 35000, false)
+
+		var origCreatedAt, origUpdatedAt time.Time
+		err := db.QueryRowContext(ctx, `SELECT created_at, updated_at FROM menu_item_sizes WHERE id = $1`, sizeID).Scan(&origCreatedAt, &origUpdatedAt)
+		require.NoError(t, err)
+
+		time.Sleep(10 * time.Millisecond)
+
+		reqID := uuid.New()
+		cmd := catalog.SetSizeAvailabilityCommand{
+			RequestID: reqID,
+			SizeID:    sizeID,
+			Available: false,
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, sizeID, res.ID)
+		assert.Equal(t, "Regular", res.Name)
+		assert.Equal(t, int64(35000), res.PriceVND)
+		assert.False(t, res.Available)
+
+		// Verify database row
+		var dbAvailable bool
+		var dbUpdatedAt time.Time
+		err = db.QueryRowContext(ctx, `SELECT available, updated_at FROM menu_item_sizes WHERE id = $1`, sizeID).Scan(&dbAvailable, &dbUpdatedAt)
+		require.NoError(t, err)
+		assert.False(t, dbAvailable)
+		assert.True(t, dbUpdatedAt.After(origUpdatedAt), "updated_at should be updated")
+
+		// Verify audit event
+		var eventType string
+		var actorID, sessionID uuid.UUID
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `
+			SELECT event_type, actor_id, session_id, details
+			FROM audit_events
+			WHERE event_type = 'catalog.size.availability_changed' AND actor_id = $1
+		`, actor.StaffID).Scan(&eventType, &actorID, &sessionID, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, "catalog.size.availability_changed", eventType)
+		assert.Equal(t, actor.StaffID, actorID)
+		assert.Equal(t, actor.SessionID, sessionID)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, sizeID.String(), details["size_id"])
+		assert.Equal(t, itemID.String(), details["menu_item_id"])
+		assert.Equal(t, true, details["old_available"])
+		assert.Equal(t, false, details["new_available"])
+
+		// Toggle back with Cashier role
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "5678")
+		cashierActor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+
+		reqID2 := uuid.New()
+		status2, res2, err2 := handler.Handle(ctx, cashierActor, catalog.SetSizeAvailabilityCommand{
+			RequestID: reqID2,
+			SizeID:    sizeID,
+			Available: true,
+		})
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.True(t, res2.Available)
+
+		err = db.QueryRowContext(ctx, `SELECT available FROM menu_item_sizes WHERE id = $1`, sizeID).Scan(&dbAvailable)
+		require.NoError(t, err)
+		assert.True(t, dbAvailable)
+
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.size.availability_changed'`).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count)
+	})
+
+	t.Run("SameState_NoOp_NoTimestampOrAuditEventChange", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewSetSizeAvailabilityHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		itemID := createTestItemDirect(t, db, catID, "Latte", nil, false)
+		sizeID := createTestSizeDirect(t, db, itemID, "Regular", 35000, false) // created with available = true
+
+		var origUpdatedAt time.Time
+		err := db.QueryRowContext(ctx, `SELECT updated_at FROM menu_item_sizes WHERE id = $1`, sizeID).Scan(&origUpdatedAt)
+		require.NoError(t, err)
+
+		time.Sleep(10 * time.Millisecond)
+
+		reqID := uuid.New()
+		cmd := catalog.SetSizeAvailabilityCommand{
+			RequestID: reqID,
+			SizeID:    sizeID,
+			Available: true, // same state!
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.True(t, res.Available)
+
+		var dbUpdatedAt time.Time
+		err = db.QueryRowContext(ctx, `SELECT updated_at FROM menu_item_sizes WHERE id = $1`, sizeID).Scan(&dbUpdatedAt)
+		require.NoError(t, err)
+		assert.True(t, dbUpdatedAt.Equal(origUpdatedAt), "updated_at must NOT change on same-state no-op")
+
+		var auditCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.size.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, auditCount, "no audit event should be emitted on same-state no-op")
+
+		statusReplay, resReplay, errReplay := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, errReplay)
+		assert.Equal(t, 200, statusReplay)
+		assert.Equal(t, res, resReplay)
+
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.size.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, auditCount)
+	})
+
+	t.Run("Authority_CashierAndBarista", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		itemID := createTestItemDirect(t, db, catID, "Latte", nil, false)
+		sizeID := createTestSizeDirect(t, db, itemID, "Regular", 35000, false)
+
+		handler := catalog.NewSetSizeAvailabilityHandler(runner)
+
+		// Cashier succeeds
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		status1, res1, err1 := handler.Handle(ctx, catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}, catalog.SetSizeAvailabilityCommand{
+			RequestID: uuid.New(),
+			SizeID:    sizeID,
+			Available: false,
+		})
+		require.NoError(t, err1)
+		assert.Equal(t, 200, status1)
+		assert.False(t, res1.Available)
+
+		// Barista succeeds
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "5678")
+		status2, res2, err2 := handler.Handle(ctx, catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}, catalog.SetSizeAvailabilityCommand{
+			RequestID: uuid.New(),
+			SizeID:    sizeID,
+			Available: true,
+		})
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.True(t, res2.Available)
+	})
+
+	t.Run("Forbidden_MissingCapabilities", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		itemID := createTestItemDirect(t, db, catID, "Latte", nil, false)
+		sizeID := createTestSizeDirect(t, db, itemID, "Regular", 35000, false)
+
+		staffWithoutRole := createCatalogTestIdentity(t, db, q, []string{}, true, "1234")
+		handler := catalog.NewSetSizeAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, catalog.Actor{StaffID: staffWithoutRole.StaffID, SessionID: staffWithoutRole.SessionID}, catalog.SetSizeAvailabilityCommand{
+			RequestID: uuid.New(),
+			SizeID:    sizeID,
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrForbidden))
+		assert.Equal(t, 0, status)
+		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.size.set_availability"))
+	})
+
+	t.Run("ParentRetirement", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		retiredItem := createTestItemDirect(t, db, catID, "Retired Latte", nil, true)
+		sizeID := createTestSizeDirect(t, db, retiredItem, "Regular", 35000, false)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetSizeAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.SetSizeAvailabilityCommand{
+			RequestID: uuid.New(),
+			SizeID:    sizeID,
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("TargetRetirement", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		activeItem := createTestItemDirect(t, db, catID, "Active Latte", nil, false)
+		retiredSize := createTestSizeDirect(t, db, activeItem, "Regular", 35000, true)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetSizeAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.SetSizeAvailabilityCommand{
+			RequestID: uuid.New(),
+			SizeID:    retiredSize,
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetSizeAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.SetSizeAvailabilityCommand{
+			RequestID: uuid.New(),
+			SizeID:    uuid.New(),
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrNotFound))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Replay", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetSizeAvailabilityHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		itemID := createTestItemDirect(t, db, catID, "Latte", nil, false)
+		sizeID := createTestSizeDirect(t, db, itemID, "Regular", 35000, false)
+
+		reqID := uuid.New()
+		cmd := catalog.SetSizeAvailabilityCommand{
+			RequestID: reqID,
+			SizeID:    sizeID,
+			Available: false,
+		}
+
+		status1, res1, err1 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err1)
+		assert.Equal(t, 200, status1)
+
+		// Exact replay returns identical result
+		status2, res2, err2 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.Equal(t, res1, res2)
+
+		var auditCount int
+		err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.size.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount)
+
+		// Conflicting replay with different availability value returns ErrRequestConflict
+		conflictCmd := cmd
+		conflictCmd.Available = true
+		statusConflict, _, errConflict := handler.Handle(ctx, actor, conflictCmd)
+		require.Error(t, errConflict)
+		assert.True(t, errors.Is(errConflict, catalog.ErrRequestConflict))
+		assert.Equal(t, 0, statusConflict)
+	})
+}
+
+// ============================================================================
+// Set Availability Modifier Option Tests
+// ============================================================================
+
+func TestSetAvailabilityModifierOption(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success_StateChange_Audit_Timestamp", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetModifierOptionAvailabilityHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+		optID := createTestModifierOptionDirect(t, db, groupID, "Less Sugar", 0, true, false)
+
+		var origCreatedAt, origUpdatedAt time.Time
+		err := db.QueryRowContext(ctx, `SELECT created_at, updated_at FROM modifier_options WHERE id = $1`, optID).Scan(&origCreatedAt, &origUpdatedAt)
+		require.NoError(t, err)
+
+		time.Sleep(10 * time.Millisecond)
+
+		reqID := uuid.New()
+		cmd := catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: reqID,
+			OptionID:  optID,
+			Available: false,
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, optID, res.ID)
+		assert.Equal(t, groupID, res.ModifierGroupID)
+		assert.Equal(t, "Less Sugar", res.Name)
+		assert.Equal(t, int64(0), res.SurchargeVND)
+		assert.False(t, res.Available)
+
+		// Verify database row
+		var dbAvailable bool
+		var dbUpdatedAt time.Time
+		err = db.QueryRowContext(ctx, `SELECT available, updated_at FROM modifier_options WHERE id = $1`, optID).Scan(&dbAvailable, &dbUpdatedAt)
+		require.NoError(t, err)
+		assert.False(t, dbAvailable)
+		assert.True(t, dbUpdatedAt.After(origUpdatedAt), "updated_at should be updated")
+
+		// Verify audit event
+		var eventType string
+		var actorID, sessionID uuid.UUID
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `
+			SELECT event_type, actor_id, session_id, details
+			FROM audit_events
+			WHERE event_type = 'catalog.modifier_option.availability_changed' AND actor_id = $1
+		`, actor.StaffID).Scan(&eventType, &actorID, &sessionID, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, "catalog.modifier_option.availability_changed", eventType)
+		assert.Equal(t, actor.StaffID, actorID)
+		assert.Equal(t, actor.SessionID, sessionID)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, optID.String(), details["option_id"])
+		assert.Equal(t, groupID.String(), details["modifier_group_id"])
+		assert.Equal(t, true, details["old_available"])
+		assert.Equal(t, false, details["new_available"])
+
+		// Toggle back with Cashier role
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "5678")
+		cashierActor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+
+		reqID2 := uuid.New()
+		status2, res2, err2 := handler.Handle(ctx, cashierActor, catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: reqID2,
+			OptionID:  optID,
+			Available: true,
+		})
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.True(t, res2.Available)
+
+		err = db.QueryRowContext(ctx, `SELECT available FROM modifier_options WHERE id = $1`, optID).Scan(&dbAvailable)
+		require.NoError(t, err)
+		assert.True(t, dbAvailable)
+
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.modifier_option.availability_changed'`).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count)
+	})
+
+	t.Run("SameState_NoOp_NoTimestampOrAuditEventChange", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewSetModifierOptionAvailabilityHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+		optID := createTestModifierOptionDirect(t, db, groupID, "Less Sugar", 0, true, false) // created with available = true
+
+		var origUpdatedAt time.Time
+		err := db.QueryRowContext(ctx, `SELECT updated_at FROM modifier_options WHERE id = $1`, optID).Scan(&origUpdatedAt)
+		require.NoError(t, err)
+
+		time.Sleep(10 * time.Millisecond)
+
+		reqID := uuid.New()
+		cmd := catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: reqID,
+			OptionID:  optID,
+			Available: true, // same state!
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.True(t, res.Available)
+
+		var dbUpdatedAt time.Time
+		err = db.QueryRowContext(ctx, `SELECT updated_at FROM modifier_options WHERE id = $1`, optID).Scan(&dbUpdatedAt)
+		require.NoError(t, err)
+		assert.True(t, dbUpdatedAt.Equal(origUpdatedAt), "updated_at must NOT change on same-state no-op")
+
+		var auditCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.modifier_option.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, auditCount, "no audit event should be emitted on same-state no-op")
+
+		statusReplay, resReplay, errReplay := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, errReplay)
+		assert.Equal(t, 200, statusReplay)
+		assert.Equal(t, res, resReplay)
+
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.modifier_option.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, auditCount)
+	})
+
+	t.Run("Authority_CashierAndBarista", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+		optID := createTestModifierOptionDirect(t, db, groupID, "Less Sugar", 0, true, false)
+
+		handler := catalog.NewSetModifierOptionAvailabilityHandler(runner)
+
+		// Cashier succeeds
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		status1, res1, err1 := handler.Handle(ctx, catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}, catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: uuid.New(),
+			OptionID:  optID,
+			Available: false,
+		})
+		require.NoError(t, err1)
+		assert.Equal(t, 200, status1)
+		assert.False(t, res1.Available)
+
+		// Barista succeeds
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "5678")
+		status2, res2, err2 := handler.Handle(ctx, catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}, catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: uuid.New(),
+			OptionID:  optID,
+			Available: true,
+		})
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.True(t, res2.Available)
+	})
+
+	t.Run("Forbidden_MissingCapabilities", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+		optID := createTestModifierOptionDirect(t, db, groupID, "Less Sugar", 0, true, false)
+
+		staffWithoutRole := createCatalogTestIdentity(t, db, q, []string{}, true, "1234")
+		handler := catalog.NewSetModifierOptionAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, catalog.Actor{StaffID: staffWithoutRole.StaffID, SessionID: staffWithoutRole.SessionID}, catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: uuid.New(),
+			OptionID:  optID,
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrForbidden))
+		assert.Equal(t, 0, status)
+		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.modifier_option.set_availability"))
+	})
+
+	t.Run("ParentRetirement", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		retiredGroup := createTestModifierGroupDirect(t, db, "Retired Sugar", 0, 1, true)
+		optID := createTestModifierOptionDirect(t, db, retiredGroup, "Less Sugar", 0, true, false)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetModifierOptionAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: uuid.New(),
+			OptionID:  optID,
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("TargetRetirement", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		activeGroup := createTestModifierGroupDirect(t, db, "Active Sugar", 0, 1, false)
+		retiredOpt := createTestModifierOptionDirect(t, db, activeGroup, "Retired Sugar Opt", 0, true, true)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetModifierOptionAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: uuid.New(),
+			OptionID:  retiredOpt,
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetModifierOptionAvailabilityHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: uuid.New(),
+			OptionID:  uuid.New(),
+			Available: false,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrNotFound))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Replay", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		barista := createCatalogTestIdentity(t, db, q, []string{auth.RoleBarista}, true, "1234")
+		actor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+		handler := catalog.NewSetModifierOptionAvailabilityHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+		optID := createTestModifierOptionDirect(t, db, groupID, "Less Sugar", 0, true, false)
+
+		reqID := uuid.New()
+		cmd := catalog.SetModifierOptionAvailabilityCommand{
+			RequestID: reqID,
+			OptionID:  optID,
+			Available: false,
+		}
+
+		status1, res1, err1 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err1)
+		assert.Equal(t, 200, status1)
+
+		// Exact replay returns identical result
+		status2, res2, err2 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.Equal(t, res1, res2)
+
+		var auditCount int
+		err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.modifier_option.availability_changed'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount)
+
+		// Conflicting replay with different availability value returns ErrRequestConflict
+		conflictCmd := cmd
+		conflictCmd.Available = true
+		statusConflict, _, errConflict := handler.Handle(ctx, actor, conflictCmd)
+		require.Error(t, errConflict)
+		assert.True(t, errors.Is(errConflict, catalog.ErrRequestConflict))
+		assert.Equal(t, 0, statusConflict)
+	})
+}
+
+

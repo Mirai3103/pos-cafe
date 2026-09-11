@@ -34,6 +34,9 @@ const (
 	OpItemReprice                       = "catalog.item.reprice"
 	OpSizeReprice                       = "catalog.size.reprice"
 	OpModifierOptionReprice             = "catalog.modifier_option.reprice"
+	OpItemSetAvailability           = "catalog.item.set_availability"
+	OpSizeSetAvailability           = "catalog.size.set_availability"
+	OpModifierOptionSetAvailability = "catalog.modifier_option.set_availability"
 )
 
 // Audit event types emitted by catalog operations.
@@ -53,6 +56,9 @@ const (
 	EventItemRepriced                       = "catalog.item.repriced"
 	EventSizeRepriced                       = "catalog.size.repriced"
 	EventModifierOptionRepriced             = "catalog.modifier_option.repriced"
+	EventItemAvailabilityChanged           = "catalog.item.availability_changed"
+	EventSizeAvailabilityChanged           = "catalog.size.availability_changed"
+	EventModifierOptionAvailabilityChanged = "catalog.modifier_option.availability_changed"
 )
 
 // Retirement holds optional retirement metadata.

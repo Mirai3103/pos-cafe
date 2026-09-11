@@ -194,3 +194,25 @@ type RepriceModifierOptionCommand struct {
 	SurchargeVND int64     `json:"surcharge_vnd"`
 	ManagerPIN   string    `json:"manager_pin"`
 }
+
+// SetItemAvailabilityCommand carries the parameters for setting a menu item's availability.
+type SetItemAvailabilityCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	ItemID    uuid.UUID `json:"item_id"`
+	Available bool      `json:"available"`
+}
+
+// SetSizeAvailabilityCommand carries the parameters for setting a menu item size's availability.
+type SetSizeAvailabilityCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	SizeID    uuid.UUID `json:"size_id"`
+	Available bool      `json:"available"`
+}
+
+// SetModifierOptionAvailabilityCommand carries the parameters for setting a modifier option's availability.
+type SetModifierOptionAvailabilityCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	OptionID  uuid.UUID `json:"option_id"`
+	Available bool      `json:"available"`
+}
+
