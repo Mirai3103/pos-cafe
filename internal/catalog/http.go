@@ -143,6 +143,54 @@ func (s *Slices) handleRenameCategory(c echo.Context) error {
 	return sendResult(c, status, res)
 }
 
+// handleRetireCategory godoc
+//
+//	@Summary		Ngừng kinh doanh danh mục thực đơn
+//	@Description	Đánh dấu ngừng kinh doanh vĩnh viễn danh mục thực đơn. Yêu cầu quyền catalog.administer_structure.
+//	@Tags			Catalog
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			category_id	path		string			true	"Category ID (UUID)"
+//	@Param			request		body		RetireRequest	true	"Lý do và ghi chú ngừng kinh doanh"
+//	@Success		200			{object}	response.APIResponse{data=CategoryResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/catalog/categories/{category_id}/retirement [post]
+func (s *Slices) handleRetireCategory(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	catID, err := parseUUIDParam(c, "category_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	req, err := bindBody[RetireRequest](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(req.RequestID); err != nil {
+		return sendError(c, err)
+	}
+
+	cmd := RetireCategoryCommand{
+		RequestID:  req.RequestID,
+		CategoryID: catID,
+		Reason:     req.Reason,
+		Note:       req.Note,
+	}
+	status, res, err := s.RetireCategory.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}
+
 // === Items ===
 
 // handleCreateItem godoc

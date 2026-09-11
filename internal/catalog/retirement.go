@@ -13,6 +13,18 @@ import (
 
 // Fingerprints and audit details
 
+type retireCategoryFingerprint struct {
+	CategoryID uuid.UUID `json:"category_id"`
+	Reason     string    `json:"reason"`
+	Note       string    `json:"note,omitempty"`
+}
+
+type categoryRetiredAuditDetails struct {
+	CategoryID uuid.UUID `json:"category_id"`
+	Reason     string    `json:"reason"`
+	Note       string    `json:"note,omitempty"`
+}
+
 type retireItemFingerprint struct {
 	ItemID uuid.UUID `json:"item_id"`
 	Reason string    `json:"reason"`
@@ -73,6 +85,89 @@ func validateRetirementInput(reason, note string) (string, error) {
 		return "", fmt.Errorf("%w: %s", ErrInvalidRetirement, err.Error())
 	}
 	return trimmedNote, nil
+}
+
+// ============================================================================
+// RetireCategoryHandler
+// ============================================================================
+
+// RetireCategoryHandler handles permanent retirement of menu categories.
+type RetireCategoryHandler struct {
+	runner *Runner
+}
+
+// NewRetireCategoryHandler creates a new RetireCategoryHandler.
+func NewRetireCategoryHandler(runner *Runner) *RetireCategoryHandler {
+	return &RetireCategoryHandler{runner: runner}
+}
+
+// Handle executes the category retirement command.
+func (h *RetireCategoryHandler) Handle(ctx context.Context, actor Actor, cmd RetireCategoryCommand) (int, CategoryResponse, error) {
+	trimmedNote, valErr := validateRetirementInput(cmd.Reason, cmd.Note)
+	if valErr != nil {
+		return 0, CategoryResponse{}, valErr
+	}
+
+	spec := MutationSpec{
+		RequestID: cmd.RequestID,
+		Operation: OpCategoryRetire,
+		Fingerprint: retireCategoryFingerprint{
+			CategoryID: cmd.CategoryID,
+			Reason:     cmd.Reason,
+			Note:       trimmedNote,
+		},
+		Required: []string{CapAdministerStructure},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, CategoryResponse, AuditRecord, error) {
+		existing, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
+		if err != nil {
+			return 0, CategoryResponse{}, AuditRecord{}, MapDBError(err)
+		}
+		if existing.RetiredAt.Valid {
+			return 0, CategoryResponse{}, AuditRecord{}, ErrEntityRetired
+		}
+
+		var noteNull sql.NullString
+		if trimmedNote != "" {
+			noteNull = sql.NullString{String: trimmedNote, Valid: true}
+		}
+
+		category, err := q.RetireMenuCategory(ctx, sqlc.RetireMenuCategoryParams{
+			ID:               cmd.CategoryID,
+			RetiredAt:        sql.NullTime{Time: time.Now(), Valid: true},
+			RetirementReason: sql.NullString{String: cmd.Reason, Valid: true},
+			RetirementNote:   noteNull,
+		})
+		if err != nil {
+			return 0, CategoryResponse{}, AuditRecord{}, MapDBError(err)
+		}
+
+		res := CategoryResponse{ID: category.ID, Name: category.Name, Retired: true}
+		if category.RetiredAt.Valid {
+			t := category.RetiredAt.Time
+			res.RetiredAt = &t
+		}
+		if category.RetirementReason.Valid {
+			r := category.RetirementReason.String
+			res.RetirementReason = &r
+		}
+		if category.RetirementNote.Valid {
+			n := category.RetirementNote.String
+			res.RetirementNote = &n
+		}
+
+		audit := AuditRecord{
+			EventType: EventCategoryRetired,
+			Details: categoryRetiredAuditDetails{
+				CategoryID: category.ID,
+				Reason:     cmd.Reason,
+				Note:       trimmedNote,
+			},
+		}
+
+		return 200, res, audit, nil
+	})
 }
 
 // ============================================================================

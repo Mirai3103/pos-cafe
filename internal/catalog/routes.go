@@ -15,6 +15,7 @@ type Slices struct {
 
 	CreateCategory                    *CreateCategoryHandler
 	RenameCategory                    *RenameCategoryHandler
+	RetireCategory                    *RetireCategoryHandler
 	CreateItem                        *CreateItemHandler
 	RenameItem                        *RenameItemHandler
 	RepriceItem                       *RepriceItemHandler
@@ -50,6 +51,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		q:                                 queries,
 		CreateCategory:                    NewCreateCategoryHandler(runner),
 		RenameCategory:                    NewRenameCategoryHandler(runner),
+		RetireCategory:                    NewRetireCategoryHandler(runner),
 		CreateItem:                        NewCreateItemHandler(runner),
 		RenameItem:                        NewRenameItemHandler(runner),
 		RepriceItem:                       NewRepriceItemHandler(runner),
@@ -92,6 +94,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	// Categories
 	catalog.POST("/categories", s.handleCreateCategory, authn.RequireCapability(CapAdministerStructure))
 	catalog.PATCH("/categories/:category_id/name", s.handleRenameCategory, authn.RequireCapability(CapAdministerStructure))
+	catalog.POST("/categories/:category_id/retirement", s.handleRetireCategory, authn.RequireCapability(CapAdministerStructure))
 
 	// Items
 	catalog.POST("/items", s.handleCreateItem, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))

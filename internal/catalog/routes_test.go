@@ -637,6 +637,22 @@ func TestCatalogRoutes(t *testing.T) {
 	})
 
 	// 9. Retirement Endpoints
+	t.Run("POST /categories/:category_id/retirement -> 200 OK", func(t *testing.T) {
+		req := catalog.RetireRequest{
+			RequestID: uuid.New(),
+			Reason:    "MENU_RESTRUCTURE",
+		}
+		rec := doJSONRequest(t, tc.e, http.MethodPost, fmt.Sprintf("/api/v1/catalog/categories/%s/retirement", catID), tc.managerToken, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		res, cat := parseAPIResponse[catalog.CategoryResponse](t, rec)
+		assert.True(t, res.Success)
+		assert.Equal(t, catID, cat.ID)
+		assert.True(t, cat.Retired)
+		require.NotNil(t, cat.RetiredAt)
+		require.NotNil(t, cat.RetirementReason)
+		assert.Equal(t, "MENU_RESTRUCTURE", *cat.RetirementReason)
+	})
+
 	t.Run("POST /sizes/:size_id/retirement -> 200 OK", func(t *testing.T) {
 		req := catalog.RetireRequest{
 			RequestID: uuid.New(),

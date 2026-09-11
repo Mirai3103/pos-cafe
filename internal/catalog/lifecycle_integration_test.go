@@ -4219,3 +4219,254 @@ func TestRetireModifierOption(t *testing.T) {
 		assert.Equal(t, 0, status)
 	})
 }
+
+// ============================================================================
+// Retire Category Tests
+// ============================================================================
+
+func TestRetireCategory(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success_MENU_RESTRUCTURE", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRetireCategoryHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+
+		var origUpdatedAt time.Time
+		err := db.QueryRowContext(ctx, `SELECT updated_at FROM menu_categories WHERE id = $1`, catID).Scan(&origUpdatedAt)
+		require.NoError(t, err)
+
+		reqID := uuid.New()
+		cmd := catalog.RetireCategoryCommand{
+			RequestID:  reqID,
+			CategoryID: catID,
+			Reason:     "MENU_RESTRUCTURE",
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, catID, res.ID)
+		assert.Equal(t, "Tea", res.Name)
+		assert.True(t, res.Retired)
+		require.NotNil(t, res.RetiredAt)
+		require.NotNil(t, res.RetirementReason)
+		assert.Equal(t, "MENU_RESTRUCTURE", *res.RetirementReason)
+		assert.Nil(t, res.RetirementNote)
+
+		// Verify database row
+		var retiredAt sql.NullTime
+		var reason, note sql.NullString
+		var dbUpdatedAt time.Time
+		err = db.QueryRowContext(ctx, `SELECT retired_at, retirement_reason, retirement_note, updated_at FROM menu_categories WHERE id = $1`, catID).
+			Scan(&retiredAt, &reason, &note, &dbUpdatedAt)
+		require.NoError(t, err)
+		assert.True(t, retiredAt.Valid)
+		assert.Equal(t, "MENU_RESTRUCTURE", reason.String)
+		assert.False(t, note.Valid)
+		assert.False(t, dbUpdatedAt.Before(origUpdatedAt))
+
+		// Verify audit event
+		var eventType string
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `SELECT event_type, details FROM audit_events WHERE event_type = 'catalog.category.retired'`).
+			Scan(&eventType, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, "catalog.category.retired", eventType)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, catID.String(), details["category_id"])
+		assert.Equal(t, "MENU_RESTRUCTURE", details["reason"])
+	})
+
+	t.Run("Success_OTHER_TrimmedNote", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRetireCategoryHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Seasonal Drinks")
+
+		reqID := uuid.New()
+		cmd := catalog.RetireCategoryCommand{
+			RequestID:  reqID,
+			CategoryID: catID,
+			Reason:     "OTHER",
+			Note:       "   Folded into the coffee menu   ",
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, catID, res.ID)
+		require.NotNil(t, res.RetirementNote)
+		assert.Equal(t, "Folded into the coffee menu", *res.RetirementNote)
+
+		var note sql.NullString
+		err = db.QueryRowContext(ctx, `SELECT retirement_note FROM menu_categories WHERE id = $1`, catID).Scan(&note)
+		require.NoError(t, err)
+		assert.True(t, note.Valid)
+		assert.Equal(t, "Folded into the coffee menu", note.String)
+	})
+
+	t.Run("Invalid_OTHER_MissingOrBlankNote", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRetireCategoryHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Seasonal Drinks")
+
+		status, _, err := handler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: catID,
+			Reason:     "OTHER",
+			Note:       "",
+		})
+		require.Error(t, err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("RetainedAssignmentRows", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRetireCategoryHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Sweetness", 0, 1, false)
+
+		// Link modifier group to category
+		_, err := db.ExecContext(ctx, `INSERT INTO category_modifier_groups (menu_category_id, modifier_group_id) VALUES ($1, $2)`, catID, groupID)
+		require.NoError(t, err)
+
+		// Retire category
+		status, _, err := handler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: catID,
+			Reason:     "MENU_RESTRUCTURE",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+
+		// Verify child rows are retained
+		var itemCount, catGroupCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM menu_items WHERE category_id = $1`, catID).Scan(&itemCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, itemCount, "menu_items row retained")
+
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM category_modifier_groups WHERE menu_category_id = $1`, catID).Scan(&catGroupCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, catGroupCount, "category_modifier_groups row retained")
+
+		_ = itemID
+	})
+
+	t.Run("TargetRetirement_PermanentConflict", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRetireCategoryHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+
+		status1, _, err1 := handler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: catID,
+			Reason:     "NO_LONGER_OFFERED",
+		})
+		require.NoError(t, err1)
+		assert.Equal(t, 200, status1)
+
+		// Second request returns ErrEntityRetired
+		status2, _, err2 := handler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: catID,
+			Reason:     "MENU_RESTRUCTURE",
+		})
+		require.Error(t, err2)
+		assert.True(t, errors.Is(err2, catalog.ErrEntityRetired))
+		assert.Equal(t, 0, status2)
+	})
+
+	t.Run("Replay", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRetireCategoryHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+
+		reqID := uuid.New()
+		cmd := catalog.RetireCategoryCommand{
+			RequestID:  reqID,
+			CategoryID: catID,
+			Reason:     "NO_LONGER_OFFERED",
+		}
+
+		status1, res1, err1 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err1)
+		assert.Equal(t, 200, status1)
+
+		status2, res2, err2 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err2)
+		assert.Equal(t, 200, status2)
+		assert.Equal(t, res1, res2)
+
+		var auditCount int
+		err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.category.retired'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRetireCategoryHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: uuid.New(),
+			Reason:     "NO_LONGER_OFFERED",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrNotFound))
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Unauthorized_Forbidden", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewRetireCategoryHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+
+		status, _, err := handler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: catID,
+			Reason:     "NO_LONGER_OFFERED",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrForbidden))
+		assert.Equal(t, 0, status)
+	})
+}

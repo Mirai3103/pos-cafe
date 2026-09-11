@@ -22,8 +22,12 @@ type RenameCategoryCommand struct {
 
 // CategoryResponse is the API response representation of a menu category.
 type CategoryResponse struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID               uuid.UUID  `json:"id"`
+	Name             string     `json:"name"`
+	Retired          bool       `json:"retired"`
+	RetiredAt        *time.Time `json:"retired_at,omitempty"`
+	RetirementReason *string    `json:"retirement_reason,omitempty"`
+	RetirementNote   *string    `json:"retirement_note,omitempty"`
 }
 
 // CreateSizeInput describes a size to create with a sized menu item.
@@ -219,6 +223,14 @@ type SetModifierOptionAvailabilityCommand struct {
 	RequestID uuid.UUID `json:"request_id"`
 	OptionID  uuid.UUID `json:"option_id"`
 	Available bool      `json:"available"`
+}
+
+// RetireCategoryCommand carries the parameters for retiring a menu category.
+type RetireCategoryCommand struct {
+	RequestID  uuid.UUID `json:"request_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+	Reason     string    `json:"reason"`
+	Note       string    `json:"note,omitempty"`
 }
 
 // RetireItemCommand carries the parameters for retiring a menu item.
