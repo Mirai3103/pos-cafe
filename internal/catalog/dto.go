@@ -216,3 +216,36 @@ type SetModifierOptionAvailabilityCommand struct {
 	Available bool      `json:"available"`
 }
 
+// RetireItemCommand carries the parameters for retiring a menu item.
+type RetireItemCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	ItemID    uuid.UUID `json:"item_id"`
+	Reason    string    `json:"reason"`
+	Note      string    `json:"note,omitempty"`
+}
+
+// RetireSizeCommand carries the parameters for retiring a menu item size.
+type RetireSizeCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	SizeID    uuid.UUID `json:"size_id"`
+	Reason    string    `json:"reason"`
+	Note      string    `json:"note,omitempty"`
+}
+
+// RetireModifierGroupCommand carries the parameters for retiring a modifier group.
+type RetireModifierGroupCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	GroupID   uuid.UUID `json:"group_id"`
+	Reason    string    `json:"reason"`
+	Note      string    `json:"note,omitempty"`
+}
+
+// RetireModifierOptionCommand carries the parameters for retiring a modifier option.
+type RetireModifierOptionCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	OptionID  uuid.UUID `json:"option_id"`
+	Reason    string    `json:"reason"`
+	Note      string    `json:"note,omitempty"`
+}
+
+

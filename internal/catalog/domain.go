@@ -37,6 +37,10 @@ const (
 	OpItemSetAvailability           = "catalog.item.set_availability"
 	OpSizeSetAvailability           = "catalog.size.set_availability"
 	OpModifierOptionSetAvailability = "catalog.modifier_option.set_availability"
+	OpItemRetire                    = "catalog.item.retire"
+	OpSizeRetire                    = "catalog.size.retire"
+	OpModifierGroupRetire           = "catalog.modifier_group.retire"
+	OpModifierOptionRetire          = "catalog.modifier_option.retire"
 )
 
 // Audit event types emitted by catalog operations.
@@ -59,6 +63,10 @@ const (
 	EventItemAvailabilityChanged           = "catalog.item.availability_changed"
 	EventSizeAvailabilityChanged           = "catalog.size.availability_changed"
 	EventModifierOptionAvailabilityChanged = "catalog.modifier_option.availability_changed"
+	EventItemRetired                        = "catalog.item.retired"
+	EventSizeRetired                        = "catalog.size.retired"
+	EventModifierGroupRetired               = "catalog.modifier_group.retired"
+	EventModifierOptionRetired              = "catalog.modifier_option.retired"
 )
 
 // Retirement holds optional retirement metadata.
