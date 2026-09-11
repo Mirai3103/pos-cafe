@@ -629,7 +629,7 @@ func TestCatalogConcurrencyAndDenials(t *testing.T) {
 		close(start)
 		wg.Wait()
 
-		// Validate outcomes: exactly one executes and returns 201; the other returns 201 (replay) or 409 (REQUEST_CONFLICT)
+		// Validate outcomes: exactly one executes and returns 201; the other returns 201 (identical cached replay).
 		successCount := 0
 		conflictCount := 0
 		for _, r := range results {
@@ -637,20 +637,38 @@ func TestCatalogConcurrencyAndDenials(t *testing.T) {
 				successCount++
 			} else if r.statusCode == http.StatusConflict {
 				conflictCount++
-				assert.Contains(t, r.body, "REQUEST_CONFLICT")
 			} else {
 				t.Fatalf("unexpected status code: %d, body: %s", r.statusCode, r.body)
 			}
 		}
 
-		assert.GreaterOrEqual(t, successCount, 1, "At least one request must succeed with 201")
-		assert.Equal(t, goroutines, successCount+conflictCount, "All requests must either be 201 or 409 conflict")
+		assert.Equal(t, goroutines, successCount, "All concurrent requests with identical payload must return 201 Created")
+		assert.Equal(t, 0, conflictCount, "No requests with identical payload should receive 409 Conflict")
 
 		// Verify database has exactly 1 category named "Concurrent Cat"
 		var count int
 		err := app.db.QueryRowContext(context.Background(), `SELECT count(*) FROM menu_categories WHERE name = 'Concurrent Cat'`).Scan(&count)
 		require.NoError(t, err)
 		assert.Equal(t, 1, count, "Exactly 1 category row must exist in the database")
+	})
+
+	t.Run("Duplicate_RequestID_With_Different_Payload_Returns_409_Conflict", func(t *testing.T) {
+		reqID := uuid.New()
+
+		// First request succeeds
+		rec1 := doHTTP(t, app.e, http.MethodPost, "/api/v1/catalog/categories", app.token, catalog.CreateCategoryCommand{
+			RequestID: reqID,
+			Name:      "First Category For Conflict",
+		})
+		require.Equal(t, http.StatusCreated, rec1.Code)
+
+		// Second request with SAME request_id but DIFFERENT payload fails with 409 Conflict (REQUEST_CONFLICT)
+		rec2 := doHTTP(t, app.e, http.MethodPost, "/api/v1/catalog/categories", app.token, catalog.CreateCategoryCommand{
+			RequestID: reqID,
+			Name:      "Different Payload Category",
+		})
+		require.Equal(t, http.StatusConflict, rec2.Code)
+		assert.Contains(t, rec2.Body.String(), "REQUEST_CONFLICT")
 	})
 
 	t.Run("Concurrent_Normalized_Name_Collision_OneSucceeds_SecondFailsWithNameConflict", func(t *testing.T) {
