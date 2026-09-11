@@ -170,3 +170,27 @@ type RenameModifierOptionCommand struct {
 	OptionID  uuid.UUID `json:"option_id"`
 	Name      string    `json:"name"`
 }
+
+// RepriceItemCommand carries the parameters for repricing a menu item.
+type RepriceItemCommand struct {
+	RequestID  uuid.UUID `json:"request_id"`
+	ItemID     uuid.UUID `json:"item_id"`
+	PriceVND   int64     `json:"price_vnd"`
+	ManagerPIN string    `json:"manager_pin"`
+}
+
+// RepriceSizeCommand carries the parameters for repricing a menu item size.
+type RepriceSizeCommand struct {
+	RequestID  uuid.UUID `json:"request_id"`
+	SizeID     uuid.UUID `json:"size_id"`
+	PriceVND   int64     `json:"price_vnd"`
+	ManagerPIN string    `json:"manager_pin"`
+}
+
+// RepriceModifierOptionCommand carries the parameters for repricing a modifier option.
+type RepriceModifierOptionCommand struct {
+	RequestID    uuid.UUID `json:"request_id"`
+	OptionID     uuid.UUID `json:"option_id"`
+	SurchargeVND int64     `json:"surcharge_vnd"`
+	ManagerPIN   string    `json:"manager_pin"`
+}

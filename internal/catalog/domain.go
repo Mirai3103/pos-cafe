@@ -31,6 +31,9 @@ const (
 	OpCategoryAttachModifierGroup       = "catalog.category.attach_modifier_group"
 	OpItemExcludeInheritedModifierGroup = "catalog.item.exclude_inherited_modifier_group"
 	OpModifierGroupSetDefaults          = "catalog.modifier_group.set_defaults"
+	OpItemReprice                       = "catalog.item.reprice"
+	OpSizeReprice                       = "catalog.size.reprice"
+	OpModifierOptionReprice             = "catalog.modifier_option.reprice"
 )
 
 // Audit event types emitted by catalog operations.
@@ -47,6 +50,9 @@ const (
 	EventCategoryModifierGroupAttached      = "catalog.category.modifier_group_attached"
 	EventItemInheritedModifierGroupExcluded = "catalog.item.inherited_modifier_group_excluded"
 	EventModifierGroupDefaultsChanged       = "catalog.modifier_group.defaults_changed"
+	EventItemRepriced                       = "catalog.item.repriced"
+	EventSizeRepriced                       = "catalog.size.repriced"
+	EventModifierOptionRepriced             = "catalog.modifier_option.repriced"
 )
 
 // Retirement holds optional retirement metadata.
