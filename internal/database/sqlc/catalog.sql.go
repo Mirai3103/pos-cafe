@@ -746,6 +746,148 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 	return i, err
 }
 
+const listAllCategoryModifierGroups = `-- name: ListAllCategoryModifierGroups :many
+SELECT menu_category_id, modifier_group_id
+FROM category_modifier_groups
+`
+
+type ListAllCategoryModifierGroupsRow struct {
+	MenuCategoryID  uuid.UUID `json:"menu_category_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllCategoryModifierGroups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllCategoryModifierGroupsRow{}
+	for rows.Next() {
+		var i ListAllCategoryModifierGroupsRow
+		if err := rows.Scan(&i.MenuCategoryID, &i.ModifierGroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllItemModifierGroupExclusions = `-- name: ListAllItemModifierGroupExclusions :many
+SELECT menu_item_id, modifier_group_id
+FROM item_modifier_group_exclusions
+`
+
+type ListAllItemModifierGroupExclusionsRow struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) ListAllItemModifierGroupExclusions(ctx context.Context) ([]ListAllItemModifierGroupExclusionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllItemModifierGroupExclusions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllItemModifierGroupExclusionsRow{}
+	for rows.Next() {
+		var i ListAllItemModifierGroupExclusionsRow
+		if err := rows.Scan(&i.MenuItemID, &i.ModifierGroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllItemModifierGroups = `-- name: ListAllItemModifierGroups :many
+SELECT menu_item_id, modifier_group_id
+FROM item_modifier_groups
+`
+
+type ListAllItemModifierGroupsRow struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) ListAllItemModifierGroups(ctx context.Context) ([]ListAllItemModifierGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllItemModifierGroups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllItemModifierGroupsRow{}
+	for rows.Next() {
+		var i ListAllItemModifierGroupsRow
+		if err := rows.Scan(&i.MenuItemID, &i.ModifierGroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllMenuItemSizes = `-- name: ListAllMenuItemSizes :many
+SELECT id, menu_item_id, name, normalized_name, price_vnd,
+       available, retired_at, retirement_reason, retirement_note,
+       created_at, updated_at
+FROM menu_item_sizes
+ORDER BY normalized_name ASC, id ASC
+`
+
+func (q *Queries) ListAllMenuItemSizes(ctx context.Context) ([]MenuItemSize, error) {
+	rows, err := q.db.QueryContext(ctx, listAllMenuItemSizes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MenuItemSize{}
+	for rows.Next() {
+		var i MenuItemSize
+		if err := rows.Scan(
+			&i.ID,
+			&i.MenuItemID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.PriceVnd,
+			&i.Available,
+			&i.RetiredAt,
+			&i.RetirementReason,
+			&i.RetirementNote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllMenuItemSizesPaginated = `-- name: ListAllMenuItemSizesPaginated :many
 SELECT id, menu_item_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
@@ -772,6 +914,51 @@ func (q *Queries) ListAllMenuItemSizesPaginated(ctx context.Context, arg ListAll
 		if err := rows.Scan(
 			&i.ID,
 			&i.MenuItemID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.PriceVnd,
+			&i.Available,
+			&i.RetiredAt,
+			&i.RetirementReason,
+			&i.RetirementNote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllMenuItems = `-- name: ListAllMenuItems :many
+
+SELECT id, category_id, name, normalized_name, price_vnd,
+       available, retired_at, retirement_reason, retirement_note,
+       created_at, updated_at
+FROM menu_items
+ORDER BY normalized_name ASC, id ASC
+`
+
+// -- Bulk Queries for Projections --
+func (q *Queries) ListAllMenuItems(ctx context.Context) ([]MenuItem, error) {
+	rows, err := q.db.QueryContext(ctx, listAllMenuItems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MenuItem{}
+	for rows.Next() {
+		var i MenuItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.CategoryID,
 			&i.Name,
 			&i.NormalizedName,
 			&i.PriceVnd,
@@ -844,6 +1031,39 @@ func (q *Queries) ListAllMenuItemsPaginated(ctx context.Context, arg ListAllMenu
 	return items, nil
 }
 
+const listAllModifierGroupDefaultOptions = `-- name: ListAllModifierGroupDefaultOptions :many
+SELECT modifier_group_id, modifier_option_id
+FROM modifier_group_default_options
+`
+
+type ListAllModifierGroupDefaultOptionsRow struct {
+	ModifierGroupID  uuid.UUID `json:"modifier_group_id"`
+	ModifierOptionID uuid.UUID `json:"modifier_option_id"`
+}
+
+func (q *Queries) ListAllModifierGroupDefaultOptions(ctx context.Context) ([]ListAllModifierGroupDefaultOptionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllModifierGroupDefaultOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllModifierGroupDefaultOptionsRow{}
+	for rows.Next() {
+		var i ListAllModifierGroupDefaultOptionsRow
+		if err := rows.Scan(&i.ModifierGroupID, &i.ModifierOptionID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllModifierGroupsPaginated = `-- name: ListAllModifierGroupsPaginated :many
 SELECT id, name, normalized_name, min_selections, max_selections,
        retired_at, retirement_reason, retirement_note,
@@ -873,6 +1093,49 @@ func (q *Queries) ListAllModifierGroupsPaginated(ctx context.Context, arg ListAl
 			&i.NormalizedName,
 			&i.MinSelections,
 			&i.MaxSelections,
+			&i.RetiredAt,
+			&i.RetirementReason,
+			&i.RetirementNote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllModifierOptions = `-- name: ListAllModifierOptions :many
+SELECT id, modifier_group_id, name, normalized_name, surcharge_vnd,
+       available, retired_at, retirement_reason, retirement_note,
+       created_at, updated_at
+FROM modifier_options
+ORDER BY normalized_name ASC, id ASC
+`
+
+func (q *Queries) ListAllModifierOptions(ctx context.Context) ([]ModifierOption, error) {
+	rows, err := q.db.QueryContext(ctx, listAllModifierOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModifierOption{}
+	for rows.Next() {
+		var i ModifierOption
+		if err := rows.Scan(
+			&i.ID,
+			&i.ModifierGroupID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.SurchargeVnd,
+			&i.Available,
 			&i.RetiredAt,
 			&i.RetirementReason,
 			&i.RetirementNote,

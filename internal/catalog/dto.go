@@ -1,6 +1,10 @@
 package catalog
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // CreateCategoryCommand carries the request ID and name for category creation.
 type CreateCategoryCommand struct {
@@ -247,5 +251,205 @@ type RetireModifierOptionCommand struct {
 	Reason    string    `json:"reason"`
 	Note      string    `json:"note,omitempty"`
 }
+
+// === Sellable Menu Projection ===
+
+// SellableModifierOptionResponse represents an available modifier option in the sellable menu.
+type SellableModifierOptionResponse struct {
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	SurchargeVND int64     `json:"surcharge_vnd"`
+}
+
+// SellableModifierGroupResponse represents an effective modifier group in the sellable menu.
+type SellableModifierGroupResponse struct {
+	ID               uuid.UUID                        `json:"id"`
+	Name             string                           `json:"name"`
+	MinSelections    int32                            `json:"min_selections"`
+	MaxSelections    int32                            `json:"max_selections"`
+	Options          []SellableModifierOptionResponse `json:"options"`
+	DefaultOptionIDs []uuid.UUID                      `json:"default_option_ids"`
+}
+
+// SellableSizeResponse represents an available size option in the sellable menu.
+type SellableSizeResponse struct {
+	ID       uuid.UUID `json:"id"`
+	Name     string    `json:"name"`
+	PriceVND int64     `json:"price_vnd"`
+}
+
+// SellableItemResponse represents a sellable menu item.
+type SellableItemResponse struct {
+	ID             uuid.UUID                       `json:"id"`
+	CategoryID     uuid.UUID                       `json:"category_id"`
+	Name           string                          `json:"name"`
+	PriceVND       *int64                          `json:"price_vnd,omitempty"`
+	Sizes          []SellableSizeResponse          `json:"sizes,omitempty"`
+	ModifierGroups []SellableModifierGroupResponse `json:"modifier_groups,omitempty"`
+}
+
+// SellableCategoryResponse represents a category with at least one sellable item.
+type SellableCategoryResponse struct {
+	ID    uuid.UUID              `json:"id"`
+	Name  string                 `json:"name"`
+	Items []SellableItemResponse `json:"items"`
+}
+
+// SellableMenuResponse is the projection of sellable catalog items.
+type SellableMenuResponse struct {
+	Categories []SellableCategoryResponse `json:"categories"`
+}
+
+// === Management Menu Projection ===
+
+// ManagementModifierOptionResponse represents a modifier option in the management projection.
+type ManagementModifierOptionResponse struct {
+	ID               uuid.UUID  `json:"id"`
+	ModifierGroupID  uuid.UUID  `json:"modifier_group_id"`
+	Name             string     `json:"name"`
+	SurchargeVND     int64      `json:"surcharge_vnd"`
+	Available        bool       `json:"available"`
+	Retired          bool       `json:"retired"`
+	RetiredAt        *time.Time `json:"retired_at,omitempty"`
+	RetirementReason *string    `json:"retirement_reason,omitempty"`
+	RetirementNote   *string    `json:"retirement_note,omitempty"`
+}
+
+// ManagementModifierGroupResponse represents a modifier group in the management projection.
+type ManagementModifierGroupResponse struct {
+	ID               uuid.UUID                           `json:"id"`
+	Name             string                              `json:"name"`
+	MinSelections    int32                               `json:"min_selections"`
+	MaxSelections    int32                               `json:"max_selections"`
+	Retired          bool                                `json:"retired"`
+	RetiredAt        *time.Time                          `json:"retired_at,omitempty"`
+	RetirementReason *string                             `json:"retirement_reason,omitempty"`
+	RetirementNote   *string                             `json:"retirement_note,omitempty"`
+	Options          []ManagementModifierOptionResponse  `json:"options"`
+	DefaultOptionIDs []uuid.UUID                         `json:"default_option_ids"`
+}
+
+// ManagementSizeResponse represents a size option in the management projection.
+type ManagementSizeResponse struct {
+	ID               uuid.UUID  `json:"id"`
+	MenuItemID       uuid.UUID  `json:"menu_item_id"`
+	Name             string     `json:"name"`
+	PriceVND         int64      `json:"price_vnd"`
+	Available        bool       `json:"available"`
+	Retired          bool       `json:"retired"`
+	RetiredAt        *time.Time `json:"retired_at,omitempty"`
+	RetirementReason *string    `json:"retirement_reason,omitempty"`
+	RetirementNote   *string    `json:"retirement_note,omitempty"`
+}
+
+// ManagementItemResponse represents a menu item in the management projection.
+type ManagementItemResponse struct {
+	ID                       uuid.UUID                         `json:"id"`
+	CategoryID               uuid.UUID                         `json:"category_id"`
+	Name                     string                            `json:"name"`
+	PriceVND                 *int64                            `json:"price_vnd,omitempty"`
+	Available                bool                              `json:"available"`
+	Retired                  bool                              `json:"retired"`
+	RetiredAt                *time.Time                        `json:"retired_at,omitempty"`
+	RetirementReason         *string                           `json:"retirement_reason,omitempty"`
+	RetirementNote           *string                           `json:"retirement_note,omitempty"`
+	Sizes                    []ManagementSizeResponse          `json:"sizes,omitempty"`
+	DirectModifierGroupIDs   []uuid.UUID                       `json:"direct_modifier_group_ids"`
+	ExcludedModifierGroupIDs []uuid.UUID                       `json:"excluded_modifier_group_ids"`
+	ModifierGroups           []ManagementModifierGroupResponse `json:"modifier_groups"`
+}
+
+// ManagementCategoryResponse represents a category in the management projection.
+type ManagementCategoryResponse struct {
+	ID               uuid.UUID                `json:"id"`
+	Name             string                   `json:"name"`
+	ModifierGroupIDs []uuid.UUID              `json:"modifier_group_ids"`
+	Items            []ManagementItemResponse `json:"items"`
+}
+
+// ManagementMenuResponse is the projection of all catalog entities for management.
+type ManagementMenuResponse struct {
+	Categories []ManagementCategoryResponse `json:"categories"`
+}
+
+// === Availability Menu Projection ===
+
+// AvailabilityModifierOptionResponse represents an option in the availability projection.
+type AvailabilityModifierOptionResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Available bool      `json:"available"`
+}
+
+// AvailabilityModifierGroupResponse represents a modifier group in the availability projection.
+type AvailabilityModifierGroupResponse struct {
+	ID            uuid.UUID                            `json:"id"`
+	Name          string                               `json:"name"`
+	MinSelections int32                                `json:"min_selections"`
+	MaxSelections int32                                `json:"max_selections"`
+	Options       []AvailabilityModifierOptionResponse `json:"options"`
+}
+
+// AvailabilitySizeResponse represents a size in the availability projection.
+type AvailabilitySizeResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Available bool      `json:"available"`
+}
+
+// AvailabilityItemResponse represents an item in the availability projection.
+type AvailabilityItemResponse struct {
+	ID             uuid.UUID                           `json:"id"`
+	CategoryID     uuid.UUID                           `json:"category_id"`
+	Name           string                              `json:"name"`
+	Available      bool                                `json:"available"`
+	Sizes          []AvailabilitySizeResponse          `json:"sizes,omitempty"`
+	ModifierGroups []AvailabilityModifierGroupResponse `json:"modifier_groups,omitempty"`
+}
+
+// AvailabilityCategoryResponse represents a category in the availability projection.
+type AvailabilityCategoryResponse struct {
+	ID    uuid.UUID                  `json:"id"`
+	Name  string                     `json:"name"`
+	Items []AvailabilityItemResponse `json:"items"`
+}
+
+// AvailabilityMenuResponse is the price-free projection for managing availability.
+type AvailabilityMenuResponse struct {
+	Categories []AvailabilityCategoryResponse `json:"categories"`
+}
+
+// === Modifier Groups Management Projection ===
+
+// ModifierOptionManagementResponse represents a modifier option in the modifier groups management projection.
+type ModifierOptionManagementResponse struct {
+	ID               uuid.UUID  `json:"id"`
+	ModifierGroupID  uuid.UUID  `json:"modifier_group_id"`
+	Name             string     `json:"name"`
+	SurchargeVND     int64      `json:"surcharge_vnd"`
+	Available        bool       `json:"available"`
+	Retired          bool       `json:"retired"`
+	RetiredAt        *time.Time `json:"retired_at,omitempty"`
+	RetirementReason *string    `json:"retirement_reason,omitempty"`
+	RetirementNote   *string    `json:"retirement_note,omitempty"`
+}
+
+// ModifierGroupManagementResponse represents a modifier group in the modifier groups management projection.
+type ModifierGroupManagementResponse struct {
+	ID               uuid.UUID                          `json:"id"`
+	Name             string                             `json:"name"`
+	MinSelections    int32                              `json:"min_selections"`
+	MaxSelections    int32                              `json:"max_selections"`
+	Retired          bool                               `json:"retired"`
+	RetiredAt        *time.Time                         `json:"retired_at,omitempty"`
+	RetirementReason *string                            `json:"retirement_reason,omitempty"`
+	RetirementNote   *string                            `json:"retirement_note,omitempty"`
+	Options          []ModifierOptionManagementResponse `json:"options"`
+	DefaultOptionIDs []uuid.UUID                        `json:"default_option_ids"`
+}
+
+// ModifierGroupsManagementResponse is a slice of ModifierGroupManagementResponse.
+type ModifierGroupsManagementResponse = []ModifierGroupManagementResponse
+
 
 

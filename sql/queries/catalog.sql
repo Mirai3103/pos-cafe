@@ -427,3 +427,43 @@ SELECT id, modifier_group_id, name, normalized_name, surcharge_vnd,
 FROM modifier_options
 ORDER BY normalized_name ASC, id ASC
 LIMIT $1 OFFSET $2;
+
+-- -- Bulk Queries for Projections --
+
+-- name: ListAllMenuItems :many
+SELECT id, category_id, name, normalized_name, price_vnd,
+       available, retired_at, retirement_reason, retirement_note,
+       created_at, updated_at
+FROM menu_items
+ORDER BY normalized_name ASC, id ASC;
+
+-- name: ListAllMenuItemSizes :many
+SELECT id, menu_item_id, name, normalized_name, price_vnd,
+       available, retired_at, retirement_reason, retirement_note,
+       created_at, updated_at
+FROM menu_item_sizes
+ORDER BY normalized_name ASC, id ASC;
+
+-- name: ListAllModifierOptions :many
+SELECT id, modifier_group_id, name, normalized_name, surcharge_vnd,
+       available, retired_at, retirement_reason, retirement_note,
+       created_at, updated_at
+FROM modifier_options
+ORDER BY normalized_name ASC, id ASC;
+
+-- name: ListAllCategoryModifierGroups :many
+SELECT menu_category_id, modifier_group_id
+FROM category_modifier_groups;
+
+-- name: ListAllItemModifierGroups :many
+SELECT menu_item_id, modifier_group_id
+FROM item_modifier_groups;
+
+-- name: ListAllItemModifierGroupExclusions :many
+SELECT menu_item_id, modifier_group_id
+FROM item_modifier_group_exclusions;
+
+-- name: ListAllModifierGroupDefaultOptions :many
+SELECT modifier_group_id, modifier_option_id
+FROM modifier_group_default_options;
+

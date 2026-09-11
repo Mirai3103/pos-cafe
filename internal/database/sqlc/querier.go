@@ -67,9 +67,17 @@ type Querier interface {
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	ListActiveCategories(ctx context.Context) ([]Category, error)
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
+	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
+	ListAllItemModifierGroupExclusions(ctx context.Context) ([]ListAllItemModifierGroupExclusionsRow, error)
+	ListAllItemModifierGroups(ctx context.Context) ([]ListAllItemModifierGroupsRow, error)
+	ListAllMenuItemSizes(ctx context.Context) ([]MenuItemSize, error)
 	ListAllMenuItemSizesPaginated(ctx context.Context, arg ListAllMenuItemSizesPaginatedParams) ([]MenuItemSize, error)
+	// -- Bulk Queries for Projections --
+	ListAllMenuItems(ctx context.Context) ([]MenuItem, error)
 	ListAllMenuItemsPaginated(ctx context.Context, arg ListAllMenuItemsPaginatedParams) ([]MenuItem, error)
+	ListAllModifierGroupDefaultOptions(ctx context.Context) ([]ListAllModifierGroupDefaultOptionsRow, error)
 	ListAllModifierGroupsPaginated(ctx context.Context, arg ListAllModifierGroupsPaginatedParams) ([]ModifierGroup, error)
+	ListAllModifierOptions(ctx context.Context) ([]ModifierOption, error)
 	ListAllModifierOptionsPaginated(ctx context.Context, arg ListAllModifierOptionsPaginatedParams) ([]ModifierOption, error)
 	ListAllStaff(ctx context.Context) ([]ListAllStaffRow, error)
 	ListAllStaffRoles(ctx context.Context) ([]StaffOperationalRole, error)
