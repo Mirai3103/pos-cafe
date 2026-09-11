@@ -226,8 +226,11 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 			return 0, zero, finishDenial(tx, outcome)
 		}
 		if err := verifyManagerPIN(ctx, q, authRow.StaffIdentityID, spec.ManagerPIN); err != nil {
-			outcome := recordDenial(ctx, q, actor, authRow, spec.Operation, err)
-			return 0, zero, finishDenial(tx, outcome)
+			if isSecurityDenial(err) {
+				outcome := recordDenial(ctx, q, actor, authRow, spec.Operation, err)
+				return 0, zero, finishDenial(tx, outcome)
+			}
+			return 0, zero, err
 		}
 	}
 
