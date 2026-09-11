@@ -14,17 +14,17 @@ func TestCatalogErrorsAreSentinels(t *testing.T) {
 	t.Parallel()
 
 	errors := map[string]error{
-		"ErrNotFound":                      catalog.ErrNotFound,
-		"ErrNameConflict":                  catalog.ErrNameConflict,
-		"ErrRequestConflict":               catalog.ErrRequestConflict,
-		"ErrInvalidPricingConfiguration":   catalog.ErrInvalidPricingConfiguration,
-		"ErrInvalidModifierConfiguration":  catalog.ErrInvalidModifierConfiguration,
-		"ErrInvalidInheritance":            catalog.ErrInvalidInheritance,
-		"ErrEntityRetired":                 catalog.ErrEntityRetired,
-		"ErrInvalidManagerPin":             catalog.ErrInvalidManagerPin,
-		"ErrForbidden":                     catalog.ErrForbidden,
-		"ErrUnauthorized":                  catalog.ErrUnauthorized,
-		"ErrInvalidStoredResult":           catalog.ErrInvalidStoredResult,
+		"ErrNotFound":                     catalog.ErrNotFound,
+		"ErrNameConflict":                 catalog.ErrNameConflict,
+		"ErrRequestConflict":              catalog.ErrRequestConflict,
+		"ErrInvalidPricingConfiguration":  catalog.ErrInvalidPricingConfiguration,
+		"ErrInvalidModifierConfiguration": catalog.ErrInvalidModifierConfiguration,
+		"ErrInvalidInheritance":           catalog.ErrInvalidInheritance,
+		"ErrEntityRetired":                catalog.ErrEntityRetired,
+		"ErrInvalidManagerPin":            catalog.ErrInvalidManagerPin,
+		"ErrForbidden":                    catalog.ErrForbidden,
+		"ErrUnauthorized":                 catalog.ErrUnauthorized,
+		"ErrInvalidStoredResult":          catalog.ErrInvalidStoredResult,
 	}
 
 	for name, err := range errors {
@@ -81,4 +81,3 @@ func TestMapDBError(t *testing.T) {
 	otherErr := errors.New("something else")
 	assert.Equal(t, otherErr, catalog.MapDBError(otherErr))
 }
-

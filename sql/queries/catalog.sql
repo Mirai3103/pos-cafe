@@ -44,9 +44,9 @@ RETURNING id, event_type, actor_id, session_id, details, occurred_at;
 -- name: ListAuditEvents :many
 SELECT id, event_type, actor_id, session_id, details, occurred_at
 FROM audit_events
-WHERE event_type LIKE $1 || '%'
+WHERE event_type LIKE btrim(sqlc.arg('event_type')) || '%'
 ORDER BY occurred_at DESC, id DESC
-LIMIT $2;
+LIMIT $1;
 
 -- -- Menu Categories --
 

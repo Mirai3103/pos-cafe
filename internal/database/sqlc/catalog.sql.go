@@ -1211,18 +1211,18 @@ func (q *Queries) ListAllModifierOptionsPaginated(ctx context.Context, arg ListA
 const listAuditEvents = `-- name: ListAuditEvents :many
 SELECT id, event_type, actor_id, session_id, details, occurred_at
 FROM audit_events
-WHERE event_type LIKE $1 || '%'
+WHERE event_type LIKE btrim($2) || '%'
 ORDER BY occurred_at DESC, id DESC
-LIMIT $2
+LIMIT $1
 `
 
 type ListAuditEventsParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Limit   int32          `json:"limit"`
+	Limit     int32  `json:"limit"`
+	EventType string `json:"event_type"`
 }
 
 func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
-	rows, err := q.db.QueryContext(ctx, listAuditEvents, arg.Column1, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, listAuditEvents, arg.Limit, arg.EventType)
 	if err != nil {
 		return nil, err
 	}

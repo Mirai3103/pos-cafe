@@ -217,7 +217,6 @@ func cleanCategoryTestTablesBenchmark(b *testing.B, db *sql.DB) {
 	require.NoError(b, err)
 }
 
-
 func BenchmarkCatalogProjections(b *testing.B) {
 	url := os.Getenv("TEST_DATABASE_URL")
 	require.Contains(b, url, "_test")

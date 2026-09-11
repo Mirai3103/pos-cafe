@@ -4067,6 +4067,3 @@ func TestRetireModifierOption(t *testing.T) {
 		assert.Equal(t, 0, status)
 	})
 }
-
-
-

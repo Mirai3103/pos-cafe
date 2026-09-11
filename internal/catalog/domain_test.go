@@ -12,10 +12,10 @@ func TestNormalizeNamePreservesInternalWhitespace(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		input         string
-		wantDisplay   string
-		wantKey       string
+		name        string
+		input       string
+		wantDisplay string
+		wantKey     string
 	}{
 		{
 			name:        "trim leading and trailing spaces",
@@ -263,10 +263,10 @@ func TestIsSellable(t *testing.T) {
 		{
 			name: "direct priced available item with no required groups is sellable",
 			state: catalog.ItemState{
-				Available:           true,
-				HasDirectPrice:      true,
-				AvailableSizeCount:  0,
-				EffectiveGroups:     nil,
+				Available:             true,
+				HasDirectPrice:        true,
+				AvailableSizeCount:    0,
+				EffectiveGroups:       nil,
 				AvailableOptionCounts: map[uuid.UUID]int{},
 			},
 			want: true,
@@ -282,9 +282,9 @@ func TestIsSellable(t *testing.T) {
 		{
 			name: "neither direct nor sized pricing",
 			state: catalog.ItemState{
-				Available:           true,
-				HasDirectPrice:      false,
-				AvailableSizeCount:  0,
+				Available:          true,
+				HasDirectPrice:     false,
+				AvailableSizeCount: 0,
 			},
 			want: false,
 		},
@@ -309,10 +309,10 @@ func TestIsSellable(t *testing.T) {
 		{
 			name: "required group missing options",
 			state: catalog.ItemState{
-				Available:          true,
-				HasDirectPrice:     true,
-				AvailableSizeCount: 0,
-				EffectiveGroups:    []catalog.EffectiveGroup{{ID: g1, MinSelections: 1}},
+				Available:             true,
+				HasDirectPrice:        true,
+				AvailableSizeCount:    0,
+				EffectiveGroups:       []catalog.EffectiveGroup{{ID: g1, MinSelections: 1}},
 				AvailableOptionCounts: map[uuid.UUID]int{g1: 0},
 			},
 			want: false,
@@ -320,10 +320,10 @@ func TestIsSellable(t *testing.T) {
 		{
 			name: "required group has enough options",
 			state: catalog.ItemState{
-				Available:          true,
-				HasDirectPrice:     true,
-				AvailableSizeCount: 0,
-				EffectiveGroups:    []catalog.EffectiveGroup{{ID: g1, MinSelections: 1}},
+				Available:             true,
+				HasDirectPrice:        true,
+				AvailableSizeCount:    0,
+				EffectiveGroups:       []catalog.EffectiveGroup{{ID: g1, MinSelections: 1}},
 				AvailableOptionCounts: map[uuid.UUID]int{g1: 2},
 			},
 			want: true,
@@ -331,10 +331,10 @@ func TestIsSellable(t *testing.T) {
 		{
 			name: "optional group does not block sellability",
 			state: catalog.ItemState{
-				Available:          true,
-				HasDirectPrice:     true,
-				AvailableSizeCount: 0,
-				EffectiveGroups:    []catalog.EffectiveGroup{{ID: g1, MinSelections: 0}},
+				Available:             true,
+				HasDirectPrice:        true,
+				AvailableSizeCount:    0,
+				EffectiveGroups:       []catalog.EffectiveGroup{{ID: g1, MinSelections: 0}},
 				AvailableOptionCounts: map[uuid.UUID]int{g1: 0},
 			},
 			want: true,

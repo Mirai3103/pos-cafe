@@ -18,7 +18,6 @@ type Querier interface {
 	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
 	CountActiveManagers(ctx context.Context) (int64, error)
 	CountManagers(ctx context.Context) (int64, error)
-	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateCategoryModifierGroup(ctx context.Context, arg CreateCategoryModifierGroupParams) error
 	// -- Association Queries --
 	CreateItemModifierGroup(ctx context.Context, arg CreateItemModifierGroupParams) error
@@ -36,7 +35,6 @@ type Querier interface {
 	CreateModifierOption(ctx context.Context, arg CreateModifierOptionParams) (ModifierOption, error)
 	CreateStaffIdentity(ctx context.Context, arg CreateStaffIdentityParams) (CreateStaffIdentityRow, error)
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
-	DeleteCategory(ctx context.Context, id int64) error
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
@@ -45,8 +43,6 @@ type Querier interface {
 	// Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
 	GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error)
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
-	GetCategoryByID(ctx context.Context, id int64) (Category, error)
-	GetCategoryByName(ctx context.Context, name string) (Category, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetMenuCategoryByID(ctx context.Context, id uuid.UUID) (MenuCategory, error)
@@ -65,7 +61,6 @@ type Querier interface {
 	GetStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
-	ListActiveCategories(ctx context.Context) ([]Category, error)
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
 	ListAllItemModifierGroupExclusions(ctx context.Context) ([]ListAllItemModifierGroupExclusionsRow, error)
@@ -82,7 +77,6 @@ type Querier interface {
 	ListAllStaff(ctx context.Context) ([]ListAllStaffRow, error)
 	ListAllStaffRoles(ctx context.Context) ([]StaffOperationalRole, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
-	ListCategories(ctx context.Context) ([]Category, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
@@ -113,7 +107,6 @@ type Querier interface {
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error
-	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
 	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error

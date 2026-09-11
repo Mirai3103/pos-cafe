@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -317,16 +318,16 @@ type ManagementModifierOptionResponse struct {
 
 // ManagementModifierGroupResponse represents a modifier group in the management projection.
 type ManagementModifierGroupResponse struct {
-	ID               uuid.UUID                           `json:"id"`
-	Name             string                              `json:"name"`
-	MinSelections    int32                               `json:"min_selections"`
-	MaxSelections    int32                               `json:"max_selections"`
-	Retired          bool                                `json:"retired"`
-	RetiredAt        *time.Time                          `json:"retired_at,omitempty"`
-	RetirementReason *string                             `json:"retirement_reason,omitempty"`
-	RetirementNote   *string                             `json:"retirement_note,omitempty"`
-	Options          []ManagementModifierOptionResponse  `json:"options"`
-	DefaultOptionIDs []uuid.UUID                         `json:"default_option_ids"`
+	ID               uuid.UUID                          `json:"id"`
+	Name             string                             `json:"name"`
+	MinSelections    int32                              `json:"min_selections"`
+	MaxSelections    int32                              `json:"max_selections"`
+	Retired          bool                               `json:"retired"`
+	RetiredAt        *time.Time                         `json:"retired_at,omitempty"`
+	RetirementReason *string                            `json:"retirement_reason,omitempty"`
+	RetirementNote   *string                            `json:"retirement_note,omitempty"`
+	Options          []ManagementModifierOptionResponse `json:"options"`
+	DefaultOptionIDs []uuid.UUID                        `json:"default_option_ids"`
 }
 
 // ManagementSizeResponse represents a size option in the management projection.
@@ -451,5 +452,60 @@ type ModifierGroupManagementResponse struct {
 // ModifierGroupsManagementResponse is a slice of ModifierGroupManagementResponse.
 type ModifierGroupsManagementResponse = []ModifierGroupManagementResponse
 
+// === Audit Events Query ===
 
+// AuditEventResponse is the API response representation of an audit event.
+type AuditEventResponse struct {
+	ID         uuid.UUID       `json:"id"`
+	EventType  string          `json:"event_type"`
+	ActorID    *uuid.UUID      `json:"actor_id,omitempty"`
+	SessionID  *uuid.UUID      `json:"session_id,omitempty"`
+	Details    json.RawMessage `json:"details"`
+	OccurredAt time.Time       `json:"occurred_at"`
+}
 
+// === HTTP Request Envelopes ===
+
+// RenameRequest carries the request ID and new name for entity rename operations.
+type RenameRequest struct {
+	RequestID uuid.UUID `json:"request_id"`
+	Name      string    `json:"name"`
+}
+
+// RepriceRequest carries the request ID, new price, and manager PIN for direct items and sizes.
+type RepriceRequest struct {
+	RequestID  uuid.UUID `json:"request_id"`
+	PriceVND   int64     `json:"price_vnd"`
+	ManagerPIN string    `json:"manager_pin"`
+}
+
+// RepriceModifierOptionRequest carries the request ID, new surcharge, and manager PIN for modifier options.
+type RepriceModifierOptionRequest struct {
+	RequestID    uuid.UUID `json:"request_id"`
+	SurchargeVND int64     `json:"surcharge_vnd"`
+	ManagerPIN   string    `json:"manager_pin"`
+}
+
+// SetAvailabilityRequest carries the request ID and target availability state.
+type SetAvailabilityRequest struct {
+	RequestID uuid.UUID `json:"request_id"`
+	Available bool      `json:"available"`
+}
+
+// RetireRequest carries the request ID, reason, and optional note for permanent retirement.
+type RetireRequest struct {
+	RequestID uuid.UUID `json:"request_id"`
+	Reason    string    `json:"reason"`
+	Note      string    `json:"note"`
+}
+
+// SetModifierGroupDefaultsRequest carries the request ID and the explicit list of default option IDs.
+type SetModifierGroupDefaultsRequest struct {
+	RequestID uuid.UUID   `json:"request_id"`
+	OptionIDs []uuid.UUID `json:"option_ids"`
+}
+
+// MutationRequest carries only the request ID for parameter-free mutation routes.
+type MutationRequest struct {
+	RequestID uuid.UUID `json:"request_id"`
+}

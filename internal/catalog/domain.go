@@ -15,6 +15,7 @@ const (
 	CapChangePrice         = "catalog.change_price"
 	CapViewPrices          = "catalog.view_prices"
 	CapManageAvailability  = "catalog.manage_availability"
+	CapAuditInspect        = "audit.inspect"
 )
 
 // Operations for catalog mutations.
@@ -34,13 +35,13 @@ const (
 	OpItemReprice                       = "catalog.item.reprice"
 	OpSizeReprice                       = "catalog.size.reprice"
 	OpModifierOptionReprice             = "catalog.modifier_option.reprice"
-	OpItemSetAvailability           = "catalog.item.set_availability"
-	OpSizeSetAvailability           = "catalog.size.set_availability"
-	OpModifierOptionSetAvailability = "catalog.modifier_option.set_availability"
-	OpItemRetire                    = "catalog.item.retire"
-	OpSizeRetire                    = "catalog.size.retire"
-	OpModifierGroupRetire           = "catalog.modifier_group.retire"
-	OpModifierOptionRetire          = "catalog.modifier_option.retire"
+	OpItemSetAvailability               = "catalog.item.set_availability"
+	OpSizeSetAvailability               = "catalog.size.set_availability"
+	OpModifierOptionSetAvailability     = "catalog.modifier_option.set_availability"
+	OpItemRetire                        = "catalog.item.retire"
+	OpSizeRetire                        = "catalog.size.retire"
+	OpModifierGroupRetire               = "catalog.modifier_group.retire"
+	OpModifierOptionRetire              = "catalog.modifier_option.retire"
 )
 
 // Audit event types emitted by catalog operations.
@@ -60,9 +61,9 @@ const (
 	EventItemRepriced                       = "catalog.item.repriced"
 	EventSizeRepriced                       = "catalog.size.repriced"
 	EventModifierOptionRepriced             = "catalog.modifier_option.repriced"
-	EventItemAvailabilityChanged           = "catalog.item.availability_changed"
-	EventSizeAvailabilityChanged           = "catalog.size.availability_changed"
-	EventModifierOptionAvailabilityChanged = "catalog.modifier_option.availability_changed"
+	EventItemAvailabilityChanged            = "catalog.item.availability_changed"
+	EventSizeAvailabilityChanged            = "catalog.size.availability_changed"
+	EventModifierOptionAvailabilityChanged  = "catalog.modifier_option.availability_changed"
 	EventItemRetired                        = "catalog.item.retired"
 	EventSizeRetired                        = "catalog.size.retired"
 	EventModifierGroupRetired               = "catalog.modifier_group.retired"

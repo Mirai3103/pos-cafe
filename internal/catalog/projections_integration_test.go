@@ -20,10 +20,10 @@ import (
 )
 
 type seededCatalog struct {
-	CatCoffee   uuid.UUID
-	CatTea      uuid.UUID
-	CatEmpty    uuid.UUID
-	CatUnsell   uuid.UUID
+	CatCoffee uuid.UUID
+	CatTea    uuid.UUID
+	CatEmpty  uuid.UUID
+	CatUnsell uuid.UUID
 
 	ItemEspressoDirect     uuid.UUID // available, direct price 30000
 	ItemAmericanoSized     uuid.UUID // available, size small available (25000), size large available (35000)
@@ -335,10 +335,10 @@ func seedTestCatalog(t *testing.T, db *sql.DB, q *sqlc.Queries) seededCatalog {
 	require.NoError(t, err)
 
 	return seededCatalog{
-		CatCoffee:   catCoffee.ID,
-		CatTea:      catTea.ID,
-		CatEmpty:    catEmpty.ID,
-		CatUnsell:   catUnsell.ID,
+		CatCoffee: catCoffee.ID,
+		CatTea:    catTea.ID,
+		CatEmpty:  catEmpty.ID,
+		CatUnsell: catUnsell.ID,
 
 		ItemEspressoDirect:     itemEspresso.ID,
 		ItemAmericanoSized:     itemAmericano.ID,

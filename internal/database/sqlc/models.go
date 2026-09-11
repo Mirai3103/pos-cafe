@@ -31,16 +31,6 @@ type CatalogMutationRequest struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
-type Category struct {
-	ID           int64     `json:"id"`
-	Name         string    `json:"name"`
-	Description  string    `json:"description"`
-	DisplayOrder int64     `json:"display_order"`
-	IsActive     bool      `json:"is_active"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
 type CategoryModifierGroup struct {
 	MenuCategoryID  uuid.UUID `json:"menu_category_id"`
 	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
