@@ -323,23 +323,28 @@ ORDER BY normalized_name ASC, id ASC;
 
 -- name: CreateItemModifierGroup :exec
 INSERT INTO item_modifier_groups (menu_item_id, modifier_group_id)
-VALUES ($1, $2)
-ON CONFLICT DO NOTHING;
+VALUES ($1, $2);
 
 -- name: CreateCategoryModifierGroup :exec
 INSERT INTO category_modifier_groups (menu_category_id, modifier_group_id)
-VALUES ($1, $2)
-ON CONFLICT DO NOTHING;
+VALUES ($1, $2);
 
 -- name: CreateItemModifierGroupExclusion :exec
 INSERT INTO item_modifier_group_exclusions (menu_item_id, modifier_group_id)
-VALUES ($1, $2)
-ON CONFLICT DO NOTHING;
+VALUES ($1, $2);
 
 -- name: CreateModifierGroupDefaultOption :exec
 INSERT INTO modifier_group_default_options (modifier_group_id, modifier_option_id)
-VALUES ($1, $2)
-ON CONFLICT DO NOTHING;
+VALUES ($1, $2);
+
+-- name: DeleteModifierGroupDefaultOptions :exec
+DELETE FROM modifier_group_default_options
+WHERE modifier_group_id = $1;
+
+-- name: GetCategoryModifierGroup :one
+SELECT menu_category_id, modifier_group_id, created_at
+FROM category_modifier_groups
+WHERE menu_category_id = $1 AND modifier_group_id = $2;
 
 -- name: ListItemModifierGroupsByItem :many
 SELECT imgr.modifier_group_id, mg.name, mg.normalized_name,

@@ -90,3 +90,55 @@ type ModifierGroupResponse struct {
 	Options          []ModifierOptionResponse `json:"options"`
 	DefaultOptionIDs []uuid.UUID              `json:"default_option_ids"`
 }
+
+// AttachItemModifierGroupCommand carries the parameters for attaching a modifier group to an item.
+type AttachItemModifierGroupCommand struct {
+	RequestID       uuid.UUID `json:"request_id"`
+	ItemID          uuid.UUID `json:"item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+// ItemModifierGroupResponse represents an item-to-modifier-group attachment response.
+type ItemModifierGroupResponse struct {
+	ItemID          uuid.UUID `json:"item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+// AttachCategoryModifierGroupCommand carries the parameters for attaching a modifier group to a category.
+type AttachCategoryModifierGroupCommand struct {
+	RequestID       uuid.UUID `json:"request_id"`
+	CategoryID      uuid.UUID `json:"category_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+// CategoryModifierGroupResponse represents a category-to-modifier-group attachment response.
+type CategoryModifierGroupResponse struct {
+	CategoryID      uuid.UUID `json:"category_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+// ExcludeInheritedModifierGroupCommand carries the parameters for excluding an inherited group from an item.
+type ExcludeInheritedModifierGroupCommand struct {
+	RequestID       uuid.UUID `json:"request_id"`
+	ItemID          uuid.UUID `json:"item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+// ItemModifierGroupExclusionResponse represents an inherited modifier group exclusion response.
+type ItemModifierGroupExclusionResponse struct {
+	ItemID          uuid.UUID `json:"item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+// SetModifierGroupDefaultsCommand carries the parameters for replacing default options of a modifier group.
+type SetModifierGroupDefaultsCommand struct {
+	RequestID uuid.UUID   `json:"request_id"`
+	GroupID   uuid.UUID   `json:"group_id"`
+	OptionIDs []uuid.UUID `json:"option_ids"`
+}
+
+// ModifierGroupDefaultsResponse represents the default options response for a modifier group.
+type ModifierGroupDefaultsResponse struct {
+	GroupID   uuid.UUID   `json:"group_id"`
+	OptionIDs []uuid.UUID `json:"option_ids"`
+}

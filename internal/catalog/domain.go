@@ -19,18 +19,26 @@ const (
 
 // Operations for catalog mutations.
 const (
-	OpCategoryCreate      = "catalog.category.create"
-	OpCategoryRename      = "catalog.category.rename"
-	OpItemCreate          = "catalog.item.create"
-	OpModifierGroupCreate = "catalog.modifier_group.create"
+	OpCategoryCreate                    = "catalog.category.create"
+	OpCategoryRename                    = "catalog.category.rename"
+	OpItemCreate                        = "catalog.item.create"
+	OpModifierGroupCreate               = "catalog.modifier_group.create"
+	OpItemAttachModifierGroup           = "catalog.item.attach_modifier_group"
+	OpCategoryAttachModifierGroup       = "catalog.category.attach_modifier_group"
+	OpItemExcludeInheritedModifierGroup = "catalog.item.exclude_inherited_modifier_group"
+	OpModifierGroupSetDefaults          = "catalog.modifier_group.set_defaults"
 )
 
 // Audit event types emitted by catalog operations.
 const (
-	EventCategoryCreated      = "catalog.category.created"
-	EventCategoryRenamed      = "catalog.category.renamed"
-	EventItemCreated          = "catalog.item.created"
-	EventModifierGroupCreated = "catalog.modifier_group.created"
+	EventCategoryCreated                    = "catalog.category.created"
+	EventCategoryRenamed                    = "catalog.category.renamed"
+	EventItemCreated                        = "catalog.item.created"
+	EventModifierGroupCreated               = "catalog.modifier_group.created"
+	EventItemModifierGroupAttached          = "catalog.item.modifier_group_attached"
+	EventCategoryModifierGroupAttached      = "catalog.category.modifier_group_attached"
+	EventItemInheritedModifierGroupExcluded = "catalog.item.inherited_modifier_group_excluded"
+	EventModifierGroupDefaultsChanged       = "catalog.modifier_group.defaults_changed"
 )
 
 // Retirement holds optional retirement metadata.

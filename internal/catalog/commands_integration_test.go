@@ -1746,3 +1746,1194 @@ func TestCreateModifierGroup(t *testing.T) {
 		assert.Equal(t, 0, reqCount, "idempotency claim must roll back on failure")
 	})
 }
+
+func createTestCategoryDirect(t *testing.T, db *sql.DB, name string) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	display, key := catalog.NormalizeName(name)
+	err := db.QueryRow(`INSERT INTO menu_categories (name, normalized_name) VALUES ($1, $2) RETURNING id`, display, key).Scan(&id)
+	require.NoError(t, err)
+	return id
+}
+
+func createTestItemDirect(t *testing.T, db *sql.DB, categoryID uuid.UUID, name string, price *int64, retired bool) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	display, key := catalog.NormalizeName(name)
+	var retiredAt *time.Time
+	var reason, note *string
+	if retired {
+		now := time.Now()
+		retiredAt = &now
+		r := "NO_LONGER_OFFERED"
+		reason = &r
+	}
+	err := db.QueryRow(`
+		INSERT INTO menu_items (category_id, name, normalized_name, price_vnd, available, retired_at, retirement_reason, retirement_note)
+		VALUES ($1, $2, $3, $4, true, $5, $6, $7)
+		RETURNING id
+	`, categoryID, display, key, price, retiredAt, reason, note).Scan(&id)
+	require.NoError(t, err)
+	return id
+}
+
+func createTestModifierGroupDirect(t *testing.T, db *sql.DB, name string, minSel, maxSel int32, retired bool) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	display, key := catalog.NormalizeName(name)
+	var retiredAt *time.Time
+	var reason, note *string
+	if retired {
+		now := time.Now()
+		retiredAt = &now
+		r := "NO_LONGER_OFFERED"
+		reason = &r
+	}
+	err := db.QueryRow(`
+		INSERT INTO modifier_groups (name, normalized_name, min_selections, max_selections, retired_at, retirement_reason, retirement_note)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id
+	`, display, key, minSel, maxSel, retiredAt, reason, note).Scan(&id)
+	require.NoError(t, err)
+	return id
+}
+
+func createTestModifierOptionDirect(t *testing.T, db *sql.DB, groupID uuid.UUID, name string, surcharge int64, available bool, retired bool) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	display, key := catalog.NormalizeName(name)
+	var retiredAt *time.Time
+	var reason, note *string
+	if retired {
+		now := time.Now()
+		retiredAt = &now
+		r := "NO_LONGER_OFFERED"
+		reason = &r
+	}
+	err := db.QueryRow(`
+		INSERT INTO modifier_options (modifier_group_id, name, normalized_name, surcharge_vnd, available, retired_at, retirement_reason, retirement_note)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id
+	`, groupID, display, key, surcharge, available, retiredAt, reason, note).Scan(&id)
+	require.NoError(t, err)
+	return id
+}
+
+func TestAttachItemModifierGroup(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachItemModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Drinks")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Milk Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Sweetness", 0, 1, false)
+
+		reqID := uuid.New()
+		cmd := catalog.AttachItemModifierGroupCommand{
+			RequestID:       reqID,
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, itemID, res.ItemID)
+		assert.Equal(t, groupID, res.ModifierGroupID)
+
+		// Verify database row in item_modifier_groups
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM item_modifier_groups WHERE menu_item_id = $1 AND modifier_group_id = $2`, itemID, groupID).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 1, count)
+
+		// Verify audit event
+		var eventType string
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `SELECT event_type, details FROM audit_events WHERE event_type = $1`, catalog.EventItemModifierGroupAttached).Scan(&eventType, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, catalog.EventItemModifierGroupAttached, eventType)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, itemID.String(), details["item_id"])
+		assert.Equal(t, groupID.String(), details["modifier_group_id"])
+	})
+
+	t.Run("Reject_ItemNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachItemModifierGroupHandler(runner)
+		groupID := createTestModifierGroupDirect(t, db, "Sweetness", 0, 1, false)
+
+		cmd := catalog.AttachItemModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          uuid.New(),
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrNotFound)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_ModifierGroupNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachItemModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Drinks")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Milk Tea", &price, false)
+
+		cmd := catalog.AttachItemModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: uuid.New(),
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrNotFound)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_RetiredItem", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachItemModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Drinks")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Retired Tea", &price, true)
+		groupID := createTestModifierGroupDirect(t, db, "Sweetness", 0, 1, false)
+
+		cmd := catalog.AttachItemModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_RetiredModifierGroup", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachItemModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Drinks")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Milk Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Retired Group", 0, 1, true)
+
+		cmd := catalog.AttachItemModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DuplicateAttachment", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachItemModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Drinks")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Milk Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Sweetness", 0, 1, false)
+
+		cmd1 := catalog.AttachItemModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status1, _, err := handler.Handle(ctx, actor, cmd1)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status1)
+
+		// Second attempt with new request ID must fail with conflict
+		cmd2 := catalog.AttachItemModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status2, _, err := handler.Handle(ctx, actor, cmd2)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrNameConflict), "duplicate attachment should return conflict error, got: %v", err)
+		assert.Equal(t, 0, status2)
+	})
+
+	t.Run("ExactReplay_And_Conflict", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachItemModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Drinks")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Milk Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Sweetness", 0, 1, false)
+		groupID2 := createTestModifierGroupDirect(t, db, "Ice", 0, 1, false)
+
+		reqID := uuid.New()
+		cmd := catalog.AttachItemModifierGroupCommand{
+			RequestID:       reqID,
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status1, res1, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status1)
+
+		// Exact replay
+		status2, res2, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status2)
+		assert.Equal(t, res1, res2)
+
+		// Verify audit event not duplicated
+		var auditCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = $1`, catalog.EventItemModifierGroupAttached).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount)
+
+		// Replay with different group -> ErrRequestConflict
+		conflictCmd := catalog.AttachItemModifierGroupCommand{
+			RequestID:       reqID,
+			ItemID:          itemID,
+			ModifierGroupID: groupID2,
+		}
+		_, _, err = handler.Handle(ctx, actor, conflictCmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrRequestConflict)
+	})
+
+	t.Run("Forbidden_MissingCapabilities", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewAttachItemModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Drinks")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Milk Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Sweetness", 0, 1, false)
+
+		cmd := catalog.AttachItemModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		_, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrForbidden)
+	})
+}
+
+func TestAttachCategoryModifierGroup(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+
+		reqID := uuid.New()
+		cmd := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       reqID,
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, catID, res.CategoryID)
+		assert.Equal(t, groupID, res.ModifierGroupID)
+
+		// Verify database row in category_modifier_groups
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM category_modifier_groups WHERE menu_category_id = $1 AND modifier_group_id = $2`, catID, groupID).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 1, count)
+
+		// Verify audit event
+		var eventType string
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `SELECT event_type, details FROM audit_events WHERE event_type = $1`, catalog.EventCategoryModifierGroupAttached).Scan(&eventType, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, catalog.EventCategoryModifierGroupAttached, eventType)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, catID.String(), details["category_id"])
+		assert.Equal(t, groupID.String(), details["modifier_group_id"])
+	})
+
+	t.Run("Reject_CategoryNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+
+		cmd := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      uuid.New(),
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrNotFound)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_ModifierGroupNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		catID := createTestCategoryDirect(t, db, "Coffee")
+
+		cmd := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: uuid.New(),
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrNotFound)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_RetiredModifierGroup", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		groupID := createTestModifierGroupDirect(t, db, "Retired Group", 0, 1, true)
+
+		cmd := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DuplicateAttachment", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+
+		cmd1 := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		}
+		status1, _, err := handler.Handle(ctx, actor, cmd1)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status1)
+
+		cmd2 := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		}
+		status2, _, err := handler.Handle(ctx, actor, cmd2)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrNameConflict), "duplicate attachment should return conflict error, got: %v", err)
+		assert.Equal(t, 0, status2)
+	})
+
+	t.Run("ExactReplay_And_Conflict", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+		groupID2 := createTestModifierGroupDirect(t, db, "Milk Choice", 0, 1, false)
+
+		reqID := uuid.New()
+		cmd := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       reqID,
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		}
+		status1, res1, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status1)
+
+		// Exact replay
+		status2, res2, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status2)
+		assert.Equal(t, res1, res2)
+
+		// Audit not duplicated
+		var auditCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = $1`, catalog.EventCategoryModifierGroupAttached).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount)
+
+		// Conflict
+		conflictCmd := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       reqID,
+			CategoryID:      catID,
+			ModifierGroupID: groupID2,
+		}
+		_, _, err = handler.Handle(ctx, actor, conflictCmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrRequestConflict)
+	})
+
+	t.Run("Forbidden_MissingCapabilities", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+
+		cmd := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		}
+		_, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrForbidden)
+	})
+}
+
+func TestExcludeInheritedModifierGroup(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Ice Level", 0, 1, false)
+
+		// Attach group to category
+		attachCatHandler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		_, _, err := attachCatHandler.Handle(ctx, actor, catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		})
+		require.NoError(t, err)
+
+		// Exclude from item
+		reqID := uuid.New()
+		cmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       reqID,
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, itemID, res.ItemID)
+		assert.Equal(t, groupID, res.ModifierGroupID)
+
+		// Verify database row in item_modifier_group_exclusions
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM item_modifier_group_exclusions WHERE menu_item_id = $1 AND modifier_group_id = $2`, itemID, groupID).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 1, count)
+
+		// Verify audit event
+		var eventType string
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `SELECT event_type, details FROM audit_events WHERE event_type = $1`, catalog.EventItemInheritedModifierGroupExcluded).Scan(&eventType, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, catalog.EventItemInheritedModifierGroupExcluded, eventType)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, itemID.String(), details["item_id"])
+		assert.Equal(t, groupID.String(), details["modifier_group_id"])
+	})
+
+	t.Run("Reject_ItemNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+		groupID := createTestModifierGroupDirect(t, db, "Ice", 0, 1, false)
+
+		cmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          uuid.New(),
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrNotFound)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_ModifierGroupNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+
+		cmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: uuid.New(),
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrNotFound)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_RetiredItem", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Retired Green Tea", &price, true)
+		groupID := createTestModifierGroupDirect(t, db, "Ice", 0, 1, false)
+
+		cmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_RetiredModifierGroup", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Retired Ice", 0, 1, true)
+
+		cmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_NotAssignedToCategory", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Topping", 0, 2, false)
+		// Group is NOT assigned to category "Tea"
+
+		cmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrInvalidInheritance)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DuplicateExclusion", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Ice Level", 0, 1, false)
+
+		attachCatHandler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		_, _, err := attachCatHandler.Handle(ctx, actor, catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		})
+		require.NoError(t, err)
+
+		cmd1 := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status1, _, err := handler.Handle(ctx, actor, cmd1)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status1)
+
+		// Second exclusion with different request ID fails
+		cmd2 := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status2, _, err := handler.Handle(ctx, actor, cmd2)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrNameConflict), "duplicate exclusion should return conflict error, got: %v", err)
+		assert.Equal(t, 0, status2)
+	})
+
+	t.Run("DirectAssignmentSurvivesExclusion_And_Deduplication", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		excludeHandler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+		attachItemHandler := catalog.NewAttachItemModifierGroupHandler(runner)
+		attachCatHandler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Ice Level", 0, 1, false)
+
+		// 1. Attach group to category
+		_, _, err := attachCatHandler.Handle(ctx, actor, catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		})
+		require.NoError(t, err)
+
+		// 2. Attach group directly to item
+		_, _, err = attachItemHandler.Handle(ctx, actor, catalog.AttachItemModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		})
+		require.NoError(t, err)
+
+		// Assert deduplication before exclusion: (inherited + direct) -> 1 instance
+		effectiveBefore := catalog.EffectiveGroupIDs([]uuid.UUID{groupID}, nil, []uuid.UUID{groupID})
+		assert.Equal(t, []uuid.UUID{groupID}, effectiveBefore, "inherited and direct group should deduplicate to 1")
+
+		// 3. Exclude inherited group from item
+		_, _, err = excludeHandler.Handle(ctx, actor, catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		})
+		require.NoError(t, err)
+
+		// Verify direct assignment still exists in DB
+		var directCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM item_modifier_groups WHERE menu_item_id = $1 AND modifier_group_id = $2`, itemID, groupID).Scan(&directCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, directCount, "direct assignment must survive exclusion")
+
+		// Verify exclusion exists in DB
+		var exclusionCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM item_modifier_group_exclusions WHERE menu_item_id = $1 AND modifier_group_id = $2`, itemID, groupID).Scan(&exclusionCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, exclusionCount, "exclusion must be recorded")
+
+		// Assert direct assignment survives exclusion in EffectiveGroupIDs computation
+		effectiveAfter := catalog.EffectiveGroupIDs([]uuid.UUID{groupID}, []uuid.UUID{groupID}, []uuid.UUID{groupID})
+		assert.Equal(t, []uuid.UUID{groupID}, effectiveAfter, "direct assignment must survive category exclusion in effective groups")
+	})
+
+	t.Run("ExactReplay_And_Conflict", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Ice Level", 0, 1, false)
+		groupID2 := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+
+		attachCatHandler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		_, _, err := attachCatHandler.Handle(ctx, actor, catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		})
+		require.NoError(t, err)
+
+		reqID := uuid.New()
+		cmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       reqID,
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		status1, res1, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status1)
+
+		// Replay
+		status2, res2, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status2)
+		assert.Equal(t, res1, res2)
+
+		// Audit not duplicated
+		var auditCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = $1`, catalog.EventItemInheritedModifierGroupExcluded).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount)
+
+		// Conflict
+		conflictCmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       reqID,
+			ItemID:          itemID,
+			ModifierGroupID: groupID2,
+		}
+		_, _, err = handler.Handle(ctx, actor, conflictCmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrRequestConflict)
+	})
+
+	t.Run("Forbidden_MissingCapabilities", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewExcludeInheritedModifierGroupHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Tea")
+		price := int64(25000)
+		itemID := createTestItemDirect(t, db, catID, "Green Tea", &price, false)
+		groupID := createTestModifierGroupDirect(t, db, "Ice Level", 0, 1, false)
+
+		cmd := catalog.ExcludeInheritedModifierGroupCommand{
+			RequestID:       uuid.New(),
+			ItemID:          itemID,
+			ModifierGroupID: groupID,
+		}
+		_, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrForbidden)
+	})
+}
+
+func TestSetModifierGroupDefaults(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success_WithDefaults", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Topping", 1, 3, false)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "Boba", 5000, true, false)
+		opt2 := createTestModifierOptionDirect(t, db, groupID, "Pudding", 7000, true, false)
+		opt3 := createTestModifierOptionDirect(t, db, groupID, "Jelly", 5000, true, false)
+		_ = opt3
+
+		// Set initial defaults
+		reqID := uuid.New()
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: reqID,
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1, opt2},
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, groupID, res.GroupID)
+		assert.ElementsMatch(t, []uuid.UUID{opt1, opt2}, res.OptionIDs)
+
+		// Verify database rows in modifier_group_default_options
+		rows, err := db.QueryContext(ctx, `SELECT modifier_option_id FROM modifier_group_default_options WHERE modifier_group_id = $1`, groupID)
+		require.NoError(t, err)
+		defer rows.Close()
+		var dbOpts []uuid.UUID
+		for rows.Next() {
+			var oid uuid.UUID
+			require.NoError(t, rows.Scan(&oid))
+			dbOpts = append(dbOpts, oid)
+		}
+		assert.ElementsMatch(t, []uuid.UUID{opt1, opt2}, dbOpts)
+
+		// Verify audit event
+		var eventType string
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `SELECT event_type, details FROM audit_events WHERE event_type = $1`, catalog.EventModifierGroupDefaultsChanged).Scan(&eventType, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, catalog.EventModifierGroupDefaultsChanged, eventType)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, groupID.String(), details["group_id"])
+		optSlice, ok := details["option_ids"].([]any)
+		require.True(t, ok)
+		assert.Len(t, optSlice, 2)
+	})
+
+	t.Run("Success_EmptyDefaults_WhenMinZero", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Ice Level", 0, 2, false)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "Regular Ice", 0, true, false)
+
+		// First set a default
+		_, _, err := handler.Handle(ctx, actor, catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1},
+		})
+		require.NoError(t, err)
+
+		// Now replace with empty defaults
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{},
+		}
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, groupID, res.GroupID)
+		assert.Empty(t, res.OptionIDs)
+
+		// Verify 0 rows in modifier_group_default_options
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM modifier_group_default_options WHERE modifier_group_id = $1`, groupID).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("Reject_GroupNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   uuid.New(),
+			OptionIDs: []uuid.UUID{uuid.New()},
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrNotFound)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_RetiredGroup", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Retired Group", 0, 2, true)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "Option", 0, true, false)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1},
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_CardinalityTooLow", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Size Choice", 2, 3, false)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "M", 0, true, false)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1}, // 1 < min(2)
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrInvalidModifierConfiguration)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_CardinalityTooHigh", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Ice Choice", 0, 1, false)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "No Ice", 0, true, false)
+		opt2 := createTestModifierOptionDirect(t, db, groupID, "Regular Ice", 0, true, false)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1, opt2}, // 2 > max(1)
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrInvalidModifierConfiguration)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DuplicateOptionIDs", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Topping", 1, 3, false)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "Boba", 5000, true, false)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1, opt1}, // duplicate
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrInvalidModifierConfiguration)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_OptionNotBelongingToGroup", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID1 := createTestModifierGroupDirect(t, db, "Group 1", 1, 2, false)
+		_ = createTestModifierOptionDirect(t, db, groupID1, "G1 Opt", 0, true, false)
+
+		groupID2 := createTestModifierGroupDirect(t, db, "Group 2", 1, 2, false)
+		optFromOtherGroup := createTestModifierOptionDirect(t, db, groupID2, "G2 Opt", 0, true, false)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID1,
+			OptionIDs: []uuid.UUID{optFromOtherGroup},
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrInvalidModifierConfiguration)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_UnavailableDefaultOption", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Topping", 1, 2, false)
+		unavailOpt := createTestModifierOptionDirect(t, db, groupID, "Out of Stock Boba", 5000, false, false)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{unavailOpt},
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrInvalidModifierConfiguration)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_RetiredDefaultOption", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Topping", 1, 2, false)
+		retiredOpt := createTestModifierOptionDirect(t, db, groupID, "Discontinued Boba", 5000, true, true)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{retiredOpt},
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("AtomicReplacement_OnFailure", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Topping", 1, 2, false)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "Boba", 5000, true, false)
+		opt2Unavailable := createTestModifierOptionDirect(t, db, groupID, "Unavailable Jelly", 5000, false, false)
+
+		// Set good initial default
+		_, _, err := handler.Handle(ctx, actor, catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1},
+		})
+		require.NoError(t, err)
+
+		// Attempt replacement with an unavailable option (fails)
+		reqID := uuid.New()
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: reqID,
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt2Unavailable},
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.Equal(t, 0, status)
+
+		// Assert initial default is still present in database
+		var currentDefaults []uuid.UUID
+		rows, err := db.QueryContext(ctx, `SELECT modifier_option_id FROM modifier_group_default_options WHERE modifier_group_id = $1`, groupID)
+		require.NoError(t, err)
+		defer rows.Close()
+		for rows.Next() {
+			var oid uuid.UUID
+			require.NoError(t, rows.Scan(&oid))
+			currentDefaults = append(currentDefaults, oid)
+		}
+		assert.Equal(t, []uuid.UUID{opt1}, currentDefaults, "original defaults must remain intact after failed replacement")
+	})
+
+	t.Run("ExactReplay_And_Conflict", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Topping", 1, 2, false)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "Boba", 5000, true, false)
+		opt2 := createTestModifierOptionDirect(t, db, groupID, "Jelly", 5000, true, false)
+
+		reqID := uuid.New()
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: reqID,
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1},
+		}
+		status1, res1, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status1)
+
+		// Exact replay
+		status2, res2, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 200, status2)
+		assert.Equal(t, res1, res2)
+
+		// Audit not duplicated
+		var auditCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = $1`, catalog.EventModifierGroupDefaultsChanged).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount)
+
+		// Conflict replay with different option
+		conflictCmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: reqID,
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt2},
+		}
+		_, _, err = handler.Handle(ctx, actor, conflictCmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrRequestConflict)
+	})
+
+	t.Run("Forbidden_MissingCapabilities", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewSetModifierGroupDefaultsHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Topping", 1, 2, false)
+		opt1 := createTestModifierOptionDirect(t, db, groupID, "Boba", 5000, true, false)
+
+		cmd := catalog.SetModifierGroupDefaultsCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			OptionIDs: []uuid.UUID{opt1},
+		}
+		_, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrForbidden)
+	})
+}

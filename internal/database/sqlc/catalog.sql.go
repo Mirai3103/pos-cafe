@@ -70,7 +70,6 @@ func (q *Queries) ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogReque
 const createCategoryModifierGroup = `-- name: CreateCategoryModifierGroup :exec
 INSERT INTO category_modifier_groups (menu_category_id, modifier_group_id)
 VALUES ($1, $2)
-ON CONFLICT DO NOTHING
 `
 
 type CreateCategoryModifierGroupParams struct {
@@ -87,7 +86,6 @@ const createItemModifierGroup = `-- name: CreateItemModifierGroup :exec
 
 INSERT INTO item_modifier_groups (menu_item_id, modifier_group_id)
 VALUES ($1, $2)
-ON CONFLICT DO NOTHING
 `
 
 type CreateItemModifierGroupParams struct {
@@ -104,7 +102,6 @@ func (q *Queries) CreateItemModifierGroup(ctx context.Context, arg CreateItemMod
 const createItemModifierGroupExclusion = `-- name: CreateItemModifierGroupExclusion :exec
 INSERT INTO item_modifier_group_exclusions (menu_item_id, modifier_group_id)
 VALUES ($1, $2)
-ON CONFLICT DO NOTHING
 `
 
 type CreateItemModifierGroupExclusionParams struct {
@@ -273,7 +270,6 @@ func (q *Queries) CreateModifierGroup(ctx context.Context, arg CreateModifierGro
 const createModifierGroupDefaultOption = `-- name: CreateModifierGroupDefaultOption :exec
 INSERT INTO modifier_group_default_options (modifier_group_id, modifier_option_id)
 VALUES ($1, $2)
-ON CONFLICT DO NOTHING
 `
 
 type CreateModifierGroupDefaultOptionParams struct {
@@ -328,6 +324,16 @@ func (q *Queries) CreateModifierOption(ctx context.Context, arg CreateModifierOp
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteModifierGroupDefaultOptions = `-- name: DeleteModifierGroupDefaultOptions :exec
+DELETE FROM modifier_group_default_options
+WHERE modifier_group_id = $1
+`
+
+func (q *Queries) DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteModifierGroupDefaultOptions, modifierGroupID)
+	return err
 }
 
 const getCatalogMutationRequest = `-- name: GetCatalogMutationRequest :one
@@ -431,6 +437,24 @@ func (q *Queries) GetCatalogSessionRoles(ctx context.Context, staffIdentityID uu
 		return nil, err
 	}
 	return items, nil
+}
+
+const getCategoryModifierGroup = `-- name: GetCategoryModifierGroup :one
+SELECT menu_category_id, modifier_group_id, created_at
+FROM category_modifier_groups
+WHERE menu_category_id = $1 AND modifier_group_id = $2
+`
+
+type GetCategoryModifierGroupParams struct {
+	MenuCategoryID  uuid.UUID `json:"menu_category_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error) {
+	row := q.db.QueryRowContext(ctx, getCategoryModifierGroup, arg.MenuCategoryID, arg.ModifierGroupID)
+	var i CategoryModifierGroup
+	err := row.Scan(&i.MenuCategoryID, &i.ModifierGroupID, &i.CreatedAt)
+	return i, err
 }
 
 const getMenuCategoryByID = `-- name: GetMenuCategoryByID :one

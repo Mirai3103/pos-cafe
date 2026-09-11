@@ -37,6 +37,7 @@ type Querier interface {
 	CreateStaffIdentity(ctx context.Context, arg CreateStaffIdentityParams) (CreateStaffIdentityRow, error)
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	DeleteCategory(ctx context.Context, id int64) error
+	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
 	GetCatalogMutationRequest(ctx context.Context, arg GetCatalogMutationRequestParams) (CatalogMutationRequest, error)
@@ -46,6 +47,7 @@ type Querier interface {
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryByID(ctx context.Context, id int64) (Category, error)
 	GetCategoryByName(ctx context.Context, name string) (Category, error)
+	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetMenuCategoryByID(ctx context.Context, id uuid.UUID) (MenuCategory, error)
 	GetMenuCategoryForUpdate(ctx context.Context, id uuid.UUID) (MenuCategory, error)
