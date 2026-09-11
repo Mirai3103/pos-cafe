@@ -165,29 +165,9 @@ func (h *RepriceSizeHandler) Handle(ctx context.Context, actor Actor, cmd Repric
 			return 0, SizeResponse{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrInvalidPricingConfiguration, err.Error())
 		}
 
-		// Lock parent before child:
-		// 2. Obtain parent MenuItemID
-		sizeRow, err := q.GetMenuItemSizeByID(ctx, cmd.SizeID)
+		existing, err := lockSizeWithParentCheck(ctx, q, cmd.SizeID)
 		if err != nil {
-			return 0, SizeResponse{}, AuditRecord{}, MapDBError(err)
-		}
-
-		// 3. Lock parent MenuItem and check retirement
-		parent, err := q.GetMenuItemForUpdate(ctx, sizeRow.MenuItemID)
-		if err != nil {
-			return 0, SizeResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		if parent.RetiredAt.Valid {
-			return 0, SizeResponse{}, AuditRecord{}, ErrEntityRetired
-		}
-
-		// 4. Lock child MenuItemSize and check retirement
-		existing, err := q.GetMenuItemSizeForUpdate(ctx, cmd.SizeID)
-		if err != nil {
-			return 0, SizeResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		if existing.RetiredAt.Valid {
-			return 0, SizeResponse{}, AuditRecord{}, ErrEntityRetired
+			return 0, SizeResponse{}, AuditRecord{}, err
 		}
 
 		// 5. Update price in database
@@ -256,29 +236,9 @@ func (h *RepriceModifierOptionHandler) Handle(ctx context.Context, actor Actor, 
 			return 0, ModifierOptionResponse{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrInvalidModifierConfiguration, err.Error())
 		}
 
-		// Lock parent before child:
-		// 2. Obtain parent ModifierGroupID
-		optRow, err := q.GetModifierOptionByID(ctx, cmd.OptionID)
+		existing, err := lockModifierOptionWithParentCheck(ctx, q, cmd.OptionID)
 		if err != nil {
-			return 0, ModifierOptionResponse{}, AuditRecord{}, MapDBError(err)
-		}
-
-		// 3. Lock parent ModifierGroup and check retirement
-		parent, err := q.GetModifierGroupForUpdate(ctx, optRow.ModifierGroupID)
-		if err != nil {
-			return 0, ModifierOptionResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		if parent.RetiredAt.Valid {
-			return 0, ModifierOptionResponse{}, AuditRecord{}, ErrEntityRetired
-		}
-
-		// 4. Lock child ModifierOption and check retirement
-		existing, err := q.GetModifierOptionForUpdate(ctx, cmd.OptionID)
-		if err != nil {
-			return 0, ModifierOptionResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		if existing.RetiredAt.Valid {
-			return 0, ModifierOptionResponse{}, AuditRecord{}, ErrEntityRetired
+			return 0, ModifierOptionResponse{}, AuditRecord{}, err
 		}
 
 		// 5. Update surcharge in database
