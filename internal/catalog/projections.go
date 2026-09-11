@@ -463,9 +463,6 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 				grpDefaults := make([]uuid.UUID, len(defaultOptionIDsByGroup[grp.ID]))
 				copy(grpDefaults, defaultOptionIDsByGroup[grp.ID])
 				sortUUIDs(grpDefaults)
-				if grpDefaults == nil {
-					grpDefaults = []uuid.UUID{}
-				}
 
 				effGroups = append(effGroups, ManagementModifierGroupResponse{
 					ID:               grp.ID,
@@ -774,9 +771,6 @@ func (h *ModifierGroupsHandler) Handle(ctx context.Context, actor Actor) ([]Modi
 			defaults := make([]uuid.UUID, len(defaultOptionIDsByGroup[grp.ID]))
 			copy(defaults, defaultOptionIDsByGroup[grp.ID])
 			sortUUIDs(defaults)
-			if defaults == nil {
-				defaults = []uuid.UUID{}
-			}
 
 			result = append(result, ModifierGroupManagementResponse{
 				ID:               grp.ID,

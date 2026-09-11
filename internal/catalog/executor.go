@@ -59,6 +59,7 @@ func NewRunner(db *sql.DB, queries *sqlc.Queries) *Runner {
 
 // idToLockKey converts a UUID to a stable int64 for advisory locking.
 func idToLockKey(id uuid.UUID) int64 {
+	//nolint:gosec // G115: bit-cast first 8 bytes of UUID to int64 for advisory lock key
 	return int64(binary.BigEndian.Uint64(id[:8]))
 }
 
@@ -313,7 +314,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 	if err := q.StoreCatalogRequestResult(ctx, sqlc.StoreCatalogRequestResultParams{
 		ActorID:      actor.StaffID,
 		RequestID:    spec.RequestID,
-		ResponseCode: int32(resultCode),
+		ResponseCode: int32(resultCode), //nolint:gosec // G115: HTTP status code (100-599) fits within int32
 		ResponseBody: bodyBytes,
 	}); err != nil {
 		return 0, zero, fmt.Errorf("store idempotent result: %w", err)

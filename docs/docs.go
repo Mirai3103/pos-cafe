@@ -317,6 +317,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.APIResponse"
                         }
                     },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -433,6 +439,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.APIResponse"
                         }
                     },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -520,21 +532,26 @@ const docTemplate = `{
                 }
             }
         },
-        "/categories": {
+        "/catalog/audit-events": {
             "get": {
-                "description": "Retrieve a list of all categories or active categories only",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về danh sách sự kiện audit của catalog theo thứ tự mới nhất trước. Yêu cầu quyền audit.inspect.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Categories"
+                    "Catalog"
                 ],
-                "summary": "List categories",
+                "summary": "Danh sách nhật ký kiểm toán catalog",
                 "parameters": [
                     {
-                        "type": "boolean",
-                        "description": "Filter active categories only (true/false)",
-                        "name": "active_only",
+                        "type": "integer",
+                        "description": "Số lượng bản ghi tối đa (mặc định 50, tối đa 100)",
+                        "name": "limit",
                         "in": "query"
                     }
                 ],
@@ -552,18 +569,61 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/category.Response"
+                                                "$ref": "#/definitions/catalog.AuditEventResponse"
                                             }
                                         }
                                     }
                                 }
                             ]
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
                     }
                 }
-            },
+            }
+        },
+        "/catalog/categories": {
             "post": {
-                "description": "Create a new drink/food category for POS Cafe",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tạo một danh mục mới trong catalog. Yêu cầu quyền catalog.administer_structure.",
                 "consumes": [
                     "application/json"
                 ],
@@ -571,17 +631,17 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Categories"
+                    "Catalog"
                 ],
-                "summary": "Create a new category",
+                "summary": "Tạo danh mục thực đơn",
                 "parameters": [
                     {
-                        "description": "Category payload",
+                        "description": "Thông tin tạo danh mục",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/category.CreateCommand"
+                            "$ref": "#/definitions/catalog.CreateCategoryCommand"
                         }
                     }
                 ],
@@ -597,7 +657,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/category.Response"
+                                            "$ref": "#/definitions/catalog.CategoryResponse"
                                         }
                                     }
                                 }
@@ -610,8 +670,32 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.APIResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -619,60 +703,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/categories/{id}": {
-            "get": {
-                "description": "Retrieve details of a specific category by its ID",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Categories"
-                ],
-                "summary": "Get category by ID",
-                "parameters": [
+        "/catalog/categories/{category_id}/modifier-groups/{group_id}": {
+            "post": {
+                "security": [
                     {
-                        "type": "integer",
-                        "description": "Category ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
+                        "BearerAuth": []
                     }
                 ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/category.Response"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.APIResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.APIResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "Update an existing category by its ID",
+                "description": "Gắn một nhóm modifier vào danh mục để các món con kế thừa. Yêu cầu quyền catalog.administer_structure.",
                 "consumes": [
                     "application/json"
                 ],
@@ -680,24 +718,31 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Categories"
+                    "Catalog"
                 ],
-                "summary": "Update category",
+                "summary": "Gắn nhóm tùy chọn vào danh mục",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Category ID",
-                        "name": "id",
+                        "type": "string",
+                        "description": "Category ID (UUID)",
+                        "name": "category_id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Category update payload",
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request ID idempotency",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/category.UpdateCommand"
+                            "$ref": "#/definitions/catalog.MutationRequest"
                         }
                     }
                 ],
@@ -713,7 +758,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/category.Response"
+                                            "$ref": "#/definitions/catalog.CategoryModifierGroupResponse"
                                         }
                                     }
                                 }
@@ -722,6 +767,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -737,30 +794,70 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
                     }
                 }
-            },
-            "delete": {
-                "description": "Delete a category by its ID",
+            }
+        },
+        "/catalog/categories/{category_id}/name": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đổi tên danh mục hiện có. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Categories"
+                    "Catalog"
                 ],
-                "summary": "Delete category",
+                "summary": "Đổi tên danh mục thực đơn",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Category ID",
-                        "name": "id",
+                        "type": "string",
+                        "description": "Category ID (UUID)",
+                        "name": "category_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Thông tin đổi tên danh mục",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RenameRequest"
+                        }
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content"
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.CategoryResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
                     },
                     "400": {
                         "description": "Bad Request",
@@ -768,8 +865,2111 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.APIResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/items": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tạo món có giá trực tiếp hoặc món có các kích thước (size). Yêu cầu quyền catalog.administer_structure và catalog.change_price.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Tạo món thực đơn",
+                "parameters": [
+                    {
+                        "description": "Thông tin tạo món",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.CreateItemCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ItemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/items/{item_id}/availability": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bật hoặc tắt trạng thái khả dụng (còn hàng/hết hàng) của món. Yêu cầu quyền catalog.manage_availability.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Cập nhật trạng thái khả dụng của món",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Item ID (UUID)",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin trạng thái khả dụng",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.SetAvailabilityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ItemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/items/{item_id}/inherited-modifier-group-exclusions/{group_id}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đánh dấu loại trừ một nhóm modifier kế thừa từ danh mục cho món cụ thể. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Loại trừ nhóm tùy chọn kế thừa cho món",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Item ID (UUID)",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request ID idempotency",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.MutationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ItemModifierGroupExclusionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/items/{item_id}/modifier-groups/{group_id}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Gắn một nhóm modifier trực tiếp vào món thực đơn. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Gắn nhóm tùy chọn trực tiếp vào món",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Item ID (UUID)",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request ID idempotency",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.MutationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ItemModifierGroupResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/items/{item_id}/name": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đổi tên món hiện có trong thực đơn. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Đổi tên món thực đơn",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Item ID (UUID)",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin đổi tên món",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ItemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/items/{item_id}/price": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Thay đổi giá của món bán trực tiếp. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Cập nhật giá món trực tiếp",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Item ID (UUID)",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin đổi giá món",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RepriceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ItemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/items/{item_id}/retirement": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đánh dấu ngừng kinh doanh vĩnh viễn món thực đơn. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Ngừng kinh doanh món thực đơn",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Item ID (UUID)",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do và ghi chú ngừng kinh doanh",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RetireRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ItemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/menu/availability": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về projection nhẹ danh mục, món, size, tùy chọn và cờ khả dụng để thu ngân/pha chế bật tắt nhanh. Yêu cầu quyền catalog.manage_availability.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Lấy thực đơn trạng thái khả dụng (Availability Menu)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.AvailabilityMenuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/menu/manage": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về toàn bộ danh mục, món, kích thước (bao gồm cả món đã ngừng bán hoặc hết hàng) phục vụ quản trị. Yêu cầu quyền catalog.view_prices.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Lấy thực đơn quản lý (Management Menu)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ManagementMenuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/menu/sellable": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về projection thực đơn chỉ bao gồm các món và kích thước còn hàng, sẵn sàng để bán. Yêu cầu quyền catalog.view_prices.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Lấy thực đơn bán hàng (Sellable Menu)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.SellableMenuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/modifier-groups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về danh sách tất cả các nhóm modifier cùng các tùy chọn và cấu hình mặc định. Yêu cầu quyền catalog.view_prices.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Danh sách nhóm tùy chọn / topping quản lý",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/catalog.ModifierGroupManagementResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tạo nhóm modifier mới kèm danh sách tùy chọn. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Tạo nhóm tùy chọn / topping",
+                "parameters": [
+                    {
+                        "description": "Thông tin tạo nhóm tùy chọn",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.CreateModifierGroupCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ModifierGroupResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/modifier-groups/{group_id}/defaults": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Thiết lập danh sách tùy chọn mặc định cho nhóm modifier. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Cập nhật tùy chọn mặc định của nhóm",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Danh sách ID tùy chọn mặc định",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.SetModifierGroupDefaultsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ModifierGroupDefaultsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/modifier-groups/{group_id}/name": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đổi tên nhóm modifier hiện có. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Đổi tên nhóm tùy chọn",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin đổi tên nhóm",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ModifierGroupResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/modifier-groups/{group_id}/retirement": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đánh dấu ngừng kinh doanh vĩnh viễn nhóm modifier. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Ngừng kinh doanh nhóm tùy chọn",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID (UUID)",
+                        "name": "group_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do và ghi chú ngừng kinh doanh",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RetireRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ModifierGroupResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/modifier-options/{option_id}/availability": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bật hoặc tắt trạng thái khả dụng của tùy chọn modifier. Yêu cầu quyền catalog.manage_availability.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Cập nhật trạng thái khả dụng của tùy chọn",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Option ID (UUID)",
+                        "name": "option_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin trạng thái khả dụng",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.SetAvailabilityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ModifierOptionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/modifier-options/{option_id}/name": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đổi tên tùy chọn hiện có. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Đổi tên tùy chọn modifier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Option ID (UUID)",
+                        "name": "option_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin đổi tên tùy chọn",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ModifierOptionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/modifier-options/{option_id}/price": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Thay đổi số tiền phụ thu của tùy chọn. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Cập nhật phụ thu tùy chọn modifier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Option ID (UUID)",
+                        "name": "option_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin đổi phụ thu",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RepriceModifierOptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ModifierOptionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/modifier-options/{option_id}/retirement": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đánh dấu ngừng kinh doanh vĩnh viễn tùy chọn modifier. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Ngừng kinh doanh tùy chọn modifier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Option ID (UUID)",
+                        "name": "option_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do và ghi chú ngừng kinh doanh",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RetireRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.ModifierOptionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/sizes/{size_id}/availability": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bật hoặc tắt trạng thái khả dụng của size món. Yêu cầu quyền catalog.manage_availability.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Cập nhật trạng thái khả dụng của kích thước",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Size ID (UUID)",
+                        "name": "size_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin trạng thái khả dụng",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.SetAvailabilityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.SizeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/sizes/{size_id}/name": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đổi tên size của món. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Đổi tên kích thước món",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Size ID (UUID)",
+                        "name": "size_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin đổi tên size",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.SizeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/sizes/{size_id}/price": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Thay đổi giá tuyệt đối của size món. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Cập nhật giá kích thước món",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Size ID (UUID)",
+                        "name": "size_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin đổi giá size",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RepriceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.SizeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/sizes/{size_id}/retirement": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đánh dấu ngừng kinh doanh vĩnh viễn size món. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Ngừng kinh doanh kích thước món",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Size ID (UUID)",
+                        "name": "size_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do và ghi chú ngừng kinh doanh",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RetireRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.SizeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -1544,77 +3744,843 @@ const docTemplate = `{
                 }
             }
         },
-        "category.CreateCommand": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 500
-                },
-                "display_order": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2
-                }
-            }
-        },
-        "category.Response": {
+        "catalog.AuditEventResponse": {
             "type": "object",
             "properties": {
-                "created_at": {
+                "actor_id": {
                     "type": "string"
                 },
-                "description": {
-                    "type": "string"
+                "details": {
+                    "type": "object"
                 },
-                "display_order": {
-                    "type": "integer"
+                "event_type": {
+                    "type": "string"
                 },
                 "id": {
-                    "type": "integer"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "name": {
                     "type": "string"
                 },
-                "updated_at": {
+                "occurred_at": {
+                    "type": "string"
+                },
+                "session_id": {
                     "type": "string"
                 }
             }
         },
-        "category.UpdateCommand": {
+        "catalog.AvailabilityCategoryResponse": {
             "type": "object",
-            "required": [
-                "name"
-            ],
             "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 500
+                "id": {
+                    "type": "string"
                 },
-                "display_order": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "is_active": {
-                    "type": "boolean"
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.AvailabilityItemResponse"
+                    }
                 },
                 "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.AvailabilityItemResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "category_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "modifier_groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.AvailabilityModifierGroupResponse"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sizes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.AvailabilitySizeResponse"
+                    }
+                }
+            }
+        },
+        "catalog.AvailabilityMenuResponse": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.AvailabilityCategoryResponse"
+                    }
+                }
+            }
+        },
+        "catalog.AvailabilityModifierGroupResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "max_selections": {
+                    "type": "integer"
+                },
+                "min_selections": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.AvailabilityModifierOptionResponse"
+                    }
+                }
+            }
+        },
+        "catalog.AvailabilityModifierOptionResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.AvailabilitySizeResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.CategoryModifierGroupResponse": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "modifier_group_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.CategoryResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.CreateCategoryCommand": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.CreateItemCommand": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "manager_pin": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "sizes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.CreateSizeInput"
+                    }
+                }
+            }
+        },
+        "catalog.CreateModifierGroupCommand": {
+            "type": "object",
+            "properties": {
+                "default_option_names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "manager_pin": {
+                    "type": "string"
+                },
+                "max_selections": {
+                    "type": "integer"
+                },
+                "min_selections": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.CreateModifierOptionInput"
+                    }
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.CreateModifierOptionInput": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "surcharge_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "catalog.CreateSizeInput": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "catalog.ItemModifierGroupExclusionResponse": {
+            "type": "object",
+            "properties": {
+                "item_id": {
+                    "type": "string"
+                },
+                "modifier_group_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.ItemModifierGroupResponse": {
+            "type": "object",
+            "properties": {
+                "item_id": {
+                    "type": "string"
+                },
+                "modifier_group_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.ItemResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "category_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
+                },
+                "sizes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.SizeResponse"
+                    }
+                }
+            }
+        },
+        "catalog.ManagementCategoryResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.ManagementItemResponse"
+                    }
+                },
+                "modifier_group_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.ManagementItemResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "category_id": {
+                    "type": "string"
+                },
+                "direct_modifier_group_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "excluded_modifier_group_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "modifier_groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.ManagementModifierGroupResponse"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
+                },
+                "retired": {
+                    "type": "boolean"
+                },
+                "retired_at": {
+                    "type": "string"
+                },
+                "retirement_note": {
+                    "type": "string"
+                },
+                "retirement_reason": {
+                    "type": "string"
+                },
+                "sizes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.ManagementSizeResponse"
+                    }
+                }
+            }
+        },
+        "catalog.ManagementMenuResponse": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.ManagementCategoryResponse"
+                    }
+                }
+            }
+        },
+        "catalog.ManagementModifierGroupResponse": {
+            "type": "object",
+            "properties": {
+                "default_option_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_selections": {
+                    "type": "integer"
+                },
+                "min_selections": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.ManagementModifierOptionResponse"
+                    }
+                },
+                "retired": {
+                    "type": "boolean"
+                },
+                "retired_at": {
+                    "type": "string"
+                },
+                "retirement_note": {
+                    "type": "string"
+                },
+                "retirement_reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.ManagementModifierOptionResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "modifier_group_id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "retired": {
+                    "type": "boolean"
+                },
+                "retired_at": {
+                    "type": "string"
+                },
+                "retirement_note": {
+                    "type": "string"
+                },
+                "retirement_reason": {
+                    "type": "string"
+                },
+                "surcharge_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "catalog.ManagementSizeResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "menu_item_id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
+                },
+                "retired": {
+                    "type": "boolean"
+                },
+                "retired_at": {
+                    "type": "string"
+                },
+                "retirement_note": {
+                    "type": "string"
+                },
+                "retirement_reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.ModifierGroupDefaultsResponse": {
+            "type": "object",
+            "properties": {
+                "group_id": {
+                    "type": "string"
+                },
+                "option_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "catalog.ModifierGroupManagementResponse": {
+            "type": "object",
+            "properties": {
+                "default_option_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_selections": {
+                    "type": "integer"
+                },
+                "min_selections": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.ModifierOptionManagementResponse"
+                    }
+                },
+                "retired": {
+                    "type": "boolean"
+                },
+                "retired_at": {
+                    "type": "string"
+                },
+                "retirement_note": {
+                    "type": "string"
+                },
+                "retirement_reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.ModifierGroupResponse": {
+            "type": "object",
+            "properties": {
+                "default_option_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_selections": {
+                    "type": "integer"
+                },
+                "min_selections": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.ModifierOptionResponse"
+                    }
+                }
+            }
+        },
+        "catalog.ModifierOptionManagementResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "modifier_group_id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "retired": {
+                    "type": "boolean"
+                },
+                "retired_at": {
+                    "type": "string"
+                },
+                "retirement_note": {
+                    "type": "string"
+                },
+                "retirement_reason": {
+                    "type": "string"
+                },
+                "surcharge_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "catalog.ModifierOptionResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "modifier_group_id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "surcharge_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "catalog.MutationRequest": {
+            "type": "object",
+            "properties": {
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.RenameRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.RepriceModifierOptionRequest": {
+            "type": "object",
+            "properties": {
+                "manager_pin": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "surcharge_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "catalog.RepriceRequest": {
+            "type": "object",
+            "properties": {
+                "manager_pin": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.RetireRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.SellableCategoryResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.SellableItemResponse"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.SellableItemResponse": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "modifier_groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.SellableModifierGroupResponse"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
+                },
+                "sizes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.SellableSizeResponse"
+                    }
+                }
+            }
+        },
+        "catalog.SellableMenuResponse": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.SellableCategoryResponse"
+                    }
+                }
+            }
+        },
+        "catalog.SellableModifierGroupResponse": {
+            "type": "object",
+            "properties": {
+                "default_option_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_selections": {
+                    "type": "integer"
+                },
+                "min_selections": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.SellableModifierOptionResponse"
+                    }
+                }
+            }
+        },
+        "catalog.SellableModifierOptionResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "surcharge_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "catalog.SellableSizeResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "catalog.SetAvailabilityRequest": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.SetModifierGroupDefaultsRequest": {
+            "type": "object",
+            "properties": {
+                "option_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.SizeResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price_vnd": {
+                    "type": "integer"
                 }
             }
         },

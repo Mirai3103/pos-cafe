@@ -460,7 +460,7 @@ type AuditEventResponse struct {
 	EventType  string          `json:"event_type"`
 	ActorID    *uuid.UUID      `json:"actor_id,omitempty"`
 	SessionID  *uuid.UUID      `json:"session_id,omitempty"`
-	Details    json.RawMessage `json:"details"`
+	Details    json.RawMessage `json:"details" swaggertype:"object"`
 	OccurredAt time.Time       `json:"occurred_at"`
 }
 

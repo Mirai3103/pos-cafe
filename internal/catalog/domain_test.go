@@ -366,4 +366,3 @@ func TestCatalogConstants(t *testing.T) {
 	assert.Equal(t, "catalog.authorization_denied", catalog.EventAuthorizationDenied)
 	assert.Equal(t, "catalog.", catalog.EventPrefixCatalog)
 }
-

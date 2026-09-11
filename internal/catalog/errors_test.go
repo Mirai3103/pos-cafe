@@ -186,4 +186,3 @@ func TestMapHTTPError(t *testing.T) {
 	unmapped := errors.New("generic unmapped error")
 	assert.Equal(t, unmapped, catalog.MapHTTPError(unmapped))
 }
-

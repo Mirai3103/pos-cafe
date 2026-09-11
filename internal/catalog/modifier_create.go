@@ -126,8 +126,8 @@ func (h *CreateModifierGroupHandler) Handle(ctx context.Context, actor Actor, cm
 
 		// 6. Validate default options if provided: cardinality and existence
 		if len(cmd.DefaultOptionNames) > 0 {
-			defCount := int32(len(cmd.DefaultOptionNames))
-			if defCount < cmd.MinSelections || defCount > cmd.MaxSelections {
+			defCount := len(cmd.DefaultOptionNames)
+			if defCount < int(cmd.MinSelections) || defCount > int(cmd.MaxSelections) {
 				return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: default options count %d must be between min %d and max %d", ErrInvalidModifierConfiguration, defCount, cmd.MinSelections, cmd.MaxSelections)
 			}
 			seenDefaults := make(map[string]bool, len(cmd.DefaultOptionNames))

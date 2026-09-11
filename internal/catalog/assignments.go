@@ -292,8 +292,8 @@ func (h *SetModifierGroupDefaultsHandler) Handle(ctx context.Context, actor Acto
 		}
 
 		// 2. Validate cardinality
-		count := int32(len(optIDs))
-		if count < group.MinSelections || count > group.MaxSelections {
+		count := len(optIDs)
+		if count < int(group.MinSelections) || count > int(group.MaxSelections) {
 			return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, fmt.Errorf("%w: default options count %d must be between min %d and max %d", ErrInvalidModifierConfiguration, count, group.MinSelections, group.MaxSelections)
 		}
 
