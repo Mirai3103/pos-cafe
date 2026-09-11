@@ -174,9 +174,6 @@ func (s *Slices) handleCreateItem(c echo.Context) error {
 	if err := checkRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
-	if cmd.CategoryID == uuid.Nil {
-		return sendError(c, fmt.Errorf("%w: category_id is required", response.ErrInvalid))
-	}
 
 	status, res, err := s.CreateItem.Handle(c.Request().Context(), actor, cmd)
 	if err != nil {

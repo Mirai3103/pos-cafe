@@ -14,6 +14,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/catalog"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1135,6 +1136,35 @@ func TestCreateItem(t *testing.T) {
 		err = db.QueryRowContext(ctx, `SELECT count(*) FROM menu_items`).Scan(&itemCount)
 		require.NoError(t, err)
 		assert.Equal(t, 0, itemCount, "whitespace-only name must not create an item")
+	})
+
+	t.Run("MissingCategoryIDRejected", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		// Valid manager identity with correct PIN: auth must pass so the
+		// request reaches the handler's own validation, proving enforcement
+		// lives in CreateItemHandler and not the HTTP transport layer.
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		itemHandler := catalog.NewCreateItemHandler(runner)
+
+		price := int64(45000)
+		status, _, err := itemHandler.Handle(ctx, actor, catalog.CreateItemCommand{
+			RequestID:  uuid.New(),
+			CategoryID: uuid.Nil,
+			Name:       "Orphan Drink",
+			PriceVND:   &price,
+			ManagerPIN: manager.PIN,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify no item was persisted
+		var itemCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM menu_items`).Scan(&itemCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, itemCount, "nil category_id must not create an item")
 	})
 }
 

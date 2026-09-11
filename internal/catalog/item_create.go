@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
 
@@ -76,13 +77,18 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, ItemResponse, AuditRecord, error) {
-		// 1. Lock parent category row for deterministic concurrency control.
+		// 1. Validate category_id is provided.
+		if cmd.CategoryID == uuid.Nil {
+			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: category_id is required", response.ErrInvalid)
+		}
+
+		// 2. Lock parent category row for deterministic concurrency control.
 		_, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
 		if err != nil {
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 2. Validate pricing configuration: exactly one pricing form.
+		// 3. Validate pricing configuration: exactly one pricing form.
 		hasDirect := cmd.PriceVND != nil
 		hasSizes := len(cmd.Sizes) > 0
 
@@ -90,19 +96,19 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			return 0, ItemResponse{}, AuditRecord{}, ErrInvalidPricingConfiguration
 		}
 
-		// 3. Validate item name is non-empty after normalization.
+		// 4. Validate item name is non-empty after normalization.
 		if display == "" {
 			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: item name cannot be empty", ErrInvalidPricingConfiguration)
 		}
 
-		// 4. Validate direct price if present.
+		// 5. Validate direct price if present.
 		if hasDirect {
 			if err := ValidatePrice(*cmd.PriceVND); err != nil {
 				return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrInvalidPricingConfiguration, err.Error())
 			}
 		}
 
-		// 5. Validate sizes if present: duplicate normalized names and price bounds.
+		// 6. Validate sizes if present: duplicate normalized names and price bounds.
 		if hasSizes {
 			seenSizes := make(map[string]bool, len(cmd.Sizes))
 			for _, s := range cmd.Sizes {
@@ -121,7 +127,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			}
 		}
 
-		// 6. Create Menu Item in database.
+		// 7. Create Menu Item in database.
 		var priceNull sql.NullInt64
 		if hasDirect {
 			priceNull = sql.NullInt64{Int64: *cmd.PriceVND, Valid: true}
@@ -138,7 +144,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 7. Create Sizes in database if sized item.
+		// 8. Create Sizes in database if sized item.
 		var createdSizes []sqlc.MenuItemSize
 		if hasSizes {
 			createdSizes = make([]sqlc.MenuItemSize, 0, len(cmd.Sizes))
@@ -158,7 +164,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			}
 		}
 
-		// 8. Assemble ItemResponse.
+		// 9. Assemble ItemResponse.
 		res := ItemResponse{
 			ID:         item.ID,
 			CategoryID: item.CategoryID,
@@ -181,7 +187,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			}
 		}
 
-		// 9. Assemble secret-free AuditRecord.
+		// 10. Assemble secret-free AuditRecord.
 		auditDetails := itemCreatedAuditDetails{
 			ItemID:     item.ID,
 			CategoryID: item.CategoryID,
