@@ -117,22 +117,6 @@ func (h *RepriceItemHandler) Handle(ctx context.Context, actor Actor, cmd Repric
 			res.PriceVND = &v
 		}
 
-		sizes, err := q.ListMenuItemSizesByItem(ctx, item.ID)
-		if err != nil {
-			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		if len(sizes) > 0 {
-			res.Sizes = make([]SizeResponse, len(sizes))
-			for i, s := range sizes {
-				res.Sizes[i] = SizeResponse{
-					ID:        s.ID,
-					Name:      s.Name,
-					PriceVND:  s.PriceVnd,
-					Available: s.Available,
-				}
-			}
-		}
-
 		// 7. Secret-free audit event
 		audit := AuditRecord{
 			EventType: EventItemRepriced,
