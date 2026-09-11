@@ -54,3 +54,39 @@ type ItemResponse struct {
 	Available  bool           `json:"available"`
 	Sizes      []SizeResponse `json:"sizes,omitempty"`
 }
+
+// CreateModifierOptionInput describes an option to create with a modifier group.
+type CreateModifierOptionInput struct {
+	Name         string `json:"name"`
+	SurchargeVND int64  `json:"surcharge_vnd"`
+}
+
+// CreateModifierGroupCommand carries the parameters for modifier group creation.
+type CreateModifierGroupCommand struct {
+	RequestID          uuid.UUID                   `json:"request_id"`
+	Name               string                      `json:"name"`
+	MinSelections      int32                       `json:"min_selections"`
+	MaxSelections      int32                       `json:"max_selections"`
+	Options            []CreateModifierOptionInput `json:"options"`
+	DefaultOptionNames []string                    `json:"default_option_names,omitempty"`
+	ManagerPIN         string                      `json:"manager_pin"`
+}
+
+// ModifierOptionResponse represents an option in a modifier group response.
+type ModifierOptionResponse struct {
+	ID              uuid.UUID `json:"id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+	Name            string    `json:"name"`
+	SurchargeVND    int64     `json:"surcharge_vnd"`
+	Available       bool      `json:"available"`
+}
+
+// ModifierGroupResponse is the API response representation of a modifier group.
+type ModifierGroupResponse struct {
+	ID               uuid.UUID                `json:"id"`
+	Name             string                   `json:"name"`
+	MinSelections    int32                    `json:"min_selections"`
+	MaxSelections    int32                    `json:"max_selections"`
+	Options          []ModifierOptionResponse `json:"options"`
+	DefaultOptionIDs []uuid.UUID              `json:"default_option_ids"`
+}

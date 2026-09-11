@@ -26,6 +26,7 @@ func cleanCategoryTestTables(t *testing.T, db *sql.DB) {
 			menu_item_sizes,
 			menu_items,
 			menu_categories, 
+			modifier_groups,
 			catalog_mutation_requests, 
 			audit_events 
 		CASCADE;
@@ -1041,6 +1042,700 @@ func TestCreateItem(t *testing.T) {
 		// Assert no audit events were committed
 		var auditCount int
 		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.item.created'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, auditCount, "no audit events should be committed on rollback")
+
+		// Assert idempotency request was rolled back (can retry cleanly)
+		var reqCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM catalog_mutation_requests WHERE request_id = $1`, reqID).Scan(&reqCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, reqCount, "idempotency claim must roll back on failure")
+	})
+}
+
+func TestCreateModifierGroup(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	runner := catalog.NewRunner(db, q)
+	ctx := context.Background()
+
+	t.Run("Success_WithDefaults_Audit_Normalization", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		reqID := uuid.New()
+		inputName := "   Ice   Level   "
+		expectedDisplayName := "Ice   Level"
+		expectedNormalizedKey := "ice   level"
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     reqID,
+			Name:          inputName,
+			MinSelections: 1,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "   No   Ice   ", SurchargeVND: 0},
+				{Name: "Less Ice", SurchargeVND: 0},
+				{Name: "   Regular   Ice   ", SurchargeVND: 0},
+				{Name: "Extra Ice", SurchargeVND: 2000},
+			},
+			DefaultOptionNames: []string{"   rEgUlAr   iCe   "},
+			ManagerPIN:         manager.PIN,
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 201, status)
+		assert.NotEqual(t, uuid.Nil, res.ID)
+		assert.Equal(t, expectedDisplayName, res.Name)
+		assert.Equal(t, int32(1), res.MinSelections)
+		assert.Equal(t, int32(1), res.MaxSelections)
+		require.Len(t, res.Options, 4)
+
+		assert.Equal(t, "No   Ice", res.Options[0].Name)
+		assert.Equal(t, int64(0), res.Options[0].SurchargeVND)
+		assert.True(t, res.Options[0].Available)
+		assert.Equal(t, res.ID, res.Options[0].ModifierGroupID)
+
+		assert.Equal(t, "Less Ice", res.Options[1].Name)
+		assert.Equal(t, int64(0), res.Options[1].SurchargeVND)
+
+		assert.Equal(t, "Regular   Ice", res.Options[2].Name)
+		assert.Equal(t, int64(0), res.Options[2].SurchargeVND)
+
+		assert.Equal(t, "Extra Ice", res.Options[3].Name)
+		assert.Equal(t, int64(2000), res.Options[3].SurchargeVND)
+
+		require.Len(t, res.DefaultOptionIDs, 1)
+		assert.Equal(t, res.Options[2].ID, res.DefaultOptionIDs[0])
+
+		// Verify database row in modifier_groups
+		var dbName, dbNorm string
+		var dbMin, dbMax int32
+		err = db.QueryRowContext(ctx, `
+			SELECT name, normalized_name, min_selections, max_selections
+			FROM modifier_groups
+			WHERE id = $1
+		`, res.ID).Scan(&dbName, &dbNorm, &dbMin, &dbMax)
+		require.NoError(t, err)
+		assert.Equal(t, expectedDisplayName, dbName)
+		assert.Equal(t, expectedNormalizedKey, dbNorm)
+		assert.Equal(t, int32(1), dbMin)
+		assert.Equal(t, int32(1), dbMax)
+
+		// Verify database rows in modifier_options
+		var optCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM modifier_options WHERE modifier_group_id = $1`, res.ID).Scan(&optCount)
+		require.NoError(t, err)
+		assert.Equal(t, 4, optCount)
+
+		// Verify database rows in modifier_group_default_options
+		var defOptID uuid.UUID
+		err = db.QueryRowContext(ctx, `
+			SELECT modifier_option_id
+			FROM modifier_group_default_options
+			WHERE modifier_group_id = $1
+		`, res.ID).Scan(&defOptID)
+		require.NoError(t, err)
+		assert.Equal(t, res.Options[2].ID, defOptID)
+
+		// Verify audit event
+		var eventType string
+		var actorID, sessionID uuid.UUID
+		var detailsJSON []byte
+		err = db.QueryRowContext(ctx, `
+			SELECT event_type, actor_id, session_id, details
+			FROM audit_events
+			WHERE event_type = 'catalog.modifier_group.created' AND actor_id = $1
+		`, actor.StaffID).Scan(&eventType, &actorID, &sessionID, &detailsJSON)
+		require.NoError(t, err)
+		assert.Equal(t, "catalog.modifier_group.created", eventType)
+		assert.Equal(t, actor.StaffID, actorID)
+		assert.Equal(t, actor.SessionID, sessionID)
+
+		var details map[string]any
+		err = json.Unmarshal(detailsJSON, &details)
+		require.NoError(t, err)
+		assert.Equal(t, res.ID.String(), details["group_id"])
+		assert.Equal(t, expectedDisplayName, details["name"])
+		assert.Equal(t, float64(1), details["min_selections"])
+		assert.Equal(t, float64(1), details["max_selections"])
+		require.NotNil(t, details["options"])
+		optsList, ok := details["options"].([]any)
+		require.True(t, ok)
+		assert.Len(t, optsList, 4)
+
+		require.NotNil(t, details["default_option_ids"])
+		defsList, ok := details["default_option_ids"].([]any)
+		require.True(t, ok)
+		assert.Len(t, defsList, 1)
+		assert.Equal(t, res.Options[2].ID.String(), defsList[0])
+
+		// Generic PIN secrecy check: audit details must NEVER contain manager PIN
+		assert.False(t, strings.Contains(string(detailsJSON), manager.PIN), "audit details must never leak manager PIN")
+	})
+
+	t.Run("Success_NoDefaults", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Toppings",
+			MinSelections: 0,
+			MaxSelections: 2,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Pearls", SurchargeVND: 5000},
+				{Name: "Pudding", SurchargeVND: 6000},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 201, status)
+		assert.NotEqual(t, uuid.Nil, res.ID)
+		assert.Equal(t, "Toppings", res.Name)
+		assert.Equal(t, int32(0), res.MinSelections)
+		assert.Equal(t, int32(2), res.MaxSelections)
+		assert.Empty(t, res.DefaultOptionIDs)
+
+		var defCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM modifier_group_default_options WHERE modifier_group_id = $1`, res.ID).Scan(&defCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, defCount)
+	})
+
+	t.Run("Reject_NoOptions", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "No Option Group",
+			MinSelections: 0,
+			MaxSelections: 1,
+			Options:       []catalog.CreateModifierOptionInput{},
+			ManagerPIN:    manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DuplicateGroupName", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		status1, _, err1 := handler.Handle(ctx, actor, catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Sweetness",
+			MinSelections: 1,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "100%", SurchargeVND: 0},
+			},
+			ManagerPIN: manager.PIN,
+		})
+		require.NoError(t, err1)
+		assert.Equal(t, 201, status1)
+
+		// Second group with whitespace/case variation
+		status2, _, err2 := handler.Handle(ctx, actor, catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "   sWeEtNeSs   ",
+			MinSelections: 1,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "50%", SurchargeVND: 0},
+			},
+			ManagerPIN: manager.PIN,
+		})
+		require.Error(t, err2)
+		assert.True(t, errors.Is(err2, catalog.ErrNameConflict), "expected ErrNameConflict, got: %v", err2)
+		assert.Equal(t, 0, status2)
+	})
+
+	t.Run("Reject_DuplicateOptionNames", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Toppings",
+			MinSelections: 1,
+			MaxSelections: 2,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Pearls", SurchargeVND: 5000},
+				{Name: "   pEaRlS   ", SurchargeVND: 6000},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrNameConflict), "expected ErrNameConflict, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_NegativeSurcharge", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Toppings",
+			MinSelections: 0,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Pearls", SurchargeVND: -1},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_SurchargeAboveMax", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Toppings",
+			MinSelections: 0,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Pearls", SurchargeVND: 2_147_483_648},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_InvalidMinMaxBounds", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cases := []struct {
+			name string
+			min  int32
+			max  int32
+		}{
+			{"Min_Negative", -1, 1},
+			{"Max_Zero", 0, 0},
+			{"Min_GreaterThan_Max", 3, 2},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				cmd := catalog.CreateModifierGroupCommand{
+					RequestID:     uuid.New(),
+					Name:          "Bounds Test Group",
+					MinSelections: tc.min,
+					MaxSelections: tc.max,
+					Options: []catalog.CreateModifierOptionInput{
+						{Name: "Opt1", SurchargeVND: 0},
+						{Name: "Opt2", SurchargeVND: 0},
+						{Name: "Opt3", SurchargeVND: 0},
+					},
+					ManagerPIN: manager.PIN,
+				}
+
+				status, _, err := handler.Handle(ctx, actor, cmd)
+				require.Error(t, err)
+				assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+				assert.Equal(t, 0, status)
+			})
+		}
+	})
+
+	t.Run("Reject_MaxSelectionsExceedsOptionCount", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Small Group",
+			MinSelections: 1,
+			MaxSelections: 3, // 3 > 2 options
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Opt1", SurchargeVND: 0},
+				{Name: "Opt2", SurchargeVND: 0},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DefaultOptionNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Group",
+			MinSelections: 1,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Opt1", SurchargeVND: 0},
+			},
+			DefaultOptionNames: []string{"NonExistent"},
+			ManagerPIN:         manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DuplicateDefaultOptionNames", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Group",
+			MinSelections: 1,
+			MaxSelections: 2,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Opt1", SurchargeVND: 0},
+				{Name: "Opt2", SurchargeVND: 0},
+			},
+			DefaultOptionNames: []string{"Opt1", "   oPt1   "},
+			ManagerPIN:         manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DefaultOptionCardinalityTooLow", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Group",
+			MinSelections: 2,
+			MaxSelections: 3,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Opt1", SurchargeVND: 0},
+				{Name: "Opt2", SurchargeVND: 0},
+				{Name: "Opt3", SurchargeVND: 0},
+			},
+			DefaultOptionNames: []string{"Opt1"}, // 1 default < min 2
+			ManagerPIN:         manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_DefaultOptionCardinalityTooHigh", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Group",
+			MinSelections: 1,
+			MaxSelections: 2,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Opt1", SurchargeVND: 0},
+				{Name: "Opt2", SurchargeVND: 0},
+				{Name: "Opt3", SurchargeVND: 0},
+			},
+			DefaultOptionNames: []string{"Opt1", "Opt2", "Opt3"}, // 3 defaults > max 2
+			ManagerPIN:         manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_EmptyOptionName", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Group",
+			MinSelections: 0,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "   ", SurchargeVND: 0},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_EmptyGroupName", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "   ",
+			MinSelections: 0,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Opt1", SurchargeVND: 0},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("FreshManagerPIN", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Group",
+			MinSelections: 0,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Opt1", SurchargeVND: 0},
+			},
+			ManagerPIN: "9999", // Invalid PIN
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidManagerPin), "expected ErrInvalidManagerPin, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Forbidden_MissingCapabilities", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		cashier := createCatalogTestIdentity(t, db, q, []string{auth.RoleCashier}, true, "1234")
+		actor := catalog.Actor{StaffID: cashier.StaffID, SessionID: cashier.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Group",
+			MinSelections: 0,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Opt1", SurchargeVND: 0},
+			},
+			ManagerPIN: cashier.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrForbidden), "expected ErrForbidden, got: %v", err)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("ExactReplay_And_PINRequiredOnReplay", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		reqID := uuid.New()
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     reqID,
+			Name:          "Sugar Level",
+			MinSelections: 1,
+			MaxSelections: 1,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "100%", SurchargeVND: 0},
+				{Name: "50%", SurchargeVND: 0},
+			},
+			DefaultOptionNames: []string{"100%"},
+			ManagerPIN:         manager.PIN,
+		}
+
+		// Initial creation
+		status1, res1, err1 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err1)
+		assert.Equal(t, 201, status1)
+		assert.NotEqual(t, uuid.Nil, res1.ID)
+
+		// Exact replay with valid PIN
+		status2, res2, err2 := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err2)
+		assert.Equal(t, 201, status2)
+		assert.Equal(t, res1.ID, res2.ID)
+		assert.Equal(t, res1.Name, res2.Name)
+
+		// Replay with wrong PIN must fail
+		badPINCmd := cmd
+		badPINCmd.ManagerPIN = "9999"
+		status3, _, err3 := handler.Handle(ctx, actor, badPINCmd)
+		require.Error(t, err3)
+		assert.True(t, errors.Is(err3, catalog.ErrInvalidManagerPin), "expected ErrInvalidManagerPin on replay, got: %v", err3)
+		assert.Equal(t, 0, status3)
+
+		// Conflicting replay with different options
+		conflictCmd := cmd
+		conflictCmd.Options = []catalog.CreateModifierOptionInput{
+			{Name: "Different", SurchargeVND: 1000},
+		}
+		status4, _, err4 := handler.Handle(ctx, actor, conflictCmd)
+		require.Error(t, err4)
+		assert.True(t, errors.Is(err4, catalog.ErrRequestConflict), "expected ErrRequestConflict on changed payload, got: %v", err4)
+		assert.Equal(t, 0, status4)
+
+		// Verify only 1 audit event was committed
+		var auditCount int
+		err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.modifier_group.created'`).Scan(&auditCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, auditCount, "idempotent replay must not duplicate audit events")
+	})
+
+	t.Run("AtomicRollback_OnFailure", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		// Install a trigger on modifier_options that aborts if option name is FAIL_OPTION
+		_, err := db.ExecContext(ctx, `
+			CREATE OR REPLACE FUNCTION fail_option_test() RETURNS trigger AS $$
+			BEGIN
+				IF NEW.name = 'FAIL_OPTION' THEN
+					RAISE EXCEPTION 'forced child option insert failure';
+				END IF;
+				RETURN NEW;
+			END;
+			$$ LANGUAGE plpgsql;
+
+			DROP TRIGGER IF EXISTS trg_fail_option_test ON modifier_options;
+			CREATE TRIGGER trg_fail_option_test
+			BEFORE INSERT ON modifier_options
+			FOR EACH ROW EXECUTE FUNCTION fail_option_test();
+		`)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_, _ = db.ExecContext(context.Background(), `
+				DROP TRIGGER IF EXISTS trg_fail_option_test ON modifier_options;
+				DROP FUNCTION IF EXISTS fail_option_test();
+			`)
+		})
+
+		reqID := uuid.New()
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     reqID,
+			Name:          "Failed Parent Group",
+			MinSelections: 0,
+			MaxSelections: 2,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Good Option", SurchargeVND: 0},
+				{Name: "FAIL_OPTION", SurchargeVND: 1000},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.Equal(t, 0, status)
+
+		// Assert parent group was rolled back
+		var groupCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM modifier_groups WHERE name = 'Failed Parent Group'`).Scan(&groupCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, groupCount, "parent modifier group must be rolled back when child option fails")
+
+		// Assert no options were committed
+		var optCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM modifier_options`).Scan(&optCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, optCount, "no child options should be committed")
+
+		// Assert no default options were committed
+		var defCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM modifier_group_default_options`).Scan(&defCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, defCount, "no default options should be committed")
+
+		// Assert no audit events were committed
+		var auditCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE event_type = 'catalog.modifier_group.created'`).Scan(&auditCount)
 		require.NoError(t, err)
 		assert.Equal(t, 0, auditCount, "no audit events should be committed on rollback")
 

@@ -19,16 +19,18 @@ const (
 
 // Operations for catalog mutations.
 const (
-	OpCategoryCreate = "catalog.category.create"
-	OpCategoryRename = "catalog.category.rename"
-	OpItemCreate     = "catalog.item.create"
+	OpCategoryCreate      = "catalog.category.create"
+	OpCategoryRename      = "catalog.category.rename"
+	OpItemCreate          = "catalog.item.create"
+	OpModifierGroupCreate = "catalog.modifier_group.create"
 )
 
 // Audit event types emitted by catalog operations.
 const (
-	EventCategoryCreated = "catalog.category.created"
-	EventCategoryRenamed = "catalog.category.renamed"
-	EventItemCreated     = "catalog.item.created"
+	EventCategoryCreated      = "catalog.category.created"
+	EventCategoryRenamed      = "catalog.category.renamed"
+	EventItemCreated          = "catalog.item.created"
+	EventModifierGroupCreated = "catalog.modifier_group.created"
 )
 
 // Retirement holds optional retirement metadata.
