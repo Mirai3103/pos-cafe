@@ -1,9 +1,12 @@
 package catalog_test
 
 import (
+	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/catalog"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -56,3 +59,26 @@ func TestCatalogErrorsAreDistinct(t *testing.T) {
 		seen[err] = true
 	}
 }
+
+func TestMapDBError(t *testing.T) {
+	t.Parallel()
+
+	assert.Nil(t, catalog.MapDBError(nil))
+
+	// sql.ErrNoRows -> ErrNotFound
+	err := catalog.MapDBError(sql.ErrNoRows)
+	assert.True(t, errors.Is(err, catalog.ErrNotFound))
+
+	// Code 23505 -> ErrNameConflict
+	err = catalog.MapDBError(&pgconn.PgError{Code: "23505", Detail: "key already exists"})
+	assert.True(t, errors.Is(err, catalog.ErrNameConflict))
+
+	// Code 23503 -> ErrNotFound
+	err = catalog.MapDBError(&pgconn.PgError{Code: "23503", Detail: "foreign key missing"})
+	assert.True(t, errors.Is(err, catalog.ErrNotFound))
+
+	// Other error -> unchanged
+	otherErr := errors.New("something else")
+	assert.Equal(t, otherErr, catalog.MapDBError(otherErr))
+}
+
