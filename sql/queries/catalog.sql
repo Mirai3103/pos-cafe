@@ -453,17 +453,22 @@ ORDER BY normalized_name ASC, id ASC;
 
 -- name: ListAllCategoryModifierGroups :many
 SELECT menu_category_id, modifier_group_id
-FROM category_modifier_groups;
+FROM category_modifier_groups
+ORDER BY menu_category_id ASC, modifier_group_id ASC;
 
 -- name: ListAllItemModifierGroups :many
 SELECT menu_item_id, modifier_group_id
-FROM item_modifier_groups;
+FROM item_modifier_groups
+ORDER BY menu_item_id ASC, modifier_group_id ASC;
 
 -- name: ListAllItemModifierGroupExclusions :many
 SELECT menu_item_id, modifier_group_id
-FROM item_modifier_group_exclusions;
+FROM item_modifier_group_exclusions
+ORDER BY menu_item_id ASC, modifier_group_id ASC;
 
 -- name: ListAllModifierGroupDefaultOptions :many
 SELECT modifier_group_id, modifier_option_id
-FROM modifier_group_default_options;
+FROM modifier_group_default_options
+ORDER BY modifier_group_id ASC, modifier_option_id ASC;
+
 

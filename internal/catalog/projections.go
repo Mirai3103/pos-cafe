@@ -9,6 +9,77 @@ import (
 	"github.com/google/uuid"
 )
 
+type catalogSnapshot struct {
+	categories []sqlc.MenuCategory
+	items      []sqlc.MenuItem
+	sizes      []sqlc.MenuItemSize
+	groups     []sqlc.ModifierGroup
+	options    []sqlc.ModifierOption
+	catGroups  []sqlc.ListAllCategoryModifierGroupsRow
+	itemGroups []sqlc.ListAllItemModifierGroupsRow
+	exclusions []sqlc.ListAllItemModifierGroupExclusionsRow
+	defaults   []sqlc.ListAllModifierGroupDefaultOptionsRow
+}
+
+func loadCatalogSnapshot(ctx context.Context, q *sqlc.Queries) (*catalogSnapshot, error) {
+	categories, err := q.ListMenuCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := q.ListAllMenuItems(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sizes, err := q.ListAllMenuItemSizes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	groups, err := q.ListModifierGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err := q.ListAllModifierOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	catGroups, err := q.ListAllCategoryModifierGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	itemGroups, err := q.ListAllItemModifierGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	exclusions, err := q.ListAllItemModifierGroupExclusions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defaults, err := q.ListAllModifierGroupDefaultOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &catalogSnapshot{
+		categories: categories,
+		items:      items,
+		sizes:      sizes,
+		groups:     groups,
+		options:    options,
+		catGroups:  catGroups,
+		itemGroups: itemGroups,
+		exclusions: exclusions,
+		defaults:   defaults,
+	}, nil
+}
+
 // SellableMenuHandler handles reading the sellable menu projection.
 type SellableMenuHandler struct {
 	runner *Runner
@@ -22,97 +93,53 @@ func NewSellableMenuHandler(runner *Runner) *SellableMenuHandler {
 // Handle executes the sellable menu projection query.
 func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (SellableMenuResponse, error) {
 	return ExecuteRead(ctx, h.runner, actor, CapViewPrices, func(q *sqlc.Queries) (SellableMenuResponse, error) {
-		// 1. Load all entities in the repeatable-read transaction
-		categories, err := q.ListMenuCategories(ctx)
+		snap, err := loadCatalogSnapshot(ctx, q)
 		if err != nil {
 			return SellableMenuResponse{}, err
 		}
 
-		items, err := q.ListAllMenuItems(ctx)
-		if err != nil {
-			return SellableMenuResponse{}, err
-		}
-
-		sizes, err := q.ListAllMenuItemSizes(ctx)
-		if err != nil {
-			return SellableMenuResponse{}, err
-		}
-
-		groups, err := q.ListModifierGroups(ctx)
-		if err != nil {
-			return SellableMenuResponse{}, err
-		}
-
-		options, err := q.ListAllModifierOptions(ctx)
-		if err != nil {
-			return SellableMenuResponse{}, err
-		}
-
-		catGroups, err := q.ListAllCategoryModifierGroups(ctx)
-		if err != nil {
-			return SellableMenuResponse{}, err
-		}
-
-		itemGroups, err := q.ListAllItemModifierGroups(ctx)
-		if err != nil {
-			return SellableMenuResponse{}, err
-		}
-
-		itemExclusions, err := q.ListAllItemModifierGroupExclusions(ctx)
-		if err != nil {
-			return SellableMenuResponse{}, err
-		}
-
-		defaultOpts, err := q.ListAllModifierGroupDefaultOptions(ctx)
-		if err != nil {
-			return SellableMenuResponse{}, err
-		}
-
-		// 2. Index entities for fast assembly
-		groupByID := make(map[uuid.UUID]sqlc.ModifierGroup, len(groups))
-		for _, g := range groups {
+		groupByID := make(map[uuid.UUID]sqlc.ModifierGroup, len(snap.groups))
+		for _, g := range snap.groups {
 			groupByID[g.ID] = g
 		}
 
 		optionsByGroup := make(map[uuid.UUID][]sqlc.ModifierOption)
-		for _, opt := range options {
+		for _, opt := range snap.options {
 			optionsByGroup[opt.ModifierGroupID] = append(optionsByGroup[opt.ModifierGroupID], opt)
 		}
 
 		defaultOptionIDsByGroup := make(map[uuid.UUID][]uuid.UUID)
-		for _, d := range defaultOpts {
+		for _, d := range snap.defaults {
 			defaultOptionIDsByGroup[d.ModifierGroupID] = append(defaultOptionIDsByGroup[d.ModifierGroupID], d.ModifierOptionID)
 		}
 
 		categoryGroupIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, cg := range catGroups {
+		for _, cg := range snap.catGroups {
 			categoryGroupIDs[cg.MenuCategoryID] = append(categoryGroupIDs[cg.MenuCategoryID], cg.ModifierGroupID)
 		}
 
 		itemDirectGroupIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, ig := range itemGroups {
+		for _, ig := range snap.itemGroups {
 			itemDirectGroupIDs[ig.MenuItemID] = append(itemDirectGroupIDs[ig.MenuItemID], ig.ModifierGroupID)
 		}
 
 		itemExclusionIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, ie := range itemExclusions {
+		for _, ie := range snap.exclusions {
 			itemExclusionIDs[ie.MenuItemID] = append(itemExclusionIDs[ie.MenuItemID], ie.ModifierGroupID)
 		}
 
 		sizesByItem := make(map[uuid.UUID][]sqlc.MenuItemSize)
-		for _, s := range sizes {
+		for _, s := range snap.sizes {
 			sizesByItem[s.MenuItemID] = append(sizesByItem[s.MenuItemID], s)
 		}
 
-		// 3. Assemble sellable items by category
 		itemsByCategory := make(map[uuid.UUID][]SellableItemResponse)
 
-		for _, item := range items {
+		for _, item := range snap.items {
 			if item.RetiredAt.Valid || !item.Available {
 				continue
 			}
 
-			// Sizes
 			itemSizes := sizesByItem[item.ID]
 			var availableSizes []SellableSizeResponse
 			for _, s := range itemSizes {
@@ -128,7 +155,6 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 			hasDirectPrice := item.PriceVnd.Valid && item.PriceVnd.Int64 > 0
 			availSizeCount := len(availableSizes)
 
-			// Effective groups
 			inherited := categoryGroupIDs[item.CategoryID]
 			exclusions := itemExclusionIDs[item.ID]
 			direct := itemDirectGroupIDs[item.ID]
@@ -141,8 +167,6 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 			for _, gID := range effGroupIDs {
 				grp, ok := groupByID[gID]
 				if !ok || grp.RetiredAt.Valid {
-					// Retired groups are omitted from effective future choices.
-					// Their retained assignment rows do not make attached items unsellable.
 					continue
 				}
 
@@ -168,7 +192,6 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 
 				availOptionCounts[grp.ID] = len(sellableOpts)
 
-				// Visible default option IDs (only available and unretired defaults)
 				rawDefaults := defaultOptionIDsByGroup[grp.ID]
 				var validDefaults []uuid.UUID
 				for _, defID := range rawDefaults {
@@ -176,6 +199,7 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 						validDefaults = append(validDefaults, defID)
 					}
 				}
+				sortUUIDs(validDefaults)
 				if validDefaults == nil {
 					validDefaults = []uuid.UUID{}
 				}
@@ -194,7 +218,6 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 				})
 			}
 
-			// Validate sellability
 			state := ItemState{
 				Available:             true,
 				HasDirectPrice:        hasDirectPrice,
@@ -207,7 +230,6 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 				continue
 			}
 
-			// Sort sellable groups deterministically: normalized name ASC, UUID ASC
 			sort.Slice(sellableGroups, func(i, j int) bool {
 				nameI, _ := NormalizeName(sellableGroups[i].Name)
 				nameJ, _ := NormalizeName(sellableGroups[j].Name)
@@ -233,9 +255,8 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 			})
 		}
 
-		// 4. Assemble categories, omitting categories with 0 sellable items
 		var resultCategories []SellableCategoryResponse
-		for _, cat := range categories {
+		for _, cat := range snap.categories {
 			catItems, ok := itemsByCategory[cat.ID]
 			if !ok || len(catItems) == 0 {
 				continue
@@ -269,58 +290,18 @@ func NewManagementMenuHandler(runner *Runner) *ManagementMenuHandler {
 // Handle executes the management menu projection query.
 func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (ManagementMenuResponse, error) {
 	return ExecuteRead(ctx, h.runner, actor, CapViewPrices, func(q *sqlc.Queries) (ManagementMenuResponse, error) {
-		categories, err := q.ListMenuCategories(ctx)
+		snap, err := loadCatalogSnapshot(ctx, q)
 		if err != nil {
 			return ManagementMenuResponse{}, err
 		}
 
-		items, err := q.ListAllMenuItems(ctx)
-		if err != nil {
-			return ManagementMenuResponse{}, err
-		}
-
-		sizes, err := q.ListAllMenuItemSizes(ctx)
-		if err != nil {
-			return ManagementMenuResponse{}, err
-		}
-
-		groups, err := q.ListModifierGroups(ctx)
-		if err != nil {
-			return ManagementMenuResponse{}, err
-		}
-
-		options, err := q.ListAllModifierOptions(ctx)
-		if err != nil {
-			return ManagementMenuResponse{}, err
-		}
-
-		catGroups, err := q.ListAllCategoryModifierGroups(ctx)
-		if err != nil {
-			return ManagementMenuResponse{}, err
-		}
-
-		itemGroups, err := q.ListAllItemModifierGroups(ctx)
-		if err != nil {
-			return ManagementMenuResponse{}, err
-		}
-
-		itemExclusions, err := q.ListAllItemModifierGroupExclusions(ctx)
-		if err != nil {
-			return ManagementMenuResponse{}, err
-		}
-
-		defaultOpts, err := q.ListAllModifierGroupDefaultOptions(ctx)
-		if err != nil {
-			return ManagementMenuResponse{}, err
-		}
-
-		groupByID := make(map[uuid.UUID]sqlc.ModifierGroup, len(groups))
-		for _, g := range groups {
+		groupByID := make(map[uuid.UUID]sqlc.ModifierGroup, len(snap.groups))
+		for _, g := range snap.groups {
 			groupByID[g.ID] = g
 		}
 
 		optionsByGroup := make(map[uuid.UUID][]ManagementModifierOptionResponse)
-		for _, opt := range options {
+		for _, opt := range snap.options {
 			var retAt *time.Time
 			if opt.RetiredAt.Valid {
 				t := opt.RetiredAt.Time
@@ -350,21 +331,23 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 		}
 
 		defaultOptionIDsByGroup := make(map[uuid.UUID][]uuid.UUID)
-		for _, d := range defaultOpts {
+		for _, d := range snap.defaults {
 			defaultOptionIDsByGroup[d.ModifierGroupID] = append(defaultOptionIDsByGroup[d.ModifierGroupID], d.ModifierOptionID)
+		}
+		for grpID := range defaultOptionIDsByGroup {
+			sortUUIDs(defaultOptionIDsByGroup[grpID])
 		}
 
 		categoryGroupIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, cg := range catGroups {
+		for _, cg := range snap.catGroups {
 			categoryGroupIDs[cg.MenuCategoryID] = append(categoryGroupIDs[cg.MenuCategoryID], cg.ModifierGroupID)
 		}
-		// Sort category group IDs deterministically
 		for catID := range categoryGroupIDs {
 			sortUUIDs(categoryGroupIDs[catID])
 		}
 
 		itemDirectGroupIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, ig := range itemGroups {
+		for _, ig := range snap.itemGroups {
 			itemDirectGroupIDs[ig.MenuItemID] = append(itemDirectGroupIDs[ig.MenuItemID], ig.ModifierGroupID)
 		}
 		for itemID := range itemDirectGroupIDs {
@@ -372,7 +355,7 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 		}
 
 		itemExclusionIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, ie := range itemExclusions {
+		for _, ie := range snap.exclusions {
 			itemExclusionIDs[ie.MenuItemID] = append(itemExclusionIDs[ie.MenuItemID], ie.ModifierGroupID)
 		}
 		for itemID := range itemExclusionIDs {
@@ -380,7 +363,7 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 		}
 
 		sizesByItem := make(map[uuid.UUID][]ManagementSizeResponse)
-		for _, s := range sizes {
+		for _, s := range snap.sizes {
 			var retAt *time.Time
 			if s.RetiredAt.Valid {
 				t := s.RetiredAt.Time
@@ -410,7 +393,7 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 		}
 
 		itemsByCategory := make(map[uuid.UUID][]ManagementItemResponse)
-		for _, item := range items {
+		for _, item := range snap.items {
 			var retAt *time.Time
 			if item.RetiredAt.Valid {
 				t := item.RetiredAt.Time
@@ -477,7 +460,9 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 					grpOpts = []ManagementModifierOptionResponse{}
 				}
 
-				grpDefaults := defaultOptionIDsByGroup[grp.ID]
+				grpDefaults := make([]uuid.UUID, len(defaultOptionIDsByGroup[grp.ID]))
+				copy(grpDefaults, defaultOptionIDsByGroup[grp.ID])
+				sortUUIDs(grpDefaults)
 				if grpDefaults == nil {
 					grpDefaults = []uuid.UUID{}
 				}
@@ -496,7 +481,6 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 				})
 			}
 
-			// Sort effective groups deterministically: normalized name ASC, UUID ASC
 			sort.Slice(effGroups, func(i, j int) bool {
 				nameI, _ := NormalizeName(effGroups[i].Name)
 				nameJ, _ := NormalizeName(effGroups[j].Name)
@@ -528,7 +512,7 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 		}
 
 		var resultCategories []ManagementCategoryResponse
-		for _, cat := range categories {
+		for _, cat := range snap.categories {
 			catItems := itemsByCategory[cat.ID]
 			if catItems == nil {
 				catItems = []ManagementItemResponse{}
@@ -568,55 +552,20 @@ func NewAvailabilityMenuHandler(runner *Runner) *AvailabilityMenuHandler {
 // Handle executes the availability menu projection query.
 func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (AvailabilityMenuResponse, error) {
 	return ExecuteRead(ctx, h.runner, actor, CapManageAvailability, func(q *sqlc.Queries) (AvailabilityMenuResponse, error) {
-		categories, err := q.ListMenuCategories(ctx)
+		snap, err := loadCatalogSnapshot(ctx, q)
 		if err != nil {
 			return AvailabilityMenuResponse{}, err
 		}
 
-		items, err := q.ListAllMenuItems(ctx)
-		if err != nil {
-			return AvailabilityMenuResponse{}, err
-		}
-
-		sizes, err := q.ListAllMenuItemSizes(ctx)
-		if err != nil {
-			return AvailabilityMenuResponse{}, err
-		}
-
-		groups, err := q.ListModifierGroups(ctx)
-		if err != nil {
-			return AvailabilityMenuResponse{}, err
-		}
-
-		options, err := q.ListAllModifierOptions(ctx)
-		if err != nil {
-			return AvailabilityMenuResponse{}, err
-		}
-
-		catGroups, err := q.ListAllCategoryModifierGroups(ctx)
-		if err != nil {
-			return AvailabilityMenuResponse{}, err
-		}
-
-		itemGroups, err := q.ListAllItemModifierGroups(ctx)
-		if err != nil {
-			return AvailabilityMenuResponse{}, err
-		}
-
-		itemExclusions, err := q.ListAllItemModifierGroupExclusions(ctx)
-		if err != nil {
-			return AvailabilityMenuResponse{}, err
-		}
-
-		groupByID := make(map[uuid.UUID]sqlc.ModifierGroup, len(groups))
-		for _, g := range groups {
+		groupByID := make(map[uuid.UUID]sqlc.ModifierGroup, len(snap.groups))
+		for _, g := range snap.groups {
 			groupByID[g.ID] = g
 		}
 
 		optionsByGroup := make(map[uuid.UUID][]AvailabilityModifierOptionResponse)
-		for _, opt := range options {
+		for _, opt := range snap.options {
 			if opt.RetiredAt.Valid {
-				continue // Retired options omitted from availability projection
+				continue
 			}
 			optionsByGroup[opt.ModifierGroupID] = append(optionsByGroup[opt.ModifierGroupID], AvailabilityModifierOptionResponse{
 				ID:        opt.ID,
@@ -626,24 +575,24 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 		}
 
 		categoryGroupIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, cg := range catGroups {
+		for _, cg := range snap.catGroups {
 			categoryGroupIDs[cg.MenuCategoryID] = append(categoryGroupIDs[cg.MenuCategoryID], cg.ModifierGroupID)
 		}
 
 		itemDirectGroupIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, ig := range itemGroups {
+		for _, ig := range snap.itemGroups {
 			itemDirectGroupIDs[ig.MenuItemID] = append(itemDirectGroupIDs[ig.MenuItemID], ig.ModifierGroupID)
 		}
 
 		itemExclusionIDs := make(map[uuid.UUID][]uuid.UUID)
-		for _, ie := range itemExclusions {
+		for _, ie := range snap.exclusions {
 			itemExclusionIDs[ie.MenuItemID] = append(itemExclusionIDs[ie.MenuItemID], ie.ModifierGroupID)
 		}
 
 		sizesByItem := make(map[uuid.UUID][]AvailabilitySizeResponse)
-		for _, s := range sizes {
+		for _, s := range snap.sizes {
 			if s.RetiredAt.Valid {
-				continue // Retired sizes omitted from availability projection
+				continue
 			}
 			sizesByItem[s.MenuItemID] = append(sizesByItem[s.MenuItemID], AvailabilitySizeResponse{
 				ID:        s.ID,
@@ -653,9 +602,9 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 		}
 
 		itemsByCategory := make(map[uuid.UUID][]AvailabilityItemResponse)
-		for _, item := range items {
+		for _, item := range snap.items {
 			if item.RetiredAt.Valid {
-				continue // Retired items omitted from availability projection
+				continue
 			}
 
 			itemSizes := sizesByItem[item.ID]
@@ -672,7 +621,7 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 			for _, gID := range effGroupIDs {
 				grp, ok := groupByID[gID]
 				if !ok || grp.RetiredAt.Valid {
-					continue // Retired groups omitted from availability projection
+					continue
 				}
 
 				grpOpts := optionsByGroup[grp.ID]
@@ -713,7 +662,7 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 		}
 
 		var resultCategories []AvailabilityCategoryResponse
-		for _, cat := range categories {
+		for _, cat := range snap.categories {
 			catItems := itemsByCategory[cat.ID]
 			if catItems == nil {
 				catItems = []AvailabilityItemResponse{}
@@ -822,7 +771,9 @@ func (h *ModifierGroupsHandler) Handle(ctx context.Context, actor Actor) ([]Modi
 				grpOpts = []ModifierOptionManagementResponse{}
 			}
 
-			defaults := defaultOptionIDsByGroup[grp.ID]
+			defaults := make([]uuid.UUID, len(defaultOptionIDsByGroup[grp.ID]))
+			copy(defaults, defaultOptionIDsByGroup[grp.ID])
+			sortUUIDs(defaults)
 			if defaults == nil {
 				defaults = []uuid.UUID{}
 			}

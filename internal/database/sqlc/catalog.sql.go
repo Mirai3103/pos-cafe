@@ -749,6 +749,7 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 const listAllCategoryModifierGroups = `-- name: ListAllCategoryModifierGroups :many
 SELECT menu_category_id, modifier_group_id
 FROM category_modifier_groups
+ORDER BY menu_category_id ASC, modifier_group_id ASC
 `
 
 type ListAllCategoryModifierGroupsRow struct {
@@ -782,6 +783,7 @@ func (q *Queries) ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllC
 const listAllItemModifierGroupExclusions = `-- name: ListAllItemModifierGroupExclusions :many
 SELECT menu_item_id, modifier_group_id
 FROM item_modifier_group_exclusions
+ORDER BY menu_item_id ASC, modifier_group_id ASC
 `
 
 type ListAllItemModifierGroupExclusionsRow struct {
@@ -815,6 +817,7 @@ func (q *Queries) ListAllItemModifierGroupExclusions(ctx context.Context) ([]Lis
 const listAllItemModifierGroups = `-- name: ListAllItemModifierGroups :many
 SELECT menu_item_id, modifier_group_id
 FROM item_modifier_groups
+ORDER BY menu_item_id ASC, modifier_group_id ASC
 `
 
 type ListAllItemModifierGroupsRow struct {
@@ -1034,6 +1037,7 @@ func (q *Queries) ListAllMenuItemsPaginated(ctx context.Context, arg ListAllMenu
 const listAllModifierGroupDefaultOptions = `-- name: ListAllModifierGroupDefaultOptions :many
 SELECT modifier_group_id, modifier_option_id
 FROM modifier_group_default_options
+ORDER BY modifier_group_id ASC, modifier_option_id ASC
 `
 
 type ListAllModifierGroupDefaultOptionsRow struct {

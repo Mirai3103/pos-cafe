@@ -595,6 +595,22 @@ func TestManagementMenu(t *testing.T) {
 		assert.Equal(t, []uuid.UUID{seed.GroupExtraEspresso}, espresso.DirectModifierGroupIDs)
 		// Effective modifier groups should include both Add-ons and Sugar Level
 		require.Len(t, espresso.ModifierGroups, 2)
+
+		// Verify Sugar Level defaults in Espresso are populated and sorted
+		var sugarGrp *catalog.ManagementModifierGroupResponse
+		for i := range espresso.ModifierGroups {
+			if espresso.ModifierGroups[i].Name == "Sugar Level" {
+				sugarGrp = &espresso.ModifierGroups[i]
+				break
+			}
+		}
+		require.NotNil(t, sugarGrp)
+		require.Len(t, sugarGrp.DefaultOptionIDs, 2)
+		expectedDefaults := []uuid.UUID{seed.OptSugarNormal, seed.OptSugarRetired}
+		if expectedDefaults[0].String() > expectedDefaults[1].String() {
+			expectedDefaults[0], expectedDefaults[1] = expectedDefaults[1], expectedDefaults[0]
+		}
+		assert.Equal(t, expectedDefaults, sugarGrp.DefaultOptionIDs, "DefaultOptionIDs must be deterministically sorted by UUID string")
 	})
 }
 
