@@ -358,3 +358,12 @@ func TestIsSellable(t *testing.T) {
 		})
 	}
 }
+
+func TestCatalogConstants(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "audit.inspect", catalog.CapAuditInspect)
+	assert.Equal(t, "catalog.authorization_denied", catalog.EventAuthorizationDenied)
+	assert.Equal(t, "catalog.", catalog.EventPrefixCatalog)
+}
+

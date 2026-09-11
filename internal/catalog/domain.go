@@ -68,6 +68,8 @@ const (
 	EventSizeRetired                        = "catalog.size.retired"
 	EventModifierGroupRetired               = "catalog.modifier_group.retired"
 	EventModifierOptionRetired              = "catalog.modifier_option.retired"
+	EventAuthorizationDenied                = "catalog.authorization_denied"
+	EventPrefixCatalog                      = "catalog."
 )
 
 // Retirement holds optional retirement metadata.

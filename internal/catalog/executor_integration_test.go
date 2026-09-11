@@ -90,8 +90,8 @@ func countAuthorizationDenials(t *testing.T, db *sql.DB, operation string) int {
 	err := db.QueryRowContext(t.Context(), `
 		SELECT count(*)
 		FROM audit_events
-		WHERE event_type = 'catalog.authorization_denied'
-		  AND details->>'operation' = $1`, operation).Scan(&count)
+		WHERE event_type = $1
+		  AND details->>'operation' = $2`, catalog.EventAuthorizationDenied, operation).Scan(&count)
 	require.NoError(t, err)
 	return count
 }

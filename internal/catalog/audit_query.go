@@ -21,10 +21,12 @@ func NewAuditEventsHandler(runner *Runner) *AuditEventsHandler {
 func (h *AuditEventsHandler) Handle(ctx context.Context, actor Actor, limit int32) ([]AuditEventResponse, error) {
 	if limit <= 0 {
 		limit = 50
+	} else if limit > 100 {
+		limit = 100
 	}
 	return ExecuteRead(ctx, h.runner, actor, CapAuditInspect, func(q *sqlc.Queries) ([]AuditEventResponse, error) {
 		events, err := q.ListAuditEvents(ctx, sqlc.ListAuditEventsParams{
-			EventType: "catalog.",
+			EventType: EventPrefixCatalog,
 			Limit:     limit,
 		})
 		if err != nil {

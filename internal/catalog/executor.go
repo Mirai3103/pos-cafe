@@ -157,7 +157,7 @@ func recordDenial(ctx context.Context, q *sqlc.Queries, actor Actor,
 		sessionID = uuid.NullUUID{UUID: actor.SessionID, Valid: true}
 	}
 	_, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-		EventType:  "catalog.authorization_denied",
+		EventType:  EventAuthorizationDenied,
 		ActorID:    actorID,
 		SessionID:  sessionID,
 		Details:    details,

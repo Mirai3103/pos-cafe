@@ -243,6 +243,41 @@ func TestAuditEvents(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, evs, 2)
 	})
+
+	t.Run("Audit limit clamped to maximum 100 and defaults to 50 on non-positive", func(t *testing.T) {
+		actorMgr := catalog.Actor{StaffID: tc.managerID.StaffID, SessionID: tc.managerID.SessionID}
+		for i := 0; i < 105; i++ {
+			_, err := tc.q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
+				EventType:  catalog.EventItemCreated,
+				ActorID:    uuid.NullUUID{UUID: tc.managerID.StaffID, Valid: true},
+				SessionID:  uuid.NullUUID{UUID: tc.managerID.SessionID, Valid: true},
+				Details:    []byte(fmt.Sprintf(`{"index":%d}`, i)),
+				OccurredAt: time.Now(),
+			})
+			require.NoError(t, err)
+		}
+
+		// limit=200 should be clamped to 100
+		evs, err := tc.slices.AuditEvents.Handle(ctx, actorMgr, 200)
+		require.NoError(t, err)
+		assert.Len(t, evs, 100)
+
+		// HTTP endpoint with limit=150 should be clamped to 100
+		rec := doJSONRequest(t, tc.e, http.MethodGet, "/api/v1/catalog/audit-events?limit=150", tc.managerToken, nil)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var res response.APIResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+		dataBytes, err := json.Marshal(res.Data)
+		require.NoError(t, err)
+		var httpEvs []catalog.AuditEventResponse
+		require.NoError(t, json.Unmarshal(dataBytes, &httpEvs))
+		assert.Len(t, httpEvs, 100)
+
+		// limit <= 0 defaults to 50
+		evsDefault, err := tc.slices.AuditEvents.Handle(ctx, actorMgr, 0)
+		require.NoError(t, err)
+		assert.Len(t, evsDefault, 50)
+	})
 }
 
 func TestCatalogRoutes(t *testing.T) {

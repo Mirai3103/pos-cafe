@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	"github.com/Mirai3103/pos-cafe/internal/response"
@@ -84,7 +83,6 @@ func MapHTTPError(err error) error {
 	case errors.Is(err, ErrUnauthorized):
 		return response.NewCodedError(http.StatusUnauthorized, "UNAUTHORIZED", err.Error(), err)
 	case errors.Is(err, ErrInvalidStoredResult):
-		slog.Error("invalid stored result", "error", err)
 		return response.NewCodedError(http.StatusInternalServerError, "INVALID_STORED_RESULT", "an unexpected error occurred", err)
 	case errors.Is(err, response.ErrInvalid):
 		return response.NewCodedError(http.StatusBadRequest, "INVALID_INPUT", err.Error(), err)
