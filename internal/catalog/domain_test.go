@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/catalog"
@@ -174,6 +175,21 @@ func TestValidateRetirement(t *testing.T) {
 		{
 			name:    "OTHER with note exactly 500 runes",
 			r:       catalog.Retirement{Reason: "OTHER", Note: string(make([]rune, 500))},
+			wantErr: false,
+		},
+		{
+			name:    "NO_LONGER_OFFERED note exceeds 500 runes",
+			r:       catalog.Retirement{Reason: "NO_LONGER_OFFERED", Note: strings.Repeat("x", 501)},
+			wantErr: true,
+		},
+		{
+			name:    "MENU_RESTRUCTURE note exceeds 500 runes",
+			r:       catalog.Retirement{Reason: "MENU_RESTRUCTURE", Note: strings.Repeat("x", 501)},
+			wantErr: true,
+		},
+		{
+			name:    "NO_LONGER_OFFERED note exactly 500 runes",
+			r:       catalog.Retirement{Reason: "NO_LONGER_OFFERED", Note: strings.Repeat("x", 500)},
 			wantErr: false,
 		},
 		{

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/google/uuid"
@@ -66,15 +65,12 @@ type modifierOptionRetiredAuditDetails struct {
 
 // validateRetirementInput performs domain validation for retirement arguments.
 func validateRetirementInput(reason, note string) (string, error) {
-	if reason == "" {
-		return "", fmt.Errorf("retirement reason is required")
-	}
 	trimmedNote := strings.TrimSpace(note)
-	if err := ValidateRetirement(Retirement{Reason: reason, Note: trimmedNote}); err != nil {
-		return "", err
+	if reason == "" {
+		return "", fmt.Errorf("%w: retirement reason is required", ErrInvalidRetirement)
 	}
-	if utf8.RuneCountInString(trimmedNote) > 500 {
-		return "", fmt.Errorf("retirement note must be at most 500 characters")
+	if err := ValidateRetirement(Retirement{Reason: reason, Note: trimmedNote}); err != nil {
+		return "", fmt.Errorf("%w: %s", ErrInvalidRetirement, err.Error())
 	}
 	return trimmedNote, nil
 }

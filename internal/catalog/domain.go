@@ -125,7 +125,7 @@ func ValidateSurcharge(surcharge int64) error {
 
 // ValidateRetirement checks that the retirement value is valid.
 // A nil Retirement is valid (no retirement).
-// OTHER requires a non-empty trimmed note of at most 500 runes.
+// OTHER requires a non-empty trimmed note; any note is capped at 500 runes.
 func ValidateRetirement(r Retirement) error {
 	if r.Reason == "" {
 		return nil
@@ -133,14 +133,12 @@ func ValidateRetirement(r Retirement) error {
 	if !validRetirementReasons[r.Reason] {
 		return fmt.Errorf("unknown retirement reason %q", r.Reason)
 	}
-	if r.Reason == "OTHER" {
-		note := strings.TrimSpace(r.Note)
-		if note == "" {
-			return fmt.Errorf("OTHER retirement reason requires a non-empty note")
-		}
-		if utf8.RuneCountInString(note) > 500 {
-			return fmt.Errorf("retirement note must be at most 500 characters")
-		}
+	note := strings.TrimSpace(r.Note)
+	if r.Reason == "OTHER" && note == "" {
+		return fmt.Errorf("OTHER retirement reason requires a non-empty note")
+	}
+	if utf8.RuneCountInString(note) > 500 {
+		return fmt.Errorf("retirement note must be at most 500 characters")
 	}
 	return nil
 }

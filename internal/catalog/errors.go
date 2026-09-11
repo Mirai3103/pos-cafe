@@ -16,6 +16,7 @@ var (
 	ErrRequestConflict              = errors.New("request conflict")
 	ErrInvalidPricingConfiguration  = errors.New("invalid pricing configuration")
 	ErrInvalidModifierConfiguration = errors.New("invalid modifier configuration")
+	ErrInvalidRetirement            = errors.New("invalid retirement configuration")
 	ErrInvalidInheritance           = errors.New("invalid inheritance")
 	ErrEntityRetired                = errors.New("entity retired")
 	ErrInvalidManagerPin            = errors.New("invalid manager pin")
@@ -72,6 +73,8 @@ func MapHTTPError(err error) error {
 		return response.NewCodedError(http.StatusBadRequest, "INVALID_PRICING_CONFIGURATION", err.Error(), err)
 	case errors.Is(err, ErrInvalidModifierConfiguration):
 		return response.NewCodedError(http.StatusBadRequest, "INVALID_MODIFIER_CONFIGURATION", err.Error(), err)
+	case errors.Is(err, ErrInvalidRetirement):
+		return response.NewCodedError(http.StatusBadRequest, "INVALID_RETIREMENT", err.Error(), err)
 	case errors.Is(err, ErrInvalidInheritance):
 		return response.NewCodedError(http.StatusConflict, "INVALID_INHERITANCE", err.Error(), err)
 	case errors.Is(err, ErrEntityRetired):

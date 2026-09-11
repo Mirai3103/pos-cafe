@@ -7,12 +7,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/catalog"
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -3117,6 +3119,10 @@ func TestRetireItem(t *testing.T) {
 			Note:      "",
 		})
 		require.Error(t, err1)
+		assert.True(t, errors.Is(err1, catalog.ErrInvalidRetirement))
+		var coded1 *response.CodedError
+		require.True(t, errors.As(catalog.MapHTTPError(err1), &coded1))
+		assert.Equal(t, http.StatusBadRequest, coded1.Status)
 		assert.Equal(t, 0, status1)
 
 		// Blank whitespace note
@@ -3127,6 +3133,10 @@ func TestRetireItem(t *testing.T) {
 			Note:      "     ",
 		})
 		require.Error(t, err2)
+		assert.True(t, errors.Is(err2, catalog.ErrInvalidRetirement))
+		var coded2 *response.CodedError
+		require.True(t, errors.As(catalog.MapHTTPError(err2), &coded2))
+		assert.Equal(t, http.StatusBadRequest, coded2.Status)
 		assert.Equal(t, 0, status2)
 	})
 
@@ -3148,6 +3158,35 @@ func TestRetireItem(t *testing.T) {
 			Note:      strings.Repeat("x", 501),
 		})
 		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidRetirement))
+		var coded *response.CodedError
+		require.True(t, errors.As(catalog.MapHTTPError(err), &coded))
+		assert.Equal(t, http.StatusBadRequest, coded.Status)
+		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Invalid_NonOTHER_NoteExceeds500", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRetireItemHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		price := int64(50000)
+		itemID := createTestItemDirect(t, db, catID, "Cold Brew", &price, false)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.RetireItemCommand{
+			RequestID: uuid.New(),
+			ItemID:    itemID,
+			Reason:    "NO_LONGER_OFFERED",
+			Note:      strings.Repeat("x", 501),
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidRetirement))
+		var coded *response.CodedError
+		require.True(t, errors.As(catalog.MapHTTPError(err), &coded))
+		assert.Equal(t, http.StatusBadRequest, coded.Status)
 		assert.Equal(t, 0, status)
 	})
 
@@ -3169,6 +3208,10 @@ func TestRetireItem(t *testing.T) {
 			Reason:    "DISCONTINUED",
 		})
 		require.Error(t, err1)
+		assert.True(t, errors.Is(err1, catalog.ErrInvalidRetirement))
+		var coded1 *response.CodedError
+		require.True(t, errors.As(catalog.MapHTTPError(err1), &coded1))
+		assert.Equal(t, http.StatusBadRequest, coded1.Status)
 		assert.Equal(t, 0, status1)
 
 		// Empty reason
@@ -3178,6 +3221,10 @@ func TestRetireItem(t *testing.T) {
 			Reason:    "",
 		})
 		require.Error(t, err2)
+		assert.True(t, errors.Is(err2, catalog.ErrInvalidRetirement))
+		var coded2 *response.CodedError
+		require.True(t, errors.As(catalog.MapHTTPError(err2), &coded2))
+		assert.Equal(t, http.StatusBadRequest, coded2.Status)
 		assert.Equal(t, 0, status2)
 	})
 
