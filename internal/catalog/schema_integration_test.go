@@ -94,4 +94,16 @@ func TestCatalogMigrationConstraints(t *testing.T) {
 		(category_id, name, normalized_name, price_vnd, retired_at, retirement_reason)
 		VALUES (gen_random_uuid(), 'RetiredItem', 'retireditem', 10000, now(), NULL)`)
 	require.Error(t, err, "retired_at with null retirement_reason must be rejected")
+
+	// menu_categories: retirement_consistency_check must fail if retired_at set without retirement_reason
+	_, err = db.Exec(`INSERT INTO menu_categories
+		(name, normalized_name, retired_at, retirement_reason)
+		VALUES ('RetiredCategory', 'retiredcategory', now(), NULL)`)
+	require.Error(t, err, "retired_at with null retirement_reason must be rejected")
+
+	// menu_categories: retirement_note_limit_check must fail if retirement_note exceeds 500 chars
+	_, err = db.Exec(`INSERT INTO menu_categories
+		(name, normalized_name, retired_at, retirement_reason, retirement_note)
+		VALUES ('LongNoteCategory', 'longnotecategory', now(), 'obsolete', repeat('x', 501))`)
+	require.Error(t, err, "retirement_note longer than 500 chars must be rejected")
 }
