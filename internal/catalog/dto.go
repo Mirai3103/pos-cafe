@@ -142,3 +142,31 @@ type ModifierGroupDefaultsResponse struct {
 	GroupID   uuid.UUID   `json:"group_id"`
 	OptionIDs []uuid.UUID `json:"option_ids"`
 }
+
+// RenameItemCommand carries the parameters for renaming a menu item.
+type RenameItemCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	ItemID    uuid.UUID `json:"item_id"`
+	Name      string    `json:"name"`
+}
+
+// RenameSizeCommand carries the parameters for renaming a menu item size.
+type RenameSizeCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	SizeID    uuid.UUID `json:"size_id"`
+	Name      string    `json:"name"`
+}
+
+// RenameModifierGroupCommand carries the parameters for renaming a modifier group.
+type RenameModifierGroupCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	GroupID   uuid.UUID `json:"group_id"`
+	Name      string    `json:"name"`
+}
+
+// RenameModifierOptionCommand carries the parameters for renaming a modifier option.
+type RenameModifierOptionCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	OptionID  uuid.UUID `json:"option_id"`
+	Name      string    `json:"name"`
+}
