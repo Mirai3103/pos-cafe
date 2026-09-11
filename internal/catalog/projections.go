@@ -257,6 +257,10 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 
 		var resultCategories []SellableCategoryResponse
 		for _, cat := range snap.categories {
+			if cat.RetiredAt.Valid {
+				continue
+			}
+
 			catItems, ok := itemsByCategory[cat.ID]
 			if !ok || len(catItems) == 0 {
 				continue
@@ -510,6 +514,21 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 
 		var resultCategories []ManagementCategoryResponse
 		for _, cat := range snap.categories {
+			var retAt *time.Time
+			if cat.RetiredAt.Valid {
+				t := cat.RetiredAt.Time
+				retAt = &t
+			}
+			var reason, note *string
+			if cat.RetirementReason.Valid {
+				r := cat.RetirementReason.String
+				reason = &r
+			}
+			if cat.RetirementNote.Valid {
+				n := cat.RetirementNote.String
+				note = &n
+			}
+
 			catItems := itemsByCategory[cat.ID]
 			if catItems == nil {
 				catItems = []ManagementItemResponse{}
@@ -523,6 +542,10 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 			resultCategories = append(resultCategories, ManagementCategoryResponse{
 				ID:               cat.ID,
 				Name:             cat.Name,
+				Retired:          cat.RetiredAt.Valid,
+				RetiredAt:        retAt,
+				RetirementReason: reason,
+				RetirementNote:   note,
 				ModifierGroupIDs: modGroupIDs,
 				Items:            catItems,
 			})
@@ -660,6 +683,10 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 
 		var resultCategories []AvailabilityCategoryResponse
 		for _, cat := range snap.categories {
+			if cat.RetiredAt.Valid {
+				continue
+			}
+
 			catItems := itemsByCategory[cat.ID]
 			if catItems == nil {
 				catItems = []AvailabilityItemResponse{}

@@ -499,6 +499,44 @@ func TestSellableMenu(t *testing.T) {
 		}
 		assert.Equal(t, []string{"Classic Green Tea", "Iced Peach Tea"}, teaItemNames)
 	})
+
+	t.Run("Retired_Category_Excluded", func(t *testing.T) {
+		catID := createTestCategoryDirect(t, db, "Seasonal Drinks")
+		itemPrice := int64(45000)
+		itemID := createTestItemDirect(t, db, catID, "Pumpkin Spice Latte", &itemPrice, false)
+
+		// Sanity: the category with its sellable item appears before retirement.
+		res, err := handler.Handle(ctx, actor)
+		require.NoError(t, err)
+		var seasonal *catalog.SellableCategoryResponse
+		for i := range res.Categories {
+			if res.Categories[i].ID == catID {
+				seasonal = &res.Categories[i]
+				break
+			}
+		}
+		require.NotNil(t, seasonal, "category with a sellable item must appear before retirement")
+		require.Len(t, seasonal.Items, 1)
+		assert.Equal(t, itemID, seasonal.Items[0].ID)
+
+		retireCat := catalog.NewRetireCategoryHandler(runner)
+		status, _, err := retireCat.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: catID,
+			Reason:     "NO_LONGER_OFFERED",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+
+		res, err = handler.Handle(ctx, actor)
+		require.NoError(t, err)
+		for _, c := range res.Categories {
+			assert.NotEqual(t, catID, c.ID, "retired category must be omitted from the sellable menu")
+			for _, item := range c.Items {
+				assert.NotEqual(t, itemID, item.ID, "items of a retired category must be omitted from the sellable menu")
+			}
+		}
+	})
 }
 
 func TestManagementMenu(t *testing.T) {
@@ -612,6 +650,50 @@ func TestManagementMenu(t *testing.T) {
 		}
 		assert.Equal(t, expectedDefaults, sugarGrp.DefaultOptionIDs, "DefaultOptionIDs must be deterministically sorted by UUID string")
 	})
+
+	t.Run("Retired_Category_Surfaces_With_Metadata", func(t *testing.T) {
+		retireCat := catalog.NewRetireCategoryHandler(runner)
+		status, retiredRes, err := retireCat.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: seed.CatTea,
+			Reason:     "MENU_RESTRUCTURE",
+			Note:       "Folded into Coffee",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.True(t, retiredRes.Retired)
+
+		res, err := handler.Handle(ctx, actor)
+		require.NoError(t, err)
+
+		// Management view always emits every category, retired ones included.
+		catNames := make([]string, len(res.Categories))
+		for i, c := range res.Categories {
+			catNames[i] = c.Name
+		}
+		assert.Equal(t, []string{"Coffee", "Empty Category", "Tea", "Z Unsellable"}, catNames)
+
+		teaCat := res.Categories[2]
+		require.Equal(t, seed.CatTea, teaCat.ID)
+		assert.True(t, teaCat.Retired)
+		require.NotNil(t, teaCat.RetiredAt)
+		require.NotNil(t, teaCat.RetirementReason)
+		assert.Equal(t, "MENU_RESTRUCTURE", *teaCat.RetirementReason)
+		require.NotNil(t, teaCat.RetirementNote)
+		assert.Equal(t, "Folded into Coffee", *teaCat.RetirementNote)
+
+		// Items of the retired category remain visible in the management view.
+		itemNames := make([]string, len(teaCat.Items))
+		for i, item := range teaCat.Items {
+			itemNames[i] = item.Name
+		}
+		assert.Equal(t, []string{"Classic Green Tea", "Iced Peach Tea"}, itemNames)
+
+		// Active categories are not flagged as retired.
+		coffeeCat := res.Categories[0]
+		assert.False(t, coffeeCat.Retired)
+		assert.Nil(t, coffeeCat.RetiredAt)
+	})
 }
 
 func TestAvailabilityMenu(t *testing.T) {
@@ -669,6 +751,47 @@ func TestAvailabilityMenu(t *testing.T) {
 		require.Len(t, sugarGrp.Options, 2)
 		assert.Equal(t, "100% Sugar", sugarGrp.Options[0].Name)
 		assert.Equal(t, "50% Sugar", sugarGrp.Options[1].Name)
+	})
+
+	t.Run("Retired_Category_Excluded", func(t *testing.T) {
+		catID := createTestCategoryDirect(t, db, "Seasonal Drinks")
+		itemPrice := int64(45000)
+		itemID := createTestItemDirect(t, db, catID, "Pumpkin Spice Latte", &itemPrice, false)
+
+		// Sanity: the category with its available item appears before retirement.
+		res, err := handler.Handle(ctx, actor)
+		require.NoError(t, err)
+		var seasonal *catalog.AvailabilityCategoryResponse
+		for i := range res.Categories {
+			if res.Categories[i].ID == catID {
+				seasonal = &res.Categories[i]
+				break
+			}
+		}
+		require.NotNil(t, seasonal, "category with an available item must appear before retirement")
+		require.Len(t, seasonal.Items, 1)
+		assert.Equal(t, itemID, seasonal.Items[0].ID)
+
+		// Retirement needs the administer-structure capability, which the barista lacks.
+		manager := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
+		managerActor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		retireCat := catalog.NewRetireCategoryHandler(runner)
+		status, _, err := retireCat.Handle(ctx, managerActor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: catID,
+			Reason:     "NO_LONGER_OFFERED",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+
+		res, err = handler.Handle(ctx, actor)
+		require.NoError(t, err)
+		for _, c := range res.Categories {
+			assert.NotEqual(t, catID, c.ID, "retired category must be omitted from the availability menu")
+			for _, item := range c.Items {
+				assert.NotEqual(t, itemID, item.ID, "items of a retired category must be omitted from the availability menu")
+			}
+		}
 	})
 }
 

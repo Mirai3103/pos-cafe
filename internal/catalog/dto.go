@@ -376,6 +376,10 @@ type ManagementItemResponse struct {
 type ManagementCategoryResponse struct {
 	ID               uuid.UUID                `json:"id"`
 	Name             string                   `json:"name"`
+	Retired          bool                     `json:"retired"`
+	RetiredAt        *time.Time               `json:"retired_at,omitempty"`
+	RetirementReason *string                  `json:"retirement_reason,omitempty"`
+	RetirementNote   *string                  `json:"retirement_note,omitempty"`
 	ModifierGroupIDs []uuid.UUID              `json:"modifier_group_ids"`
 	Items            []ManagementItemResponse `json:"items"`
 }
