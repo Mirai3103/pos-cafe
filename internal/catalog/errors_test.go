@@ -21,6 +21,7 @@ func TestCatalogErrorsAreSentinels(t *testing.T) {
 		"ErrRequestConflict":              catalog.ErrRequestConflict,
 		"ErrInvalidPricingConfiguration":  catalog.ErrInvalidPricingConfiguration,
 		"ErrInvalidModifierConfiguration": catalog.ErrInvalidModifierConfiguration,
+		"ErrInvalidCategoryConfiguration": catalog.ErrInvalidCategoryConfiguration,
 		"ErrInvalidRetirement":            catalog.ErrInvalidRetirement,
 		"ErrInvalidInheritance":           catalog.ErrInvalidInheritance,
 		"ErrEntityRetired":                catalog.ErrEntityRetired,
@@ -48,6 +49,7 @@ func TestCatalogErrorsAreDistinct(t *testing.T) {
 		catalog.ErrRequestConflict,
 		catalog.ErrInvalidPricingConfiguration,
 		catalog.ErrInvalidModifierConfiguration,
+		catalog.ErrInvalidCategoryConfiguration,
 		catalog.ErrInvalidRetirement,
 		catalog.ErrInvalidInheritance,
 		catalog.ErrEntityRetired,
@@ -129,6 +131,12 @@ func TestMapHTTPError(t *testing.T) {
 			err:        catalog.ErrInvalidModifierConfiguration,
 			wantStatus: http.StatusBadRequest,
 			wantCode:   "INVALID_MODIFIER_CONFIGURATION",
+		},
+		{
+			name:       "ErrInvalidCategoryConfiguration",
+			err:        catalog.ErrInvalidCategoryConfiguration,
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "INVALID_CATEGORY_CONFIGURATION",
 		},
 		{
 			name:       "ErrInvalidRetirement",

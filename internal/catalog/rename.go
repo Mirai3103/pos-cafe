@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/google/uuid"
@@ -93,6 +94,10 @@ func (h *RenameItemHandler) Handle(ctx context.Context, actor Actor, cmd RenameI
 		}
 		if existing.RetiredAt.Valid {
 			return 0, ItemResponse{}, AuditRecord{}, ErrEntityRetired
+		}
+
+		if display == "" {
+			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: item name cannot be empty", ErrInvalidPricingConfiguration)
 		}
 
 		item, err := q.RenameMenuItem(ctx, sqlc.RenameMenuItemParams{
@@ -196,6 +201,10 @@ func (h *RenameSizeHandler) Handle(ctx context.Context, actor Actor, cmd RenameS
 			return 0, SizeResponse{}, AuditRecord{}, ErrEntityRetired
 		}
 
+		if display == "" {
+			return 0, SizeResponse{}, AuditRecord{}, fmt.Errorf("%w: size name cannot be empty", ErrInvalidPricingConfiguration)
+		}
+
 		size, err := q.RenameMenuItemSize(ctx, sqlc.RenameMenuItemSizeParams{
 			ID:             cmd.SizeID,
 			Name:           display,
@@ -258,6 +267,10 @@ func (h *RenameModifierGroupHandler) Handle(ctx context.Context, actor Actor, cm
 		}
 		if existing.RetiredAt.Valid {
 			return 0, ModifierGroupResponse{}, AuditRecord{}, ErrEntityRetired
+		}
+
+		if display == "" {
+			return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: group name cannot be empty", ErrInvalidModifierConfiguration)
 		}
 
 		group, err := q.RenameModifierGroup(ctx, sqlc.RenameModifierGroupParams{
@@ -363,6 +376,10 @@ func (h *RenameModifierOptionHandler) Handle(ctx context.Context, actor Actor, c
 		}
 		if existing.RetiredAt.Valid {
 			return 0, ModifierOptionResponse{}, AuditRecord{}, ErrEntityRetired
+		}
+
+		if display == "" {
+			return 0, ModifierOptionResponse{}, AuditRecord{}, fmt.Errorf("%w: option name cannot be empty", ErrInvalidModifierConfiguration)
 		}
 
 		opt, err := q.RenameModifierOption(ctx, sqlc.RenameModifierOptionParams{

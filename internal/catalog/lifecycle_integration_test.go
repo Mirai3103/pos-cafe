@@ -313,6 +313,33 @@ func TestRenameItem(t *testing.T) {
 		assert.Equal(t, 0, status)
 		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.item.rename"))
 	})
+
+	t.Run("EmptyNameRejected", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRenameItemHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		price := int64(30000)
+		itemID := createTestItemDirect(t, db, catID, "Original Item", &price, false)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.RenameItemCommand{
+			RequestID: uuid.New(),
+			ItemID:    itemID,
+			Name:      "   ",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidPricingConfiguration), "expected ErrInvalidPricingConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify the item name is unchanged
+		var name string
+		err = db.QueryRowContext(ctx, `SELECT name FROM menu_items WHERE id = $1`, itemID).Scan(&name)
+		require.NoError(t, err)
+		assert.Equal(t, "Original Item", name, "whitespace-only rename must not change the item")
+	})
 }
 
 // ============================================================================
@@ -581,6 +608,33 @@ func TestRenameSize(t *testing.T) {
 		assert.Equal(t, 0, status)
 		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.size.rename"))
 	})
+
+	t.Run("EmptyNameRejected", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRenameSizeHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		itemID := createTestItemDirect(t, db, catID, "Latte", nil, false)
+		sizeID := createTestSizeDirect(t, db, itemID, "Medium", 35000, false)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.RenameSizeCommand{
+			RequestID: uuid.New(),
+			SizeID:    sizeID,
+			Name:      "   ",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidPricingConfiguration), "expected ErrInvalidPricingConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify the size name is unchanged
+		var name string
+		err = db.QueryRowContext(ctx, `SELECT name FROM menu_item_sizes WHERE id = $1`, sizeID).Scan(&name)
+		require.NoError(t, err)
+		assert.Equal(t, "Medium", name, "whitespace-only rename must not change the size")
+	})
 }
 
 // ============================================================================
@@ -793,6 +847,31 @@ func TestRenameModifierGroup(t *testing.T) {
 		assert.True(t, errors.Is(err, catalog.ErrForbidden))
 		assert.Equal(t, 0, status)
 		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.modifier_group.rename"))
+	})
+
+	t.Run("EmptyNameRejected", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRenameModifierGroupHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Original Group", 0, 1, false)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.RenameModifierGroupCommand{
+			RequestID: uuid.New(),
+			GroupID:   groupID,
+			Name:      "   ",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify the group name is unchanged
+		var name string
+		err = db.QueryRowContext(ctx, `SELECT name FROM modifier_groups WHERE id = $1`, groupID).Scan(&name)
+		require.NoError(t, err)
+		assert.Equal(t, "Original Group", name, "whitespace-only rename must not change the group")
 	})
 }
 
@@ -1054,6 +1133,32 @@ func TestRenameModifierOption(t *testing.T) {
 		assert.True(t, errors.Is(err, catalog.ErrForbidden))
 		assert.Equal(t, 0, status)
 		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.modifier_option.rename"))
+	})
+
+	t.Run("EmptyNameRejected", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewRenameModifierOptionHandler(runner)
+
+		groupID := createTestModifierGroupDirect(t, db, "Ice", 0, 1, false)
+		optID := createTestModifierOptionDirect(t, db, groupID, "No Ice", 0, true, false)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.RenameModifierOptionCommand{
+			RequestID: uuid.New(),
+			OptionID:  optID,
+			Name:      "   ",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify the option name is unchanged
+		var name string
+		err = db.QueryRowContext(ctx, `SELECT name FROM modifier_options WHERE id = $1`, optID).Scan(&name)
+		require.NoError(t, err)
+		assert.Equal(t, "No Ice", name, "whitespace-only rename must not change the option")
 	})
 }
 

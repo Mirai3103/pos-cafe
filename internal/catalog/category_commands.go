@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/google/uuid"
@@ -50,6 +51,10 @@ func (h *CreateCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Cre
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, CategoryResponse, AuditRecord, error) {
+		if display == "" {
+			return 0, CategoryResponse{}, AuditRecord{}, fmt.Errorf("%w: category name cannot be empty", ErrInvalidCategoryConfiguration)
+		}
+
 		category, err := q.CreateMenuCategory(ctx, sqlc.CreateMenuCategoryParams{
 			Name:           display,
 			NormalizedName: key,
@@ -100,6 +105,10 @@ func (h *RenameCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Ren
 		existing, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
 		if err != nil {
 			return 0, CategoryResponse{}, AuditRecord{}, MapDBError(err)
+		}
+
+		if display == "" {
+			return 0, CategoryResponse{}, AuditRecord{}, fmt.Errorf("%w: category name cannot be empty", ErrInvalidCategoryConfiguration)
 		}
 
 		category, err := q.RenameMenuCategory(ctx, sqlc.RenameMenuCategoryParams{

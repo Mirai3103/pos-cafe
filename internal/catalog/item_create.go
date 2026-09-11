@@ -90,14 +90,19 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			return 0, ItemResponse{}, AuditRecord{}, ErrInvalidPricingConfiguration
 		}
 
-		// 3. Validate direct price if present.
+		// 3. Validate item name is non-empty after normalization.
+		if display == "" {
+			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: item name cannot be empty", ErrInvalidPricingConfiguration)
+		}
+
+		// 4. Validate direct price if present.
 		if hasDirect {
 			if err := ValidatePrice(*cmd.PriceVND); err != nil {
 				return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrInvalidPricingConfiguration, err.Error())
 			}
 		}
 
-		// 4. Validate sizes if present: duplicate normalized names and price bounds.
+		// 5. Validate sizes if present: duplicate normalized names and price bounds.
 		if hasSizes {
 			seenSizes := make(map[string]bool, len(cmd.Sizes))
 			for _, s := range cmd.Sizes {
@@ -116,7 +121,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			}
 		}
 
-		// 5. Create Menu Item in database.
+		// 6. Create Menu Item in database.
 		var priceNull sql.NullInt64
 		if hasDirect {
 			priceNull = sql.NullInt64{Int64: *cmd.PriceVND, Valid: true}
@@ -133,7 +138,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 6. Create Sizes in database if sized item.
+		// 7. Create Sizes in database if sized item.
 		var createdSizes []sqlc.MenuItemSize
 		if hasSizes {
 			createdSizes = make([]sqlc.MenuItemSize, 0, len(cmd.Sizes))
@@ -153,7 +158,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			}
 		}
 
-		// 7. Assemble ItemResponse.
+		// 8. Assemble ItemResponse.
 		res := ItemResponse{
 			ID:         item.ID,
 			CategoryID: item.CategoryID,
@@ -176,7 +181,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			}
 		}
 
-		// 8. Assemble secret-free AuditRecord.
+		// 9. Assemble secret-free AuditRecord.
 		auditDetails := itemCreatedAuditDetails{
 			ItemID:     item.ID,
 			CategoryID: item.CategoryID,

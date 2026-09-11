@@ -200,6 +200,28 @@ func TestCreateCategory(t *testing.T) {
 		// Verify denial audit event was recorded
 		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.category.create"))
 	})
+
+	t.Run("EmptyNameRejected", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateCategoryHandler(runner)
+
+		status, _, err := handler.Handle(ctx, actor, catalog.CreateCategoryCommand{
+			RequestID: uuid.New(),
+			Name:      "   ",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidCategoryConfiguration), "expected ErrInvalidCategoryConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify nothing was persisted
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM menu_categories`).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 0, count, "whitespace-only name must not create a category")
+	})
 }
 
 func TestRenameCategory(t *testing.T) {
@@ -388,6 +410,36 @@ func TestRenameCategory(t *testing.T) {
 
 		// Verify denial audit event was recorded
 		assert.Equal(t, 1, countAuthorizationDenials(t, db, "catalog.category.rename"))
+	})
+
+	t.Run("EmptyNameRejected", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		createHandler := catalog.NewCreateCategoryHandler(runner)
+		renameHandler := catalog.NewRenameCategoryHandler(runner)
+
+		_, created, err := createHandler.Handle(ctx, actor, catalog.CreateCategoryCommand{
+			RequestID: uuid.New(),
+			Name:      "Cold Drinks",
+		})
+		require.NoError(t, err)
+
+		status, _, err := renameHandler.Handle(ctx, actor, catalog.RenameCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: created.ID,
+			Name:       "   ",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidCategoryConfiguration), "expected ErrInvalidCategoryConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify the category name is unchanged
+		var name string
+		err = db.QueryRowContext(ctx, `SELECT name FROM menu_categories WHERE id = $1`, created.ID).Scan(&name)
+		require.NoError(t, err)
+		assert.Equal(t, "Cold Drinks", name, "whitespace-only rename must not change the category")
 	})
 }
 
@@ -1050,6 +1102,39 @@ func TestCreateItem(t *testing.T) {
 		err = db.QueryRowContext(ctx, `SELECT count(*) FROM catalog_mutation_requests WHERE request_id = $1`, reqID).Scan(&reqCount)
 		require.NoError(t, err)
 		assert.Equal(t, 0, reqCount, "idempotency claim must roll back on failure")
+	})
+
+	t.Run("EmptyNameRejected", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		catHandler := catalog.NewCreateCategoryHandler(runner)
+		itemHandler := catalog.NewCreateItemHandler(runner)
+
+		_, cat, err := catHandler.Handle(ctx, actor, catalog.CreateCategoryCommand{
+			RequestID: uuid.New(),
+			Name:      "Beverages",
+		})
+		require.NoError(t, err)
+
+		price := int64(45000)
+		status, _, err := itemHandler.Handle(ctx, actor, catalog.CreateItemCommand{
+			RequestID:  uuid.New(),
+			CategoryID: cat.ID,
+			Name:       "   ",
+			PriceVND:   &price,
+			ManagerPIN: manager.PIN,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrInvalidPricingConfiguration), "expected ErrInvalidPricingConfiguration, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify no item was persisted
+		var itemCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM menu_items`).Scan(&itemCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, itemCount, "whitespace-only name must not create an item")
 	})
 }
 
