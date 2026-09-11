@@ -42,11 +42,11 @@ func (h *CreateCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Cre
 	display, key := NormalizeName(cmd.Name)
 	spec := MutationSpec{
 		RequestID: cmd.RequestID,
-		Operation: "catalog.category.create",
+		Operation: OpCategoryCreate,
 		Fingerprint: createCategoryFingerprint{
 			Name: display,
 		},
-		Required: []string{"catalog.administer_structure"},
+		Required: []string{CapAdministerStructure},
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, CategoryResponse, AuditRecord, error) {
@@ -63,7 +63,7 @@ func (h *CreateCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Cre
 			Name: category.Name,
 		}
 		audit := AuditRecord{
-			EventType: "catalog.category.created",
+			EventType: EventCategoryCreated,
 			Details: categoryCreatedAuditDetails{
 				CategoryID: category.ID,
 				Name:       category.Name,
@@ -88,12 +88,12 @@ func (h *RenameCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Ren
 	display, key := NormalizeName(cmd.Name)
 	spec := MutationSpec{
 		RequestID: cmd.RequestID,
-		Operation: "catalog.category.rename",
+		Operation: OpCategoryRename,
 		Fingerprint: renameCategoryFingerprint{
 			CategoryID: cmd.CategoryID,
 			Name:       display,
 		},
-		Required: []string{"catalog.administer_structure"},
+		Required: []string{CapAdministerStructure},
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, CategoryResponse, AuditRecord, error) {
@@ -116,7 +116,7 @@ func (h *RenameCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Ren
 			Name: category.Name,
 		}
 		audit := AuditRecord{
-			EventType: "catalog.category.renamed",
+			EventType: EventCategoryRenamed,
 			Details: categoryRenamedAuditDetails{
 				CategoryID: category.ID,
 				OldName:    existing.Name,

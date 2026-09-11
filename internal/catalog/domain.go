@@ -9,6 +9,26 @@ import (
 	"github.com/google/uuid"
 )
 
+// Capabilities required for catalog operations.
+const (
+	CapAdministerStructure = "catalog.administer_structure"
+	CapChangePrice         = "catalog.change_price"
+	CapViewPrices          = "catalog.view_prices"
+	CapManageAvailability  = "catalog.manage_availability"
+)
+
+// Operations for catalog mutations.
+const (
+	OpCategoryCreate = "catalog.category.create"
+	OpCategoryRename = "catalog.category.rename"
+)
+
+// Audit event types emitted by catalog operations.
+const (
+	EventCategoryCreated = "catalog.category.created"
+	EventCategoryRenamed = "catalog.category.renamed"
+)
+
 // Retirement holds optional retirement metadata.
 type Retirement struct {
 	Reason string
