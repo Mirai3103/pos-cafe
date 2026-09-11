@@ -60,10 +60,14 @@ type ItemModifierGroupExclusion struct {
 }
 
 type MenuCategory struct {
-	ID             uuid.UUID `json:"id"`
-	Name           string    `json:"name"`
-	NormalizedName string    `json:"normalized_name"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID               uuid.UUID      `json:"id"`
+	Name             string         `json:"name"`
+	NormalizedName   string         `json:"normalized_name"`
+	CreatedAt        time.Time      `json:"created_at"`
+	RetiredAt        sql.NullTime   `json:"retired_at"`
+	RetirementReason sql.NullString `json:"retirement_reason"`
+	RetirementNote   sql.NullString `json:"retirement_note"`
+	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
 type MenuItem struct {

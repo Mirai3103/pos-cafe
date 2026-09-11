@@ -96,6 +96,7 @@ type Querier interface {
 	RepriceMenuItem(ctx context.Context, arg RepriceMenuItemParams) (MenuItem, error)
 	RepriceMenuItemSize(ctx context.Context, arg RepriceMenuItemSizeParams) (MenuItemSize, error)
 	RepriceModifierOption(ctx context.Context, arg RepriceModifierOptionParams) (ModifierOption, error)
+	RetireMenuCategory(ctx context.Context, arg RetireMenuCategoryParams) (MenuCategory, error)
 	RetireMenuItem(ctx context.Context, arg RetireMenuItemParams) (MenuItem, error)
 	RetireMenuItemSize(ctx context.Context, arg RetireMenuItemSizeParams) (MenuItemSize, error)
 	RetireModifierGroup(ctx context.Context, arg RetireModifierGroupParams) (ModifierGroup, error)

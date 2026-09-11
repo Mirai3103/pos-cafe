@@ -53,15 +53,18 @@ LIMIT $1;
 -- name: CreateMenuCategory :one
 INSERT INTO menu_categories (name, normalized_name)
 VALUES ($1, $2)
-RETURNING id, name, normalized_name, created_at;
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at;
 
 -- name: GetMenuCategoryByID :one
-SELECT id, name, normalized_name, created_at
+SELECT id, name, normalized_name, created_at,
+       retired_at, retirement_reason, retirement_note, updated_at
 FROM menu_categories
 WHERE id = $1;
 
 -- name: GetMenuCategoryForUpdate :one
-SELECT id, name, normalized_name, created_at
+SELECT id, name, normalized_name, created_at,
+       retired_at, retirement_reason, retirement_note, updated_at
 FROM menu_categories
 WHERE id = $1
 FOR UPDATE;
@@ -70,10 +73,19 @@ FOR UPDATE;
 UPDATE menu_categories
 SET name = $2, normalized_name = $3
 WHERE id = $1
-RETURNING id, name, normalized_name, created_at;
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at;
+
+-- name: RetireMenuCategory :one
+UPDATE menu_categories
+SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at;
 
 -- name: ListMenuCategories :many
-SELECT id, name, normalized_name, created_at
+SELECT id, name, normalized_name, created_at,
+       retired_at, retirement_reason, retirement_note, updated_at
 FROM menu_categories
 ORDER BY normalized_name ASC, id ASC;
 

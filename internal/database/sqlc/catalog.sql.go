@@ -118,7 +118,8 @@ const createMenuCategory = `-- name: CreateMenuCategory :one
 
 INSERT INTO menu_categories (name, normalized_name)
 VALUES ($1, $2)
-RETURNING id, name, normalized_name, created_at
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at
 `
 
 type CreateMenuCategoryParams struct {
@@ -135,6 +136,10 @@ func (q *Queries) CreateMenuCategory(ctx context.Context, arg CreateMenuCategory
 		&i.Name,
 		&i.NormalizedName,
 		&i.CreatedAt,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -458,7 +463,8 @@ func (q *Queries) GetCategoryModifierGroup(ctx context.Context, arg GetCategoryM
 }
 
 const getMenuCategoryByID = `-- name: GetMenuCategoryByID :one
-SELECT id, name, normalized_name, created_at
+SELECT id, name, normalized_name, created_at,
+       retired_at, retirement_reason, retirement_note, updated_at
 FROM menu_categories
 WHERE id = $1
 `
@@ -471,12 +477,17 @@ func (q *Queries) GetMenuCategoryByID(ctx context.Context, id uuid.UUID) (MenuCa
 		&i.Name,
 		&i.NormalizedName,
 		&i.CreatedAt,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getMenuCategoryForUpdate = `-- name: GetMenuCategoryForUpdate :one
-SELECT id, name, normalized_name, created_at
+SELECT id, name, normalized_name, created_at,
+       retired_at, retirement_reason, retirement_note, updated_at
 FROM menu_categories
 WHERE id = $1
 FOR UPDATE
@@ -490,6 +501,10 @@ func (q *Queries) GetMenuCategoryForUpdate(ctx context.Context, id uuid.UUID) (M
 		&i.Name,
 		&i.NormalizedName,
 		&i.CreatedAt,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -1395,7 +1410,8 @@ func (q *Queries) ListItemModifierGroupsByItem(ctx context.Context, menuItemID u
 }
 
 const listMenuCategories = `-- name: ListMenuCategories :many
-SELECT id, name, normalized_name, created_at
+SELECT id, name, normalized_name, created_at,
+       retired_at, retirement_reason, retirement_note, updated_at
 FROM menu_categories
 ORDER BY normalized_name ASC, id ASC
 `
@@ -1414,6 +1430,10 @@ func (q *Queries) ListMenuCategories(ctx context.Context) ([]MenuCategory, error
 			&i.Name,
 			&i.NormalizedName,
 			&i.CreatedAt,
+			&i.RetiredAt,
+			&i.RetirementReason,
+			&i.RetirementNote,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1712,7 +1732,8 @@ const renameMenuCategory = `-- name: RenameMenuCategory :one
 UPDATE menu_categories
 SET name = $2, normalized_name = $3
 WHERE id = $1
-RETURNING id, name, normalized_name, created_at
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at
 `
 
 type RenameMenuCategoryParams struct {
@@ -1729,6 +1750,10 @@ func (q *Queries) RenameMenuCategory(ctx context.Context, arg RenameMenuCategory
 		&i.Name,
 		&i.NormalizedName,
 		&i.CreatedAt,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -1962,6 +1987,42 @@ func (q *Queries) RepriceModifierOption(ctx context.Context, arg RepriceModifier
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const retireMenuCategory = `-- name: RetireMenuCategory :one
+UPDATE menu_categories
+SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at
+`
+
+type RetireMenuCategoryParams struct {
+	ID               uuid.UUID      `json:"id"`
+	RetiredAt        sql.NullTime   `json:"retired_at"`
+	RetirementReason sql.NullString `json:"retirement_reason"`
+	RetirementNote   sql.NullString `json:"retirement_note"`
+}
+
+func (q *Queries) RetireMenuCategory(ctx context.Context, arg RetireMenuCategoryParams) (MenuCategory, error) {
+	row := q.db.QueryRowContext(ctx, retireMenuCategory,
+		arg.ID,
+		arg.RetiredAt,
+		arg.RetirementReason,
+		arg.RetirementNote,
+	)
+	var i MenuCategory
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.CreatedAt,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
 		&i.UpdatedAt,
 	)
 	return i, err
