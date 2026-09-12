@@ -75,7 +75,7 @@ func TestTableAssignmentReleaseEvidenceConstraint(t *testing.T) {
 	var staffID string
 	err := db.QueryRowContext(ctx,
 		`INSERT INTO staff_identities (display_name, login_code, pin_hash, enabled)
-		 VALUES ('Schema Actor', 'SCHEMA1', '', true) RETURNING id`).Scan(&staffID)
+		 VALUES ('Schema Actor', $1, '', true) RETURNING id`, testLoginCode("SCH")).Scan(&staffID)
 	require.NoError(t, err)
 	t.Cleanup(func() { _, _ = db.ExecContext(ctx, `DELETE FROM staff_identities WHERE id = $1`, staffID) })
 
@@ -88,7 +88,7 @@ func TestTableAssignmentReleaseEvidenceConstraint(t *testing.T) {
 	var sessionID string
 	err = db.QueryRowContext(ctx,
 		`INSERT INTO service_sessions (service_number, service_mode, state, created_by_staff_identity_id)
-		 VALUES ('SCH001', 'DINE_IN', 'ACTIVE', $1) RETURNING id`, staffID).Scan(&sessionID)
+		 VALUES ($1, 'DINE_IN', 'ACTIVE', $2) RETURNING id`, randomServiceNumber(), staffID).Scan(&sessionID)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -126,7 +126,7 @@ func TestServiceSessionNumberConstraint(t *testing.T) {
 	var staffID string
 	err := db.QueryRowContext(ctx,
 		`INSERT INTO staff_identities (display_name, login_code, pin_hash, enabled)
-		 VALUES ('Schema Actor 2', 'SCHEMA2', '', true) RETURNING id`).Scan(&staffID)
+		 VALUES ('Schema Actor 2', $1, '', true) RETURNING id`, testLoginCode("SCH")).Scan(&staffID)
 	require.NoError(t, err)
 	t.Cleanup(func() { _, _ = db.ExecContext(ctx, `DELETE FROM staff_identities WHERE id = $1`, staffID) })
 
@@ -144,6 +144,6 @@ func TestServiceSessionNumberConstraint(t *testing.T) {
 	// An invalid state is rejected.
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO service_sessions (service_number, state, created_by_staff_identity_id)
-		 VALUES ('SCH002', 'PENDING', $1)`, staffID)
+		 VALUES ($1, 'PENDING', $2)`, randomServiceNumber(), staffID)
 	require.Error(t, err, "unknown state must be rejected")
 }
