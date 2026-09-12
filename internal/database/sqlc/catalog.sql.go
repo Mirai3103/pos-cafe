@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const catalogAdvisoryLock = `-- name: CatalogAdvisoryLock :exec
@@ -232,6 +233,64 @@ func (q *Queries) CreateMenuItemSize(ctx context.Context, arg CreateMenuItemSize
 	return i, err
 }
 
+const createMenuItemSizes = `-- name: CreateMenuItemSizes :many
+INSERT INTO menu_item_sizes (menu_item_id, name, normalized_name, price_vnd, available)
+SELECT $1, u.name, u.normalized_name, u.price_vnd, true
+FROM ROWS FROM (unnest($2::text[]), unnest($3::text[]), unnest($4::bigint[]))
+    WITH ORDINALITY AS u(name, normalized_name, price_vnd, ord)
+ORDER BY u.ord
+RETURNING id, menu_item_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at
+`
+
+type CreateMenuItemSizesParams struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	Names           []string  `json:"names"`
+	NormalizedNames []string  `json:"normalized_names"`
+	Prices          []int64   `json:"prices"`
+}
+
+func (q *Queries) CreateMenuItemSizes(ctx context.Context, arg CreateMenuItemSizesParams) ([]MenuItemSize, error) {
+	rows, err := q.db.QueryContext(ctx, createMenuItemSizes,
+		arg.MenuItemID,
+		pq.Array(arg.Names),
+		pq.Array(arg.NormalizedNames),
+		pq.Array(arg.Prices),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MenuItemSize{}
+	for rows.Next() {
+		var i MenuItemSize
+		if err := rows.Scan(
+			&i.ID,
+			&i.MenuItemID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.PriceVnd,
+			&i.Available,
+			&i.RetiredAt,
+			&i.RetirementReason,
+			&i.RetirementNote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createModifierGroup = `-- name: CreateModifierGroup :one
 
 INSERT INTO modifier_groups (name, normalized_name, min_selections, max_selections)
@@ -287,6 +346,21 @@ func (q *Queries) CreateModifierGroupDefaultOption(ctx context.Context, arg Crea
 	return err
 }
 
+const createModifierGroupDefaultOptions = `-- name: CreateModifierGroupDefaultOptions :exec
+INSERT INTO modifier_group_default_options (modifier_group_id, modifier_option_id)
+SELECT $1, unnest($2::uuid[])
+`
+
+type CreateModifierGroupDefaultOptionsParams struct {
+	ModifierGroupID uuid.UUID   `json:"modifier_group_id"`
+	OptionIds       []uuid.UUID `json:"option_ids"`
+}
+
+func (q *Queries) CreateModifierGroupDefaultOptions(ctx context.Context, arg CreateModifierGroupDefaultOptionsParams) error {
+	_, err := q.db.ExecContext(ctx, createModifierGroupDefaultOptions, arg.ModifierGroupID, pq.Array(arg.OptionIds))
+	return err
+}
+
 const createModifierOption = `-- name: CreateModifierOption :one
 
 INSERT INTO modifier_options
@@ -329,6 +403,64 @@ func (q *Queries) CreateModifierOption(ctx context.Context, arg CreateModifierOp
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const createModifierOptions = `-- name: CreateModifierOptions :many
+INSERT INTO modifier_options (modifier_group_id, name, normalized_name, surcharge_vnd, available)
+SELECT $1, u.name, u.normalized_name, u.surcharge_vnd, true
+FROM ROWS FROM (unnest($2::text[]), unnest($3::text[]), unnest($4::bigint[]))
+    WITH ORDINALITY AS u(name, normalized_name, surcharge_vnd, ord)
+ORDER BY u.ord
+RETURNING id, modifier_group_id, name, normalized_name, surcharge_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at
+`
+
+type CreateModifierOptionsParams struct {
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+	Names           []string  `json:"names"`
+	NormalizedNames []string  `json:"normalized_names"`
+	Surcharges      []int64   `json:"surcharges"`
+}
+
+func (q *Queries) CreateModifierOptions(ctx context.Context, arg CreateModifierOptionsParams) ([]ModifierOption, error) {
+	rows, err := q.db.QueryContext(ctx, createModifierOptions,
+		arg.ModifierGroupID,
+		pq.Array(arg.Names),
+		pq.Array(arg.NormalizedNames),
+		pq.Array(arg.Surcharges),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModifierOption{}
+	for rows.Next() {
+		var i ModifierOption
+		if err := rows.Scan(
+			&i.ID,
+			&i.ModifierGroupID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.SurchargeVnd,
+			&i.Available,
+			&i.RetiredAt,
+			&i.RetirementReason,
+			&i.RetirementNote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteModifierGroupDefaultOptions = `-- name: DeleteModifierGroupDefaultOptions :exec

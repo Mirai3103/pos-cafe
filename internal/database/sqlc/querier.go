@@ -28,11 +28,14 @@ type Querier interface {
 	CreateMenuItem(ctx context.Context, arg CreateMenuItemParams) (MenuItem, error)
 	// -- Menu Item Sizes --
 	CreateMenuItemSize(ctx context.Context, arg CreateMenuItemSizeParams) (MenuItemSize, error)
+	CreateMenuItemSizes(ctx context.Context, arg CreateMenuItemSizesParams) ([]MenuItemSize, error)
 	// -- Modifier Groups --
 	CreateModifierGroup(ctx context.Context, arg CreateModifierGroupParams) (ModifierGroup, error)
 	CreateModifierGroupDefaultOption(ctx context.Context, arg CreateModifierGroupDefaultOptionParams) error
+	CreateModifierGroupDefaultOptions(ctx context.Context, arg CreateModifierGroupDefaultOptionsParams) error
 	// -- Modifier Options --
 	CreateModifierOption(ctx context.Context, arg CreateModifierOptionParams) (ModifierOption, error)
+	CreateModifierOptions(ctx context.Context, arg CreateModifierOptionsParams) ([]ModifierOption, error)
 	CreateStaffIdentity(ctx context.Context, arg CreateStaffIdentityParams) (CreateStaffIdentityRow, error)
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error

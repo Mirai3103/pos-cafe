@@ -219,6 +219,16 @@ FROM menu_item_sizes
 WHERE menu_item_id = $1
 ORDER BY normalized_name ASC, id ASC;
 
+-- name: CreateMenuItemSizes :many
+INSERT INTO menu_item_sizes (menu_item_id, name, normalized_name, price_vnd, available)
+SELECT sqlc.arg(menu_item_id), u.name, u.normalized_name, u.price_vnd, true
+FROM ROWS FROM (unnest(sqlc.arg(names)::text[]), unnest(sqlc.arg(normalized_names)::text[]), unnest(sqlc.arg(prices)::bigint[]))
+    WITH ORDINALITY AS u(name, normalized_name, price_vnd, ord)
+ORDER BY u.ord
+RETURNING id, menu_item_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at;
+
 -- -- Modifier Groups --
 
 -- name: CreateModifierGroup :one
@@ -331,6 +341,16 @@ FROM modifier_options
 WHERE modifier_group_id = $1
 ORDER BY normalized_name ASC, id ASC;
 
+-- name: CreateModifierOptions :many
+INSERT INTO modifier_options (modifier_group_id, name, normalized_name, surcharge_vnd, available)
+SELECT sqlc.arg(modifier_group_id), u.name, u.normalized_name, u.surcharge_vnd, true
+FROM ROWS FROM (unnest(sqlc.arg(names)::text[]), unnest(sqlc.arg(normalized_names)::text[]), unnest(sqlc.arg(surcharges)::bigint[]))
+    WITH ORDINALITY AS u(name, normalized_name, surcharge_vnd, ord)
+ORDER BY u.ord
+RETURNING id, modifier_group_id, name, normalized_name, surcharge_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at;
+
 -- -- Association Queries --
 
 -- name: CreateItemModifierGroup :exec
@@ -348,6 +368,10 @@ VALUES ($1, $2);
 -- name: CreateModifierGroupDefaultOption :exec
 INSERT INTO modifier_group_default_options (modifier_group_id, modifier_option_id)
 VALUES ($1, $2);
+
+-- name: CreateModifierGroupDefaultOptions :exec
+INSERT INTO modifier_group_default_options (modifier_group_id, modifier_option_id)
+SELECT sqlc.arg(modifier_group_id), unnest(sqlc.arg(option_ids)::uuid[]);
 
 -- name: DeleteModifierGroupDefaultOptions :exec
 DELETE FROM modifier_group_default_options
