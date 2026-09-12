@@ -145,7 +145,7 @@ func (h *RetireCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Ret
 
 		res := CategoryResponse{ID: category.ID, Name: category.Name, Retired: true}
 		if category.RetiredAt.Valid {
-			t := category.RetiredAt.Time
+			t := category.RetiredAt.Time.UTC()
 			res.RetiredAt = &t
 		}
 		if category.RetirementReason.Valid {
