@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
 
@@ -52,7 +53,7 @@ func (h *CreateCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Cre
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, CategoryResponse, AuditRecord, error) {
 		if display == "" {
-			return 0, CategoryResponse{}, AuditRecord{}, fmt.Errorf("%w: category name cannot be empty", ErrInvalidCategoryConfiguration)
+			return 0, CategoryResponse{}, AuditRecord{}, fmt.Errorf("%w: category name cannot be empty", response.ErrInvalid)
 		}
 
 		category, err := q.CreateMenuCategory(ctx, sqlc.CreateMenuCategoryParams{
@@ -111,7 +112,7 @@ func (h *RenameCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Ren
 		}
 
 		if display == "" {
-			return 0, CategoryResponse{}, AuditRecord{}, fmt.Errorf("%w: category name cannot be empty", ErrInvalidCategoryConfiguration)
+			return 0, CategoryResponse{}, AuditRecord{}, fmt.Errorf("%w: category name cannot be empty", response.ErrInvalid)
 		}
 
 		category, err := q.RenameMenuCategory(ctx, sqlc.RenameMenuCategoryParams{

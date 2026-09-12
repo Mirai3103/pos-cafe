@@ -331,7 +331,7 @@ func TestRenameItem(t *testing.T) {
 			Name:      "   ",
 		})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidPricingConfiguration), "expected ErrInvalidPricingConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 
 		// Verify the item name is unchanged
@@ -626,7 +626,7 @@ func TestRenameSize(t *testing.T) {
 			Name:      "   ",
 		})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidPricingConfiguration), "expected ErrInvalidPricingConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 
 		// Verify the size name is unchanged
@@ -864,7 +864,7 @@ func TestRenameModifierGroup(t *testing.T) {
 			Name:      "   ",
 		})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 
 		// Verify the group name is unchanged
@@ -1151,7 +1151,7 @@ func TestRenameModifierOption(t *testing.T) {
 			Name:      "   ",
 		})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 
 		// Verify the option name is unchanged

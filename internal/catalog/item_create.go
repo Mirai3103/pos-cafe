@@ -101,7 +101,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 
 		// 4. Validate item name is non-empty after normalization.
 		if display == "" {
-			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: item name cannot be empty", ErrInvalidPricingConfiguration)
+			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: item name cannot be empty", response.ErrInvalid)
 		}
 
 		// 5. Validate direct price if present.
@@ -117,7 +117,7 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			for _, s := range cmd.Sizes {
 				sDisplay, sKey := NormalizeName(s.Name)
 				if sDisplay == "" {
-					return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: size name cannot be empty", ErrInvalidPricingConfiguration)
+					return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: size name cannot be empty", response.ErrInvalid)
 				}
 				if seenSizes[sKey] {
 					return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: duplicate size name %q", ErrNameConflict, sDisplay)

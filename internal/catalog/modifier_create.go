@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
 
@@ -89,7 +90,7 @@ func (h *CreateModifierGroupHandler) Handle(ctx context.Context, actor Actor, cm
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, ModifierGroupResponse, AuditRecord, error) {
 		// 1. Validate modifier group name
 		if display == "" {
-			return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: group name cannot be empty", ErrInvalidModifierConfiguration)
+			return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: group name cannot be empty", response.ErrInvalid)
 		}
 
 		// 2. Validate at least one option is present
@@ -112,7 +113,7 @@ func (h *CreateModifierGroupHandler) Handle(ctx context.Context, actor Actor, cm
 		for _, o := range cmd.Options {
 			oDisplay, oKey := NormalizeName(o.Name)
 			if oDisplay == "" {
-				return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: option name cannot be empty", ErrInvalidModifierConfiguration)
+				return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: option name cannot be empty", response.ErrInvalid)
 			}
 			if seenOptions[oKey] {
 				return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: duplicate option name %q", ErrNameConflict, oDisplay)

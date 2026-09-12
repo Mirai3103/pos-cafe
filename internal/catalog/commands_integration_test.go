@@ -214,7 +214,7 @@ func TestCreateCategory(t *testing.T) {
 			Name:      "   ",
 		})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidCategoryConfiguration), "expected ErrInvalidCategoryConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 
 		// Verify nothing was persisted
@@ -433,7 +433,7 @@ func TestRenameCategory(t *testing.T) {
 			Name:       "   ",
 		})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidCategoryConfiguration), "expected ErrInvalidCategoryConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 
 		// Verify the category name is unchanged
@@ -1167,7 +1167,7 @@ func TestCreateItem(t *testing.T) {
 			ManagerPIN: manager.PIN,
 		})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidPricingConfiguration), "expected ErrInvalidPricingConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 
 		// Verify no item was persisted
@@ -1762,7 +1762,7 @@ func TestCreateModifierGroup(t *testing.T) {
 
 		status, _, err := handler.Handle(ctx, actor, cmd)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 	})
 
@@ -1786,7 +1786,7 @@ func TestCreateModifierGroup(t *testing.T) {
 
 		status, _, err := handler.Handle(ctx, actor, cmd)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "expected ErrInvalidModifierConfiguration, got: %v", err)
+		assert.True(t, errors.Is(err, response.ErrInvalid), "expected ErrInvalid, got: %v", err)
 		assert.Equal(t, 0, status)
 	})
 

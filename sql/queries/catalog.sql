@@ -71,7 +71,7 @@ FOR UPDATE;
 
 -- name: RenameMenuCategory :one
 UPDATE menu_categories
-SET name = $2, normalized_name = $3
+SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
           retired_at, retirement_reason, retirement_note, updated_at;

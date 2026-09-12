@@ -5,12 +5,9 @@ import (
 	"fmt"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
-
-func normalizeName(raw string) (display, key string) {
-	return NormalizeName(raw)
-}
 
 // Fingerprints and audit details
 
@@ -76,7 +73,7 @@ func NewRenameItemHandler(runner *Runner) *RenameItemHandler {
 
 // Handle executes the item rename command.
 func (h *RenameItemHandler) Handle(ctx context.Context, actor Actor, cmd RenameItemCommand) (int, ItemResponse, error) {
-	display, key := normalizeName(cmd.Name)
+	display, key := NormalizeName(cmd.Name)
 	spec := MutationSpec{
 		RequestID: cmd.RequestID,
 		Operation: OpItemRename,
@@ -97,7 +94,7 @@ func (h *RenameItemHandler) Handle(ctx context.Context, actor Actor, cmd RenameI
 		}
 
 		if display == "" {
-			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: item name cannot be empty", ErrInvalidPricingConfiguration)
+			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: item name cannot be empty", response.ErrInvalid)
 		}
 
 		item, err := q.RenameMenuItem(ctx, sqlc.RenameMenuItemParams{
@@ -164,7 +161,7 @@ func NewRenameSizeHandler(runner *Runner) *RenameSizeHandler {
 
 // Handle executes the size rename command.
 func (h *RenameSizeHandler) Handle(ctx context.Context, actor Actor, cmd RenameSizeCommand) (int, SizeResponse, error) {
-	display, key := normalizeName(cmd.Name)
+	display, key := NormalizeName(cmd.Name)
 	spec := MutationSpec{
 		RequestID: cmd.RequestID,
 		Operation: OpSizeRename,
@@ -182,7 +179,7 @@ func (h *RenameSizeHandler) Handle(ctx context.Context, actor Actor, cmd RenameS
 		}
 
 		if display == "" {
-			return 0, SizeResponse{}, AuditRecord{}, fmt.Errorf("%w: size name cannot be empty", ErrInvalidPricingConfiguration)
+			return 0, SizeResponse{}, AuditRecord{}, fmt.Errorf("%w: size name cannot be empty", response.ErrInvalid)
 		}
 
 		size, err := q.RenameMenuItemSize(ctx, sqlc.RenameMenuItemSizeParams{
@@ -229,7 +226,7 @@ func NewRenameModifierGroupHandler(runner *Runner) *RenameModifierGroupHandler {
 
 // Handle executes the modifier group rename command.
 func (h *RenameModifierGroupHandler) Handle(ctx context.Context, actor Actor, cmd RenameModifierGroupCommand) (int, ModifierGroupResponse, error) {
-	display, key := normalizeName(cmd.Name)
+	display, key := NormalizeName(cmd.Name)
 	spec := MutationSpec{
 		RequestID: cmd.RequestID,
 		Operation: OpModifierGroupRename,
@@ -250,7 +247,7 @@ func (h *RenameModifierGroupHandler) Handle(ctx context.Context, actor Actor, cm
 		}
 
 		if display == "" {
-			return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: group name cannot be empty", ErrInvalidModifierConfiguration)
+			return 0, ModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: group name cannot be empty", response.ErrInvalid)
 		}
 
 		group, err := q.RenameModifierGroup(ctx, sqlc.RenameModifierGroupParams{
@@ -321,7 +318,7 @@ func NewRenameModifierOptionHandler(runner *Runner) *RenameModifierOptionHandler
 
 // Handle executes the modifier option rename command.
 func (h *RenameModifierOptionHandler) Handle(ctx context.Context, actor Actor, cmd RenameModifierOptionCommand) (int, ModifierOptionResponse, error) {
-	display, key := normalizeName(cmd.Name)
+	display, key := NormalizeName(cmd.Name)
 	spec := MutationSpec{
 		RequestID: cmd.RequestID,
 		Operation: OpModifierOptionRename,
@@ -339,7 +336,7 @@ func (h *RenameModifierOptionHandler) Handle(ctx context.Context, actor Actor, c
 		}
 
 		if display == "" {
-			return 0, ModifierOptionResponse{}, AuditRecord{}, fmt.Errorf("%w: option name cannot be empty", ErrInvalidModifierConfiguration)
+			return 0, ModifierOptionResponse{}, AuditRecord{}, fmt.Errorf("%w: option name cannot be empty", response.ErrInvalid)
 		}
 
 		opt, err := q.RenameModifierOption(ctx, sqlc.RenameModifierOptionParams{
