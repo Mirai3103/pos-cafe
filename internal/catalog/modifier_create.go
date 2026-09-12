@@ -154,38 +154,47 @@ func (h *CreateModifierGroupHandler) Handle(ctx context.Context, actor Actor, cm
 			return 0, ModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 8. Create modifier options
-		createdOptions := make([]sqlc.ModifierOption, 0, len(cmd.Options))
-		optMap := make(map[string]uuid.UUID, len(cmd.Options))
-		for _, o := range cmd.Options {
+		// 8. Create modifier options in a single batch insert.
+		names := make([]string, len(cmd.Options))
+		normNames := make([]string, len(cmd.Options))
+		surcharges := make([]int64, len(cmd.Options))
+		for i, o := range cmd.Options {
 			oDisplay, oKey := NormalizeName(o.Name)
-			optRow, err := q.CreateModifierOption(ctx, sqlc.CreateModifierOptionParams{
-				ModifierGroupID: group.ID,
-				Name:            oDisplay,
-				NormalizedName:  oKey,
-				SurchargeVnd:    o.SurchargeVND,
-				Available:       true,
-			})
-			if err != nil {
-				return 0, ModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
-			}
-			createdOptions = append(createdOptions, optRow)
-			optMap[oKey] = optRow.ID
+			names[i] = oDisplay
+			normNames[i] = oKey
+			surcharges[i] = o.SurchargeVND
+		}
+		createdOptions, err := q.CreateModifierOptions(ctx, sqlc.CreateModifierOptionsParams{
+			ModifierGroupID: group.ID,
+			Names:           names,
+			NormalizedNames: normNames,
+			Surcharges:      surcharges,
+		})
+		if err != nil {
+			return 0, ModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 9. Create default options associations
+		// The batch query returns rows in input order (ORDER BY ordinality),
+		// so createdOptions[i] corresponds to cmd.Options[i], whose normalized
+		// key is normNames[i].
+		optMap := make(map[string]uuid.UUID, len(cmd.Options))
+		for i, oKey := range normNames {
+			optMap[oKey] = createdOptions[i].ID
+		}
+
+		// 9. Create default options associations in a single batch insert.
 		defaultIDs := make([]uuid.UUID, 0, len(cmd.DefaultOptionNames))
 		for _, d := range cmd.DefaultOptionNames {
 			_, dKey := NormalizeName(d)
-			optID := optMap[dKey]
-			err := q.CreateModifierGroupDefaultOption(ctx, sqlc.CreateModifierGroupDefaultOptionParams{
-				ModifierGroupID:  group.ID,
-				ModifierOptionID: optID,
-			})
-			if err != nil {
+			defaultIDs = append(defaultIDs, optMap[dKey])
+		}
+		if len(defaultIDs) > 0 {
+			if err := q.CreateModifierGroupDefaultOptions(ctx, sqlc.CreateModifierGroupDefaultOptionsParams{
+				ModifierGroupID: group.ID,
+				OptionIds:       defaultIDs,
+			}); err != nil {
 				return 0, ModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
 			}
-			defaultIDs = append(defaultIDs, optID)
 		}
 
 		// 10. Assemble ModifierGroupResponse

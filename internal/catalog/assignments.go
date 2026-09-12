@@ -337,12 +337,11 @@ func (h *SetModifierGroupDefaultsHandler) Handle(ctx context.Context, actor Acto
 			return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		for _, id := range optIDs {
-			err = q.CreateModifierGroupDefaultOption(ctx, sqlc.CreateModifierGroupDefaultOptionParams{
-				ModifierGroupID:  cmd.GroupID,
-				ModifierOptionID: id,
-			})
-			if err != nil {
+		if len(optIDs) > 0 {
+			if err := q.CreateModifierGroupDefaultOptions(ctx, sqlc.CreateModifierGroupDefaultOptionsParams{
+				ModifierGroupID: cmd.GroupID,
+				OptionIds:       optIDs,
+			}); err != nil {
 				return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, MapDBError(err)
 			}
 		}

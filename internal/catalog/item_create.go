@@ -144,23 +144,26 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 8. Create Sizes in database if sized item.
+		// 8. Create Sizes in database in a single batch insert if sized item.
 		var createdSizes []sqlc.MenuItemSize
 		if hasSizes {
-			createdSizes = make([]sqlc.MenuItemSize, 0, len(cmd.Sizes))
-			for _, s := range cmd.Sizes {
+			sizeNames := make([]string, len(cmd.Sizes))
+			sizeNormNames := make([]string, len(cmd.Sizes))
+			sizePrices := make([]int64, len(cmd.Sizes))
+			for i, s := range cmd.Sizes {
 				sDisplay, sKey := NormalizeName(s.Name)
-				sizeRow, err := q.CreateMenuItemSize(ctx, sqlc.CreateMenuItemSizeParams{
-					MenuItemID:     item.ID,
-					Name:           sDisplay,
-					NormalizedName: sKey,
-					PriceVnd:       s.PriceVND,
-					Available:      true,
-				})
-				if err != nil {
-					return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
-				}
-				createdSizes = append(createdSizes, sizeRow)
+				sizeNames[i] = sDisplay
+				sizeNormNames[i] = sKey
+				sizePrices[i] = s.PriceVND
+			}
+			createdSizes, err = q.CreateMenuItemSizes(ctx, sqlc.CreateMenuItemSizesParams{
+				MenuItemID:      item.ID,
+				Names:           sizeNames,
+				NormalizedNames: sizeNormNames,
+				Prices:          sizePrices,
+			})
+			if err != nil {
+				return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 			}
 		}
 

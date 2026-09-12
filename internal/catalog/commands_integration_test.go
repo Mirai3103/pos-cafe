@@ -1326,6 +1326,40 @@ func TestCreateModifierGroup(t *testing.T) {
 		assert.Equal(t, 0, defCount)
 	})
 
+	t.Run("Success_PreservesOptionInputOrder", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewCreateModifierGroupHandler(runner)
+
+		cmd := catalog.CreateModifierGroupCommand{
+			RequestID:     uuid.New(),
+			Name:          "Sweetness",
+			MinSelections: 0,
+			MaxSelections: 3,
+			Options: []catalog.CreateModifierOptionInput{
+				{Name: "Zebra", SurchargeVND: 0},
+				{Name: "Apple", SurchargeVND: 1000},
+				{Name: "Mango", SurchargeVND: 2000},
+			},
+			ManagerPIN: manager.PIN,
+		}
+
+		status, res, err := handler.Handle(ctx, actor, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, 201, status)
+		require.Len(t, res.Options, 3)
+		// Options must come back in the exact input order, not alphabetical.
+		assert.Equal(t, "Zebra", res.Options[0].Name)
+		assert.Equal(t, "Apple", res.Options[1].Name)
+		assert.Equal(t, "Mango", res.Options[2].Name)
+		// Surcharges must stay aligned with their options.
+		assert.Equal(t, int64(0), res.Options[0].SurchargeVND)
+		assert.Equal(t, int64(1000), res.Options[1].SurchargeVND)
+		assert.Equal(t, int64(2000), res.Options[2].SurchargeVND)
+	})
+
 	t.Run("Reject_NoOptions", func(t *testing.T) {
 		cleanCategoryTestTables(t, db)
 
