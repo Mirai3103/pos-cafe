@@ -131,6 +131,16 @@ type ModifierOption struct {
 	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
+// Owned by internal/sales (Phase 5). Provisioned in Phase 3 for the Tables overview read; sales_shift_id is added in Phase 5.
+type ServiceSession struct {
+	ID                       uuid.UUID `json:"id"`
+	ServiceNumber            string    `json:"service_number"`
+	ServiceMode              string    `json:"service_mode"`
+	State                    string    `json:"state"`
+	CreatedByStaffIdentityID uuid.UUID `json:"created_by_staff_identity_id"`
+	CreatedAt                time.Time `json:"created_at"`
+}
+
 type StaffAccessSession struct {
 	ID                  uuid.UUID      `json:"id"`
 	TokenHash           string         `json:"token_hash"`
@@ -156,4 +166,25 @@ type StaffIdentity struct {
 type StaffOperationalRole struct {
 	StaffIdentityID uuid.UUID `json:"staff_identity_id"`
 	Role            string    `json:"role"`
+}
+
+type Table struct {
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	NormalizedName string    `json:"normalized_name"`
+	Available      bool      `json:"available"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// Owned by internal/sales (Phase 5). Provisioned in Phase 3 for the Tables overview read.
+type TableAssignment struct {
+	ID                        uuid.UUID     `json:"id"`
+	TableID                   uuid.UUID     `json:"table_id"`
+	ServiceSessionID          uuid.UUID     `json:"service_session_id"`
+	AssignedAt                time.Time     `json:"assigned_at"`
+	AssignedByStaffIdentityID uuid.UUID     `json:"assigned_by_staff_identity_id"`
+	Sequence                  int32         `json:"sequence"`
+	ReleasedAt                sql.NullTime  `json:"released_at"`
+	ReleasedByStaffIdentityID uuid.NullUUID `json:"released_by_staff_identity_id"`
 }
