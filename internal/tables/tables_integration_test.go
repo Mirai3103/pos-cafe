@@ -224,6 +224,23 @@ func TestTablesHTTPValidation(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code, rec.Body.String())
 	})
 
+	t.Run("rejects a missing available field", func(t *testing.T) {
+		name := uniqueTableName("No available")
+		body, _ := json.Marshal(map[string]any{"request_id": uuid.New(), "name": name})
+		rec := doRequest(t, e, http.MethodPost, "/api/v1/tables", token, body)
+		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+
+		var env envelope
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+		var created tables.TableResponse
+		require.NoError(t, json.Unmarshal(env.Data, &created))
+
+		body, _ = json.Marshal(map[string]any{"request_id": uuid.New()})
+		rec = doRequest(t, e, http.MethodPatch,
+			"/api/v1/tables/"+created.ID.String()+"/availability", token, body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	})
+
 	t.Run("reports a conflicting request_id reuse as 409 REQUEST_CONFLICT", func(t *testing.T) {
 		requestID := uuid.New()
 		body, _ := json.Marshal(map[string]any{

@@ -16,11 +16,12 @@ type RenameTableCommand struct {
 }
 
 // SetTableAvailabilityCommand changes a Table's Availability.
-// TableID comes from the route.
+// TableID comes from the route. Available is a pointer so a missing JSON
+// field can be rejected instead of silently defaulting to false.
 type SetTableAvailabilityCommand struct {
 	RequestID uuid.UUID `json:"request_id"`
 	TableID   uuid.UUID `json:"-"`
-	Available bool      `json:"available"`
+	Available *bool     `json:"available"`
 }
 
 // TableResponse is the API representation of a Table. It is the result of all

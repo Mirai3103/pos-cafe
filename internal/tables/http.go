@@ -42,6 +42,13 @@ func checkRequestID(id uuid.UUID) error {
 	return nil
 }
 
+func checkAvailable(available *bool) error {
+	if available == nil {
+		return fmt.Errorf("%w: available is required", response.ErrInvalid)
+	}
+	return nil
+}
+
 func sendResult[T any](c echo.Context, status int, data T) error {
 	if status == http.StatusCreated {
 		return response.Created(c, data)
@@ -182,6 +189,9 @@ func (s *Slices) handleSetTableAvailability(c echo.Context) error {
 		return sendError(c, err)
 	}
 	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	if err := checkAvailable(cmd.Available); err != nil {
 		return sendError(c, err)
 	}
 	cmd.TableID = tableID

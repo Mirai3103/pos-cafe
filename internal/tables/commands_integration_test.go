@@ -19,6 +19,10 @@ func uniqueTableName(prefix string) string {
 	return prefix + " " + uuid.NewString()[:8]
 }
 
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 func countAuditEvents(t *testing.T, db *sql.DB, eventType string, tableID uuid.UUID) int {
 	t.Helper()
 	var n int
@@ -207,7 +211,7 @@ func TestSetTableAvailability(t *testing.T) {
 
 	t.Run("turns availability off and audits it", func(t *testing.T) {
 		code, res, err := setAvail.Handle(ctx, manager.actor(), tables.SetTableAvailabilityCommand{
-			RequestID: uuid.New(), TableID: created.ID, Available: false,
+			RequestID: uuid.New(), TableID: created.ID, Available: boolPtr(false),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, 200, code)
@@ -219,7 +223,7 @@ func TestSetTableAvailability(t *testing.T) {
 		before := readUpdatedAt()
 
 		code, res, err := setAvail.Handle(ctx, manager.actor(), tables.SetTableAvailabilityCommand{
-			RequestID: uuid.New(), TableID: created.ID, Available: false,
+			RequestID: uuid.New(), TableID: created.ID, Available: boolPtr(false),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, 200, code)
@@ -231,7 +235,7 @@ func TestSetTableAvailability(t *testing.T) {
 
 	t.Run("restores availability without deleting the record", func(t *testing.T) {
 		_, res, err := setAvail.Handle(ctx, manager.actor(), tables.SetTableAvailabilityCommand{
-			RequestID: uuid.New(), TableID: created.ID, Available: true,
+			RequestID: uuid.New(), TableID: created.ID, Available: boolPtr(true),
 		})
 		require.NoError(t, err)
 		assert.True(t, res.Available)
@@ -241,7 +245,7 @@ func TestSetTableAvailability(t *testing.T) {
 
 	t.Run("rejects a missing Table", func(t *testing.T) {
 		_, _, err := setAvail.Handle(ctx, manager.actor(), tables.SetTableAvailabilityCommand{
-			RequestID: uuid.New(), TableID: uuid.New(), Available: false,
+			RequestID: uuid.New(), TableID: uuid.New(), Available: boolPtr(false),
 		})
 		require.ErrorIs(t, err, tables.ErrTableNotFound)
 	})

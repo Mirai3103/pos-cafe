@@ -158,7 +158,7 @@ func TestOverviewReportsOccupancy(t *testing.T) {
 	t.Run("an unavailable Table keeps its occupants", func(t *testing.T) {
 		setAvail := tables.NewSetTableAvailabilityHandler(runner)
 		_, _, err := setAvail.Handle(ctx, manager.actor(), tables.SetTableAvailabilityCommand{
-			RequestID: uuid.New(), TableID: shared.ID, Available: false,
+			RequestID: uuid.New(), TableID: shared.ID, Available: boolPtr(false),
 		})
 		require.NoError(t, err)
 

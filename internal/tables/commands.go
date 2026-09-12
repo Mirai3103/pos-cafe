@@ -149,7 +149,7 @@ func (h *SetTableAvailabilityHandler) Handle(ctx context.Context, actor Actor, c
 		Operation: OpSetTableAvailability,
 		Fingerprint: setAvailabilityFingerprint{
 			TableID:   cmd.TableID,
-			Available: cmd.Available,
+			Available: *cmd.Available,
 		},
 		Required: []string{CapTablesAdminister},
 	}
@@ -161,14 +161,14 @@ func (h *SetTableAvailabilityHandler) Handle(ctx context.Context, actor Actor, c
 				return 0, TableResponse{}, AuditRecord{}, MapDBError(err)
 			}
 
-			if before.Available == cmd.Available {
+			if before.Available == *cmd.Available {
 				// Same-state no-op: no row change, no audit event.
 				return 200, toTableResponse(before), AuditRecord{}, nil
 			}
 
 			after, err := q.SetTableAvailability(ctx, sqlc.SetTableAvailabilityParams{
 				ID:        cmd.TableID,
-				Available: cmd.Available,
+				Available: *cmd.Available,
 			})
 			if err != nil {
 				return 0, TableResponse{}, AuditRecord{}, MapDBError(err)
