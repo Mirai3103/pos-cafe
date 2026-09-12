@@ -309,6 +309,14 @@ definitions:
         type: string
       name:
         type: string
+      retired:
+        type: boolean
+      retired_at:
+        type: string
+      retirement_note:
+        type: string
+      retirement_reason:
+        type: string
     type: object
   catalog.CreateCategoryCommand:
     properties:
@@ -413,6 +421,14 @@ definitions:
           type: string
         type: array
       name:
+        type: string
+      retired:
+        type: boolean
+      retired_at:
+        type: string
+      retirement_note:
+        type: string
+      retirement_reason:
         type: string
     type: object
   catalog.ManagementItemResponse:
@@ -537,33 +553,6 @@ definitions:
           type: string
         type: array
     type: object
-  catalog.ModifierGroupManagementResponse:
-    properties:
-      default_option_ids:
-        items:
-          type: string
-        type: array
-      id:
-        type: string
-      max_selections:
-        type: integer
-      min_selections:
-        type: integer
-      name:
-        type: string
-      options:
-        items:
-          $ref: '#/definitions/catalog.ModifierOptionManagementResponse'
-        type: array
-      retired:
-        type: boolean
-      retired_at:
-        type: string
-      retirement_note:
-        type: string
-      retirement_reason:
-        type: string
-    type: object
   catalog.ModifierGroupResponse:
     properties:
       default_option_ids:
@@ -582,27 +571,6 @@ definitions:
         items:
           $ref: '#/definitions/catalog.ModifierOptionResponse'
         type: array
-    type: object
-  catalog.ModifierOptionManagementResponse:
-    properties:
-      available:
-        type: boolean
-      id:
-        type: string
-      modifier_group_id:
-        type: string
-      name:
-        type: string
-      retired:
-        type: boolean
-      retired_at:
-        type: string
-      retirement_note:
-        type: string
-      retirement_reason:
-        type: string
-      surcharge_vnd:
-        type: integer
     type: object
   catalog.ModifierOptionResponse:
     properties:
@@ -1321,6 +1289,65 @@ paths:
       summary: Đổi tên danh mục thực đơn
       tags:
       - Catalog
+  /catalog/categories/{category_id}/retirement:
+    post:
+      consumes:
+      - application/json
+      description: Đánh dấu ngừng kinh doanh vĩnh viễn danh mục thực đơn. Yêu cầu
+        quyền catalog.administer_structure.
+      parameters:
+      - description: Category ID (UUID)
+        in: path
+        name: category_id
+        required: true
+        type: string
+      - description: Lý do và ghi chú ngừng kinh doanh
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.RetireRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.CategoryResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Ngừng kinh doanh danh mục thực đơn
+      tags:
+      - Catalog
   /catalog/items:
     post:
       consumes:
@@ -1888,7 +1915,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/catalog.ModifierGroupManagementResponse'
+                    $ref: '#/definitions/catalog.ManagementModifierGroupResponse'
                   type: array
               type: object
         "400":

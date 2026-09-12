@@ -749,10 +749,20 @@ func TestCatalogRoutes(t *testing.T) {
 	})
 
 	t.Run("400 INVALID_PRICING_CONFIGURATION", func(t *testing.T) {
+		// Use a fresh, non-retired category: catID is retired by the earlier
+		// retirement subtest, so pricing validation (not the retired-entity
+		// guard) must be what rejects the request.
+		createRec := doJSONRequest(t, tc.e, http.MethodPost, "/api/v1/catalog/categories", tc.managerToken, catalog.CreateCategoryCommand{
+			RequestID: uuid.New(),
+			Name:      "Pricing Validation",
+		})
+		assert.Equal(t, http.StatusCreated, createRec.Code)
+		_, freshCat := parseAPIResponse[catalog.CategoryResponse](t, createRec)
+
 		zeroPrice := int64(0)
 		cmd := catalog.CreateItemCommand{
 			RequestID:  uuid.New(),
-			CategoryID: catID,
+			CategoryID: freshCat.ID,
 			Name:       "Free Drink",
 			PriceVND:   &zeroPrice,
 			ManagerPIN: "123456",

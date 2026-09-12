@@ -892,6 +892,100 @@
                 }
             }
         },
+        "/catalog/categories/{category_id}/retirement": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đánh dấu ngừng kinh doanh vĩnh viễn danh mục thực đơn. Yêu cầu quyền catalog.administer_structure.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Ngừng kinh doanh danh mục thực đơn",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Category ID (UUID)",
+                        "name": "category_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do và ghi chú ngừng kinh doanh",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.RetireRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.CategoryResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/catalog/items": {
             "post": {
                 "security": [
@@ -1805,7 +1899,7 @@
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/catalog.ModifierGroupManagementResponse"
+                                                "$ref": "#/definitions/catalog.ManagementModifierGroupResponse"
                                             }
                                         }
                                     }
@@ -3888,6 +3982,18 @@
                 },
                 "name": {
                     "type": "string"
+                },
+                "retired": {
+                    "type": "boolean"
+                },
+                "retired_at": {
+                    "type": "string"
+                },
+                "retirement_note": {
+                    "type": "string"
+                },
+                "retirement_reason": {
+                    "type": "string"
                 }
             }
         },
@@ -4049,6 +4155,18 @@
                     }
                 },
                 "name": {
+                    "type": "string"
+                },
+                "retired": {
+                    "type": "boolean"
+                },
+                "retired_at": {
+                    "type": "string"
+                },
+                "retirement_note": {
+                    "type": "string"
+                },
+                "retirement_reason": {
                     "type": "string"
                 }
             }
@@ -4239,47 +4357,6 @@
                 }
             }
         },
-        "catalog.ModifierGroupManagementResponse": {
-            "type": "object",
-            "properties": {
-                "default_option_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "max_selections": {
-                    "type": "integer"
-                },
-                "min_selections": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "options": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/catalog.ModifierOptionManagementResponse"
-                    }
-                },
-                "retired": {
-                    "type": "boolean"
-                },
-                "retired_at": {
-                    "type": "string"
-                },
-                "retirement_note": {
-                    "type": "string"
-                },
-                "retirement_reason": {
-                    "type": "string"
-                }
-            }
-        },
         "catalog.ModifierGroupResponse": {
             "type": "object",
             "properties": {
@@ -4306,38 +4383,6 @@
                     "items": {
                         "$ref": "#/definitions/catalog.ModifierOptionResponse"
                     }
-                }
-            }
-        },
-        "catalog.ModifierOptionManagementResponse": {
-            "type": "object",
-            "properties": {
-                "available": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "modifier_group_id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "retired": {
-                    "type": "boolean"
-                },
-                "retired_at": {
-                    "type": "string"
-                },
-                "retirement_note": {
-                    "type": "string"
-                },
-                "retirement_reason": {
-                    "type": "string"
-                },
-                "surcharge_vnd": {
-                    "type": "integer"
                 }
             }
         },

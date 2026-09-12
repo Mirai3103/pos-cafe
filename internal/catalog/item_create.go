@@ -83,9 +83,12 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 		}
 
 		// 2. Lock parent category row for deterministic concurrency control.
-		_, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
+		category, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
 		if err != nil {
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
+		}
+		if category.RetiredAt.Valid {
+			return 0, ItemResponse{}, AuditRecord{}, ErrEntityRetired
 		}
 
 		// 3. Validate pricing configuration: exactly one pricing form.

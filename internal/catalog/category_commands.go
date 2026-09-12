@@ -106,6 +106,9 @@ func (h *RenameCategoryHandler) Handle(ctx context.Context, actor Actor, cmd Ren
 		if err != nil {
 			return 0, CategoryResponse{}, AuditRecord{}, MapDBError(err)
 		}
+		if existing.RetiredAt.Valid {
+			return 0, CategoryResponse{}, AuditRecord{}, ErrEntityRetired
+		}
 
 		if display == "" {
 			return 0, CategoryResponse{}, AuditRecord{}, fmt.Errorf("%w: category name cannot be empty", ErrInvalidCategoryConfiguration)

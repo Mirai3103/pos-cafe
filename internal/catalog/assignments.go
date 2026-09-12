@@ -119,9 +119,12 @@ func (h *AttachCategoryModifierGroupHandler) Handle(ctx context.Context, actor A
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, CategoryModifierGroupResponse, AuditRecord, error) {
 		// 1. Lock owner (category)
-		_, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
+		category, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
 		if err != nil {
 			return 0, CategoryModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
+		}
+		if category.RetiredAt.Valid {
+			return 0, CategoryModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: category is retired", ErrEntityRetired)
 		}
 
 		// 2. Lock group

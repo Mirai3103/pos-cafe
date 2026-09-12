@@ -442,6 +442,45 @@ func TestRenameCategory(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "Cold Drinks", name, "whitespace-only rename must not change the category")
 	})
+
+	t.Run("TargetRetirement", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createTestIdentity(t, db, q, []string{auth.RoleManager}, true)
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		createHandler := catalog.NewCreateCategoryHandler(runner)
+		renameHandler := catalog.NewRenameCategoryHandler(runner)
+		retireHandler := catalog.NewRetireCategoryHandler(runner)
+
+		_, created, err := createHandler.Handle(ctx, actor, catalog.CreateCategoryCommand{
+			RequestID: uuid.New(),
+			Name:      "Cold Drinks",
+		})
+		require.NoError(t, err)
+
+		// Retire the category first
+		_, _, err = retireHandler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: created.ID,
+			Reason:     "MENU_RESTRUCTURE",
+		})
+		require.NoError(t, err)
+
+		status, _, err := renameHandler.Handle(ctx, actor, catalog.RenameCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: created.ID,
+			Name:       "Special Desserts",
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired), "expected ErrEntityRetired, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify the retired category was not renamed
+		var dbName string
+		err = db.QueryRowContext(ctx, `SELECT name FROM menu_categories WHERE id = $1`, created.ID).Scan(&dbName)
+		require.NoError(t, err)
+		assert.Equal(t, "Cold Drinks", dbName, "retired category must not be renamed")
+	})
 }
 
 func TestCreateItem(t *testing.T) {
@@ -1165,6 +1204,48 @@ func TestCreateItem(t *testing.T) {
 		err = db.QueryRowContext(ctx, `SELECT count(*) FROM menu_items`).Scan(&itemCount)
 		require.NoError(t, err)
 		assert.Equal(t, 0, itemCount, "nil category_id must not create an item")
+	})
+
+	t.Run("ParentRetirement", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		catHandler := catalog.NewCreateCategoryHandler(runner)
+		itemHandler := catalog.NewCreateItemHandler(runner)
+		retireHandler := catalog.NewRetireCategoryHandler(runner)
+
+		_, cat, err := catHandler.Handle(ctx, actor, catalog.CreateCategoryCommand{
+			RequestID: uuid.New(),
+			Name:      "Beverages",
+		})
+		require.NoError(t, err)
+
+		// Retire the parent category first
+		_, _, err = retireHandler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: cat.ID,
+			Reason:     "MENU_RESTRUCTURE",
+		})
+		require.NoError(t, err)
+
+		price := int64(45000)
+		status, _, err := itemHandler.Handle(ctx, actor, catalog.CreateItemCommand{
+			RequestID:  uuid.New(),
+			CategoryID: cat.ID,
+			Name:       "Retired Category Drink",
+			PriceVND:   &price,
+			ManagerPIN: manager.PIN,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired), "expected ErrEntityRetired, got: %v", err)
+		assert.Equal(t, 0, status)
+
+		// Verify no item was persisted
+		var itemCount int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM menu_items`).Scan(&itemCount)
+		require.NoError(t, err)
+		assert.Equal(t, 0, itemCount, "retired category must not accept new items")
 	})
 }
 
@@ -2300,6 +2381,41 @@ func TestAttachCategoryModifierGroup(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
 		assert.Equal(t, 0, status)
+	})
+
+	t.Run("Reject_RetiredCategory", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		manager := createCatalogTestIdentity(t, db, q, []string{auth.RoleManager}, true, "1234")
+		actor := catalog.Actor{StaffID: manager.StaffID, SessionID: manager.SessionID}
+		handler := catalog.NewAttachCategoryModifierGroupHandler(runner)
+		retireHandler := catalog.NewRetireCategoryHandler(runner)
+
+		catID := createTestCategoryDirect(t, db, "Coffee")
+		groupID := createTestModifierGroupDirect(t, db, "Sugar Level", 0, 1, false)
+
+		// Retire the owner category first
+		_, _, err := retireHandler.Handle(ctx, actor, catalog.RetireCategoryCommand{
+			RequestID:  uuid.New(),
+			CategoryID: catID,
+			Reason:     "MENU_RESTRUCTURE",
+		})
+		require.NoError(t, err)
+
+		cmd := catalog.AttachCategoryModifierGroupCommand{
+			RequestID:       uuid.New(),
+			CategoryID:      catID,
+			ModifierGroupID: groupID,
+		}
+		status, _, err := handler.Handle(ctx, actor, cmd)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, catalog.ErrEntityRetired)
+		assert.Equal(t, 0, status)
+
+		// Verify no assignment was persisted
+		var count int
+		err = db.QueryRowContext(ctx, `SELECT count(*) FROM category_modifier_groups WHERE menu_category_id = $1 AND modifier_group_id = $2`, catID, groupID).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 0, count, "retired category must not accept modifier group attachments")
 	})
 
 	t.Run("Reject_DuplicateAttachment", func(t *testing.T) {
