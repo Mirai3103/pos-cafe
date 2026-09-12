@@ -318,6 +318,30 @@ func (q *Queries) GetStaffByLoginCode(ctx context.Context, btrim string) (StaffI
 	return i, err
 }
 
+const getStaffByLoginCodeForUpdate = `-- name: GetStaffByLoginCodeForUpdate :one
+SELECT id, display_name, login_code, pin_hash, enabled, created_at
+FROM staff_identities
+WHERE upper(btrim(login_code)) = upper(btrim($1))
+LIMIT 1
+FOR UPDATE
+`
+
+// Locks the approver row so a concurrent disablement or role change cannot
+// interleave between verification and use. Used by VerifyManagerApproval.
+func (q *Queries) GetStaffByLoginCodeForUpdate(ctx context.Context, btrim string) (StaffIdentity, error) {
+	row := q.db.QueryRowContext(ctx, getStaffByLoginCodeForUpdate, btrim)
+	var i StaffIdentity
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.LoginCode,
+		&i.PinHash,
+		&i.Enabled,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getStaffRoles = `-- name: GetStaffRoles :many
 SELECT role
 FROM staff_operational_roles
@@ -327,6 +351,37 @@ ORDER BY role ASC
 
 func (q *Queries) GetStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error) {
 	rows, err := q.db.QueryContext(ctx, getStaffRoles, staffIdentityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStaffRolesForUpdate = `-- name: GetStaffRolesForUpdate :many
+SELECT role
+FROM staff_operational_roles
+WHERE staff_identity_id = $1
+ORDER BY role ASC
+FOR UPDATE
+`
+
+func (q *Queries) GetStaffRolesForUpdate(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getStaffRolesForUpdate, staffIdentityID)
 	if err != nil {
 		return nil, err
 	}

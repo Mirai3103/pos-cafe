@@ -141,3 +141,19 @@ WHERE id = $1;
 -- name: InsertIdempotencyKey :exec
 INSERT INTO idempotency_keys (key, actor_id, action, request_hash, response_code, response_body)
 VALUES ($1, $2, $3, $4, $5, $6);
+
+-- name: GetStaffByLoginCodeForUpdate :one
+-- Locks the approver row so a concurrent disablement or role change cannot
+-- interleave between verification and use. Used by VerifyManagerApproval.
+SELECT id, display_name, login_code, pin_hash, enabled, created_at
+FROM staff_identities
+WHERE upper(btrim(login_code)) = upper(btrim($1))
+LIMIT 1
+FOR UPDATE;
+
+-- name: GetStaffRolesForUpdate :many
+SELECT role
+FROM staff_operational_roles
+WHERE staff_identity_id = $1
+ORDER BY role ASC
+FOR UPDATE;
