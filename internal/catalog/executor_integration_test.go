@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -44,7 +45,7 @@ func createTestIdentity(t *testing.T, db *sql.DB, q *sqlc.Queries, roles []strin
 	t.Helper()
 	ctx := context.Background()
 
-	loginCode := fmt.Sprintf("test%s", uuid.New().String()[:6])
+	loginCode := testLoginCode("test")
 	row, err := q.CreateStaffIdentity(ctx, sqlc.CreateStaffIdentityParams{
 		DisplayName: fmt.Sprintf("Test Staff %s", loginCode),
 		Btrim:       loginCode,
@@ -81,6 +82,16 @@ func createTestIdentity(t *testing.T, db *sql.DB, q *sqlc.Queries, roles []strin
 	require.NoError(t, err)
 
 	return testIdentity{StaffID: staffID, SessionID: actualSessionID}
+}
+
+// testLoginCode generates a high-entropy unique login code for a test identity.
+// The staff_identities.login_code column is VARCHAR(24); the prefix shares that budget.
+func testLoginCode(prefix string) string {
+	room := 24 - len(prefix)
+	if room < 8 {
+		panic("testLoginCode: prefix leaves too little entropy budget")
+	}
+	return prefix + strings.ReplaceAll(uuid.NewString(), "-", "")[:room]
 }
 
 func countAuthorizationDenials(t *testing.T, db *sql.DB, operation string) int {
@@ -368,7 +379,7 @@ func TestExecuteMutation_InvalidManagerPin(t *testing.T) {
 	pinHash, err := auth.HashPin("1234")
 	require.NoError(t, err)
 
-	loginCode := fmt.Sprintf("pinmgr%s", uuid.New().String()[:6])
+	loginCode := testLoginCode("pinmgr")
 	row, err := q.CreateStaffIdentity(ctx, sqlc.CreateStaffIdentityParams{
 		DisplayName: "PIN Manager",
 		Btrim:       loginCode,

@@ -73,7 +73,7 @@ func setupHTTPTest(t *testing.T) *httpTestContext {
 func createHTTPTestIdentity(t *testing.T, db *sql.DB, q *sqlc.Queries, roles []string, pin string) (string, catalogTestIdentity) {
 	t.Helper()
 	ctx := context.Background()
-	loginCode := fmt.Sprintf("t%s", uuid.New().String()[:6])
+	loginCode := testLoginCode("t")
 	var pinHash string
 	if pin != "" {
 		var err error

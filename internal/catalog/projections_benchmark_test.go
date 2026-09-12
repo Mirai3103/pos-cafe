@@ -31,7 +31,7 @@ func seedBenchmarkCatalog(b *testing.B, db *sql.DB) (catalog.Actor, *catalog.Run
 	q := sqlc.New(tx)
 
 	// Create manager identity
-	loginCode := fmt.Sprintf("bench%s", uuid.New().String()[:6])
+	loginCode := testLoginCode("bench")
 	staff, err := q.CreateStaffIdentity(ctx, sqlc.CreateStaffIdentityParams{
 		DisplayName: "Benchmark Manager",
 		Btrim:       loginCode,
