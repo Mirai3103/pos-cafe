@@ -84,3 +84,35 @@ CREATE TABLE idempotency_keys (
 * Highly concise database schema that eliminates redundant boilerplate.
 * Enables instant response replaying during network instability or terminal double-clicks.
 * Simplifies cleanup automation via a scheduled cron job (purging records older than 24 hours).
+
+---
+
+## ADR-006: Provision sớm schema Sales cho Phase 3 (`service_sessions`, `table_assignments`)
+- **Ngày quyết định:** 2026-09-12
+- **Trạng thái:** Accepted
+- **Bối cảnh:** Theo `CONTEXT.md`, một Bàn "may be associated with one or more active Service Sessions". Read `overview` canonical của Tables phải trả về các Service Session đang chiếm bàn, tức là phụ thuộc vào `table_assignments` và `service_sessions` — hai bảng thuộc quyền sở hữu nghiệp vụ của `internal/sales` (Phase 5). Nếu chờ Phase 5, Phase 3 sẽ ship một contract API thiếu field và phải breaking change về sau.
+- **Quyết định:**
+  - Migration `000006` của Phase 3 tạo luôn `service_sessions` và `table_assignments`, kèm `COMMENT ON TABLE` ghi rõ quyền sở hữu thuộc `internal/sales` (Phase 5).
+  - `service_sessions` lược bỏ **duy nhất** cột `sales_shift_id` vì `sales_shifts` là bảng của Phase 4. Phase 5 bổ sung bằng `ALTER TABLE service_sessions ADD COLUMN sales_shift_id UUID NOT NULL REFERENCES sales_shifts(id)`.
+  - `internal/tables` **không** import `internal/sales`. Nó đọc occupancy qua query sqlc của riêng nó (`ListCurrentTableOccupants`), đúng nguyên tắc "dùng queries hoặc interface, đừng import struct" của MIGRATE_PLAN §4.1.
+  - Phase 3 chỉ **đọc** hai bảng này, không ghi qua API. Test integration seed trực tiếp bằng SQL.
+- **Hệ quả:**
+  - Contract công khai của Tables hoàn chỉnh và ổn định ngay từ Phase 3; frontend không phải chịu breaking change khi Phase 5 lên.
+  - Đổi lại, Phase 5 phải thực hiện đúng một thao tác `ALTER TABLE` bổ sung thay vì `CREATE TABLE`.
+
+---
+
+## ADR-007: Reaffirming the Shared `idempotency_keys` Table
+
+* **Decision Date:** 2026-09-12
+* **Status:** Accepted
+* **Context:** ADR-005 mandated that all slices share a single `idempotency_keys` table. However, Phase 2 (Catalog) created a dedicated `catalog_mutation_requests` table, contradicting this decision and reintroducing the exact schema bloat anti-pattern that ADR-005 aimed to eliminate.
+* **Decision:**
+* Starting from Phase 3 onwards, all slices must write idempotency records to the shared `idempotency_keys` table, using fully qualified action names for the `action` column (e.g., `tables.create_table`, `tables.rename_table`, `tables.set_table_availability`).
+* `catalog_mutation_requests` is acknowledged as a **historical exception**, not a precedent. Catalog will not be retrofitted during Phase 3; any cleanup will be handled as a separate task.
+* Each slice continues to own its respective executor. Sharing the **database table** does not imply sharing the **helper logic**: `internal/tables` must not import idempotency helpers from `internal/auth`.
+
+
+* **Consequences:**
+* Prevents schema bloat by avoiding a new table for every slice.
+* Preserves vertical slice boundaries at the code layer while consolidating the storage layer.

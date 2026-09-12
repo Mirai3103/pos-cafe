@@ -82,7 +82,12 @@ The source project is already cleanly structured around domain boundaries. We ma
 
 ---
 
-### Phase 3: Tables & Floor Layout (`internal/tables`)
+### Phase 3: Tables & Floor Layout (`internal/tables`) (✅ COMPLETED)
+*Approved Design Spec:* [`docs/superpowers/specs/2026-09-12-tables-slice-design.md`](docs/superpowers/specs/2026-09-12-tables-slice-design.md)
+*Implementation Plan:* [`docs/superpowers/plans/2026-09-12-tables-slice.md`](docs/superpowers/plans/2026-09-12-tables-slice.md)
+
+> The checklist below predates the canonical source review and is superseded by the spec above. It is kept only as a record of the original sketch.
+
 *Focus: Manage dining areas, table availability, and active service session mapping.*
 
 - [ ] **3.1 Database Schema Migration:**
@@ -179,8 +184,8 @@ The source project is already cleanly structured around domain boundaries. We ma
 | :--- | :---: | :---: | :---: | :---: |
 | **0. Core Boilerplate** | ✅ DONE | 5 | 5 / 5 | 2026-09-08 |
 | **1. Auth & Staff** | ✅ DONE | 4 | 4 / 4 | 2026-09-09 (PR #2) |
-| **2. Catalog & Menu** | ⏳ PENDING | 5 | 1 / 5 | Phase 2 |
-| **3. Tables & Layout** | ⏳ PENDING | 3 | 0 / 3 | Phase 3 |
+| **2. Catalog & Menu** | ✅ DONE | 5 | 5 / 5 | Phase 2 |
+| **3. Tables & Layout** | ✅ DONE | 4 | 4 / 4 | 2026-09-12 |
 | **4. Sales Shift & Cash** | ⏳ PENDING | 3 | 0 / 3 | Phase 4 |
 | **5. Sales, Orders & Pay** | ⏳ PENDING | 6 | 0 / 6 | Phase 5 |
 | **6. Preparation (Barista)** | ⏳ PENDING | 3 | 0 / 3 | Phase 6 |
