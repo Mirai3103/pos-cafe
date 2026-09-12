@@ -19,6 +19,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/eventbus"
 	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
+	"github.com/Mirai3103/pos-cafe/internal/tables"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoSwagger "github.com/swaggo/echo-swagger"
@@ -164,6 +165,9 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 	catalogSlices := catalog.NewSlices(db, queries)
 	catalogSlices.RegisterRoutes(v1, authSlices.Middleware)
+
+	tablesSlices := tables.NewSlices(db, queries)
+	tablesSlices.RegisterRoutes(v1, authSlices.Middleware)
 
 	// 7. Start Server with Graceful Shutdown error propagation
 	serverErrChan := make(chan error, 1)
