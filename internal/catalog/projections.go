@@ -230,14 +230,9 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 				continue
 			}
 
-			sort.Slice(sellableGroups, func(i, j int) bool {
-				nameI, _ := NormalizeName(sellableGroups[i].Name)
-				nameJ, _ := NormalizeName(sellableGroups[j].Name)
-				if nameI != nameJ {
-					return nameI < nameJ
-				}
-				return sellableGroups[i].ID.String() < sellableGroups[j].ID.String()
-			})
+			sortByNormalizedNameThenID(sellableGroups,
+				func(g SellableModifierGroupResponse) string { return g.Name },
+				func(g SellableModifierGroupResponse) uuid.UUID { return g.ID })
 
 			var itemPrice *int64
 			if hasDirectPrice {
@@ -426,14 +421,9 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 				effGroups = append(effGroups, buildManagementModifierGroup(grp, optionsByGroup[grp.ID], grpDefaults))
 			}
 
-			sort.Slice(effGroups, func(i, j int) bool {
-				nameI, _ := NormalizeName(effGroups[i].Name)
-				nameJ, _ := NormalizeName(effGroups[j].Name)
-				if nameI != nameJ {
-					return nameI < nameJ
-				}
-				return effGroups[i].ID.String() < effGroups[j].ID.String()
-			})
+			sortByNormalizedNameThenID(effGroups,
+				func(g ManagementModifierGroupResponse) string { return g.Name },
+				func(g ManagementModifierGroupResponse) uuid.UUID { return g.ID })
 
 			if effGroups == nil {
 				effGroups = []ManagementModifierGroupResponse{}
@@ -602,14 +592,9 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 				})
 			}
 
-			sort.Slice(effGroups, func(i, j int) bool {
-				nameI, _ := NormalizeName(effGroups[i].Name)
-				nameJ, _ := NormalizeName(effGroups[j].Name)
-				if nameI != nameJ {
-					return nameI < nameJ
-				}
-				return effGroups[i].ID.String() < effGroups[j].ID.String()
-			})
+			sortByNormalizedNameThenID(effGroups,
+				func(g AvailabilityModifierGroupResponse) string { return g.Name },
+				func(g AvailabilityModifierGroupResponse) uuid.UUID { return g.ID })
 
 			if effGroups == nil {
 				effGroups = []AvailabilityModifierGroupResponse{}
@@ -773,4 +758,31 @@ func buildManagementModifierGroup(grp sqlc.ModifierGroup, options []ManagementMo
 		Options:          options,
 		DefaultOptionIDs: defaultIDs,
 	}
+}
+
+// sortByNormalizedNameThenID sorts items in place by the normalized name of each
+// item (the display value of NormalizeName(nameOf(item))), then idOf(item).String(),
+// computing each key exactly once per element instead of on every comparison.
+func sortByNormalizedNameThenID[T any](items []T, nameOf func(T) string, idOf func(T) uuid.UUID) {
+	type keyed struct {
+		key string
+		id  string
+		idx int
+	}
+	keys := make([]keyed, len(items))
+	for i, it := range items {
+		key, _ := NormalizeName(nameOf(it))
+		keys[i] = keyed{key: key, id: idOf(it).String(), idx: i}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].key != keys[j].key {
+			return keys[i].key < keys[j].key
+		}
+		return keys[i].id < keys[j].id
+	})
+	sorted := make([]T, len(items))
+	for i, k := range keys {
+		sorted[i] = items[k.idx]
+	}
+	copy(items, sorted)
 }
