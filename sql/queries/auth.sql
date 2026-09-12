@@ -128,6 +128,16 @@ FROM idempotency_keys
 WHERE actor_id = $1 AND key = $2
 LIMIT 1;
 
+-- name: ExpireSession :exec
+UPDATE staff_access_sessions
+SET expires_at = $2
+WHERE id = $1;
+
+-- name: DisableIdentity :exec
+UPDATE staff_identities
+SET enabled = $2
+WHERE id = $1;
+
 -- name: InsertIdempotencyKey :exec
 INSERT INTO idempotency_keys (key, actor_id, action, request_hash, response_code, response_body)
 VALUES ($1, $2, $3, $4, $5, $6);

@@ -15,6 +15,11 @@ type sampleStruct struct {
 	Email string `validate:"omitempty,email"`
 }
 
+type catalogItem struct {
+	BasePrice int64  `json:"base_price" validate:"gte=1"`
+	Category  string `json:"category_id" validate:"required"`
+}
+
 func TestValidator(t *testing.T) {
 	t.Parallel()
 	v := httpvalidator.New()
@@ -78,4 +83,26 @@ func TestValidatorNonStructInput(t *testing.T) {
 	require.Error(t, err)
 	var invalid *validator.InvalidValidationError
 	assert.ErrorAs(t, err, &invalid)
+}
+
+func TestJSONFieldNames(t *testing.T) {
+	t.Parallel()
+	v := httpvalidator.New()
+
+	t.Run("uses json tag for field name", func(t *testing.T) {
+		t.Parallel()
+		item := catalogItem{BasePrice: 0, Category: ""}
+		err := v.Validate(&item)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "base_price")
+		assert.NotContains(t, err.Error(), "baseprice")
+	})
+
+	t.Run("required field uses json tag", func(t *testing.T) {
+		t.Parallel()
+		item := catalogItem{BasePrice: 10000, Category: ""}
+		err := v.Validate(&item)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "category_id")
+	})
 }

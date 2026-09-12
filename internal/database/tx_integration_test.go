@@ -33,11 +33,11 @@ func setupTestDB(t *testing.T) *sql.DB {
 	db, err := database.Open(context.Background(), dbURL)
 	require.NoError(t, err)
 
-	_, err = db.ExecContext(context.Background(), "TRUNCATE TABLE categories RESTART IDENTITY CASCADE")
+	_, err = db.ExecContext(context.Background(), "TRUNCATE TABLE menu_categories CASCADE")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		_, cleanErr := db.ExecContext(context.Background(), "TRUNCATE TABLE categories RESTART IDENTITY CASCADE")
+		_, cleanErr := db.ExecContext(context.Background(), "TRUNCATE TABLE menu_categories CASCADE")
 		assert.NoError(t, cleanErr)
 		assert.NoError(t, db.Close())
 	})
@@ -51,9 +51,9 @@ func TestWithTxCommitsOnSuccess(t *testing.T) {
 
 	err := database.WithTx(ctx, db, func(q *sqlc.Queries) error {
 		for _, name := range []string{"Espresso Bar", "Cold Brew"} {
-			if _, err := q.CreateCategory(ctx, sqlc.CreateCategoryParams{
-				Name:     name,
-				IsActive: true,
+			if _, err := q.CreateMenuCategory(ctx, sqlc.CreateMenuCategoryParams{
+				Name:           name,
+				NormalizedName: strings.ToLower(name),
 			}); err != nil {
 				return err
 			}
@@ -62,7 +62,7 @@ func TestWithTxCommitsOnSuccess(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	rows, err := sqlc.New(db).ListCategories(ctx)
+	rows, err := sqlc.New(db).ListMenuCategories(ctx)
 	require.NoError(t, err)
 	assert.Len(t, rows, 2)
 }
@@ -75,9 +75,9 @@ func TestWithTxRollsBackOnError(t *testing.T) {
 
 	// The first insert succeeds, so a missing rollback would leave it behind.
 	err := database.WithTx(ctx, db, func(q *sqlc.Queries) error {
-		if _, err := q.CreateCategory(ctx, sqlc.CreateCategoryParams{
-			Name:     "Espresso Bar",
-			IsActive: true,
+		if _, err := q.CreateMenuCategory(ctx, sqlc.CreateMenuCategoryParams{
+			Name:           "Espresso Bar",
+			NormalizedName: "espresso bar",
 		}); err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ func TestWithTxRollsBackOnError(t *testing.T) {
 	})
 	require.ErrorIs(t, err, sentinel)
 
-	rows, err := sqlc.New(db).ListCategories(ctx)
+	rows, err := sqlc.New(db).ListMenuCategories(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, rows, "the successful insert must have been rolled back")
 }
@@ -96,9 +96,9 @@ func TestWithTxRollsBackOnPanic(t *testing.T) {
 
 	assert.Panics(t, func() {
 		_ = database.WithTx(ctx, db, func(q *sqlc.Queries) error {
-			if _, err := q.CreateCategory(ctx, sqlc.CreateCategoryParams{
-				Name:     "Espresso Bar",
-				IsActive: true,
+			if _, err := q.CreateMenuCategory(ctx, sqlc.CreateMenuCategoryParams{
+				Name:           "Espresso Bar",
+				NormalizedName: "espresso bar",
 			}); err != nil {
 				return err
 			}
@@ -106,7 +106,7 @@ func TestWithTxRollsBackOnPanic(t *testing.T) {
 		})
 	}, "the panic must propagate to the caller, not be swallowed")
 
-	rows, err := sqlc.New(db).ListCategories(ctx)
+	rows, err := sqlc.New(db).ListMenuCategories(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, rows, "the panic must not leave the write committed")
 }

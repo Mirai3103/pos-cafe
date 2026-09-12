@@ -11,6 +11,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.15.4
+	github.com/lib/pq v1.12.3
 	github.com/stretchr/testify v1.12.1
 	github.com/swaggo/echo-swagger v1.5.2
 	github.com/swaggo/swag v1.16.6

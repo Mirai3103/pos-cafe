@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,7 +14,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/config"
 	_ "github.com/Mirai3103/pos-cafe/docs"
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/category"
+	"github.com/Mirai3103/pos-cafe/internal/catalog"
 	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/eventbus"
@@ -84,23 +83,6 @@ func run(ctx context.Context, logger *slog.Logger) error {
 			slog.Error("failed to close eventbus", "error", closeErr)
 		}
 	}()
-
-	// Domain Event Listener: Log category events.
-	//
-	// Deliberately NOT the signal-aware ctx: that would kill this consumer the
-	// instant SIGTERM lands, before e.Shutdown drains in-flight requests, so
-	// events emitted by those requests would be silently dropped. The deferred
-	// bus.Close above is the stop signal, and it waits for in-flight handlers.
-	if err := bus.Subscribe(context.Background(), category.TopicCategoryCreated, func(_ context.Context, payload []byte) error {
-		var evt category.CreatedEvent
-		if err := json.Unmarshal(payload, &evt); err != nil {
-			return err
-		}
-		slog.Info("📢 [EVENT CONSUMED]", "topic", category.TopicCategoryCreated, "category_id", evt.ID, "name", evt.Name)
-		return nil
-	}); err != nil {
-		return fmt.Errorf("subscribe category.created event: %w", err)
-	}
 
 	// 5. Setup Echo Web Server & HTTP Timeouts
 	e := echo.New()
@@ -180,8 +162,8 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	authSlices := auth.NewSlices(db, queries)
 	authSlices.RegisterRoutes(v1)
 
-	categorySlices := category.NewSlices(queries, bus)
-	categorySlices.RegisterRoutes(v1)
+	catalogSlices := catalog.NewSlices(db, queries)
+	catalogSlices.RegisterRoutes(v1, authSlices.Middleware)
 
 	// 7. Start Server with Graceful Shutdown error propagation
 	serverErrChan := make(chan error, 1)

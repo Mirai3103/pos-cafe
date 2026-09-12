@@ -18,6 +18,34 @@ var (
 	ErrManagerInvariant = errors.New("manager invariant violation")
 )
 
+// CodedError carries an explicit HTTP status, stable error code, and user-facing
+// message. Use NewCodedError to create one; the Error function respects it before
+// falling through to sentinel matching.
+type CodedError struct {
+	Status  int
+	Code    string
+	Message string
+	Cause   error
+}
+
+// NewCodedError creates a CodedError. The cause is optional and preserved via Unwrap.
+func NewCodedError(status int, code, message string, cause error) *CodedError {
+	return &CodedError{
+		Status:  status,
+		Code:    code,
+		Message: message,
+		Cause:   cause,
+	}
+}
+
+func (e *CodedError) Error() string {
+	return e.Message
+}
+
+func (e *CodedError) Unwrap() error {
+	return e.Cause
+}
+
 type APIResponse struct {
 	Success bool      `json:"success"`
 	Data    any       `json:"data,omitempty"`
@@ -54,6 +82,17 @@ func NoContent(c echo.Context) error {
 func Error(c echo.Context, err error) error {
 	if err == nil {
 		return nil
+	}
+
+	var codedErr *CodedError
+	if errors.As(err, &codedErr) {
+		return c.JSON(codedErr.Status, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    codedErr.Code,
+				Message: codedErr.Message,
+			},
+		})
 	}
 
 	switch {

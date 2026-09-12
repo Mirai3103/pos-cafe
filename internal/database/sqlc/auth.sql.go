@@ -159,6 +159,38 @@ func (q *Queries) CreateStaffSession(ctx context.Context, arg CreateStaffSession
 	return i, err
 }
 
+const disableIdentity = `-- name: DisableIdentity :exec
+UPDATE staff_identities
+SET enabled = $2
+WHERE id = $1
+`
+
+type DisableIdentityParams struct {
+	ID      uuid.UUID `json:"id"`
+	Enabled bool      `json:"enabled"`
+}
+
+func (q *Queries) DisableIdentity(ctx context.Context, arg DisableIdentityParams) error {
+	_, err := q.db.ExecContext(ctx, disableIdentity, arg.ID, arg.Enabled)
+	return err
+}
+
+const expireSession = `-- name: ExpireSession :exec
+UPDATE staff_access_sessions
+SET expires_at = $2
+WHERE id = $1
+`
+
+type ExpireSessionParams struct {
+	ID        uuid.UUID `json:"id"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (q *Queries) ExpireSession(ctx context.Context, arg ExpireSessionParams) error {
+	_, err := q.db.ExecContext(ctx, expireSession, arg.ID, arg.ExpiresAt)
+	return err
+}
+
 const getIdempotencyKey = `-- name: GetIdempotencyKey :one
 SELECT key, actor_id, action, request_hash, response_code, response_body, created_at
 FROM idempotency_keys

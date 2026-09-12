@@ -49,24 +49,36 @@ The source project is already cleanly structured around domain boundaries. We ma
 
 ---
 
-### Phase 2: Catalog Expansion (`internal/catalog`)
-*Focus: Expand beyond simple categories to support menu items, sizes, and topping modifiers.*
+### Phase 2: Catalog Expansion (`internal/catalog`) (✅ COMPLETED)
+*Focus: Expand beyond simple categories to support menu items, sizes with absolute pricing, topping modifiers, category/item attachments, inherited exclusions, and dedicated menu projections.*
+*Approved Design Spec:* [`docs/superpowers/specs/2026-09-10-catalog-slice-design.md`](docs/superpowers/specs/2026-09-10-catalog-slice-design.md)
+*Implementation Plan:* [`docs/superpowers/plans/2026-09-10-catalog-slice.md`](docs/superpowers/plans/2026-09-10-catalog-slice.md)
 
-- [ ] **2.1 Database Schema Migration:**
-  - Create table `menu_items` (`id`, `category_id`, `name`, `description`, `base_price`, `is_active`).
-  - Create table `item_sizes` (`id`, `item_id`, `name` [S, M, L], `price_adjustment`).
-  - Create table `modifier_groups` (`id`, `name` [Độ ngọt, Lượng đá, Topping], `min_select`, `max_select`).
-  - Create table `modifier_options` (`id`, `group_id`, `name` [Trân châu đen, Thạch củ năng, 50% đường], `price`).
-  - Create table `item_modifier_groups` (link items to modifier groups).
-- [ ] **2.2 SQL Queries (`sql/queries/catalog.sql`):**
-  - CRUD for items, sizes, modifier groups, and options.
-  - Efficient composite query: `GetFullMenu` (fetching all categories + items + sizes + modifiers in 1–2 queries).
-- [ ] **2.3 Business Slices:**
-  - `create_item.go`, `update_item.go`, `set_item_availability.go`.
-  - `manage_modifiers.go`: Create/update modifier groups and options.
-  - `get_menu.go`: High-performance query returning full hierarchical menu for the POS cashier screen.
-- [ ] **2.4 Testing:**
-  - Integration tests for price calculations, availability toggling, and menu hierarchy.
+- [x] **2.1 Database Schema Migration:** `000003_create_catalog_tables.sql`
+  - Created tables: `menu_categories` (expanded from 000001), `menu_items`, `menu_item_sizes` (storing absolute `price_vnd` per size rather than relative adjustments; direct items have nullable `price_vnd`), `modifier_groups`, `modifier_options`, `category_modifier_groups`, `item_modifier_groups`, `item_modifier_group_exclusions`, `modifier_group_default_options`, `catalog_mutation_requests` (idempotency tracking), and `audit_events`.
+- [x] **2.2 SQL Queries (`sql/queries/catalog.sql`):**
+  - CRUD and lock-for-update queries for categories, items, sizes, modifier groups, and options.
+  - Attachment and inherited-exclusion association queries.
+  - Normalized name collision queries with advisory locks (`CatalogAdvisoryLock`).
+  - Projection snapshot queries: `ListMenuCategories`, `ListAllMenuItems`, `ListAllMenuItemSizes`, `ListModifierGroups`, `ListAllModifierOptions`, `ListAllCategoryModifierGroups`, `ListAllItemModifierGroups`, `ListAllItemModifierGroupExclusions`, `ListAllModifierGroupDefaultOptions`, and `ListCatalogAuditEvents`.
+- [x] **2.3 Business Slices & Projections:**
+  - Category operations: `create_category.go`, `rename_category.go`.
+  - Item operations: `item_create.go`, `item_commands.go` (rename, reprice, availability, retirement).
+  - Size operations: `size_commands.go` (rename, reprice, availability, retirement).
+  - Modifier operations: `modifier_create.go`, `modifier_commands.go` (rename, reprice, availability, retirement).
+  - Assignment & Exclusion operations: `assignments.go` (attach item/category groups, exclude inherited groups, set default options).
+  - Dedicated menu projections (`projections.go`):
+    - `SellableMenu`: Returns only sellable, available, priced items with effective modifier groups, available options, and validated default selections for cashier/ordering.
+    - `ManagementMenu`: Full hierarchical catalog projection including retired entities, explicit sizes, direct attachments, and exclusions for managerial control.
+    - `AvailabilityMenu`: Lightweight projection for fast toggling of availability flags across categories, items, sizes, and modifier options.
+    - `ModifierGroups`: Detailed management view of all modifier groups and options.
+    - `AuditEvents`: Inspection endpoint for catalog audit records with actor and session tracking.
+  - Robust mutation executor (`executor.go`): Transactional advisory locking, request idempotency replay/conflict detection, capability authorization, and fresh Manager PIN verification.
+- [x] **2.4 Testing & Documentation:**
+  - Comprehensive unit and integration test suites: `domain_test.go`, `errors_test.go`, `schema_integration_test.go`, `executor_integration_test.go`, `commands_integration_test.go`, `lifecycle_integration_test.go`, `projections_integration_test.go`, `projections_benchmark_test.go`, `routes_test.go`, and end-to-end `catalog_integration_test.go`.
+  - Concurrency verification: Synchronized goroutines for duplicate `request_id` idempotency and normalized name collision safety.
+  - Authorization defense: Verified replay denial after role/session revocation and audit evidence (`catalog.authorization_denied`).
+  - OpenAPI 2.0 / Swagger documentation: All 27 catalog operations annotated with Bearer security, request DTOs, projection responses, and error status codes.
 
 ---
 

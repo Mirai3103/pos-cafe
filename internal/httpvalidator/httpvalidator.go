@@ -9,6 +9,7 @@ package httpvalidator
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -19,8 +20,16 @@ type CustomValidator struct {
 }
 
 func New() *CustomValidator {
+	v := validator.New()
+	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := fld.Tag.Get("json")
+		if name == "" || name == "-" {
+			return ""
+		}
+		return strings.SplitN(name, ",", 2)[0]
+	})
 	return &CustomValidator{
-		validator: validator.New(),
+		validator: v,
 	}
 }
 

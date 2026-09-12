@@ -148,3 +148,57 @@ func TestErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestCodedErrorMapping(t *testing.T) {
+	t.Parallel()
+	e := echo.New()
+
+	tests := []struct {
+		name           string
+		err            error
+		expectedCode   int
+		expectedStatus string
+		expectedMsg    string
+	}{
+		{
+			name:           "coded error returns exact status and code",
+			err:            response.NewCodedError(409, "CATALOG_NAME_CONFLICT", "Tên đã tồn tại", nil),
+			expectedCode:   http.StatusConflict,
+			expectedStatus: "CATALOG_NAME_CONFLICT",
+			expectedMsg:    "Tên đã tồn tại",
+		},
+		{
+			name:           "coded error with cause returns its own code",
+			err:            response.NewCodedError(400, "INVALID_PRICING_CONFIGURATION", "bad pricing", response.ErrInvalid),
+			expectedCode:   http.StatusBadRequest,
+			expectedStatus: "INVALID_PRICING_CONFIGURATION",
+			expectedMsg:    "bad pricing",
+		},
+		{
+			name:           "coded 404 error",
+			err:            response.NewCodedError(404, "CATALOG_NOT_FOUND", "item not found", nil),
+			expectedCode:   http.StatusNotFound,
+			expectedStatus: "CATALOG_NOT_FOUND",
+			expectedMsg:    "item not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rec := httptest.NewRecorder()
+			c := e.NewContext(httptest.NewRequest(http.MethodGet, "/test", nil), rec)
+
+			err := response.Error(c, tt.err)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedCode, rec.Code)
+
+			var resp response.APIResponse
+			unmarshalErr := json.Unmarshal(rec.Body.Bytes(), &resp)
+			require.NoError(t, unmarshalErr)
+			assert.False(t, resp.Success)
+			assert.Equal(t, tt.expectedStatus, resp.Error.Code)
+			assert.Equal(t, tt.expectedMsg, resp.Error.Message)
+		})
+	}
+}
