@@ -306,32 +306,7 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 
 		optionsByGroup := make(map[uuid.UUID][]ManagementModifierOptionResponse)
 		for _, opt := range snap.options {
-			var retAt *time.Time
-			if opt.RetiredAt.Valid {
-				t := opt.RetiredAt.Time
-				retAt = &t
-			}
-			var reason, note *string
-			if opt.RetirementReason.Valid {
-				r := opt.RetirementReason.String
-				reason = &r
-			}
-			if opt.RetirementNote.Valid {
-				n := opt.RetirementNote.String
-				note = &n
-			}
-
-			optionsByGroup[opt.ModifierGroupID] = append(optionsByGroup[opt.ModifierGroupID], ManagementModifierOptionResponse{
-				ID:               opt.ID,
-				ModifierGroupID:  opt.ModifierGroupID,
-				Name:             opt.Name,
-				SurchargeVND:     opt.SurchargeVnd,
-				Available:        opt.Available,
-				Retired:          opt.RetiredAt.Valid,
-				RetiredAt:        retAt,
-				RetirementReason: reason,
-				RetirementNote:   note,
-			})
+			optionsByGroup[opt.ModifierGroupID] = append(optionsByGroup[opt.ModifierGroupID], buildManagementModifierOption(opt))
 		}
 
 		defaultOptionIDsByGroup := make(map[uuid.UUID][]uuid.UUID)
@@ -444,42 +419,11 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 					continue
 				}
 
-				var grpRetAt *time.Time
-				if grp.RetiredAt.Valid {
-					t := grp.RetiredAt.Time
-					grpRetAt = &t
-				}
-				var grpReason, grpNote *string
-				if grp.RetirementReason.Valid {
-					r := grp.RetirementReason.String
-					grpReason = &r
-				}
-				if grp.RetirementNote.Valid {
-					n := grp.RetirementNote.String
-					grpNote = &n
-				}
-
-				grpOpts := optionsByGroup[grp.ID]
-				if grpOpts == nil {
-					grpOpts = []ManagementModifierOptionResponse{}
-				}
-
 				grpDefaults := make([]uuid.UUID, len(defaultOptionIDsByGroup[grp.ID]))
 				copy(grpDefaults, defaultOptionIDsByGroup[grp.ID])
 				sortUUIDs(grpDefaults)
 
-				effGroups = append(effGroups, ManagementModifierGroupResponse{
-					ID:               grp.ID,
-					Name:             grp.Name,
-					MinSelections:    grp.MinSelections,
-					MaxSelections:    grp.MaxSelections,
-					Retired:          grp.RetiredAt.Valid,
-					RetiredAt:        grpRetAt,
-					RetirementReason: grpReason,
-					RetirementNote:   grpNote,
-					Options:          grpOpts,
-					DefaultOptionIDs: grpDefaults,
-				})
+				effGroups = append(effGroups, buildManagementModifierGroup(grp, optionsByGroup[grp.ID], grpDefaults))
 			}
 
 			sort.Slice(effGroups, func(i, j int) bool {
@@ -718,8 +662,8 @@ func NewModifierGroupsHandler(runner *Runner) *ModifierGroupsHandler {
 }
 
 // Handle executes the modifier groups query.
-func (h *ModifierGroupsHandler) Handle(ctx context.Context, actor Actor) ([]ModifierGroupManagementResponse, error) {
-	return ExecuteRead(ctx, h.runner, actor, CapViewPrices, func(q *sqlc.Queries) ([]ModifierGroupManagementResponse, error) {
+func (h *ModifierGroupsHandler) Handle(ctx context.Context, actor Actor) ([]ManagementModifierGroupResponse, error) {
+	return ExecuteRead(ctx, h.runner, actor, CapViewPrices, func(q *sqlc.Queries) ([]ManagementModifierGroupResponse, error) {
 		groups, err := q.ListModifierGroups(ctx)
 		if err != nil {
 			return nil, err
@@ -735,34 +679,9 @@ func (h *ModifierGroupsHandler) Handle(ctx context.Context, actor Actor) ([]Modi
 			return nil, err
 		}
 
-		optionsByGroup := make(map[uuid.UUID][]ModifierOptionManagementResponse)
+		optionsByGroup := make(map[uuid.UUID][]ManagementModifierOptionResponse)
 		for _, opt := range options {
-			var retAt *time.Time
-			if opt.RetiredAt.Valid {
-				t := opt.RetiredAt.Time
-				retAt = &t
-			}
-			var reason, note *string
-			if opt.RetirementReason.Valid {
-				r := opt.RetirementReason.String
-				reason = &r
-			}
-			if opt.RetirementNote.Valid {
-				n := opt.RetirementNote.String
-				note = &n
-			}
-
-			optionsByGroup[opt.ModifierGroupID] = append(optionsByGroup[opt.ModifierGroupID], ModifierOptionManagementResponse{
-				ID:               opt.ID,
-				ModifierGroupID:  opt.ModifierGroupID,
-				Name:             opt.Name,
-				SurchargeVND:     opt.SurchargeVnd,
-				Available:        opt.Available,
-				Retired:          opt.RetiredAt.Valid,
-				RetiredAt:        retAt,
-				RetirementReason: reason,
-				RetirementNote:   note,
-			})
+			optionsByGroup[opt.ModifierGroupID] = append(optionsByGroup[opt.ModifierGroupID], buildManagementModifierOption(opt))
 		}
 
 		defaultOptionIDsByGroup := make(map[uuid.UUID][]uuid.UUID)
@@ -773,48 +692,17 @@ func (h *ModifierGroupsHandler) Handle(ctx context.Context, actor Actor) ([]Modi
 			sortUUIDs(defaultOptionIDsByGroup[grpID])
 		}
 
-		var result []ModifierGroupManagementResponse
+		var result []ManagementModifierGroupResponse
 		for _, grp := range groups {
-			var retAt *time.Time
-			if grp.RetiredAt.Valid {
-				t := grp.RetiredAt.Time
-				retAt = &t
-			}
-			var reason, note *string
-			if grp.RetirementReason.Valid {
-				r := grp.RetirementReason.String
-				reason = &r
-			}
-			if grp.RetirementNote.Valid {
-				n := grp.RetirementNote.String
-				note = &n
-			}
-
-			grpOpts := optionsByGroup[grp.ID]
-			if grpOpts == nil {
-				grpOpts = []ModifierOptionManagementResponse{}
-			}
-
 			defaults := make([]uuid.UUID, len(defaultOptionIDsByGroup[grp.ID]))
 			copy(defaults, defaultOptionIDsByGroup[grp.ID])
 			sortUUIDs(defaults)
 
-			result = append(result, ModifierGroupManagementResponse{
-				ID:               grp.ID,
-				Name:             grp.Name,
-				MinSelections:    grp.MinSelections,
-				MaxSelections:    grp.MaxSelections,
-				Retired:          grp.RetiredAt.Valid,
-				RetiredAt:        retAt,
-				RetirementReason: reason,
-				RetirementNote:   note,
-				Options:          grpOpts,
-				DefaultOptionIDs: defaults,
-			})
+			result = append(result, buildManagementModifierGroup(grp, optionsByGroup[grp.ID], defaults))
 		}
 
 		if result == nil {
-			result = []ModifierGroupManagementResponse{}
+			result = []ManagementModifierGroupResponse{}
 		}
 
 		return result, nil
@@ -825,4 +713,64 @@ func sortUUIDs(ids []uuid.UUID) {
 	sort.Slice(ids, func(i, j int) bool {
 		return ids[i].String() < ids[j].String()
 	})
+}
+
+func buildManagementModifierOption(opt sqlc.ModifierOption) ManagementModifierOptionResponse {
+	var retAt *time.Time
+	if opt.RetiredAt.Valid {
+		t := opt.RetiredAt.Time
+		retAt = &t
+	}
+	var reason, note *string
+	if opt.RetirementReason.Valid {
+		r := opt.RetirementReason.String
+		reason = &r
+	}
+	if opt.RetirementNote.Valid {
+		n := opt.RetirementNote.String
+		note = &n
+	}
+	return ManagementModifierOptionResponse{
+		ID:               opt.ID,
+		ModifierGroupID:  opt.ModifierGroupID,
+		Name:             opt.Name,
+		SurchargeVND:     opt.SurchargeVnd,
+		Available:        opt.Available,
+		Retired:          opt.RetiredAt.Valid,
+		RetiredAt:        retAt,
+		RetirementReason: reason,
+		RetirementNote:   note,
+	}
+}
+
+func buildManagementModifierGroup(grp sqlc.ModifierGroup, options []ManagementModifierOptionResponse, defaultIDs []uuid.UUID) ManagementModifierGroupResponse {
+	var retAt *time.Time
+	if grp.RetiredAt.Valid {
+		t := grp.RetiredAt.Time
+		retAt = &t
+	}
+	var reason, note *string
+	if grp.RetirementReason.Valid {
+		r := grp.RetirementReason.String
+		reason = &r
+	}
+	if grp.RetirementNote.Valid {
+		n := grp.RetirementNote.String
+		note = &n
+	}
+	if options == nil {
+		options = []ManagementModifierOptionResponse{}
+	}
+	return ManagementModifierGroupResponse{
+		ID:               grp.ID,
+		Name:             grp.Name,
+		MinSelections:    grp.MinSelections,
+		MaxSelections:    grp.MaxSelections,
+		Retired:          grp.RetiredAt.Valid,
+		RetiredAt:        retAt,
+		RetirementReason: reason,
+		RetirementNote:   note,
+		Options:          options,
+		DefaultOptionIDs: defaultIDs,
+	}
 }

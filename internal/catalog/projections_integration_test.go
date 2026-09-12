@@ -828,7 +828,7 @@ func TestModifierGroups(t *testing.T) {
 		assert.Equal(t, []string{"Add-ons", "Ice Level", "Old Toppings", "Sugar Level", "Temp Unavailable Mod"}, groupNames)
 
 		// Check retired group Old Toppings
-		var retiredGrp *catalog.ModifierGroupManagementResponse
+		var retiredGrp *catalog.ManagementModifierGroupResponse
 		for i := range groups {
 			if groups[i].Name == "Old Toppings" {
 				retiredGrp = &groups[i]
@@ -842,7 +842,7 @@ func TestModifierGroups(t *testing.T) {
 		assert.Equal(t, "Boba", retiredGrp.Options[0].Name)
 
 		// Check Sugar Level defaults and retired options
-		var sugarGrp *catalog.ModifierGroupManagementResponse
+		var sugarGrp *catalog.ManagementModifierGroupResponse
 		for i := range groups {
 			if groups[i].Name == "Sugar Level" {
 				sugarGrp = &groups[i]

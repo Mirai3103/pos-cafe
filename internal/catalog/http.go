@@ -1233,7 +1233,7 @@ func (s *Slices) handleGetAvailabilityMenu(c echo.Context) error {
 //	@Tags			Catalog
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Success		200	{object}	response.APIResponse{data=[]ModifierGroupManagementResponse}
+//	@Success		200	{object}	response.APIResponse{data=[]ManagementModifierGroupResponse}
 //	@Failure		400	{object}	response.APIResponse
 //	@Failure		401	{object}	response.APIResponse
 //	@Failure		403	{object}	response.APIResponse

@@ -532,7 +532,7 @@ func TestCatalogEndToEndLifecycle(t *testing.T) {
 	// 11.4 Modifier Groups (/api/v1/catalog/modifier-groups)
 	rec = doHTTP(t, app.e, http.MethodGet, "/api/v1/catalog/modifier-groups", app.token, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
-	_, modGroups := decodeBody[[]catalog.ModifierGroupManagementResponse](t, rec)
+	_, modGroups := decodeBody[[]catalog.ManagementModifierGroupResponse](t, rec)
 	require.Len(t, modGroups, 2)
 
 	// 11.5 Audit Events (/api/v1/catalog/audit-events)

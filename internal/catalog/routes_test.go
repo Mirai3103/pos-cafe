@@ -631,7 +631,7 @@ func TestCatalogRoutes(t *testing.T) {
 	t.Run("GET /modifier-groups -> 200 OK", func(t *testing.T) {
 		rec := doJSONRequest(t, tc.e, http.MethodGet, "/api/v1/catalog/modifier-groups", tc.managerToken, nil)
 		assert.Equal(t, http.StatusOK, rec.Code)
-		res, groups := parseAPIResponse[[]catalog.ModifierGroupManagementResponse](t, rec)
+		res, groups := parseAPIResponse[[]catalog.ManagementModifierGroupResponse](t, rec)
 		assert.True(t, res.Success)
 		assert.NotEmpty(t, groups)
 	})

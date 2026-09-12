@@ -438,35 +438,8 @@ type AvailabilityMenuResponse struct {
 
 // === Modifier Groups Management Projection ===
 
-// ModifierOptionManagementResponse represents a modifier option in the modifier groups management projection.
-type ModifierOptionManagementResponse struct {
-	ID               uuid.UUID  `json:"id"`
-	ModifierGroupID  uuid.UUID  `json:"modifier_group_id"`
-	Name             string     `json:"name"`
-	SurchargeVND     int64      `json:"surcharge_vnd"`
-	Available        bool       `json:"available"`
-	Retired          bool       `json:"retired"`
-	RetiredAt        *time.Time `json:"retired_at,omitempty"`
-	RetirementReason *string    `json:"retirement_reason,omitempty"`
-	RetirementNote   *string    `json:"retirement_note,omitempty"`
-}
-
-// ModifierGroupManagementResponse represents a modifier group in the modifier groups management projection.
-type ModifierGroupManagementResponse struct {
-	ID               uuid.UUID                          `json:"id"`
-	Name             string                             `json:"name"`
-	MinSelections    int32                              `json:"min_selections"`
-	MaxSelections    int32                              `json:"max_selections"`
-	Retired          bool                               `json:"retired"`
-	RetiredAt        *time.Time                         `json:"retired_at,omitempty"`
-	RetirementReason *string                            `json:"retirement_reason,omitempty"`
-	RetirementNote   *string                            `json:"retirement_note,omitempty"`
-	Options          []ModifierOptionManagementResponse `json:"options"`
-	DefaultOptionIDs []uuid.UUID                        `json:"default_option_ids"`
-}
-
-// ModifierGroupsManagementResponse is a slice of ModifierGroupManagementResponse.
-type ModifierGroupsManagementResponse = []ModifierGroupManagementResponse
+// ModifierGroupsManagementResponse is a slice of ManagementModifierGroupResponse.
+type ModifierGroupsManagementResponse = []ManagementModifierGroupResponse
 
 // === Audit Events Query ===
 
