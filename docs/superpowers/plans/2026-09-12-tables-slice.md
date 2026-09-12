@@ -3199,18 +3199,20 @@ Append to `spec/decisions.md`:
 
 ---
 
-## ADR-007: Tái khẳng định bảng `idempotency_keys` dùng chung
-- **Ngày quyết định:** 2026-09-12
-- **Trạng thái:** Accepted
-- **Bối cảnh:** ADR-005 quy định mọi slice dùng chung một bảng `idempotency_keys`. Tuy nhiên Phase 2 (Catalog) lại tạo bảng riêng `catalog_mutation_requests`, đi ngược quyết định này và tái lập chính anti-pattern schema bloat mà ADR-005 muốn loại bỏ.
-- **Quyết định:**
-  - Từ Phase 3 trở đi, mọi slice ghi idempotency vào bảng dùng chung `idempotency_keys`, với cột `action` mang tên thao tác đầy đủ (`tables.create_table`, `tables.rename_table`, `tables.set_table_availability`).
-  - `catalog_mutation_requests` được ghi nhận là **ngoại lệ lịch sử**, không phải tiền lệ. Không migrate ngược Catalog trong Phase 3; nếu có nhu cầu dọn dẹp, đó là một công việc riêng.
-  - Mỗi slice vẫn sở hữu executor riêng của nó. Dùng chung **bảng** không có nghĩa là dùng chung **helper**: `internal/tables` không import helper idempotency của `internal/auth`.
-- **Hệ quả:**
-  - Schema không phình thêm một bảng cho mỗi slice.
-  - Ranh giới vertical slice được giữ nguyên ở tầng code, trong khi tầng lưu trữ được hợp nhất.
-```
+## ADR-007: Reaffirming the Shared `idempotency_keys` Table
+
+* **Decision Date:** 2026-09-12
+* **Status:** Accepted
+* **Context:** ADR-005 mandated that all slices share a single `idempotency_keys` table. However, Phase 2 (Catalog) created a dedicated `catalog_mutation_requests` table, contradicting this decision and reintroducing the exact schema bloat anti-pattern that ADR-005 aimed to eliminate.
+* **Decision:**
+* Starting from Phase 3 onwards, all slices must write idempotency records to the shared `idempotency_keys` table, using fully qualified action names for the `action` column (e.g., `tables.create_table`, `tables.rename_table`, `tables.set_table_availability`).
+* `catalog_mutation_requests` is acknowledged as a **historical exception**, not a precedent. Catalog will not be retrofitted during Phase 3; any cleanup will be handled as a separate task.
+* Each slice continues to own its respective executor. Sharing the **database table** does not imply sharing the **helper logic**: `internal/tables` must not import idempotency helpers from `internal/auth`.
+
+
+* **Consequences:**
+* Prevents schema bloat by avoiding a new table for every slice.
+* Preserves vertical slice boundaries at the code layer while consolidating the storage layer.
 
 - [ ] **Step 2: Update the roadmap status only**
 
