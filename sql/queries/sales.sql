@@ -126,3 +126,27 @@ RETURNING id, table_id, service_session_id, sequence, assigned_at;
 SELECT COALESCE(MAX(sequence), -1)::int AS highest
 FROM table_assignments
 WHERE service_session_id = $1;
+
+-- name: LockServiceSessionForUpdate :one
+SELECT id, service_mode, state, sales_shift_id
+FROM service_sessions
+WHERE id = $1
+FOR UPDATE;
+
+-- name: LockCurrentTableAssignments :many
+SELECT id, table_id, sequence
+FROM table_assignments
+WHERE service_session_id = $1 AND released_at IS NULL
+ORDER BY sequence ASC
+FOR UPDATE;
+
+-- name: ReleaseTableAssignment :exec
+-- released_at and released_by_staff_identity_id must be set together; the
+-- table_assignment_release_evidence_valid constraint from migration 000006
+-- rejects one without the other.
+UPDATE table_assignments
+SET released_at = now(), released_by_staff_identity_id = $2
+WHERE id = $1;
+
+-- name: GetSalesShiftStateByID :one
+SELECT state FROM sales_shifts WHERE id = $1;

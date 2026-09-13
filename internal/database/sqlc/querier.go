@@ -84,6 +84,7 @@ type Querier interface {
 	// shared table is shared, the helper logic is not.
 	GetSalesSessionAuthority(ctx context.Context, arg GetSalesSessionAuthorityParams) (GetSalesSessionAuthorityRow, error)
 	GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	GetSalesShiftStateByID(ctx context.Context, id uuid.UUID) (string, error)
 	GetServiceSession(ctx context.Context, id uuid.UUID) (GetServiceSessionRow, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
 	// -- Authority --
@@ -156,12 +157,18 @@ type Querier interface {
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
+	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
 	// Locks the selected Tables in id order so two concurrent assignments over
 	// overlapping sets cannot deadlock against each other. The caller must sort
 	// the ids before calling.
 	LockTablesForAssignment(ctx context.Context, tableIds []uuid.UUID) ([]LockTablesForAssignmentRow, error)
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
+	// released_at and released_by_staff_identity_id must be set together; the
+	// table_assignment_release_evidence_valid constraint from migration 000006
+	// rejects one without the other.
+	ReleaseTableAssignment(ctx context.Context, arg ReleaseTableAssignmentParams) error
 	RenameMenuCategory(ctx context.Context, arg RenameMenuCategoryParams) (MenuCategory, error)
 	RenameMenuItem(ctx context.Context, arg RenameMenuItemParams) (MenuItem, error)
 	RenameMenuItemSize(ctx context.Context, arg RenameMenuItemSizeParams) (MenuItemSize, error)

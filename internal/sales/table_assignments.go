@@ -2,7 +2,9 @@ package sales
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -86,8 +88,6 @@ func assignTables(ctx context.Context, q *sqlc.Queries, actor Actor,
 
 // nextAssignmentSequence returns the next sequence for a Session, continuing
 // past released assignments so a number is never reused.
-//
-//nolint:unused // brief-mandated helper; first consumed by the Set-session-Tables task
 func nextAssignmentSequence(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (int32, error) {
 	highest, err := q.GetHighestAssignmentSequence(ctx, sessionID)
 	if err != nil {
@@ -119,4 +119,142 @@ func writeAssignmentAudits(ctx context.Context, q *sqlc.Queries, actor Actor,
 		}
 	}
 	return nil
+}
+
+type setSessionTablesFingerprint struct {
+	ServiceSessionID uuid.UUID   `json:"service_session_id"`
+	TableIDs         []uuid.UUID `json:"table_ids"`
+}
+
+// SetSessionTablesHandler replaces a Dine-in Session's Table set.
+type SetSessionTablesHandler struct{ runner *Runner }
+
+// NewSetSessionTablesHandler creates a new SetSessionTablesHandler.
+func NewSetSessionTablesHandler(runner *Runner) *SetSessionTablesHandler {
+	return &SetSessionTablesHandler{runner: runner}
+}
+
+// Handle computes the difference between the Session's current and desired
+// Table sets, releases what is gone, and assigns what is new.
+//
+// Only additions are validated for availability. A Table that is already
+// assigned and has since been marked unavailable must not block an unrelated
+// change to the same Session.
+func (h *SetSessionTablesHandler) Handle(ctx context.Context, actor Actor,
+	cmd SetSessionTablesCommand,
+) (int, ServiceSessionResponse, error) {
+	if HasDuplicateUUIDs(cmd.TableIDs) {
+		return 0, ServiceSessionResponse{}, ErrTableSelectionDuplicate
+	}
+
+	spec := MutationSpec{
+		RequestID: cmd.RequestID,
+		Operation: OpSetSessionTables,
+		Fingerprint: setSessionTablesFingerprint{
+			ServiceSessionID: cmd.ServiceSessionID,
+			TableIDs:         SortedUUIDs(cmd.TableIDs),
+		},
+		Required: []string{CapSalesOperate},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec,
+		func(mc MutationContext) (int, ServiceSessionResponse, AuditRecord, error) {
+			var zero ServiceSessionResponse
+			q := mc.Queries
+
+			session, err := q.LockServiceSessionForUpdate(ctx, cmd.ServiceSessionID)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return 0, zero, AuditRecord{},
+						fmt.Errorf("%w: %s", ErrServiceSessionNotFound, cmd.ServiceSessionID)
+				}
+				return 0, zero, AuditRecord{}, fmt.Errorf("lock service session: %w", err)
+			}
+			if session.ServiceMode != ModeDineIn {
+				return 0, zero, AuditRecord{}, ErrTakeawayTablesNotAvailable
+			}
+			if session.State != StateActive {
+				return 0, zero, AuditRecord{}, ErrServiceSessionClosed
+			}
+
+			// Spec 6.1: every 5A mutation requires a Sales Shift in state OPEN.
+			// Like the draft-lock query's sh.id = s.sales_shift_id AND
+			// sh.state = 'OPEN', this deliberately checks the Session's OWN
+			// Shift, not whether some open Shift exists.
+			shiftState, err := q.GetSalesShiftStateByID(ctx, session.SalesShiftID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("load sales shift state: %w", err)
+			}
+			if shiftState != "OPEN" {
+				return 0, zero, AuditRecord{}, ErrOpenShiftRequired
+			}
+
+			current, err := q.LockCurrentTableAssignments(ctx, cmd.ServiceSessionID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("lock current assignments: %w", err)
+			}
+
+			desired := make(map[uuid.UUID]struct{}, len(cmd.TableIDs))
+			for _, id := range cmd.TableIDs {
+				desired[id] = struct{}{}
+			}
+			assignedNow := make(map[uuid.UUID]struct{}, len(current))
+			var toRelease []sqlc.LockCurrentTableAssignmentsRow
+			for _, row := range current {
+				assignedNow[row.TableID] = struct{}{}
+				if _, keep := desired[row.TableID]; !keep {
+					toRelease = append(toRelease, row)
+				}
+			}
+			var toAdd []uuid.UUID
+			for _, id := range cmd.TableIDs {
+				if _, already := assignedNow[id]; !already {
+					toAdd = append(toAdd, id)
+				}
+			}
+
+			if err := lockAndValidateTables(ctx, q, toAdd); err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+
+			released := make([]tableAssignmentAudit, 0, len(toRelease))
+			for _, row := range toRelease {
+				if err := q.ReleaseTableAssignment(ctx, sqlc.ReleaseTableAssignmentParams{
+					ID:                        row.ID,
+					ReleasedByStaffIdentityID: uuid.NullUUID{UUID: actor.StaffID, Valid: true},
+				}); err != nil {
+					return 0, zero, AuditRecord{}, fmt.Errorf("release table assignment: %w", err)
+				}
+				released = append(released, tableAssignmentAudit{
+					TableAssignmentID: row.ID,
+					TableID:           row.TableID,
+					ServiceSessionID:  cmd.ServiceSessionID,
+				})
+			}
+			if err := writeAssignmentAudits(ctx, q, actor, EventTableAssignmentReleased, released); err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+
+			if len(toAdd) > 0 {
+				startSeq, err := nextAssignmentSequence(ctx, q, cmd.ServiceSessionID)
+				if err != nil {
+					return 0, zero, AuditRecord{}, err
+				}
+				added, err := assignTables(ctx, q, actor, cmd.ServiceSessionID, toAdd, startSeq)
+				if err != nil {
+					return 0, zero, AuditRecord{}, err
+				}
+				if err := writeAssignmentAudits(ctx, q, actor, EventTableAssignmentCreated, added); err != nil {
+					return 0, zero, AuditRecord{}, err
+				}
+			}
+
+			result, err := LoadServiceSession(ctx, q, cmd.ServiceSessionID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			// The per-Table events above are the whole audit trail for this
+			// command; there is no meaningful Session-level event to add.
+			return 200, result, AuditRecord{}, nil
+		})
 }

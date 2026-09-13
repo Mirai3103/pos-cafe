@@ -150,3 +150,45 @@ func (s *Slices) handleStartDineIn(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleSetSessionTables sets a Service Session's Tables.
+//
+//	@Summary		Set a Service Session's Tables
+//	@Description	Replaces a Dine-in Session's current Table set. Tables no longer listed are released, preserving history. An empty table_ids releases every Table and is permitted. Rejected for a Takeaway Session.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string					true	"Service Session ID"
+//	@Param			request	body		SetSessionTablesCommand	true	"Request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/tables [put]
+func (s *Slices) handleSetSessionTables(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[SetSessionTablesCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// ServiceSessionID is json:"-": it comes from the path, never the body.
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd.ServiceSessionID = sessionID
+	status, result, err := s.SetSessionTables.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

@@ -156,6 +156,17 @@ func (q *Queries) GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid
 	return items, nil
 }
 
+const getSalesShiftStateByID = `-- name: GetSalesShiftStateByID :one
+SELECT state FROM sales_shifts WHERE id = $1
+`
+
+func (q *Queries) GetSalesShiftStateByID(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSalesShiftStateByID, id)
+	var state string
+	err := row.Scan(&state)
+	return state, err
+}
+
 const getServiceSession = `-- name: GetServiceSession :one
 SELECT id, service_number, sequence, service_mode, state, sales_shift_id,
        created_by_staff_identity_id, created_at
@@ -507,6 +518,69 @@ func (q *Queries) ListServiceSessionTables(ctx context.Context, serviceSessionID
 	return items, nil
 }
 
+const lockCurrentTableAssignments = `-- name: LockCurrentTableAssignments :many
+SELECT id, table_id, sequence
+FROM table_assignments
+WHERE service_session_id = $1 AND released_at IS NULL
+ORDER BY sequence ASC
+FOR UPDATE
+`
+
+type LockCurrentTableAssignmentsRow struct {
+	ID       uuid.UUID `json:"id"`
+	TableID  uuid.UUID `json:"table_id"`
+	Sequence int32     `json:"sequence"`
+}
+
+func (q *Queries) LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockCurrentTableAssignments, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockCurrentTableAssignmentsRow{}
+	for rows.Next() {
+		var i LockCurrentTableAssignmentsRow
+		if err := rows.Scan(&i.ID, &i.TableID, &i.Sequence); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockServiceSessionForUpdate = `-- name: LockServiceSessionForUpdate :one
+SELECT id, service_mode, state, sales_shift_id
+FROM service_sessions
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockServiceSessionForUpdateRow struct {
+	ID           uuid.UUID `json:"id"`
+	ServiceMode  string    `json:"service_mode"`
+	State        string    `json:"state"`
+	SalesShiftID uuid.UUID `json:"sales_shift_id"`
+}
+
+func (q *Queries) LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error) {
+	row := q.db.QueryRowContext(ctx, lockServiceSessionForUpdate, id)
+	var i LockServiceSessionForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceMode,
+		&i.State,
+		&i.SalesShiftID,
+	)
+	return i, err
+}
+
 const lockTablesForAssignment = `-- name: LockTablesForAssignment :many
 SELECT id, name, available
 FROM tables
@@ -545,6 +619,25 @@ func (q *Queries) LockTablesForAssignment(ctx context.Context, tableIds []uuid.U
 		return nil, err
 	}
 	return items, nil
+}
+
+const releaseTableAssignment = `-- name: ReleaseTableAssignment :exec
+UPDATE table_assignments
+SET released_at = now(), released_by_staff_identity_id = $2
+WHERE id = $1
+`
+
+type ReleaseTableAssignmentParams struct {
+	ID                        uuid.UUID     `json:"id"`
+	ReleasedByStaffIdentityID uuid.NullUUID `json:"released_by_staff_identity_id"`
+}
+
+// released_at and released_by_staff_identity_id must be set together; the
+// table_assignment_release_evidence_valid constraint from migration 000006
+// rejects one without the other.
+func (q *Queries) ReleaseTableAssignment(ctx context.Context, arg ReleaseTableAssignmentParams) error {
+	_, err := q.db.ExecContext(ctx, releaseTableAssignment, arg.ID, arg.ReleasedByStaffIdentityID)
+	return err
 }
 
 const salesAdvisoryLock = `-- name: SalesAdvisoryLock :exec
