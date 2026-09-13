@@ -145,6 +145,33 @@ type ModifierOption struct {
 	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
+// Owned by internal/sales (Phase 5A). Commit, which writes COMMITTED, lands in 5B.
+type OrderDraft struct {
+	ID               uuid.UUID `json:"id"`
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	State            string    `json:"state"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+type OrderDraftItem struct {
+	ID              uuid.UUID      `json:"id"`
+	OrderDraftID    uuid.UUID      `json:"order_draft_id"`
+	MenuItemID      uuid.UUID      `json:"menu_item_id"`
+	SizeID          uuid.NullUUID  `json:"size_id"`
+	Quantity        int32          `json:"quantity"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+	// Derived: sorted, comma-joined modifier_option_id list. Exists only to make the composition index possible; order_draft_item_modifier_options is authoritative.
+	ModifierKey string         `json:"modifier_key"`
+	CreatedAt   time.Time      `json:"created_at"`
+	SizeKey     sql.NullString `json:"size_key"`
+	NoteKey     sql.NullString `json:"note_key"`
+}
+
+type OrderDraftItemModifierOption struct {
+	OrderDraftItemID uuid.UUID `json:"order_draft_item_id"`
+	ModifierOptionID uuid.UUID `json:"modifier_option_id"`
+}
+
 // Owned by internal/shift (Phase 4). At most one row may be in OPEN state. Phase 4 ships no close operation; see the Non-Goals in the Phase 4 design spec.
 type SalesShift struct {
 	ID                      uuid.UUID `json:"id"`
@@ -154,7 +181,7 @@ type SalesShift struct {
 	OpenedAt                time.Time `json:"opened_at"`
 }
 
-// Owned by internal/sales (Phase 5). Provisioned in Phase 3 for the Tables overview read; sales_shift_id is added in Phase 5.
+// Owned by internal/sales (Phase 5A).
 type ServiceSession struct {
 	ID                       uuid.UUID `json:"id"`
 	ServiceNumber            string    `json:"service_number"`
@@ -162,6 +189,8 @@ type ServiceSession struct {
 	State                    string    `json:"state"`
 	CreatedByStaffIdentityID uuid.UUID `json:"created_by_staff_identity_id"`
 	CreatedAt                time.Time `json:"created_at"`
+	SalesShiftID             uuid.UUID `json:"sales_shift_id"`
+	Sequence                 int32     `json:"sequence"`
 }
 
 type StaffAccessSession struct {
@@ -200,7 +229,7 @@ type Table struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-// Owned by internal/sales (Phase 5). Provisioned in Phase 3 for the Tables overview read.
+// Owned by internal/sales (Phase 5A). Read by internal/tables for the overview.
 type TableAssignment struct {
 	ID                        uuid.UUID     `json:"id"`
 	TableID                   uuid.UUID     `json:"table_id"`

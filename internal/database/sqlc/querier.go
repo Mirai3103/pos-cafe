@@ -67,6 +67,12 @@ type Querier interface {
 	// Single-table so the row lock is unambiguous; the opener is fetched separately
 	// with GetStaffSummary.
 	GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) (GetOpenSalesShiftForUpdateRow, error)
+	// Queries for internal/sales (Phase 5A).
+	//
+	// Authority, role, and advisory-lock queries are slice-local by ADR-007: the
+	// shared table is shared, the helper logic is not.
+	GetSalesSessionAuthority(ctx context.Context, arg GetSalesSessionAuthorityParams) (GetSalesSessionAuthorityRow, error)
+	GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
 	// -- Authority --
 	// Names are prefixed because sqlc query names are global across the package.
@@ -137,6 +143,7 @@ type Querier interface {
 	RetireModifierOption(ctx context.Context, arg RetireModifierOptionParams) (ModifierOption, error)
 	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
+	SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAvailabilityParams) (MenuItem, error)
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)

@@ -8,10 +8,14 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -122,4 +126,50 @@ func seedSalesFixture(t *testing.T, db *sql.DB, q *sqlc.Queries) salesFixture {
 		fx.ServiceSessionID).Scan(&fx.DraftID))
 
 	return fx
+}
+
+// seedActor creates an enabled identity with the given roles and an active
+// access session, returning the Actor the executor expects.
+func seedActor(t *testing.T, q *sqlc.Queries, roles []string) sales.Actor {
+	t.Helper()
+	ctx := context.Background()
+
+	code := testLoginCode("A")
+	hash, err := auth.HashPin("1234")
+	require.NoError(t, err)
+
+	identity, err := q.CreateStaffIdentity(ctx, sqlc.CreateStaffIdentityParams{
+		DisplayName: "Actor " + code,
+		Btrim:       code,
+		PinHash:     hash,
+		Enabled:     true,
+	})
+	require.NoError(t, err)
+
+	for _, role := range roles {
+		require.NoError(t, q.AddStaffRole(ctx, sqlc.AddStaffRoleParams{
+			StaffIdentityID: identity.ID,
+			Role:            role,
+		}))
+	}
+
+	session, err := q.CreateStaffSession(ctx, sqlc.CreateStaffSessionParams{
+		TokenHash:           "tok_" + uuid.NewString()[:16],
+		StaffIdentityID:     identity.ID,
+		State:               auth.SessionStateActive,
+		LastHumanActivityAt: time.Now(),
+		ExpiresAt:           time.Now().Add(8 * time.Hour),
+	})
+	require.NoError(t, err)
+
+	return sales.Actor{StaffID: identity.ID, SessionID: session.ID}
+}
+
+// assertAuditEvent asserts the exact number of audit_events rows of a type.
+func assertAuditEvent(t *testing.T, db *sql.DB, eventType string, want int) {
+	t.Helper()
+	var got int
+	require.NoError(t, db.QueryRow(
+		`SELECT count(*) FROM audit_events WHERE event_type = $1`, eventType).Scan(&got))
+	assert.Equal(t, want, got, "audit_events rows of type %s", eventType)
 }
