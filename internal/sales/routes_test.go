@@ -16,6 +16,12 @@ import (
 // sub-group with group-level middleware would silently add two
 // echo_route_not_found catch-all routes, which is exactly the mistake the
 // comment in RegisterRoutes warns about.
+//
+// Registration ORDER (the static list route before the :id param route) is
+// deliberately not pinned here: echo.Routes() iterates a Go map, so its slice
+// order is random per call and any index comparison flakes. The order is
+// pinned behaviorally instead, by TestListRouteShadowsGetByID in
+// list_sessions_integration_test.go.
 func TestRouteRegistration(t *testing.T) {
 	want := map[string]bool{
 		"GET /api/v1/sales/service-sessions":                                             true,
@@ -49,28 +55,4 @@ func TestRouteRegistration(t *testing.T) {
 	}
 	require.Equal(t, len(want), len(got),
 		"the router must expose exactly the Sales routes and nothing else; got %v", got)
-}
-
-// TestRouteRegistrationOrder pins the order the two colliding-looking GET
-// paths are registered in: the static list route before the :id param route.
-// Echo resolves static-before-param regardless, but the safe order is the one
-// RegisterRoutes ships, and this test makes changing it a deliberate act.
-func TestRouteRegistrationOrder(t *testing.T) {
-	e := echo.New()
-	v1 := e.Group("/api/v1")
-
-	slices := NewSlices(nil, nil)
-	slices.RegisterRoutes(v1, &auth.Middleware{})
-
-	order := make(map[string]int)
-	for i, route := range e.Routes() {
-		order[route.Method+" "+route.Path] = i
-	}
-
-	listPos, hasList := order["GET /api/v1/sales/service-sessions"]
-	getPos, hasGet := order["GET /api/v1/sales/service-sessions/:id"]
-	require.True(t, hasList, "list route must be registered")
-	require.True(t, hasGet, "get-by-id route must be registered")
-	assert.Less(t, listPos, getPos,
-		"GET /sales/service-sessions must be registered before GET /sales/service-sessions/:id")
 }
