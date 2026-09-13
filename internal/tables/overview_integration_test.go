@@ -16,13 +16,21 @@ import (
 
 // seedServiceSession inserts a Sales-owned service_sessions row directly.
 // Phase 3 never writes these through its API; Phase 5 owns that behavior.
+// sales_shift_id is NOT NULL since Phase 5A, so each session gets a CLOSED
+// Sales Shift from seedClosedSalesShift (schema_integration_test.go).
 func seedServiceSession(t *testing.T, db *sql.DB, staffID uuid.UUID, serviceNumber, state string) uuid.UUID {
 	t.Helper()
+	shiftID := seedClosedSalesShift(t, db, staffID)
 	var id uuid.UUID
 	require.NoError(t, db.QueryRow(
-		`INSERT INTO service_sessions (service_number, service_mode, state, created_by_staff_identity_id)
-		 VALUES ($1, 'DINE_IN', $2, $3) RETURNING id`,
-		serviceNumber, state, staffID).Scan(&id))
+		`INSERT INTO service_sessions (service_number, sequence, service_mode, state, created_by_staff_identity_id, sales_shift_id)
+		 VALUES ($1, 1, 'DINE_IN', $2, $3, $4) RETURNING id`,
+		serviceNumber, state, staffID, shiftID).Scan(&id))
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM table_assignments WHERE service_session_id = $1`, id)
+		_, _ = db.Exec(`DELETE FROM service_sessions WHERE id = $1`, id)
+		_, _ = db.Exec(`DELETE FROM sales_shifts WHERE id = $1`, shiftID)
+	})
 	return id
 }
 
@@ -147,7 +155,7 @@ func TestOverviewReportsOccupancy(t *testing.T) {
 			RequestID: uuid.New(), Name: uniqueTableName("Ban done"),
 		})
 		require.NoError(t, err)
-		session := seedServiceSession(t, db, manager.StaffID, randomServiceNumber(), "COMPLETED")
+		session := seedServiceSession(t, db, manager.StaffID, randomServiceNumber(), "CLOSED")
 		seedAssignment(t, db, done.ID, session, manager.StaffID, 1, false)
 
 		rows, err := overview.Handle(ctx, cashier.actor())

@@ -41,15 +41,26 @@ type Querier interface {
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	// -- Tables --
 	CreateTable(ctx context.Context, arg CreateTableParams) (Table, error)
+	DeleteDraftItem(ctx context.Context, id uuid.UUID) error
+	DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
+	FindDraftItemByComposition(ctx context.Context, arg FindDraftItemByCompositionParams) (FindDraftItemByCompositionRow, error)
+	// findDraftItemByComposition plus an id <> $n clause, so the row being edited
+	// never matches itself. A separate query rather than a nullable exclusion
+	// parameter keeps the add path's query untouched.
+	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
 	GetCatalogMutationRequest(ctx context.Context, arg GetCatalogMutationRequestParams) (CatalogMutationRequest, error)
 	// Catalog sqlc queries
 	// Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
 	GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error)
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
+	GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
+	// Includes released assignments, so a released sequence number is never
+	// reused and the audit trail stays unambiguous.
+	GetHighestAssignmentSequence(ctx context.Context, serviceSessionID uuid.UUID) (int32, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	// -- Shared idempotency (ADR-005) --
 	GetIdempotencyRecord(ctx context.Context, arg GetIdempotencyRecordParams) (IdempotencyKey, error)
@@ -63,10 +74,25 @@ type Querier interface {
 	GetModifierGroupForUpdate(ctx context.Context, id uuid.UUID) (ModifierGroup, error)
 	GetModifierOptionByID(ctx context.Context, id uuid.UUID) (ModifierOption, error)
 	GetModifierOptionForUpdate(ctx context.Context, id uuid.UUID) (ModifierOption, error)
+	// Callers MUST hold the advisory lock on the Sales Shift before running this.
+	// Without it two concurrent opens read the same maximum and one loses to the
+	// unique index.
+	GetNextServiceSequence(ctx context.Context, salesShiftID uuid.UUID) (int32, error)
 	GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, error)
 	// Single-table so the row lock is unambiguous; the opener is fetched separately
 	// with GetStaffSummary.
 	GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) (GetOpenSalesShiftForUpdateRow, error)
+	// Sales reads the Shift-owned table through its own query rather than
+	// importing internal/shift, per ADR-006's precedent.
+	GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error)
+	// Queries for internal/sales (Phase 5A).
+	//
+	// Authority, role, and advisory-lock queries are slice-local by ADR-007: the
+	// shared table is shared, the helper logic is not.
+	GetSalesSessionAuthority(ctx context.Context, arg GetSalesSessionAuthorityParams) (GetSalesSessionAuthorityRow, error)
+	GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	GetSalesShiftStateByID(ctx context.Context, id uuid.UUID) (string, error)
+	GetServiceSession(ctx context.Context, id uuid.UUID) (GetServiceSessionRow, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
 	// -- Authority --
 	// Names are prefixed because sqlc query names are global across the package.
@@ -85,10 +111,33 @@ type Querier interface {
 	GetTablesSessionAuthority(ctx context.Context, arg GetTablesSessionAuthorityParams) (GetTablesSessionAuthorityRow, error)
 	GetTablesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
+	// Batches a per-entry audit-insert loop into one round trip for callers
+	// (Sales table-assignment audits) that write several events of the same type,
+	// actor, session, and timestamp in one mutation, differing only in details.
+	//
+	// details_batch is text[], not jsonb[], and cast to jsonb per element inside
+	// the query: the pq.Array encoder used for database/sql array parameters has
+	// no driver.Valuer case for []json.RawMessage, so it falls through to its
+	// generic reflection path and encodes each byte-slice element as a NESTED
+	// ARRAY OF BYTES rather than a quoted string, which unnest then flatters into
+	// one row per byte. []string goes through pq's dedicated, correct StringArray
+	// codec instead.
+	InsertAuditEventsBatch(ctx context.Context, arg InsertAuditEventsBatchParams) error
 	// -- Cash Movements --
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
+	InsertDraftItem(ctx context.Context, arg InsertDraftItemParams) (InsertDraftItemRow, error)
+	InsertDraftItemModifierOption(ctx context.Context, arg InsertDraftItemModifierOptionParams) error
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
+	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
+	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
+	// Batches assignTables' per-Table insert loop into one round trip. Two
+	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
+	// into rows in lockstep, so row i of the result is table_ids[i] assigned at
+	// sequences[i]; the caller relies on getting exactly len(table_ids) rows back
+	// in that order.
+	InsertTableAssignmentsBatch(ctx context.Context, arg InsertTableAssignmentsBatchParams) ([]InsertTableAssignmentsBatchRow, error)
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
+	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
 	ListAllItemModifierGroupExclusions(ctx context.Context) ([]ListAllItemModifierGroupExclusionsRow, error)
 	ListAllItemModifierGroups(ctx context.Context) ([]ListAllItemModifierGroupsRow, error)
@@ -108,6 +157,32 @@ type Querier interface {
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
+	// Declared defaults of the given Groups, filtered to what is currently
+	// selectable. A retired Group's defaults never apply.
+	ListDefaultModifierOptionIDs(ctx context.Context, groupIds []uuid.UUID) ([]uuid.UUID, error)
+	// Ordered by Group then Option name, which is the order the projection emits.
+	ListDraftItemModifierOptions(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemModifierOptionsRow, error)
+	ListDraftItemOptionIDs(ctx context.Context, orderDraftItemID uuid.UUID) ([]uuid.UUID, error)
+	// price_vnd is the Size price when a Size is chosen and the Item price
+	// otherwise, matching the canonical Menu Price rule. available is read live
+	// rather than snapshotted: a draft is a live proposal, and an item that became
+	// unavailable while the customer was deciding must show as such.
+	//
+	// price_vnd reads the Size price through a correlated scalar subquery rather
+	// than the column directly. The subquery returns the same value (it references
+	// the already-joined row), but sqlc infers scalar subqueries as nullable, so
+	// COALESCE yields sql.NullInt64 instead of a bare int64 that cannot scan the
+	// NULL price of a required-Size Item whose Size has not been chosen yet.
+	ListDraftItems(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemsRow, error)
+	// (inherited - exclusions) + direct, for one Menu Item.
+	//
+	// internal/catalog computes the same set in the exported pure function
+	// EffectiveGroupIDs. Sales does not import it: MIGRATE_PLAN section 4.1
+	// forbids importing another slice, and ADR-006 established reading another
+	// slice's tables through one's own query. Expressing the algebra once in SQL
+	// keeps the duplication to one function against one query, which
+	// TestSalesResolutionMatchesCatalog pins together. See ADR-012.
+	ListEffectiveModifierGroupIDs(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -118,9 +193,41 @@ type Querier interface {
 	ListModifierGroupDefaultOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ListModifierGroupDefaultOptionsByGroupRow, error)
 	ListModifierGroups(ctx context.Context) ([]ModifierGroup, error)
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
+	ListModifierOptionsForValidation(ctx context.Context, optionIds []uuid.UUID) ([]ListModifierOptionsForValidationRow, error)
+	// Current assignments only. Released rows are history, not occupancy.
+	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
+	// Scoped to the draft, so a caller cannot reach an item of another Session by
+	// guessing its id.
+	LockDraftItem(ctx context.Context, arg LockDraftItemParams) (LockDraftItemRow, error)
+	// Checks every precondition and takes the lock in one statement, so there is
+	// no window between the check and the write.
+	//
+	// No match means the Session is missing, closed, its draft already committed,
+	// or its Sales Shift closed. The caller reports EDITABLE_DRAFT_NOT_FOUND for
+	// all four: the remedy is the same, and distinguishing them would leak state
+	// about Sessions the caller did not ask about.
+	LockEditableDraft(ctx context.Context, id uuid.UUID) (LockEditableDraftRow, error)
+	// Locked FOR UPDATE so the Item cannot be retired between validation and
+	// write. Sales rows are always locked before Catalog rows, and
+	// internal/catalog never locks Sales rows, so no deadlock cycle exists.
+	LockMenuItemForDraft(ctx context.Context, id uuid.UUID) (LockMenuItemForDraftRow, error)
+	// Locked FOR UPDATE for the same reason as LockMenuItemForDraft: without it, a
+	// concurrent retirement of this Size can slip between validation and the
+	// draft-item write.
+	LockMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (LockMenuItemSizeForDraftRow, error)
+	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
+	// Locks the selected Tables in id order so two concurrent assignments over
+	// overlapping sets cannot deadlock against each other. The caller must sort
+	// the ids before calling.
+	LockTablesForAssignment(ctx context.Context, tableIds []uuid.UUID) ([]LockTablesForAssignmentRow, error)
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
+	// released_at and released_by_staff_identity_id must be set together; the
+	// table_assignment_release_evidence_valid constraint from migration 000006
+	// rejects one without the other.
+	ReleaseTableAssignment(ctx context.Context, arg ReleaseTableAssignmentParams) error
 	RenameMenuCategory(ctx context.Context, arg RenameMenuCategoryParams) (MenuCategory, error)
 	RenameMenuItem(ctx context.Context, arg RenameMenuItemParams) (MenuItem, error)
 	RenameMenuItemSize(ctx context.Context, arg RenameMenuItemSizeParams) (MenuItemSize, error)
@@ -137,6 +244,8 @@ type Querier interface {
 	RetireModifierOption(ctx context.Context, arg RetireModifierOptionParams) (ModifierOption, error)
 	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
+	SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuantityParams) (SetDraftItemQuantityRow, error)
 	SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAvailabilityParams) (MenuItem, error)
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
@@ -147,6 +256,8 @@ type Querier interface {
 	StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error
 	SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) (SumCashMovementsRow, error)
 	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	// size_key and note_key are generated columns, so they follow the write.
+	UpdateDraftItemComposition(ctx context.Context, arg UpdateDraftItemCompositionParams) error
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
 	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error

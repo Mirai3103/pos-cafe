@@ -740,6 +740,173 @@ definitions:
       success:
         type: boolean
     type: object
+  sales.AddDraftItemCommand:
+    properties:
+      menu_item_id:
+        type: string
+      modifier_option_ids:
+        items:
+          type: string
+        type: array
+      preparation_note:
+        type: string
+      request_id:
+        type: string
+      size_id:
+        type: string
+    type: object
+  sales.DraftItemResponse:
+    properties:
+      available:
+        type: boolean
+      id:
+        type: string
+      menu_item_id:
+        type: string
+      name:
+        type: string
+      preparation_note:
+        type: string
+      price_vnd:
+        type: integer
+      quantity:
+        type: integer
+      selected_modifier_options:
+        items:
+          $ref: '#/definitions/sales.SelectedModifierOptionResponse'
+        type: array
+      size_id:
+        type: string
+      size_name:
+        type: string
+    type: object
+  sales.OrderDraftResponse:
+    properties:
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/sales.DraftItemResponse'
+        type: array
+      state:
+        type: string
+    type: object
+  sales.RemoveDraftItemCommand:
+    properties:
+      request_id:
+        type: string
+    type: object
+  sales.SelectedModifierOptionResponse:
+    properties:
+      group_id:
+        type: string
+      group_name:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      surcharge_vnd:
+        type: integer
+    type: object
+  sales.ServiceSessionResponse:
+    properties:
+      checks:
+        description: Filled by 5B and 5C.
+        items:
+          type: object
+        type: array
+      created_at:
+        type: string
+      customer_identity_id:
+        type: string
+      draft:
+        $ref: '#/definitions/sales.OrderDraftResponse'
+      id:
+        type: string
+      orders:
+        description: Filled by 5D.
+        items:
+          type: object
+        type: array
+      preparation_units:
+        description: Filled by 5D.
+        items:
+          type: object
+        type: array
+      sales_shift_id:
+        type: string
+      service_mode:
+        type: string
+      service_number:
+        type: string
+      state:
+        type: string
+      tables:
+        items:
+          $ref: '#/definitions/sales.SessionTableResponse'
+        type: array
+    type: object
+  sales.SessionTableResponse:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  sales.SetDraftItemModifiersCommand:
+    properties:
+      modifier_option_ids:
+        items:
+          type: string
+        type: array
+      request_id:
+        type: string
+    type: object
+  sales.SetDraftItemNoteCommand:
+    properties:
+      preparation_note:
+        type: string
+      request_id:
+        type: string
+    type: object
+  sales.SetDraftItemQuantityCommand:
+    properties:
+      quantity:
+        type: integer
+      request_id:
+        type: string
+    type: object
+  sales.SetDraftItemSizeCommand:
+    properties:
+      request_id:
+        type: string
+      size_id:
+        type: string
+    type: object
+  sales.SetSessionTablesCommand:
+    properties:
+      request_id:
+        type: string
+      table_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  sales.StartDineInSessionCommand:
+    properties:
+      request_id:
+        type: string
+      table_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  sales.StartTakeawaySessionCommand:
+    properties:
+      request_id:
+        type: string
+    type: object
   shift.CashMovementResponse:
     properties:
       amount_vnd:
@@ -2787,6 +2954,610 @@ paths:
       summary: Ngừng kinh doanh kích thước món
       tags:
       - Catalog
+  /sales/service-sessions:
+    get:
+      description: Returns every ACTIVE Service Session with its full projection,
+        ordered by creation. This is the cashier's open-tabs view.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/sales.ServiceSessionResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List active Service Sessions
+      tags:
+      - sales
+  /sales/service-sessions/{id}:
+    get:
+      description: Returns one Service Session with its current Tables and Order Draft.
+        checks is filled by Phase 5B, orders and preparation_units by Phase 5D; each
+        is an empty array until then.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a Service Session
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft/items:
+    post:
+      consumes:
+      - application/json
+      description: Adds one unit of a configured Menu Item, merging into an existing
+        line of the same composition. Omit modifier_option_ids to apply the menu's
+        default options; send an empty array to apply none. The draft accepts an incomplete
+        configuration; completeness is checked at Commit in Phase 5B.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.AddDraftItemCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Add an Order Draft item
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft/items/{item_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Removes one Order Draft item and its selected options, returning
+        the whole Service Session projection with 200 rather than 204 so a client
+        sees the resulting draft without a follow-up read. request_id may be sent
+        as a query parameter instead of in the body, since some clients and proxies
+        strip a DELETE request's body.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Order Draft Item ID
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Idempotency key, if not sent in the body
+        in: query
+        name: request_id
+        type: string
+      - description: Request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/sales.RemoveDraftItemCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a draft item
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft/items/{item_id}/modifiers:
+    patch:
+      consumes:
+      - application/json
+      description: 'Replaces one Order Draft item''s selected Modifier Options. Unlike
+        adding an item, the list is taken literally: an empty modifier_option_ids
+        selects no options and no defaults are applied. If the edit makes the item
+        identical in composition to another line of the same draft, the two MERGE:
+        the pre-existing line''s quantity grows by this one''s, this line''s id is
+        deleted, and the returned projection reflects the merge. A merged quantity
+        above 9999 is rejected. Returns the whole Service Session projection.'
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Order Draft Item ID
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.SetDraftItemModifiersCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Set a draft item's Modifier Options
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft/items/{item_id}/preparation-note:
+    patch:
+      consumes:
+      - application/json
+      description: 'Sets or clears one Order Draft item''s Preparation Note. The note
+        is trimmed and may be at most 200 characters; a null or blank preparation_note
+        clears it. If the edit makes the item identical in composition to another
+        line of the same draft, the two MERGE: the pre-existing line''s quantity grows
+        by this one''s, this line''s id is deleted, and the returned projection reflects
+        the merge. A merged quantity above 9999 is rejected. Returns the whole Service
+        Session projection.'
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Order Draft Item ID
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.SetDraftItemNoteCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Set a draft item's Preparation Note
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft/items/{item_id}/quantity:
+    patch:
+      consumes:
+      - application/json
+      description: 'Sets an absolute quantity between 1 and 9999 on one Order Draft
+        item. Zero is rejected: removal is its own command. Returns the whole Service
+        Session projection.'
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Order Draft Item ID
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.SetDraftItemQuantityCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Set a draft item's quantity
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft/items/{item_id}/size:
+    patch:
+      consumes:
+      - application/json
+      description: 'Sets or clears one Order Draft item''s Size. A null size_id clears
+        the Size and is accepted: the draft tolerates an incomplete configuration
+        until Commit in Phase 5B. If the edit makes the item identical in composition
+        to another line of the same draft, the two MERGE: the pre-existing line''s
+        quantity grows by this one''s, this line''s id is deleted, and the returned
+        projection reflects the merge. A merged quantity above 9999 is rejected. Returns
+        the whole Service Session projection.'
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Order Draft Item ID
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.SetDraftItemSizeCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Set a draft item's Size
+      tags:
+      - sales
+  /sales/service-sessions/{id}/tables:
+    put:
+      consumes:
+      - application/json
+      description: Replaces a Dine-in Session's current Table set. Tables no longer
+        listed are released, preserving history. An empty table_ids releases every
+        Table and is permitted. Rejected for a Takeaway Session.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.SetSessionTablesCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Set a Service Session's Tables
+      tags:
+      - sales
+  /sales/service-sessions/dine-in:
+    post:
+      consumes:
+      - application/json
+      description: Opens a Dine-in Service Session assigned to one or more Tables.
+        A Table may carry more than one active Service Session. Requires an open Sales
+        Shift.
+      parameters:
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.StartDineInSessionCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Open a Dine-in Service Session
+      tags:
+      - sales
+  /sales/service-sessions/takeaway:
+    post:
+      consumes:
+      - application/json
+      description: Opens an anonymous Takeaway Service Session with an empty editable
+        Order Draft. Requires an open Sales Shift. The Service Number is sequential
+        within that Shift (ADR-011).
+      parameters:
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.StartTakeawaySessionCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Open a Takeaway Service Session
+      tags:
+      - sales
   /shifts:
     post:
       consumes:

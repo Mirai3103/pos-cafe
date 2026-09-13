@@ -148,3 +148,39 @@ CREATE TABLE idempotency_keys (
 * **Consequences:**
 * Security-critical verification is implemented and tested once rather than copied into each slice that needs it.
 * This is a deliberate exception to the general rule that slices do not share helpers. It does not extend to idempotency helpers, which ADR-007 keeps slice-local.
+
+---
+
+## ADR-010: Decomposition of Phase 5 into Four Sub-Phases
+
+* **Decision Date:** 2026-09-13
+* **Status:** Accepted
+* **Context:** The canonical Sales module is roughly 16,000 lines exposing eighteen commands, five reads, and seventy-eight error codes, against three operations in Phase 4. A single Phase 5 specification would be unreviewable and a single implementation plan unexecutable.
+* **Decision:**
+* Phase 5 ships as 5A (Service Session and Order Draft), 5B (Commit, Checks, Charge Allocations), 5C (Payments, Check restructuring, settlement), and 5D (Submit, Orders, Preparation Units, closure), each with its own spec, plan, and suite, in that fixed order.
+* **Consequences:**
+* Each sub-phase is reviewable and independently testable; the cost is four spec-and-plan cycles instead of one, and a public contract that ships with fields no sub-phase before its owner can fill.
+
+---
+
+## ADR-011: Service Number Allocation Scoped to a Sales Shift
+
+* **Decision Date:** 2026-09-13
+* **Status:** Accepted
+* **Context:** The canonical implementation derives the number from six hexadecimal characters of the Session UUID against a permanently global unique index with a five-attempt retry, so collision probability grows with all Sessions ever recorded and ends in an unrecoverable `SERVICE_NUMBER_UNAVAILABLE` in the system's most frequent operation. `CONTEXT.md` defines the Service Number as an operational label, which needs to be unambiguous among Sessions currently being served, not unique for all time.
+* **Decision:**
+* Allocate `S%05d` sequentially within the Sales Shift, serialized by transaction-scoped advisory lock, with a `(sales_shift_id, service_number)` unique index as a safety net and a dedicated `sequence` column as the authoritative ordinal; the six-character check constraint is unchanged and `SERVICE_NUMBER_UNAVAILABLE` is not migrated.
+* **Consequences:**
+* No exhaustion mode, no retry loop, and a label staff can read aloud; the number is no longer globally unique, so any future cross-Shift reference must carry the Shift id alongside it.
+
+---
+
+## ADR-012: Sales Resolves Catalog Through Its Own SQL
+
+* **Decision Date:** 2026-09-13
+* **Status:** Accepted
+* **Context:** Draft item validation needs each Menu Item's effective Modifier Groups, which `internal/catalog` already computes in the exported pure function `EffectiveGroupIDs`; MIGRATE_PLAN §4.1 forbids importing another slice, and ADR-006 established reading another slice's tables through one's own sqlc query.
+* **Decision:**
+* `internal/sales` expresses the resolution once, in SQL, in `sql/queries/sales.sql`, rather than importing the function or reimplementing it in Go; an integration test importing both packages pins the SQL result to `catalog.EffectiveGroupIDs` over shared fixtures including the inherited-and-excluded and excluded-and-direct cases.
+* **Consequences:**
+* Slice boundaries hold at the code layer and the duplication is one function against one query with a mechanical consistency check, rather than two hand-maintained Go copies.

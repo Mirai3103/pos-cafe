@@ -41,6 +41,22 @@ INSERT INTO audit_events (event_type, actor_id, session_id, details, occurred_at
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, event_type, actor_id, session_id, details, occurred_at;
 
+-- name: InsertAuditEventsBatch :exec
+-- Batches a per-entry audit-insert loop into one round trip for callers
+-- (Sales table-assignment audits) that write several events of the same type,
+-- actor, session, and timestamp in one mutation, differing only in details.
+--
+-- details_batch is text[], not jsonb[], and cast to jsonb per element inside
+-- the query: the pq.Array encoder used for database/sql array parameters has
+-- no driver.Valuer case for []json.RawMessage, so it falls through to its
+-- generic reflection path and encodes each byte-slice element as a NESTED
+-- ARRAY OF BYTES rather than a quoted string, which unnest then flatters into
+-- one row per byte. []string goes through pq's dedicated, correct StringArray
+-- codec instead.
+INSERT INTO audit_events (event_type, actor_id, session_id, details, occurred_at)
+SELECT sqlc.arg(event_type)::text, sqlc.arg(actor_id)::uuid, sqlc.arg(session_id)::uuid, d::jsonb, sqlc.arg(occurred_at)::timestamptz
+FROM unnest(sqlc.arg(details_batch)::text[]) AS d;
+
 -- name: ListAuditEvents :many
 SELECT id, event_type, actor_id, session_id, details, occurred_at
 FROM audit_events
