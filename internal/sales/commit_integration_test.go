@@ -40,6 +40,33 @@ func TestCommitIsModeAgnostic(t *testing.T) {
 	require.Len(t, got.Checks[0].Allocations, 1)
 }
 
+// The Sized Item's price lives on its Size, so the charge and the frozen
+// size_name both come from the Size row, never from the item's NULL price.
+func TestCommitChargesTheSizePriceAndFreezesTheSizeName(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.StartTakeaway(t)
+	env.AddDraftItem(t, session.ID, env.SizedItemID, &env.LargeSizeID)
+
+	got := env.Commit(t, session.ID)
+
+	require.Len(t, got.Checks, 1)
+	check := got.Checks[0]
+	require.Equal(t, int64(30_000), check.ChargeVND)
+	require.Len(t, check.Allocations, 1)
+	require.Equal(t, check.ChargeVND, check.Allocations[0].AmountVND)
+	require.NotNil(t, check.Allocations[0].SizeName)
+	require.Equal(t, "Lớn", *check.Allocations[0].SizeName)
+
+	// The snapshot persists: a re-read of the Session still shows the frozen
+	// size name and the size-derived charge.
+	after := env.GetSessionOK(t, session.ID)
+	require.Len(t, after.Checks, 1)
+	require.Equal(t, int64(30_000), after.Checks[0].ChargeVND)
+	require.Len(t, after.Checks[0].Allocations, 1)
+	require.NotNil(t, after.Checks[0].Allocations[0].SizeName)
+	require.Equal(t, "Lớn", *after.Checks[0].Allocations[0].SizeName)
+}
+
 func TestCommitRejectsAnEmptyDraft(t *testing.T) {
 	env := newSalesEnv(t)
 	session := env.StartTakeaway(t)

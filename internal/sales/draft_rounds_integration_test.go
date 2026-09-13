@@ -50,6 +50,15 @@ func TestStartNewOrderDraftDeniedForBarista(t *testing.T) {
 	require.ErrorIs(t, err, sales.ErrForbidden)
 }
 
+func TestSetCheckTargetDeniedForBarista(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.StartTakeaway(t)
+
+	_, err := env.AsBarista().TrySetCheckTarget(t, session.ID, "NEW_CHECK")
+
+	require.ErrorIs(t, err, sales.ErrForbidden)
+}
+
 func TestSetCheckTargetUpdatesTheDraft(t *testing.T) {
 	env := newSalesEnv(t)
 	session := env.StartTakeaway(t)

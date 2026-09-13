@@ -264,7 +264,7 @@ func TestSalesHTTPSerializesEmptyCollectionsAsArrays(t *testing.T) {
 	assert.Equal(t, shiftID, session.SalesShiftID)
 }
 
-// salesRoutes enumerates all eleven operations for the denial tests. Bodies
+// salesRoutes enumerates all fourteen operations for the denial tests. Bodies
 // are well-formed; the denial happens in the middleware chain before any
 // handler logic runs, but valid requests keep the test honest about what is
 // being denied.
@@ -305,6 +305,12 @@ func salesRoutes() []struct {
 			map[string]any{"request_id": uuid.New(), "modifier_option_ids": []uuid.UUID{}}},
 		{"remove item", http.MethodDelete, itemPath,
 			map[string]any{"request_id": uuid.New()}},
+		{"commit draft", http.MethodPost, sessionPath + "/draft/commit",
+			map[string]any{"request_id": uuid.New()}},
+		{"start new draft", http.MethodPost, sessionPath + "/draft",
+			map[string]any{"request_id": uuid.New()}},
+		{"set check target", http.MethodPut, sessionPath + "/draft/check-target",
+			map[string]any{"request_id": uuid.New(), "check_target": "NEW_CHECK"}},
 	}
 }
 

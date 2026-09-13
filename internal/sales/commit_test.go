@@ -46,6 +46,24 @@ func TestBuildSnapshotAddsSurchargesToTheBasePrice(t *testing.T) {
 	require.Len(t, got.Modifiers, 2)
 }
 
+func TestBuildSnapshotPricesASizedItemThroughItsSize(t *testing.T) {
+	c := candidate()
+	c.ItemPriceVND = nil // sized items carry no own price
+	sizeID := uuid.New()
+	c.SizeID = &sizeID
+	c.Size = &sales.CommitSize{
+		ID: sizeID, MenuItemID: c.MenuItemID, Name: "Lớn", PriceVND: 30_000, Available: true,
+	}
+
+	got, err := sales.BuildSnapshot(c)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(30_000), got.UnitPriceVND)
+	require.Equal(t, int64(60_000), got.TotalVND)
+	require.NotNil(t, got.SizeName)
+	require.Equal(t, "Lớn", *got.SizeName)
+}
+
 func TestBuildSnapshotRequiresASizeForASizedItem(t *testing.T) {
 	c := candidate()
 	c.ItemPriceVND = nil // sized items carry no own price
