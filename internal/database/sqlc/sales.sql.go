@@ -137,7 +137,7 @@ func (q *Queries) FindDraftItemByCompositionExcluding(ctx context.Context, arg F
 }
 
 const getEditableDraft = `-- name: GetEditableDraft :one
-SELECT id, service_session_id, state, created_at
+SELECT id, service_session_id, state, check_target, created_at
 FROM order_drafts
 WHERE service_session_id = $1 AND state = 'EDITABLE'
 `
@@ -146,6 +146,7 @@ type GetEditableDraftRow struct {
 	ID               uuid.UUID `json:"id"`
 	ServiceSessionID uuid.UUID `json:"service_session_id"`
 	State            string    `json:"state"`
+	CheckTarget      string    `json:"check_target"`
 	CreatedAt        time.Time `json:"created_at"`
 }
 
@@ -156,6 +157,7 @@ func (q *Queries) GetEditableDraft(ctx context.Context, serviceSessionID uuid.UU
 		&i.ID,
 		&i.ServiceSessionID,
 		&i.State,
+		&i.CheckTarget,
 		&i.CreatedAt,
 	)
 	return i, err

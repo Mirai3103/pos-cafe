@@ -35,7 +35,7 @@ WHERE a.service_session_id = $1 AND a.released_at IS NULL
 ORDER BY a.sequence ASC;
 
 -- name: GetEditableDraft :one
-SELECT id, service_session_id, state, created_at
+SELECT id, service_session_id, state, check_target, created_at
 FROM order_drafts
 WHERE service_session_id = $1 AND state = 'EDITABLE';
 
