@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
@@ -182,6 +183,10 @@ func recordDenial(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}); err != nil {
 		return fmt.Errorf("insert denial audit event: %w", err)
 	}
+	slog.Warn("shift authorization denied",
+		"operation", operation,
+		"reason", denialErr.Error(),
+		"staff_identity_id", actor.StaffID)
 	return &committedDenial{err: denialErr}
 }
 
