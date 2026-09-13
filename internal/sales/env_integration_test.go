@@ -427,6 +427,28 @@ func (e *salesEnv) RequireNoCommittedItems(t *testing.T, sessionID uuid.UUID) {
 	require.Equal(t, 0, got, "committed_items rows for session %s", sessionID)
 }
 
+// RequireCommittedItemCount asserts the Session's exact Committed Item count,
+// counted across all of the Session's drafts.
+func (e *salesEnv) RequireCommittedItemCount(t *testing.T, sessionID uuid.UUID, want int) {
+	t.Helper()
+	var got int
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT count(*)
+		FROM committed_items ci
+		JOIN order_drafts d ON d.id = ci.order_draft_id
+		WHERE d.service_session_id = $1`, sessionID).Scan(&got))
+	require.Equal(t, want, got, "committed_items rows for session %s", sessionID)
+}
+
+// DisableActorIdentity disables the env actor's Staff Identity directly with
+// SQL, so a later handler call or idempotency replay must be denied.
+func (e *salesEnv) DisableActorIdentity(t *testing.T) {
+	t.Helper()
+	_, err := e.DB.Exec(
+		`UPDATE staff_identities SET enabled = false WHERE id = $1`, e.Actor.StaffID)
+	require.NoError(t, err)
+}
+
 // RequireDraftState asserts the Session's latest draft's state.
 func (e *salesEnv) RequireDraftState(t *testing.T, sessionID uuid.UUID, state string) {
 	t.Helper()
