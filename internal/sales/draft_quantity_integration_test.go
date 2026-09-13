@@ -105,14 +105,32 @@ func TestRemoveDraftItem(t *testing.T) {
 
 	actor := seedActor(t, q, []string{"CASHIER"})
 	seedOpenShift(t, q, actor.StaffID)
-	menuItemID := seedMenuItem(t, db, "Cà phê sữa", 25000)
-	sessionID, itemID := draftWithOneItem(t, runner, actor, menuItemID)
+	_, session, err := startTakeaway(t, runner, actor, uuid.New())
+	require.NoError(t, err)
 
-	_, resp, err := sales.NewRemoveDraftItemHandler(runner).Handle(
+	// The line carries a selected option so the cascade assertion below can
+	// fail: removing an option-less item would make count == 0 vacuous.
+	itemID, optionA, _ := seedItemWithTwoOptions(t, db)
+	resp, err := addItem(t, runner, actor, sales.AddDraftItemCommand{
+		ServiceSessionID:  session.ID,
+		MenuItemID:        itemID,
+		ModifierOptionIDs: &[]uuid.UUID{optionA},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Draft.Items, 1)
+	draftItemID := resp.Draft.Items[0].ID
+
+	var options int
+	require.NoError(t, db.QueryRow(
+		`SELECT count(*) FROM order_draft_item_modifier_options
+		 WHERE order_draft_item_id = $1`, draftItemID).Scan(&options))
+	require.Equal(t, 1, options)
+
+	_, resp, err = sales.NewRemoveDraftItemHandler(runner).Handle(
 		context.Background(), actor, sales.RemoveDraftItemCommand{
 			RequestID:        uuid.New(),
-			ServiceSessionID: sessionID,
-			DraftItemID:      itemID,
+			ServiceSessionID: session.ID,
+			DraftItemID:      draftItemID,
 		})
 	require.NoError(t, err)
 	assert.Empty(t, resp.Draft.Items)
@@ -120,8 +138,8 @@ func TestRemoveDraftItem(t *testing.T) {
 	assertAuditEvent(t, db, sales.EventDraftItemRemoved, 1)
 
 	// The cascade cleared the option rows too.
-	var options int
 	require.NoError(t, db.QueryRow(
-		`SELECT count(*) FROM order_draft_item_modifier_options`).Scan(&options))
+		`SELECT count(*) FROM order_draft_item_modifier_options
+		 WHERE order_draft_item_id = $1`, draftItemID).Scan(&options))
 	assert.Equal(t, 0, options)
 }
