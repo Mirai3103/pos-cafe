@@ -184,3 +184,43 @@ CREATE TABLE idempotency_keys (
 * `internal/sales` expresses the resolution once, in SQL, in `sql/queries/sales.sql`, rather than importing the function or reimplementing it in Go; an integration test importing both packages pins the SQL result to `catalog.EffectiveGroupIDs` over shared fixtures including the inherited-and-excluded and excluded-and-direct cases.
 * **Consequences:**
 * Slice boundaries hold at the code layer and the duplication is one function against one query with a mechanical consistency check, rather than two hand-maintained Go copies.
+
+---
+
+## ADR-013: Monetary bounds follow `int64`, not the canonical JavaScript ceiling
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical `MAX_CHECK_CHARGE_VND` is `Number.MAX_SAFE_INTEGER`, and `check-totals.ts` guards every accumulation against it, because JavaScript numbers lose integer precision beyond that point. Go stores VND in `int64` against `BIGINT` columns and has no such limit; the constant is a foreign artifact, as 5A already found when it replaced the derived `MAX_DRAFT_QUANTITY` with a plain 9,999.
+* **Decision:**
+* `unit_price_vnd`, `total_vnd`, and `charge_vnd` are `BIGINT` constrained only to be positive (non-negative for a Check's charge); Go keeps explicit positivity and overflow guards, raising `LINE_TOTAL_OUT_OF_RANGE` and `CHECK_CHARGE_OUT_OF_RANGE`, because Go's arithmetic wraps silently rather than failing.
+* No business ceiling is imposed on a Check's total.
+* **Consequences:**
+* No arbitrary limit propagates into a domain that does not need one, and the guards that remain exist for a reason that is true in Go.
+
+---
+
+## ADR-014: The `checks` state domain ships complete in 5B; settlement columns do not
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** 5B writes only `OPEN` Checks, but its Check-target query filters on `state = 'OPEN'`, and 5C introduces `SETTLED` and `MERGED` along with the columns evidencing them.
+* **Decision:**
+* Migration `000009` declares `CHECK (state IN ('OPEN', 'SETTLED', 'MERGED'))` from the start, while `settled_at`, `settled_by_staff_identity_id`, `settled_during_sales_shift_id`, `settled_staff_access_session_id`, `merged_into_check_id`, and the composite constraint tying them to the state are added by 5C.
+* This follows 5A's treatment of the `COMMITTED` value in the `order_drafts` domain.
+* **Consequences:**
+* The state filter is meaningful rather than vacuous from 5B, and 5C adds columns without rewriting a constraint; the cost is that two state values are unreachable until 5C, which 5B's suite asserts explicitly.
+
+---
+
+## ADR-015: Commit locks Catalog rows `FOR SHARE`
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical Commit locks `menu_items`, `menu_item_sizes`, and `modifier_options` `FOR UPDATE` to prevent retirement or an availability change between validation and write. Under `FOR UPDATE`, two cashiers committing orders that share one popular item serialize against each other on the system's busiest path, for no correctness gain — Commit only reads those rows.
+* **Decision:**
+* Commit takes `FOR SHARE` on Catalog rows, in sorted id order, after the Sales rows.
+* `internal/catalog`'s mutations take `FOR UPDATE` and are therefore still blocked for the duration of a Commit.
+* 5A's single-row `FOR UPDATE` in the add-draft-item path is left unchanged rather than churned.
+* **Consequences:**
+* Concurrent Commits sharing menu items proceed in parallel while retirement and availability changes remain excluded; the Sales-before-Catalog lock order of 5A §10 is preserved, so no deadlock cycle is introduced.
