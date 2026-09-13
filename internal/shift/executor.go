@@ -59,10 +59,14 @@ type AuditRecord struct {
 	Details   any
 }
 
-// committedDenial signals that a denial audit event was written and must be
-// committed even though the operation itself failed.
+// committedDenial carries a resolved authorization denial: err is the
+// original denial reason the client must see, and committed reports whether
+// its audit event was durably written. committed is false only when the audit
+// insert itself failed, which is logged but must never mask err with a
+// different, unmapped error.
 type committedDenial struct {
-	err error
+	err       error
+	committed bool
 }
 
 func (e *committedDenial) Error() string { return e.err.Error() }
@@ -153,52 +157,69 @@ func verifyCapabilities(required []string, available []string) error {
 	return nil
 }
 
-// recordDenial writes a denial audit event and returns an outcome that must be
-// committed so the security evidence survives the failed operation.
+// recordDenial writes a denial audit event and returns the resolved outcome
+// for finishDenial or auditReadDenial to commit.
+//
+// actor.StaffID is always attributed: staff_identities rows are never
+// deleted (ON DELETE RESTRICT), and actor is built only from a session the
+// HTTP middleware already validated moments earlier (see
+// auth.Middleware.RequireAuth), so the identity is never in doubt even when
+// this transaction's own reload denies the request.
+//
+// actor.SessionID is attributed only when authority confirms that exact
+// session row still exists: audit_events.session_id carries its own foreign
+// key, so writing a session id this transaction could not find (the reload
+// missed with sql.ErrNoRows) would itself fail the audit insert. On every
+// other denial — locked, revoked, expired, disabled identity, inactive, or
+// an insufficient capability — reloadAuthority already found the row by
+// exactly (actor.SessionID, actor.StaffID), so authority.SessionID always
+// equals actor.SessionID and the audit event names it.
 //
 // The details carry the operation and the reason text. The reason may name an
 // approval denial such as INVALID_PIN, which is why this value is audited and
 // logged but never returned to a client.
 func recordDenial(ctx context.Context, q *sqlc.Queries, actor Actor,
 	authority sqlc.GetShiftSessionAuthorityRow, operation string, denialErr error,
-) error {
+) *committedDenial {
 	details, _ := json.Marshal(map[string]string{
 		"operation": operation,
 		"reason":    denialErr.Error(),
 	})
-	actorID := uuid.NullUUID{}
 	sessionID := uuid.NullUUID{}
-	if authority.StaffIdentityID == actor.StaffID {
-		actorID = uuid.NullUUID{UUID: actor.StaffID, Valid: true}
-	}
 	if authority.SessionID == actor.SessionID {
 		sessionID = uuid.NullUUID{UUID: actor.SessionID, Valid: true}
 	}
 	if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
 		EventType:  EventAuthorizationDenied,
-		ActorID:    actorID,
+		ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
 		SessionID:  sessionID,
 		Details:    details,
 		OccurredAt: time.Now(),
 	}); err != nil {
-		return fmt.Errorf("insert denial audit event: %w", err)
+		slog.Error("insert denial audit event",
+			"operation", operation,
+			"reason", denialErr.Error(),
+			"staff_identity_id", actor.StaffID,
+			"error", err)
+		return &committedDenial{err: denialErr, committed: false}
 	}
 	slog.Warn("shift authorization denied",
 		"operation", operation,
 		"reason", denialErr.Error(),
 		"staff_identity_id", actor.StaffID)
-	return &committedDenial{err: denialErr}
+	return &committedDenial{err: denialErr, committed: true}
 }
 
-func finishDenial(tx *sql.Tx, outcome error) error {
-	var denial *committedDenial
-	if !errors.As(outcome, &denial) {
-		return outcome
+// finishDenial commits the denial's audit event when it was written and
+// always returns the original denial reason, so a failed audit insert can
+// never surface as an unmapped error in place of the real 401/403/409.
+func finishDenial(tx *sql.Tx, outcome *committedDenial) error {
+	if outcome.committed {
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit authorization denial: %w", err)
+		}
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit authorization denial: %w", err)
-	}
-	return denial.err
+	return outcome.err
 }
 
 func isSecurityDenial(err error) bool {
@@ -349,8 +370,13 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 
 // ExecuteRead runs a read inside a read-only repeatable-read transaction so the
 // capability check and every query observe one snapshot.
+//
+// An authorization denial is audited exactly as it is for a mutation. The
+// read's own transaction is read-only and cannot itself contain that write,
+// so the denial is recorded in a short separate read-write transaction; see
+// auditReadDenial.
 func ExecuteRead[T any](ctx context.Context, r *Runner, actor Actor,
-	requiredCapability string,
+	operation string, requiredCapability string,
 	fn func(*sqlc.Queries) (T, error),
 ) (T, error) {
 	var zero T
@@ -363,10 +389,15 @@ func ExecuteRead[T any](ctx context.Context, r *Runner, actor Actor,
 
 	q := r.queries.WithTx(tx)
 
-	if _, caps, err := reloadAuthority(ctx, q, actor); err != nil {
+	authRow, caps, err := reloadAuthority(ctx, q, actor)
+	if err != nil {
+		if isSecurityDenial(err) {
+			return zero, r.auditReadDenial(ctx, actor, authRow, operation, err)
+		}
 		return zero, err
-	} else if err := verifyCapabilities([]string{requiredCapability}, caps); err != nil {
-		return zero, err
+	}
+	if err := verifyCapabilities([]string{requiredCapability}, caps); err != nil {
+		return zero, r.auditReadDenial(ctx, actor, authRow, operation, err)
 	}
 
 	result, err := fn(q)
@@ -377,4 +408,28 @@ func ExecuteRead[T any](ctx context.Context, r *Runner, actor Actor,
 		return zero, fmt.Errorf("commit read transaction: %w", err)
 	}
 	return result, nil
+}
+
+// auditReadDenial records a read-path authorization denial in a short
+// separate read-write transaction, since ExecuteRead's own transaction is
+// read-only and PostgreSQL rejects a write inside it. It always returns
+// denialErr, whether or not the audit insert itself succeeded, matching
+// finishDenial's guarantee for the mutation path.
+func (r *Runner) auditReadDenial(ctx context.Context, actor Actor,
+	authority sqlc.GetShiftSessionAuthorityRow, operation string, denialErr error,
+) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		slog.Error("begin read denial audit transaction", "operation", operation, "error", err)
+		return denialErr
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	outcome := recordDenial(ctx, r.queries.WithTx(tx), actor, authority, operation, denialErr)
+	if outcome.committed {
+		if err := tx.Commit(); err != nil {
+			slog.Error("commit read denial audit transaction", "operation", operation, "error", err)
+		}
+	}
+	return denialErr
 }

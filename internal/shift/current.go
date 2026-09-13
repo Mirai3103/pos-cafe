@@ -28,7 +28,7 @@ func NewCurrentShiftHandler(runner *Runner) *CurrentShiftHandler {
 // check, the Shift row, the movement list, and the Expected Cash aggregate all
 // observe one snapshot.
 func (h *CurrentShiftHandler) Handle(ctx context.Context, actor Actor) (*CurrentSalesShiftResponse, error) {
-	return ExecuteRead(ctx, h.runner, actor, CapSalesShiftOperate,
+	return ExecuteRead(ctx, h.runner, actor, OpGetCurrentShift, CapSalesShiftOperate,
 		func(q *sqlc.Queries) (*CurrentSalesShiftResponse, error) {
 			row, err := q.GetOpenSalesShift(ctx)
 			if err != nil {
@@ -43,18 +43,17 @@ func (h *CurrentShiftHandler) Handle(ctx context.Context, actor Actor) (*Current
 				return nil, fmt.Errorf("list cash movements: %w", err)
 			}
 
-			sums, err := q.SumCashMovements(ctx, row.ID)
-			if err != nil {
-				return nil, fmt.Errorf("sum cash movements: %w", err)
-			}
-			expected, err := ComputeExpectedCash(row.OpeningFloatVnd, sums.PayInVnd, sums.PayOutVnd)
-			if err != nil {
-				return nil, err
-			}
-
 			// Serialize an empty list as [] rather than null.
+			var payInVND, payOutVND int64
 			movements := make([]CashMovementResponse, 0, len(movementRows))
 			for _, m := range movementRows {
+				switch m.Method {
+				case MethodPayIn:
+					payInVND += m.AmountVnd
+				case MethodPayOut:
+					payOutVND += m.AmountVnd
+				}
+
 				var note *string
 				if m.Note.Valid {
 					value := m.Note.String
@@ -79,6 +78,11 @@ func (h *CurrentShiftHandler) Handle(ctx context.Context, actor Actor) (*Current
 					},
 					OccurredAt: m.OccurredAt,
 				})
+			}
+
+			expected, err := ComputeExpectedCash(row.OpeningFloatVnd, payInVND, payOutVND)
+			if err != nil {
+				return nil, err
 			}
 
 			return &CurrentSalesShiftResponse{

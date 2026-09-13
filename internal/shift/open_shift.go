@@ -33,6 +33,9 @@ func NewOpenShiftHandler(runner *Runner) *OpenShiftHandler {
 // invariant: a second open receives SALES_SHIFT_ALREADY_OPEN rather than a
 // generic 500, and two truly concurrent opens resolve to exactly one success.
 func (h *OpenShiftHandler) Handle(ctx context.Context, actor Actor, cmd OpenShiftCommand) (int, SalesShiftResponse, error) {
+	if cmd.OpeningFloatVND == nil {
+		return 0, SalesShiftResponse{}, fmt.Errorf("%w: opening_float_vnd is required", response.ErrInvalid)
+	}
 	openingFloat := *cmd.OpeningFloatVND
 
 	spec := MutationSpec{

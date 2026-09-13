@@ -4,6 +4,7 @@ package shift_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/shift"
@@ -78,6 +79,20 @@ func TestCurrentShiftIgnoresClosedShifts(t *testing.T) {
 	assert.Nil(t, res)
 }
 
+// countDenialAuditEvents counts shift.authorization_denied events attributed
+// to a staff identity. Its transaction is separate from the read that denies,
+// since ExecuteRead's own transaction is read-only.
+func countDenialAuditEvents(t *testing.T, db *sql.DB, staffID uuid.UUID) int {
+	t.Helper()
+	var n int
+	err := db.QueryRow(
+		`SELECT count(*) FROM audit_events WHERE event_type = $1 AND actor_id = $2`,
+		shift.EventAuthorizationDenied, staffID,
+	).Scan(&n)
+	require.NoError(t, err)
+	return n
+}
+
 func TestCurrentShiftDeniesBarista(t *testing.T) {
 	db, q := openShiftTestDB(t)
 	truncateShiftTables(t, db)
@@ -88,6 +103,10 @@ func TestCurrentShiftDeniesBarista(t *testing.T) {
 	_, err := shift.NewCurrentShiftHandler(shift.NewRunner(db, q)).Handle(ctx, barista.actor())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, shift.ErrForbidden)
+
+	// The read's own transaction is read-only and cannot itself audit the
+	// denial, so ExecuteRead must record it in a separate transaction.
+	assert.Equal(t, 1, countDenialAuditEvents(t, db, barista.StaffID))
 }
 
 func TestCurrentShiftDeniesRevokedSession(t *testing.T) {
@@ -100,6 +119,7 @@ func TestCurrentShiftDeniesRevokedSession(t *testing.T) {
 	_, err = shift.NewCurrentShiftHandler(f.Runner).Handle(ctx, f.Cashier.actor())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, shift.ErrUnauthorized)
+	assert.Equal(t, 1, countDenialAuditEvents(t, f.DB, f.Cashier.StaffID))
 }
 
 func TestCurrentShiftReportsUnknownShiftIDNotFoundForMovement(t *testing.T) {

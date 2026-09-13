@@ -19,8 +19,16 @@ func TestMapDBErrorMapsConstraintFailures(t *testing.T) {
 	unique := &pgconn.PgError{Code: "23505", Message: "duplicate key", Detail: "sales_shift_only_one_open_unique"}
 	assert.ErrorIs(t, shift.MapDBError(unique), shift.ErrShiftAlreadyOpen)
 
-	fk := &pgconn.PgError{Code: "23503", Message: "foreign key violation"}
+	fk := &pgconn.PgError{Code: "23503", Message: "foreign key violation", ConstraintName: "cash_movements_sales_shift_id_fkey"}
 	assert.ErrorIs(t, shift.MapDBError(fk), shift.ErrOpenShiftRequired)
+
+	// A foreign key violation on any other column (initiator, its session, the
+	// approver) is a defect, not this business state: it must pass through
+	// unmapped so it surfaces as a logged 500.
+	otherFK := &pgconn.PgError{Code: "23503", Message: "foreign key violation", ConstraintName: "cash_movements_approved_by_staff_identity_id_fkey"}
+	mappedOtherFK := shift.MapDBError(otherFK)
+	assert.NotErrorIs(t, mappedOtherFK, shift.ErrOpenShiftRequired)
+	assert.ErrorIs(t, mappedOtherFK, otherFK)
 
 	// A check violation is a defect, not a business state: it must pass through
 	// unmapped so it surfaces as a logged 500.
@@ -58,6 +66,18 @@ func TestMapHTTPErrorStatusesAndCodes(t *testing.T) {
 			assert.Equal(t, tc.code, coded.Code)
 		})
 	}
+}
+
+func TestMapHTTPErrorHidesDBDetail(t *testing.T) {
+	// A raw PostgreSQL constraint detail must never reach the client message,
+	// even though MapDBError legitimately embeds it in the Go error chain for
+	// server-side logging.
+	unique := &pgconn.PgError{Code: "23505", Message: "duplicate key", Detail: "Key (state)=(OPEN) already exists."}
+	mapped := shift.MapHTTPError(shift.MapDBError(unique))
+
+	var coded *response.CodedError
+	require.True(t, errors.As(mapped, &coded))
+	assert.NotContains(t, coded.Message, "Key (state)")
 }
 
 func TestMapHTTPErrorHidesApprovalReason(t *testing.T) {

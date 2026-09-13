@@ -51,6 +51,9 @@ func NewRecordCashMovementHandler(runner *Runner) *RecordCashMovementHandler {
 //
 // Cash Movements are append-only: Phase 4 provides no edit, reverse, or delete.
 func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd RecordCashMovementCommand) (int, CashMovementResult, error) {
+	if cmd.AmountVND == nil {
+		return 0, CashMovementResult{}, fmt.Errorf("%w: amount_vnd is required", response.ErrInvalid)
+	}
 	note := NormalizeNote(cmd.Note)
 	amount := *cmd.AmountVND
 	approverLoginCode := auth.NormalizeLoginCode(cmd.ApproverLoginCode)

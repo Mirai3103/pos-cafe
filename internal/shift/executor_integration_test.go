@@ -277,6 +277,40 @@ func TestExecuteMutationApprovalRunsBeforeReplay(t *testing.T) {
 	assert.ErrorIs(t, err, shift.ErrManagerApprovalUnavailable)
 }
 
+func TestExecuteMutationAuditsDenialAttributionOnSessionNotFound(t *testing.T) {
+	db, q := openShiftTestDB(t)
+	truncateShiftTables(t, db)
+	runner := shift.NewRunner(db, q)
+	ctx := context.Background()
+
+	cashier := newTestActor(t, q, []string{"CASHIER"}, true)
+	// A SessionID with no matching row makes reloadAuthority return
+	// sql.ErrNoRows: the race between the HTTP middleware's own valid check
+	// and this transaction's reload. actor.StaffID names a real, currently
+	// enabled identity and must still be attributed on the denial event.
+	actor := shift.Actor{StaffID: cashier.StaffID, SessionID: uuid.New()}
+
+	_, _, err := shift.ExecuteMutation(ctx, runner, actor, shift.MutationSpec{
+		RequestID:   uuid.New(),
+		Operation:   shift.OpOpenShift,
+		Fingerprint: probeFingerprint{Label: "denied"},
+		Required:    []string{shift.CapSalesShiftOperate},
+	}, func(shift.MutationContext) (int, probeResult, shift.AuditRecord, error) {
+		t.Fatal("mutation body must not run for a denied actor")
+		return 0, probeResult{}, shift.AuditRecord{}, nil
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, shift.ErrUnauthorized)
+
+	var actorID uuid.NullUUID
+	require.NoError(t, db.QueryRow(
+		`SELECT actor_id FROM audit_events WHERE event_type = $1 ORDER BY occurred_at DESC LIMIT 1`,
+		shift.EventAuthorizationDenied,
+	).Scan(&actorID))
+	require.True(t, actorID.Valid, "denial audit event must attribute the actor even when the session reload misses")
+	assert.Equal(t, cashier.StaffID, actorID.UUID)
+}
+
 func TestExecuteMutationConcurrentDuplicatesRunOnce(t *testing.T) {
 	db, q := openShiftTestDB(t)
 	truncateShiftTables(t, db)

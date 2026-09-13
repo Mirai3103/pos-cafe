@@ -21,6 +21,12 @@ var (
 	ErrInvalidStoredResult        = errors.New("invalid stored result")
 )
 
+// cashMovementSalesShiftFK is the auto-generated name of the only foreign key
+// whose violation means "no open Shift to attach to". InsertCashMovement has
+// three other FK columns (the initiator, its session, and the approver) whose
+// violation is a defect, not this business state.
+const cashMovementSalesShiftFK = "cash_movements_sales_shift_id_fkey"
+
 // MapDBError maps PostgreSQL driver and database errors to domain sentinels
 // inside the Shift boundary, so an expected constraint failure never becomes an
 // accidental generic 500.
@@ -40,8 +46,13 @@ func MapDBError(err error) error {
 		switch pgErr.Code {
 		case "23505": // unique_violation on sales_shift_only_one_open_unique
 			return fmt.Errorf("%w: %s", ErrShiftAlreadyOpen, msg)
-		case "23503": // foreign_key_violation on sales_shift_id
-			return fmt.Errorf("%w: %s", ErrOpenShiftRequired, msg)
+		case "23503": // foreign_key_violation
+			if pgErr.ConstraintName == cashMovementSalesShiftFK {
+				return fmt.Errorf("%w: %s", ErrOpenShiftRequired, msg)
+			}
+			// Any other FK (initiator, initiator session, approver) failing
+			// means Go's own authorization/approval checks disagree with the
+			// database, which is a defect, not this business state.
 		}
 		// 23514 (check_violation) is deliberately not mapped. It means Go
 		// validation and the database disagree, which is a defect, not a
@@ -62,9 +73,11 @@ func MapHTTPError(err error) error {
 	}
 	switch {
 	case errors.Is(err, ErrShiftAlreadyOpen):
-		return response.NewCodedError(http.StatusConflict, "SALES_SHIFT_ALREADY_OPEN", err.Error(), err)
+		// The client message is the stable sentinel text, never the wrapped
+		// PostgreSQL detail, which must stay server-side only.
+		return response.NewCodedError(http.StatusConflict, "SALES_SHIFT_ALREADY_OPEN", ErrShiftAlreadyOpen.Error(), err)
 	case errors.Is(err, ErrOpenShiftRequired):
-		return response.NewCodedError(http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED", err.Error(), err)
+		return response.NewCodedError(http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED", ErrOpenShiftRequired.Error(), err)
 	case errors.Is(err, ErrManagerApprovalUnavailable):
 		// Every denial reason collapses here so the API never discloses which
 		// condition failed. The reason is in the server log and audit event.

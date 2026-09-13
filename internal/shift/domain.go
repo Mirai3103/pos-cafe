@@ -17,6 +17,7 @@ const CapSalesShiftOperate = "sales_shift.operate"
 const (
 	OpOpenShift          = "shift.open_shift"
 	OpRecordCashMovement = "shift.record_cash_movement"
+	OpGetCurrentShift    = "shift.get_current_shift"
 )
 
 // Audit event types. Business events are UPPER_SNAKE_CASE and the denial event
