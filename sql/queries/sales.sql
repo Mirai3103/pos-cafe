@@ -79,3 +79,27 @@ SELECT id, service_number, sequence, service_mode, state, sales_shift_id,
 FROM service_sessions
 WHERE state = 'ACTIVE'
 ORDER BY created_at ASC, id ASC;
+
+-- name: GetOpenSalesShiftID :one
+-- Sales reads the Shift-owned table through its own query rather than
+-- importing internal/shift, per ADR-006's precedent.
+SELECT id FROM sales_shifts WHERE state = 'OPEN' LIMIT 1;
+
+-- name: GetNextServiceSequence :one
+-- Callers MUST hold the advisory lock on the Sales Shift before running this.
+-- Without it two concurrent opens read the same maximum and one loses to the
+-- unique index.
+SELECT COALESCE(MAX(sequence), 0)::int + 1 AS next_sequence
+FROM service_sessions
+WHERE sales_shift_id = $1;
+
+-- name: InsertServiceSession :one
+INSERT INTO service_sessions
+    (service_number, sequence, service_mode, state,
+     created_by_staff_identity_id, sales_shift_id)
+VALUES ($1, $2, $3, 'ACTIVE', $4, $5)
+RETURNING id, service_number, sequence, service_mode, state, sales_shift_id, created_at;
+
+-- name: InsertOrderDraft :one
+INSERT INTO order_drafts (service_session_id) VALUES ($1)
+RETURNING id, service_session_id, state, created_at;

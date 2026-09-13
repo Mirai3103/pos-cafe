@@ -64,10 +64,17 @@ type Querier interface {
 	GetModifierGroupForUpdate(ctx context.Context, id uuid.UUID) (ModifierGroup, error)
 	GetModifierOptionByID(ctx context.Context, id uuid.UUID) (ModifierOption, error)
 	GetModifierOptionForUpdate(ctx context.Context, id uuid.UUID) (ModifierOption, error)
+	// Callers MUST hold the advisory lock on the Sales Shift before running this.
+	// Without it two concurrent opens read the same maximum and one loses to the
+	// unique index.
+	GetNextServiceSequence(ctx context.Context, salesShiftID uuid.UUID) (int32, error)
 	GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, error)
 	// Single-table so the row lock is unambiguous; the opener is fetched separately
 	// with GetStaffSummary.
 	GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) (GetOpenSalesShiftForUpdateRow, error)
+	// Sales reads the Shift-owned table through its own query rather than
+	// importing internal/shift, per ADR-006's precedent.
+	GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error)
 	// Queries for internal/sales (Phase 5A).
 	//
 	// Authority, role, and advisory-lock queries are slice-local by ADR-007: the
@@ -96,6 +103,8 @@ type Querier interface {
 	// -- Cash Movements --
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
+	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
+	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
 	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)

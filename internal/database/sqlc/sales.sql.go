@@ -31,6 +31,35 @@ func (q *Queries) GetEditableDraft(ctx context.Context, serviceSessionID uuid.UU
 	return i, err
 }
 
+const getNextServiceSequence = `-- name: GetNextServiceSequence :one
+SELECT COALESCE(MAX(sequence), 0)::int + 1 AS next_sequence
+FROM service_sessions
+WHERE sales_shift_id = $1
+`
+
+// Callers MUST hold the advisory lock on the Sales Shift before running this.
+// Without it two concurrent opens read the same maximum and one loses to the
+// unique index.
+func (q *Queries) GetNextServiceSequence(ctx context.Context, salesShiftID uuid.UUID) (int32, error) {
+	row := q.db.QueryRowContext(ctx, getNextServiceSequence, salesShiftID)
+	var next_sequence int32
+	err := row.Scan(&next_sequence)
+	return next_sequence, err
+}
+
+const getOpenSalesShiftID = `-- name: GetOpenSalesShiftID :one
+SELECT id FROM sales_shifts WHERE state = 'OPEN' LIMIT 1
+`
+
+// Sales reads the Shift-owned table through its own query rather than
+// importing internal/shift, per ADR-006's precedent.
+func (q *Queries) GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, getOpenSalesShiftID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getSalesSessionAuthority = `-- name: GetSalesSessionAuthority :one
 
 SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
@@ -140,6 +169,70 @@ func (q *Queries) GetServiceSession(ctx context.Context, id uuid.UUID) (GetServi
 		&i.State,
 		&i.SalesShiftID,
 		&i.CreatedByStaffIdentityID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const insertOrderDraft = `-- name: InsertOrderDraft :one
+INSERT INTO order_drafts (service_session_id) VALUES ($1)
+RETURNING id, service_session_id, state, created_at
+`
+
+func (q *Queries) InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error) {
+	row := q.db.QueryRowContext(ctx, insertOrderDraft, serviceSessionID)
+	var i OrderDraft
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceSessionID,
+		&i.State,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const insertServiceSession = `-- name: InsertServiceSession :one
+INSERT INTO service_sessions
+    (service_number, sequence, service_mode, state,
+     created_by_staff_identity_id, sales_shift_id)
+VALUES ($1, $2, $3, 'ACTIVE', $4, $5)
+RETURNING id, service_number, sequence, service_mode, state, sales_shift_id, created_at
+`
+
+type InsertServiceSessionParams struct {
+	ServiceNumber            string    `json:"service_number"`
+	Sequence                 int32     `json:"sequence"`
+	ServiceMode              string    `json:"service_mode"`
+	CreatedByStaffIdentityID uuid.UUID `json:"created_by_staff_identity_id"`
+	SalesShiftID             uuid.UUID `json:"sales_shift_id"`
+}
+
+type InsertServiceSessionRow struct {
+	ID            uuid.UUID `json:"id"`
+	ServiceNumber string    `json:"service_number"`
+	Sequence      int32     `json:"sequence"`
+	ServiceMode   string    `json:"service_mode"`
+	State         string    `json:"state"`
+	SalesShiftID  uuid.UUID `json:"sales_shift_id"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+func (q *Queries) InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error) {
+	row := q.db.QueryRowContext(ctx, insertServiceSession,
+		arg.ServiceNumber,
+		arg.Sequence,
+		arg.ServiceMode,
+		arg.CreatedByStaffIdentityID,
+		arg.SalesShiftID,
+	)
+	var i InsertServiceSessionRow
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceNumber,
+		&i.Sequence,
+		&i.ServiceMode,
+		&i.State,
+		&i.SalesShiftID,
 		&i.CreatedAt,
 	)
 	return i, err

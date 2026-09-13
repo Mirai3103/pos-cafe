@@ -89,12 +89,8 @@ func seedSalesFixture(t *testing.T, db *sql.DB, q *sqlc.Queries) salesFixture {
 	require.NoError(t, err)
 	fx.StaffID = staff.ID
 
-	shift, err := q.OpenSalesShift(ctx, sqlc.OpenSalesShiftParams{
-		OpenedByStaffIdentityID: fx.StaffID,
-		OpeningFloatVnd:         100000,
-	})
-	require.NoError(t, err)
-	fx.SalesShiftID = shift.ID
+	shift := seedOpenShift(t, q, fx.StaffID)
+	fx.SalesShiftID = shift
 
 	cat, err := q.CreateMenuCategory(ctx, sqlc.CreateMenuCategoryParams{
 		Name:           "Cà phê",
@@ -172,6 +168,17 @@ func assertAuditEvent(t *testing.T, db *sql.DB, eventType string, want int) {
 	require.NoError(t, db.QueryRow(
 		`SELECT count(*) FROM audit_events WHERE event_type = $1`, eventType).Scan(&got))
 	assert.Equal(t, want, got, "audit_events rows of type %s", eventType)
+}
+
+// seedOpenShift opens a Sales Shift and returns its id.
+func seedOpenShift(t *testing.T, q *sqlc.Queries, openedBy uuid.UUID) uuid.UUID {
+	t.Helper()
+	shift, err := q.OpenSalesShift(context.Background(), sqlc.OpenSalesShiftParams{
+		OpenedByStaffIdentityID: openedBy,
+		OpeningFloatVnd:         100000,
+	})
+	require.NoError(t, err)
+	return shift.ID
 }
 
 // seedSize adds a Size to a Menu Item and returns its id.

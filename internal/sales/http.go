@@ -81,3 +81,37 @@ func (s *Slices) handleGetServiceSession(c echo.Context) error {
 	}
 	return sendResult(c, http.StatusOK, result)
 }
+
+// handleStartTakeaway opens a Takeaway Service Session.
+//
+//	@Summary		Open a Takeaway Service Session
+//	@Description	Opens an anonymous Takeaway Service Session with an empty editable Order Draft. Requires an open Sales Shift. The Service Number is sequential within that Shift (ADR-011).
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			request	body		StartTakeawaySessionCommand	true	"Request"
+//	@Success		201		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/takeaway [post]
+func (s *Slices) handleStartTakeaway(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[StartTakeawaySessionCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	status, result, err := s.StartTakeaway.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
