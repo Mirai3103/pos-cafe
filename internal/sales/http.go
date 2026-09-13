@@ -457,14 +457,15 @@ func (s *Slices) handleSetDraftItemModifiers(c echo.Context) error {
 // handleRemoveDraftItem removes one draft item outright.
 //
 //	@Summary		Remove a draft item
-//	@Description	Removes one Order Draft item and its selected options, returning the whole Service Session projection with 200 rather than 204 so a client sees the resulting draft without a follow-up read.
+//	@Description	Removes one Order Draft item and its selected options, returning the whole Service Session projection with 200 rather than 204 so a client sees the resulting draft without a follow-up read. request_id may be sent as a query parameter instead of in the body, since some clients and proxies strip a DELETE request's body.
 //	@Tags			sales
 //	@Accept			json
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			id		path	string					true	"Service Session ID"
-//	@Param			item_id	path	string					true	"Order Draft Item ID"
-//	@Param			request	body	RemoveDraftItemCommand	true	"Request"
+//	@Param			id			path	string					true	"Service Session ID"
+//	@Param			item_id		path	string					true	"Order Draft Item ID"
+//	@Param			request_id	query	string					false	"Idempotency key, if not sent in the body"
+//	@Param			request		body	RemoveDraftItemCommand	false	"Request"
 //	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
 //	@Failure		400		{object}	response.APIResponse
 //	@Failure		401		{object}	response.APIResponse

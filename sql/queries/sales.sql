@@ -114,10 +114,16 @@ WHERE id = ANY(sqlc.arg(table_ids)::uuid[])
 ORDER BY id ASC
 FOR UPDATE;
 
--- name: InsertTableAssignment :one
-INSERT INTO table_assignments
-    (table_id, service_session_id, assigned_by_staff_identity_id, sequence)
-VALUES ($1, $2, $3, $4)
+-- name: InsertTableAssignmentsBatch :many
+-- Batches assignTables' per-Table insert loop into one round trip. Two
+-- single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
+-- into rows in lockstep, so row i of the result is table_ids[i] assigned at
+-- sequences[i]; the caller relies on getting exactly len(table_ids) rows back
+-- in that order.
+INSERT INTO table_assignments (table_id, service_session_id, assigned_by_staff_identity_id, sequence)
+SELECT tid.val, $2::uuid, $3::uuid, seq.val
+FROM unnest($1::uuid[]) WITH ORDINALITY AS tid(val, ord)
+JOIN unnest($4::int[]) WITH ORDINALITY AS seq(val, ord) ON seq.ord = tid.ord
 RETURNING id, table_id, service_session_id, sequence, assigned_at;
 
 -- name: GetHighestAssignmentSequence :one
@@ -235,10 +241,14 @@ FROM menu_items
 WHERE id = $1
 FOR UPDATE;
 
--- name: GetMenuItemSizeForDraft :one
+-- name: LockMenuItemSizeForDraft :one
+-- Locked FOR UPDATE for the same reason as LockMenuItemForDraft: without it, a
+-- concurrent retirement of this Size can slip between validation and the
+-- draft-item write.
 SELECT id, menu_item_id, name, price_vnd, available, retired_at
 FROM menu_item_sizes
-WHERE id = $1;
+WHERE id = $1
+FOR UPDATE;
 
 -- name: FindDraftItemByComposition :one
 SELECT id, quantity

@@ -26,6 +26,11 @@ func seedServiceSession(t *testing.T, db *sql.DB, staffID uuid.UUID, serviceNumb
 		`INSERT INTO service_sessions (service_number, sequence, service_mode, state, created_by_staff_identity_id, sales_shift_id)
 		 VALUES ($1, 1, 'DINE_IN', $2, $3, $4) RETURNING id`,
 		serviceNumber, state, staffID, shiftID).Scan(&id))
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM table_assignments WHERE service_session_id = $1`, id)
+		_, _ = db.Exec(`DELETE FROM service_sessions WHERE id = $1`, id)
+		_, _ = db.Exec(`DELETE FROM sales_shifts WHERE id = $1`, shiftID)
+	})
 	return id
 }
 

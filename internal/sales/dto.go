@@ -77,8 +77,13 @@ type SetDraftItemModifiersCommand struct {
 }
 
 // RemoveDraftItemCommand removes a draft item outright.
+//
+// RequestID also binds from the request_id query parameter: many HTTP
+// clients, proxies, and load balancers strip or ignore a DELETE request's
+// body, and the idempotency key must still reach the handler when they do. A
+// body value, if present, takes precedence.
 type RemoveDraftItemCommand struct {
-	RequestID        uuid.UUID `json:"request_id"`
+	RequestID        uuid.UUID `json:"request_id" query:"request_id"`
 	ServiceSessionID uuid.UUID `json:"-"`
 	DraftItemID      uuid.UUID `json:"-"`
 }

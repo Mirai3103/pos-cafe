@@ -893,6 +893,42 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 	return i, err
 }
 
+const insertAuditEventsBatch = `-- name: InsertAuditEventsBatch :exec
+INSERT INTO audit_events (event_type, actor_id, session_id, details, occurred_at)
+SELECT $1::text, $2::uuid, $3::uuid, d::jsonb, $4::timestamptz
+FROM unnest($5::text[]) AS d
+`
+
+type InsertAuditEventsBatchParams struct {
+	EventType    string    `json:"event_type"`
+	ActorID      uuid.UUID `json:"actor_id"`
+	SessionID    uuid.UUID `json:"session_id"`
+	OccurredAt   time.Time `json:"occurred_at"`
+	DetailsBatch []string  `json:"details_batch"`
+}
+
+// Batches a per-entry audit-insert loop into one round trip for callers
+// (Sales table-assignment audits) that write several events of the same type,
+// actor, session, and timestamp in one mutation, differing only in details.
+//
+// details_batch is text[], not jsonb[], and cast to jsonb per element inside
+// the query: the pq.Array encoder used for database/sql array parameters has
+// no driver.Valuer case for []json.RawMessage, so it falls through to its
+// generic reflection path and encodes each byte-slice element as a NESTED
+// ARRAY OF BYTES rather than a quoted string, which unnest then flatters into
+// one row per byte. []string goes through pq's dedicated, correct StringArray
+// codec instead.
+func (q *Queries) InsertAuditEventsBatch(ctx context.Context, arg InsertAuditEventsBatchParams) error {
+	_, err := q.db.ExecContext(ctx, insertAuditEventsBatch,
+		arg.EventType,
+		arg.ActorID,
+		arg.SessionID,
+		arg.OccurredAt,
+		pq.Array(arg.DetailsBatch),
+	)
+	return err
+}
+
 const listAllCategoryModifierGroups = `-- name: ListAllCategoryModifierGroups :many
 SELECT menu_category_id, modifier_group_id
 FROM category_modifier_groups

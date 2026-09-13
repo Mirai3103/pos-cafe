@@ -69,7 +69,6 @@ type Querier interface {
 	GetMenuItemByID(ctx context.Context, id uuid.UUID) (MenuItem, error)
 	GetMenuItemForUpdate(ctx context.Context, id uuid.UUID) (MenuItem, error)
 	GetMenuItemSizeByID(ctx context.Context, id uuid.UUID) (MenuItemSize, error)
-	GetMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (GetMenuItemSizeForDraftRow, error)
 	GetMenuItemSizeForUpdate(ctx context.Context, id uuid.UUID) (MenuItemSize, error)
 	GetModifierGroupByID(ctx context.Context, id uuid.UUID) (ModifierGroup, error)
 	GetModifierGroupForUpdate(ctx context.Context, id uuid.UUID) (ModifierGroup, error)
@@ -112,6 +111,18 @@ type Querier interface {
 	GetTablesSessionAuthority(ctx context.Context, arg GetTablesSessionAuthorityParams) (GetTablesSessionAuthorityRow, error)
 	GetTablesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
+	// Batches a per-entry audit-insert loop into one round trip for callers
+	// (Sales table-assignment audits) that write several events of the same type,
+	// actor, session, and timestamp in one mutation, differing only in details.
+	//
+	// details_batch is text[], not jsonb[], and cast to jsonb per element inside
+	// the query: the pq.Array encoder used for database/sql array parameters has
+	// no driver.Valuer case for []json.RawMessage, so it falls through to its
+	// generic reflection path and encodes each byte-slice element as a NESTED
+	// ARRAY OF BYTES rather than a quoted string, which unnest then flatters into
+	// one row per byte. []string goes through pq's dedicated, correct StringArray
+	// codec instead.
+	InsertAuditEventsBatch(ctx context.Context, arg InsertAuditEventsBatchParams) error
 	// -- Cash Movements --
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
 	InsertDraftItem(ctx context.Context, arg InsertDraftItemParams) (InsertDraftItemRow, error)
@@ -119,7 +130,12 @@ type Querier interface {
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
-	InsertTableAssignment(ctx context.Context, arg InsertTableAssignmentParams) (InsertTableAssignmentRow, error)
+	// Batches assignTables' per-Table insert loop into one round trip. Two
+	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
+	// into rows in lockstep, so row i of the result is table_ids[i] assigned at
+	// sequences[i]; the caller relies on getting exactly len(table_ids) rows back
+	// in that order.
+	InsertTableAssignmentsBatch(ctx context.Context, arg InsertTableAssignmentsBatchParams) ([]InsertTableAssignmentsBatchRow, error)
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
 	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
@@ -197,6 +213,10 @@ type Querier interface {
 	// write. Sales rows are always locked before Catalog rows, and
 	// internal/catalog never locks Sales rows, so no deadlock cycle exists.
 	LockMenuItemForDraft(ctx context.Context, id uuid.UUID) (LockMenuItemForDraftRow, error)
+	// Locked FOR UPDATE for the same reason as LockMenuItemForDraft: without it, a
+	// concurrent retirement of this Size can slip between validation and the
+	// draft-item write.
+	LockMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (LockMenuItemSizeForDraftRow, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
 	// Locks the selected Tables in id order so two concurrent assignments over
 	// overlapping sets cannot deadlock against each other. The caller must sort

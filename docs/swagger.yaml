@@ -3088,7 +3088,9 @@ paths:
       - application/json
       description: Removes one Order Draft item and its selected options, returning
         the whole Service Session projection with 200 rather than 204 so a client
-        sees the resulting draft without a follow-up read.
+        sees the resulting draft without a follow-up read. request_id may be sent
+        as a query parameter instead of in the body, since some clients and proxies
+        strip a DELETE request's body.
       parameters:
       - description: Service Session ID
         in: path
@@ -3100,10 +3102,13 @@ paths:
         name: item_id
         required: true
         type: string
+      - description: Idempotency key, if not sent in the body
+        in: query
+        name: request_id
+        type: string
       - description: Request
         in: body
         name: request
-        required: true
         schema:
           $ref: '#/definitions/sales.RemoveDraftItemCommand'
       produces:

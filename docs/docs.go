@@ -3438,7 +3438,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Removes one Order Draft item and its selected options, returning the whole Service Session projection with 200 rather than 204 so a client sees the resulting draft without a follow-up read.",
+                "description": "Removes one Order Draft item and its selected options, returning the whole Service Session projection with 200 rather than 204 so a client sees the resulting draft without a follow-up read. request_id may be sent as a query parameter instead of in the body, since some clients and proxies strip a DELETE request's body.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3465,10 +3465,15 @@ const docTemplate = `{
                         "required": true
                     },
                     {
+                        "type": "string",
+                        "description": "Idempotency key, if not sent in the body",
+                        "name": "request_id",
+                        "in": "query"
+                    },
+                    {
                         "description": "Request",
                         "name": "request",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/sales.RemoveDraftItemCommand"
                         }

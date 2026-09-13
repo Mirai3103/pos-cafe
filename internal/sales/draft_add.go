@@ -77,7 +77,7 @@ func requireSellableMenuItem(ctx context.Context, q *sqlc.Queries, menuItemID uu
 func requireSizeForItem(ctx context.Context, q *sqlc.Queries,
 	menuItemID, sizeID uuid.UUID,
 ) error {
-	size, err := q.GetMenuItemSizeForDraft(ctx, sizeID)
+	size, err := q.LockMenuItemSizeForDraft(ctx, sizeID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: %s", ErrSizeNotFound, sizeID)
@@ -191,15 +191,19 @@ func (h *AddDraftItemHandler) Handle(ctx context.Context, actor Actor,
 			// customer declined every option".
 			var optionIDs []uuid.UUID
 			if cmd.ModifierOptionIDs == nil {
-				optionIDs, err = defaultOptionIDs(ctx, q, item.ID)
+				var groups []uuid.UUID
+				optionIDs, groups, err = defaultOptionIDs(ctx, q, item.ID)
 				if err != nil {
+					return 0, zero, AuditRecord{}, err
+				}
+				if err := validateModifierOptionsForGroups(ctx, q, groups, optionIDs); err != nil {
 					return 0, zero, AuditRecord{}, err
 				}
 			} else {
 				optionIDs = *cmd.ModifierOptionIDs
-			}
-			if err := validateModifierOptions(ctx, q, item.ID, optionIDs); err != nil {
-				return 0, zero, AuditRecord{}, err
+				if err := validateModifierOptions(ctx, q, item.ID, optionIDs); err != nil {
+					return 0, zero, AuditRecord{}, err
+				}
 			}
 
 			note, err := NormalizePreparationNote(cmd.PreparationNote)

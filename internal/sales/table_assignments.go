@@ -58,30 +58,32 @@ func lockAndValidateTables(ctx context.Context, q *sqlc.Queries, tableIDs []uuid
 	return nil
 }
 
-// assignTables inserts one assignment per Table, numbering them from
-// startSequence in the caller's selection order, and returns the audit details
-// for each.
+// assignTables inserts one assignment per Table in a single statement,
+// numbering them from startSequence in the caller's selection order, and
+// returns the audit details for each.
 func assignTables(ctx context.Context, q *sqlc.Queries, actor Actor,
 	sessionID uuid.UUID, tableIDs []uuid.UUID, startSequence int32,
 ) ([]tableAssignmentAudit, error) {
-	out := make([]tableAssignmentAudit, 0, len(tableIDs))
-	seq := startSequence
-	for _, tableID := range tableIDs {
-		row, err := q.InsertTableAssignment(ctx, sqlc.InsertTableAssignmentParams{
-			TableID:                   tableID,
-			ServiceSessionID:          sessionID,
-			AssignedByStaffIdentityID: actor.StaffID,
-			Sequence:                  seq,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("insert table assignment: %w", err)
-		}
-		out = append(out, tableAssignmentAudit{
+	sequences := make([]int32, len(tableIDs))
+	for i := range tableIDs {
+		sequences[i] = startSequence + int32(i)
+	}
+	rows, err := q.InsertTableAssignmentsBatch(ctx, sqlc.InsertTableAssignmentsBatchParams{
+		Column1: tableIDs,
+		Column2: sessionID,
+		Column3: actor.StaffID,
+		Column4: sequences,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("insert table assignments: %w", err)
+	}
+	out := make([]tableAssignmentAudit, len(rows))
+	for i, row := range rows {
+		out[i] = tableAssignmentAudit{
 			TableAssignmentID: row.ID,
-			TableID:           tableID,
+			TableID:           row.TableID,
 			ServiceSessionID:  sessionID,
-		})
-		seq++
+		}
 	}
 	return out, nil
 }
@@ -96,27 +98,33 @@ func nextAssignmentSequence(ctx context.Context, q *sqlc.Queries, sessionID uuid
 	return highest + 1, nil
 }
 
-// writeAssignmentAudits inserts one audit event per Table assignment change.
-// The executor's AuditRecord holds the single Session-level event; these are
-// the per-Table events alongside it, inserted in the same transaction so an
-// audit failure still rolls the whole mutation back.
+// writeAssignmentAudits inserts one audit event per Table assignment change,
+// in a single statement. The executor's AuditRecord holds the single
+// Session-level event; these are the per-Table events alongside it, inserted
+// in the same transaction so an audit failure still rolls the whole mutation
+// back.
 func writeAssignmentAudits(ctx context.Context, q *sqlc.Queries, actor Actor,
 	eventType string, entries []tableAssignmentAudit,
 ) error {
-	for _, entry := range entries {
+	if len(entries) == 0 {
+		return nil
+	}
+	detailsBatch := make([]string, len(entries))
+	for i, entry := range entries {
 		details, err := json.Marshal(entry)
 		if err != nil {
 			return fmt.Errorf("marshal table assignment audit: %w", err)
 		}
-		if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-			EventType:  eventType,
-			ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-			SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-			Details:    details,
-			OccurredAt: time.Now(),
-		}); err != nil {
-			return fmt.Errorf("insert %s audit event: %w", eventType, err)
-		}
+		detailsBatch[i] = string(details)
+	}
+	if err := q.InsertAuditEventsBatch(ctx, sqlc.InsertAuditEventsBatchParams{
+		EventType:    eventType,
+		ActorID:      actor.StaffID,
+		SessionID:    actor.SessionID,
+		OccurredAt:   time.Now(),
+		DetailsBatch: detailsBatch,
+	}); err != nil {
+		return fmt.Errorf("insert %s audit events: %w", eventType, err)
 	}
 	return nil
 }

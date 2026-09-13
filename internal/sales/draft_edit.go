@@ -203,8 +203,14 @@ func applyCompositionChange(ctx context.Context, q *sqlc.Queries,
 	}); err != nil {
 		return mergeOutcome{}, fmt.Errorf("update draft item composition: %w", err)
 	}
-	if err := replaceDraftItemOptions(ctx, q, item.ID, next.OptionIDs); err != nil {
-		return mergeOutcome{}, err
+	// ModifierKey is a canonical, order-independent rendering of the option
+	// set (ModifierKeyFor), so an unchanged key means an unchanged set: skip
+	// the delete-and-reinsert for the common case where a size/note edit
+	// carries the same options forward untouched.
+	if next.ModifierKey != item.ModifierKey {
+		if err := replaceDraftItemOptions(ctx, q, item.ID, next.OptionIDs); err != nil {
+			return mergeOutcome{}, err
+		}
 	}
 	return mergeOutcome{SurvivingItemID: item.ID, Quantity: item.Quantity}, nil
 }

@@ -22,26 +22,28 @@ func effectiveGroupIDs(ctx context.Context, q *sqlc.Queries, menuItemID uuid.UUI
 }
 
 // defaultOptionIDs returns the declared default options of a Menu Item's
-// effective Groups, filtered to those currently selectable.
+// effective Groups, filtered to those currently selectable, along with those
+// effective Group ids themselves so a caller that must also validate the
+// result (AddDraftItemHandler) does not resolve them a second time.
 //
 // These apply only when an add request omits modifier_option_ids entirely. An
 // explicitly empty list means the customer declined every option and is taken
 // literally.
 func defaultOptionIDs(ctx context.Context, q *sqlc.Queries, menuItemID uuid.UUID) (
-	[]uuid.UUID, error,
+	ids []uuid.UUID, groups []uuid.UUID, err error,
 ) {
-	groups, err := effectiveGroupIDs(ctx, q, menuItemID)
+	groups, err = effectiveGroupIDs(ctx, q, menuItemID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(groups) == 0 {
-		return []uuid.UUID{}, nil
+		return []uuid.UUID{}, groups, nil
 	}
-	ids, err := q.ListDefaultModifierOptionIDs(ctx, groups)
+	ids, err = q.ListDefaultModifierOptionIDs(ctx, groups)
 	if err != nil {
-		return nil, fmt.Errorf("resolve default modifier options: %w", err)
+		return nil, nil, fmt.Errorf("resolve default modifier options: %w", err)
 	}
-	return ids, nil
+	return ids, groups, nil
 }
 
 // validateModifierOptions rejects any option that is not currently selectable
@@ -59,6 +61,19 @@ func defaultOptionIDs(ctx context.Context, q *sqlc.Queries, menuItemID uuid.UUID
 func validateModifierOptions(ctx context.Context, q *sqlc.Queries,
 	menuItemID uuid.UUID, optionIDs []uuid.UUID,
 ) error {
+	groups, err := effectiveGroupIDs(ctx, q, menuItemID)
+	if err != nil {
+		return err
+	}
+	return validateModifierOptionsForGroups(ctx, q, groups, optionIDs)
+}
+
+// validateModifierOptionsForGroups is validateModifierOptions for a caller
+// that has already resolved the Menu Item's effective Groups (AddDraftItemHandler's
+// default-options path), so the resolution query does not run twice.
+func validateModifierOptionsForGroups(ctx context.Context, q *sqlc.Queries,
+	groups []uuid.UUID, optionIDs []uuid.UUID,
+) error {
 	if len(optionIDs) == 0 {
 		return nil
 	}
@@ -66,10 +81,6 @@ func validateModifierOptions(ctx context.Context, q *sqlc.Queries,
 		return fmt.Errorf("%w: the same modifier option was selected twice", ErrModifierOptionNotFound)
 	}
 
-	groups, err := effectiveGroupIDs(ctx, q, menuItemID)
-	if err != nil {
-		return err
-	}
 	effective := make(map[uuid.UUID]struct{}, len(groups))
 	for _, id := range groups {
 		effective[id] = struct{}{}
@@ -95,9 +106,16 @@ func validateModifierOptions(ctx context.Context, q *sqlc.Queries,
 		// sqlc cannot infer the boolean type of the query's
 		// `(retired_at IS NOT NULL)` expressions for the database/sql
 		// engine, so the generated fields are interface{}; pgx scans
-		// PostgreSQL booleans into bool.
-		optionRetired, _ := row.OptionRetired.(bool)
-		groupRetired, _ := row.GroupRetired.(bool)
+		// PostgreSQL booleans into bool. A mismatch here must fail closed
+		// rather than silently treat a retired row as active.
+		optionRetired, ok := row.OptionRetired.(bool)
+		if !ok {
+			return fmt.Errorf("scan modifier option retirement flag: unexpected type %T", row.OptionRetired)
+		}
+		groupRetired, ok := row.GroupRetired.(bool)
+		if !ok {
+			return fmt.Errorf("scan modifier group retirement flag: unexpected type %T", row.GroupRetired)
+		}
 		if optionRetired || groupRetired {
 			return fmt.Errorf("%w: %s", ErrModifierOptionRetired, id)
 		}

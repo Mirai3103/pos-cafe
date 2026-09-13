@@ -143,35 +143,6 @@ func (q *Queries) GetHighestAssignmentSequence(ctx context.Context, serviceSessi
 	return highest, err
 }
 
-const getMenuItemSizeForDraft = `-- name: GetMenuItemSizeForDraft :one
-SELECT id, menu_item_id, name, price_vnd, available, retired_at
-FROM menu_item_sizes
-WHERE id = $1
-`
-
-type GetMenuItemSizeForDraftRow struct {
-	ID         uuid.UUID    `json:"id"`
-	MenuItemID uuid.UUID    `json:"menu_item_id"`
-	Name       string       `json:"name"`
-	PriceVnd   int64        `json:"price_vnd"`
-	Available  bool         `json:"available"`
-	RetiredAt  sql.NullTime `json:"retired_at"`
-}
-
-func (q *Queries) GetMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (GetMenuItemSizeForDraftRow, error) {
-	row := q.db.QueryRowContext(ctx, getMenuItemSizeForDraft, id)
-	var i GetMenuItemSizeForDraftRow
-	err := row.Scan(
-		&i.ID,
-		&i.MenuItemID,
-		&i.Name,
-		&i.PriceVnd,
-		&i.Available,
-		&i.RetiredAt,
-	)
-	return i, err
-}
-
 const getNextServiceSequence = `-- name: GetNextServiceSequence :one
 SELECT COALESCE(MAX(sequence), 0)::int + 1 AS next_sequence
 FROM service_sessions
@@ -439,21 +410,22 @@ func (q *Queries) InsertServiceSession(ctx context.Context, arg InsertServiceSes
 	return i, err
 }
 
-const insertTableAssignment = `-- name: InsertTableAssignment :one
-INSERT INTO table_assignments
-    (table_id, service_session_id, assigned_by_staff_identity_id, sequence)
-VALUES ($1, $2, $3, $4)
+const insertTableAssignmentsBatch = `-- name: InsertTableAssignmentsBatch :many
+INSERT INTO table_assignments (table_id, service_session_id, assigned_by_staff_identity_id, sequence)
+SELECT tid.val, $2::uuid, $3::uuid, seq.val
+FROM unnest($1::uuid[]) WITH ORDINALITY AS tid(val, ord)
+JOIN unnest($4::int[]) WITH ORDINALITY AS seq(val, ord) ON seq.ord = tid.ord
 RETURNING id, table_id, service_session_id, sequence, assigned_at
 `
 
-type InsertTableAssignmentParams struct {
-	TableID                   uuid.UUID `json:"table_id"`
-	ServiceSessionID          uuid.UUID `json:"service_session_id"`
-	AssignedByStaffIdentityID uuid.UUID `json:"assigned_by_staff_identity_id"`
-	Sequence                  int32     `json:"sequence"`
+type InsertTableAssignmentsBatchParams struct {
+	Column1 []uuid.UUID `json:"column_1"`
+	Column2 uuid.UUID   `json:"column_2"`
+	Column3 uuid.UUID   `json:"column_3"`
+	Column4 []int32     `json:"column_4"`
 }
 
-type InsertTableAssignmentRow struct {
+type InsertTableAssignmentsBatchRow struct {
 	ID               uuid.UUID `json:"id"`
 	TableID          uuid.UUID `json:"table_id"`
 	ServiceSessionID uuid.UUID `json:"service_session_id"`
@@ -461,22 +433,43 @@ type InsertTableAssignmentRow struct {
 	AssignedAt       time.Time `json:"assigned_at"`
 }
 
-func (q *Queries) InsertTableAssignment(ctx context.Context, arg InsertTableAssignmentParams) (InsertTableAssignmentRow, error) {
-	row := q.db.QueryRowContext(ctx, insertTableAssignment,
-		arg.TableID,
-		arg.ServiceSessionID,
-		arg.AssignedByStaffIdentityID,
-		arg.Sequence,
+// Batches assignTables' per-Table insert loop into one round trip. Two
+// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
+// into rows in lockstep, so row i of the result is table_ids[i] assigned at
+// sequences[i]; the caller relies on getting exactly len(table_ids) rows back
+// in that order.
+func (q *Queries) InsertTableAssignmentsBatch(ctx context.Context, arg InsertTableAssignmentsBatchParams) ([]InsertTableAssignmentsBatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, insertTableAssignmentsBatch,
+		pq.Array(arg.Column1),
+		arg.Column2,
+		arg.Column3,
+		pq.Array(arg.Column4),
 	)
-	var i InsertTableAssignmentRow
-	err := row.Scan(
-		&i.ID,
-		&i.TableID,
-		&i.ServiceSessionID,
-		&i.Sequence,
-		&i.AssignedAt,
-	)
-	return i, err
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InsertTableAssignmentsBatchRow{}
+	for rows.Next() {
+		var i InsertTableAssignmentsBatchRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TableID,
+			&i.ServiceSessionID,
+			&i.Sequence,
+			&i.AssignedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listActiveServiceSessions = `-- name: ListActiveServiceSessions :many
@@ -998,6 +991,39 @@ func (q *Queries) LockMenuItemForDraft(ctx context.Context, id uuid.UUID) (LockM
 	err := row.Scan(
 		&i.ID,
 		&i.CategoryID,
+		&i.Name,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+	)
+	return i, err
+}
+
+const lockMenuItemSizeForDraft = `-- name: LockMenuItemSizeForDraft :one
+SELECT id, menu_item_id, name, price_vnd, available, retired_at
+FROM menu_item_sizes
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockMenuItemSizeForDraftRow struct {
+	ID         uuid.UUID    `json:"id"`
+	MenuItemID uuid.UUID    `json:"menu_item_id"`
+	Name       string       `json:"name"`
+	PriceVnd   int64        `json:"price_vnd"`
+	Available  bool         `json:"available"`
+	RetiredAt  sql.NullTime `json:"retired_at"`
+}
+
+// Locked FOR UPDATE for the same reason as LockMenuItemForDraft: without it, a
+// concurrent retirement of this Size can slip between validation and the
+// draft-item write.
+func (q *Queries) LockMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (LockMenuItemSizeForDraftRow, error) {
+	row := q.db.QueryRowContext(ctx, lockMenuItemSizeForDraft, id)
+	var i LockMenuItemSizeForDraftRow
+	err := row.Scan(
+		&i.ID,
+		&i.MenuItemID,
 		&i.Name,
 		&i.PriceVnd,
 		&i.Available,

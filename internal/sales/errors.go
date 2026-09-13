@@ -1,7 +1,6 @@
 package sales
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -159,8 +158,11 @@ func MapHTTPError(err error) error {
 
 	case errors.Is(err, ErrRequestConflict):
 		return response.NewCodedError(http.StatusConflict, "REQUEST_CONFLICT", err.Error(), err)
-	case errors.Is(err, ErrInvalidStoredResult), errors.Is(err, ErrServiceSequenceExhausted):
+	case errors.Is(err, ErrInvalidStoredResult):
 		return response.NewCodedError(http.StatusInternalServerError, "INVALID_STORED_RESULT",
+			"an unexpected error occurred", err)
+	case errors.Is(err, ErrServiceSequenceExhausted):
+		return response.NewCodedError(http.StatusInternalServerError, "SERVICE_SEQUENCE_EXHAUSTED",
 			"an unexpected error occurred", err)
 
 	// Both denial sentinels collapse to one code so the API never discloses
@@ -179,6 +181,3 @@ func MapHTTPError(err error) error {
 		return err
 	}
 }
-
-// unused keeps the sql import honest if a future edit drops the only use.
-var _ = sql.ErrNoRows
