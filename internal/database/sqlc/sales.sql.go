@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const getEditableDraft = `-- name: GetEditableDraft :one
@@ -29,6 +30,21 @@ func (q *Queries) GetEditableDraft(ctx context.Context, serviceSessionID uuid.UU
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getHighestAssignmentSequence = `-- name: GetHighestAssignmentSequence :one
+SELECT COALESCE(MAX(sequence), -1)::int AS highest
+FROM table_assignments
+WHERE service_session_id = $1
+`
+
+// Includes released assignments, so a released sequence number is never
+// reused and the audit trail stays unambiguous.
+func (q *Queries) GetHighestAssignmentSequence(ctx context.Context, serviceSessionID uuid.UUID) (int32, error) {
+	row := q.db.QueryRowContext(ctx, getHighestAssignmentSequence, serviceSessionID)
+	var highest int32
+	err := row.Scan(&highest)
+	return highest, err
 }
 
 const getNextServiceSequence = `-- name: GetNextServiceSequence :one
@@ -238,6 +254,46 @@ func (q *Queries) InsertServiceSession(ctx context.Context, arg InsertServiceSes
 	return i, err
 }
 
+const insertTableAssignment = `-- name: InsertTableAssignment :one
+INSERT INTO table_assignments
+    (table_id, service_session_id, assigned_by_staff_identity_id, sequence)
+VALUES ($1, $2, $3, $4)
+RETURNING id, table_id, service_session_id, sequence, assigned_at
+`
+
+type InsertTableAssignmentParams struct {
+	TableID                   uuid.UUID `json:"table_id"`
+	ServiceSessionID          uuid.UUID `json:"service_session_id"`
+	AssignedByStaffIdentityID uuid.UUID `json:"assigned_by_staff_identity_id"`
+	Sequence                  int32     `json:"sequence"`
+}
+
+type InsertTableAssignmentRow struct {
+	ID               uuid.UUID `json:"id"`
+	TableID          uuid.UUID `json:"table_id"`
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	Sequence         int32     `json:"sequence"`
+	AssignedAt       time.Time `json:"assigned_at"`
+}
+
+func (q *Queries) InsertTableAssignment(ctx context.Context, arg InsertTableAssignmentParams) (InsertTableAssignmentRow, error) {
+	row := q.db.QueryRowContext(ctx, insertTableAssignment,
+		arg.TableID,
+		arg.ServiceSessionID,
+		arg.AssignedByStaffIdentityID,
+		arg.Sequence,
+	)
+	var i InsertTableAssignmentRow
+	err := row.Scan(
+		&i.ID,
+		&i.TableID,
+		&i.ServiceSessionID,
+		&i.Sequence,
+		&i.AssignedAt,
+	)
+	return i, err
+}
+
 const listActiveServiceSessions = `-- name: ListActiveServiceSessions :many
 SELECT id, service_number, sequence, service_mode, state, sales_shift_id,
        created_by_staff_identity_id, created_at
@@ -438,6 +494,46 @@ func (q *Queries) ListServiceSessionTables(ctx context.Context, serviceSessionID
 	for rows.Next() {
 		var i ListServiceSessionTablesRow
 		if err := rows.Scan(&i.ID, &i.Name, &i.Sequence); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockTablesForAssignment = `-- name: LockTablesForAssignment :many
+SELECT id, name, available
+FROM tables
+WHERE id = ANY($1::uuid[])
+ORDER BY id ASC
+FOR UPDATE
+`
+
+type LockTablesForAssignmentRow struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Available bool      `json:"available"`
+}
+
+// Locks the selected Tables in id order so two concurrent assignments over
+// overlapping sets cannot deadlock against each other. The caller must sort
+// the ids before calling.
+func (q *Queries) LockTablesForAssignment(ctx context.Context, tableIds []uuid.UUID) ([]LockTablesForAssignmentRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockTablesForAssignment, pq.Array(tableIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockTablesForAssignmentRow{}
+	for rows.Next() {
+		var i LockTablesForAssignmentRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Available); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

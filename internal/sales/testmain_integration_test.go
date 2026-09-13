@@ -181,6 +181,16 @@ func seedOpenShift(t *testing.T, q *sqlc.Queries, openedBy uuid.UUID) uuid.UUID 
 	return shift.ID
 }
 
+// seedTable creates a Table and returns its id.
+func seedTable(t *testing.T, db *sql.DB, name string) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO tables (name, normalized_name, available)
+		VALUES ($1, lower($1), true) RETURNING id`, name).Scan(&id))
+	return id
+}
+
 // seedSize adds a Size to a Menu Item and returns its id.
 func seedSize(t *testing.T, db *sql.DB, menuItemID uuid.UUID, name string, priceVND int64) uuid.UUID {
 	t.Helper()

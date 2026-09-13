@@ -103,3 +103,26 @@ RETURNING id, service_number, sequence, service_mode, state, sales_shift_id, cre
 -- name: InsertOrderDraft :one
 INSERT INTO order_drafts (service_session_id) VALUES ($1)
 RETURNING id, service_session_id, state, created_at;
+
+-- name: LockTablesForAssignment :many
+-- Locks the selected Tables in id order so two concurrent assignments over
+-- overlapping sets cannot deadlock against each other. The caller must sort
+-- the ids before calling.
+SELECT id, name, available
+FROM tables
+WHERE id = ANY(sqlc.arg(table_ids)::uuid[])
+ORDER BY id ASC
+FOR UPDATE;
+
+-- name: InsertTableAssignment :one
+INSERT INTO table_assignments
+    (table_id, service_session_id, assigned_by_staff_identity_id, sequence)
+VALUES ($1, $2, $3, $4)
+RETURNING id, table_id, service_session_id, sequence, assigned_at;
+
+-- name: GetHighestAssignmentSequence :one
+-- Includes released assignments, so a released sequence number is never
+-- reused and the audit trail stays unambiguous.
+SELECT COALESCE(MAX(sequence), -1)::int AS highest
+FROM table_assignments
+WHERE service_session_id = $1;

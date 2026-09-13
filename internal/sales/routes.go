@@ -14,6 +14,7 @@ type Slices struct {
 
 	GetServiceSession *GetServiceSessionHandler
 	StartTakeaway     *StartTakeawaySessionHandler
+	StartDineIn       *StartDineInSessionHandler
 }
 
 // NewSlices wires every Sales handler onto a shared Runner.
@@ -23,6 +24,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		Runner:            runner,
 		GetServiceSession: NewGetServiceSessionHandler(runner),
 		StartTakeaway:     NewStartTakeawaySessionHandler(runner),
+		StartDineIn:       NewStartDineInSessionHandler(runner),
 	}
 }
 
@@ -37,5 +39,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.GET("/sales/service-sessions/:id", s.handleGetServiceSession,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/sales/service-sessions/takeaway", s.handleStartTakeaway,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/service-sessions/dine-in", s.handleStartDineIn,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 }

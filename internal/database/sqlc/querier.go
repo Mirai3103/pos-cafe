@@ -51,6 +51,9 @@ type Querier interface {
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
 	GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
+	// Includes released assignments, so a released sequence number is never
+	// reused and the audit trail stays unambiguous.
+	GetHighestAssignmentSequence(ctx context.Context, serviceSessionID uuid.UUID) (int32, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	// -- Shared idempotency (ADR-005) --
 	GetIdempotencyRecord(ctx context.Context, arg GetIdempotencyRecordParams) (IdempotencyKey, error)
@@ -105,6 +108,7 @@ type Querier interface {
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
+	InsertTableAssignment(ctx context.Context, arg InsertTableAssignmentParams) (InsertTableAssignmentRow, error)
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
 	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
@@ -152,6 +156,10 @@ type Querier interface {
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	// Locks the selected Tables in id order so two concurrent assignments over
+	// overlapping sets cannot deadlock against each other. The caller must sort
+	// the ids before calling.
+	LockTablesForAssignment(ctx context.Context, tableIds []uuid.UUID) ([]LockTablesForAssignmentRow, error)
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
 	RenameMenuCategory(ctx context.Context, arg RenameMenuCategoryParams) (MenuCategory, error)
