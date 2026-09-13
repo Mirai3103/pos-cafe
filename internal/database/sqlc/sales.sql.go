@@ -356,6 +356,43 @@ func (q *Queries) ListActiveServiceSessions(ctx context.Context) ([]ListActiveSe
 	return items, nil
 }
 
+const listDefaultModifierOptionIDs = `-- name: ListDefaultModifierOptionIDs :many
+SELECT DISTINCT o.id
+FROM modifier_group_default_options d
+JOIN modifier_options o ON o.id = d.modifier_option_id
+JOIN modifier_groups g ON g.id = o.modifier_group_id
+WHERE d.modifier_group_id = ANY($1::uuid[])
+  AND o.available
+  AND o.retired_at IS NULL
+  AND g.retired_at IS NULL
+ORDER BY o.id ASC
+`
+
+// Declared defaults of the given Groups, filtered to what is currently
+// selectable. A retired Group's defaults never apply.
+func (q *Queries) ListDefaultModifierOptionIDs(ctx context.Context, groupIds []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listDefaultModifierOptionIDs, pq.Array(groupIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDraftItemModifierOptions = `-- name: ListDraftItemModifierOptions :many
 SELECT m.order_draft_item_id, o.id AS option_id, o.name AS option_name,
        o.surcharge_vnd, g.id AS group_id, g.name AS group_name
@@ -466,6 +503,112 @@ func (q *Queries) ListDraftItems(ctx context.Context, orderDraftID uuid.UUID) ([
 			&i.ModifierKey,
 			&i.CreatedAt,
 			&i.Available,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEffectiveModifierGroupIDs = `-- name: ListEffectiveModifierGroupIDs :many
+WITH target AS (
+    SELECT id, category_id FROM menu_items WHERE id = $1
+),
+inherited AS (
+    SELECT cmg.modifier_group_id
+    FROM category_modifier_groups cmg
+    JOIN target ON target.category_id = cmg.menu_category_id
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM item_modifier_group_exclusions ex
+        WHERE ex.menu_item_id = (SELECT id FROM target)
+          AND ex.modifier_group_id = cmg.modifier_group_id
+    )
+),
+direct AS (
+    SELECT img.modifier_group_id
+    FROM item_modifier_groups img
+    JOIN target ON target.id = img.menu_item_id
+)
+SELECT modifier_group_id
+FROM (
+    SELECT modifier_group_id FROM inherited
+    UNION
+    SELECT modifier_group_id FROM direct
+) g
+ORDER BY modifier_group_id ASC
+`
+
+// (inherited - exclusions) + direct, for one Menu Item.
+//
+// internal/catalog computes the same set in the exported pure function
+// EffectiveGroupIDs. Sales does not import it: MIGRATE_PLAN section 4.1
+// forbids importing another slice, and ADR-006 established reading another
+// slice's tables through one's own query. Expressing the algebra once in SQL
+// keeps the duplication to one function against one query, which
+// TestSalesResolutionMatchesCatalog pins together. See ADR-012.
+func (q *Queries) ListEffectiveModifierGroupIDs(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listEffectiveModifierGroupIDs, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listModifierOptionsForValidation = `-- name: ListModifierOptionsForValidation :many
+SELECT o.id, o.modifier_group_id, o.available,
+       (o.retired_at IS NOT NULL) AS option_retired,
+       (g.retired_at IS NOT NULL) AS group_retired
+FROM modifier_options o
+JOIN modifier_groups g ON g.id = o.modifier_group_id
+WHERE o.id = ANY($1::uuid[])
+`
+
+type ListModifierOptionsForValidationRow struct {
+	ID              uuid.UUID   `json:"id"`
+	ModifierGroupID uuid.UUID   `json:"modifier_group_id"`
+	Available       bool        `json:"available"`
+	OptionRetired   interface{} `json:"option_retired"`
+	GroupRetired    interface{} `json:"group_retired"`
+}
+
+func (q *Queries) ListModifierOptionsForValidation(ctx context.Context, optionIds []uuid.UUID) ([]ListModifierOptionsForValidationRow, error) {
+	rows, err := q.db.QueryContext(ctx, listModifierOptionsForValidation, pq.Array(optionIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListModifierOptionsForValidationRow{}
+	for rows.Next() {
+		var i ListModifierOptionsForValidationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ModifierGroupID,
+			&i.Available,
+			&i.OptionRetired,
+			&i.GroupRetired,
 		); err != nil {
 			return nil, err
 		}

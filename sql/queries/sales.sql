@@ -150,3 +150,60 @@ WHERE id = $1;
 
 -- name: GetSalesShiftStateByID :one
 SELECT state FROM sales_shifts WHERE id = $1;
+
+-- name: ListEffectiveModifierGroupIDs :many
+-- (inherited - exclusions) + direct, for one Menu Item.
+--
+-- internal/catalog computes the same set in the exported pure function
+-- EffectiveGroupIDs. Sales does not import it: MIGRATE_PLAN section 4.1
+-- forbids importing another slice, and ADR-006 established reading another
+-- slice's tables through one's own query. Expressing the algebra once in SQL
+-- keeps the duplication to one function against one query, which
+-- TestSalesResolutionMatchesCatalog pins together. See ADR-012.
+WITH target AS (
+    SELECT id, category_id FROM menu_items WHERE id = $1
+),
+inherited AS (
+    SELECT cmg.modifier_group_id
+    FROM category_modifier_groups cmg
+    JOIN target ON target.category_id = cmg.menu_category_id
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM item_modifier_group_exclusions ex
+        WHERE ex.menu_item_id = (SELECT id FROM target)
+          AND ex.modifier_group_id = cmg.modifier_group_id
+    )
+),
+direct AS (
+    SELECT img.modifier_group_id
+    FROM item_modifier_groups img
+    JOIN target ON target.id = img.menu_item_id
+)
+SELECT modifier_group_id
+FROM (
+    SELECT modifier_group_id FROM inherited
+    UNION
+    SELECT modifier_group_id FROM direct
+) g
+ORDER BY modifier_group_id ASC;
+
+-- name: ListDefaultModifierOptionIDs :many
+-- Declared defaults of the given Groups, filtered to what is currently
+-- selectable. A retired Group's defaults never apply.
+SELECT DISTINCT o.id
+FROM modifier_group_default_options d
+JOIN modifier_options o ON o.id = d.modifier_option_id
+JOIN modifier_groups g ON g.id = o.modifier_group_id
+WHERE d.modifier_group_id = ANY(sqlc.arg(group_ids)::uuid[])
+  AND o.available
+  AND o.retired_at IS NULL
+  AND g.retired_at IS NULL
+ORDER BY o.id ASC;
+
+-- name: ListModifierOptionsForValidation :many
+SELECT o.id, o.modifier_group_id, o.available,
+       (o.retired_at IS NOT NULL) AS option_retired,
+       (g.retired_at IS NOT NULL) AS group_retired
+FROM modifier_options o
+JOIN modifier_groups g ON g.id = o.modifier_group_id
+WHERE o.id = ANY(sqlc.arg(option_ids)::uuid[]);

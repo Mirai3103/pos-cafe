@@ -131,6 +131,9 @@ type Querier interface {
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
+	// Declared defaults of the given Groups, filtered to what is currently
+	// selectable. A retired Group's defaults never apply.
+	ListDefaultModifierOptionIDs(ctx context.Context, groupIds []uuid.UUID) ([]uuid.UUID, error)
 	// Ordered by Group then Option name, which is the order the projection emits.
 	ListDraftItemModifierOptions(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemModifierOptionsRow, error)
 	// price_vnd is the Size price when a Size is chosen and the Item price
@@ -144,6 +147,15 @@ type Querier interface {
 	// COALESCE yields sql.NullInt64 instead of a bare int64 that cannot scan the
 	// NULL price of a required-Size Item whose Size has not been chosen yet.
 	ListDraftItems(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemsRow, error)
+	// (inherited - exclusions) + direct, for one Menu Item.
+	//
+	// internal/catalog computes the same set in the exported pure function
+	// EffectiveGroupIDs. Sales does not import it: MIGRATE_PLAN section 4.1
+	// forbids importing another slice, and ADR-006 established reading another
+	// slice's tables through one's own query. Expressing the algebra once in SQL
+	// keeps the duplication to one function against one query, which
+	// TestSalesResolutionMatchesCatalog pins together. See ADR-012.
+	ListEffectiveModifierGroupIDs(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -154,6 +166,7 @@ type Querier interface {
 	ListModifierGroupDefaultOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ListModifierGroupDefaultOptionsByGroupRow, error)
 	ListModifierGroups(ctx context.Context) ([]ModifierGroup, error)
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
+	ListModifierOptionsForValidation(ctx context.Context, optionIds []uuid.UUID) ([]ListModifierOptionsForValidationRow, error)
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
