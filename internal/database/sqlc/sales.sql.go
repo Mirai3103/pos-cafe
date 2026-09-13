@@ -954,6 +954,7 @@ JOIN modifier_options o ON o.id = dio.modifier_option_id
 JOIN modifier_groups g ON g.id = o.modifier_group_id
 WHERE dio.order_draft_item_id = ANY($1::uuid[])
 ORDER BY g.name ASC, o.name ASC, o.id ASC
+FOR SHARE OF o
 `
 
 type ListDraftItemOptionsForCommitRow struct {
@@ -969,7 +970,9 @@ type ListDraftItemOptionsForCommitRow struct {
 }
 
 // The selected Options of the given draft items, with the Group facts the
-// Commit rules need.
+// Commit rules need. The Options are locked FOR SHARE per ADR-015's lock
+// list, so a retirement or availability change cannot land between the
+// Commit validation and its writes; modifier_groups stay unlocked.
 func (q *Queries) ListDraftItemOptionsForCommit(ctx context.Context, draftItemIds []uuid.UUID) ([]ListDraftItemOptionsForCommitRow, error) {
 	rows, err := q.db.QueryContext(ctx, listDraftItemOptionsForCommit, pq.Array(draftItemIds))
 	if err != nil {
@@ -1451,7 +1454,7 @@ JOIN menu_items mi ON mi.id = di.menu_item_id
 JOIN menu_categories mc ON mc.id = mi.category_id
 WHERE di.order_draft_id = $1
 ORDER BY di.created_at ASC, di.id ASC
-FOR UPDATE OF di
+FOR UPDATE OF di FOR SHARE OF mi
 `
 
 type LockDraftItemsForCommitRow struct {
@@ -1468,8 +1471,10 @@ type LockDraftItemsForCommitRow struct {
 }
 
 // Every draft item with the Catalog facts Commit revalidates against, locked
-// so the rows cannot change between validation and write. Ordered by
-// (created_at, id), which also fixes the order of the Committed Items.
+// so the rows cannot change between validation and write: the draft items FOR
+// UPDATE, and the joined Menu Items FOR SHARE per ADR-015's lock list.
+// Ordered by (created_at, id), which also fixes the order of the Committed
+// Items.
 func (q *Queries) LockDraftItemsForCommit(ctx context.Context, orderDraftID uuid.UUID) ([]LockDraftItemsForCommitRow, error) {
 	rows, err := q.db.QueryContext(ctx, lockDraftItemsForCommit, orderDraftID)
 	if err != nil {

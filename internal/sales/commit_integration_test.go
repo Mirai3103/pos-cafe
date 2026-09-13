@@ -166,6 +166,7 @@ func TestCommittedSnapshotSurvivesCatalogChanges(t *testing.T) {
 	session := env.StartTakeaway(t)
 	env.AddDraftItemWithOptions(t, session.ID, env.CoffeeID, env.ToppingOptionID)
 	before := env.Commit(t, session.ID)
+	require.Equal(t, int64(30_000), before.Checks[0].ChargeVND)
 
 	env.RenameMenuItem(t, env.CoffeeID, "Tên mới")
 	env.RenameOption(t, env.ToppingOptionID, "Topping mới")

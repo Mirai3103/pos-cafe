@@ -182,7 +182,9 @@ type Querier interface {
 	ListDraftItemModifierOptions(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemModifierOptionsRow, error)
 	ListDraftItemOptionIDs(ctx context.Context, orderDraftItemID uuid.UUID) ([]uuid.UUID, error)
 	// The selected Options of the given draft items, with the Group facts the
-	// Commit rules need.
+	// Commit rules need. The Options are locked FOR SHARE per ADR-015's lock
+	// list, so a retirement or availability change cannot land between the
+	// Commit validation and its writes; modifier_groups stay unlocked.
 	ListDraftItemOptionsForCommit(ctx context.Context, draftItemIds []uuid.UUID) ([]ListDraftItemOptionsForCommitRow, error)
 	// price_vnd is the Size price when a Size is chosen and the Item price
 	// otherwise, matching the canonical Menu Price rule. available is read live
@@ -235,8 +237,10 @@ type Querier interface {
 	// guessing its id.
 	LockDraftItem(ctx context.Context, arg LockDraftItemParams) (LockDraftItemRow, error)
 	// Every draft item with the Catalog facts Commit revalidates against, locked
-	// so the rows cannot change between validation and write. Ordered by
-	// (created_at, id), which also fixes the order of the Committed Items.
+	// so the rows cannot change between validation and write: the draft items FOR
+	// UPDATE, and the joined Menu Items FOR SHARE per ADR-015's lock list.
+	// Ordered by (created_at, id), which also fixes the order of the Committed
+	// Items.
 	LockDraftItemsForCommit(ctx context.Context, orderDraftID uuid.UUID) ([]LockDraftItemsForCommitRow, error)
 	// Checks every precondition and takes the lock in one statement, so there is
 	// no window between the check and the write.
