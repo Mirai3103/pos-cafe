@@ -740,6 +740,56 @@ definitions:
       success:
         type: boolean
     type: object
+  tables.CreateTableCommand:
+    properties:
+      name:
+        type: string
+      request_id:
+        type: string
+    type: object
+  tables.RenameTableCommand:
+    properties:
+      name:
+        type: string
+      request_id:
+        type: string
+    type: object
+  tables.SetTableAvailabilityCommand:
+    properties:
+      available:
+        type: boolean
+      request_id:
+        type: string
+    type: object
+  tables.TableOccupant:
+    properties:
+      service_number:
+        type: string
+      service_session_id:
+        type: string
+    type: object
+  tables.TableOverviewRow:
+    properties:
+      available:
+        type: boolean
+      current_service_sessions:
+        items:
+          $ref: '#/definitions/tables.TableOccupant'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  tables.TableResponse:
+    properties:
+      available:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -2928,6 +2978,186 @@ paths:
       summary: Lấy thông tin tài khoản hiện tại
       tags:
       - Staff
+  /tables:
+    post:
+      consumes:
+      - application/json
+      description: Creates a Table with a unique name
+      parameters:
+      - description: Table to create
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/tables.CreateTableCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/tables.TableResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a Table
+      tags:
+      - tables
+  /tables/{table_id}/availability:
+    patch:
+      consumes:
+      - application/json
+      description: Sets whether a Table is eligible for new work. Setting the current
+        value again is a successful no-op.
+      parameters:
+      - description: Table ID
+        in: path
+        name: table_id
+        required: true
+        type: string
+      - description: Availability to set
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/tables.SetTableAvailabilityCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/tables.TableResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Set Table Availability
+      tags:
+      - tables
+  /tables/{table_id}/name:
+    patch:
+      consumes:
+      - application/json
+      description: Renames a Table, preserving its identity and history
+      parameters:
+      - description: Table ID
+        in: path
+        name: table_id
+        required: true
+        type: string
+      - description: New name
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/tables.RenameTableCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/tables.TableResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Rename a Table
+      tags:
+      - tables
+  /tables/overview:
+    get:
+      description: Lists every Table with the active Service Sessions occupying it
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/tables.TableOverviewRow'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Table overview
+      tags:
+      - tables
 securityDefinitions:
   BearerAuth:
     description: Type "Bearer " followed by token

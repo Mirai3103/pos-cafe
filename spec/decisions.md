@@ -1,72 +1,118 @@
 # Architecture Decision Records (ADR) - POS Cafe Backend
 
-Tài liệu ghi nhận các quyết định kiến trúc và thiết kế kỹ thuật trong quá trình chuyển đổi từ TypeScript sang Golang.
+This document records architectural and technical design decisions made during the migration from TypeScript to Golang.
 
 ---
 
-## ADR-001: Multi-Role Model cho Nhân viên (`staff_operational_roles`)
-- **Ngày quyết định:** 2026-09-09
-- **Trạng thái:** Accepted
-- **Bối cảnh:** Hệ thống cũ cho phép một nhân viên có nhiều vai trò cùng lúc (ví dụ: `MANAGER` kiêm `CASHIER`, hoặc `CASHIER` kiêm `BARISTA`).
-- **Quyết định:** Giữ nguyên mô hình Multi-role với bảng quan hệ `staff_operational_roles(staff_identity_id, role)`.
-- **Hệ quả:** Tương thích 100% với Frontend React và logic phân quyền nghiệp vụ POS hiện tại.
+## ADR-001: Multi-Role Model for Staff (`staff_operational_roles`)
+
+* **Decision Date:** 2026-09-09
+* **Status:** Accepted
+* **Context:** The legacy system allowed an employee to hold multiple roles simultaneously (e.g., `MANAGER` concurrently acting as `CASHIER`, or `CASHIER` concurrently acting as `BARISTA`).
+* **Decision:** Retain the multi-role model using the relation table `staff_operational_roles(staff_identity_id, role)`.
+* **Consequences:** 100% backward-compatible with the React frontend and existing POS business authorization logic.
 
 ---
 
-## ADR-002: Thuật toán băm mã PIN bằng `bcrypt`
-- **Ngày quyết định:** 2026-09-09
-- **Trạng thái:** Accepted
-- **Bối cảnh:** Hệ thống cũ dùng `argon2id` từ thư viện Node.js. Cần chọn giải pháp tối ưu cho Go backend.
-- **Quyết định:** Sử dụng thư viện chuẩn `golang.org/x/crypto/bcrypt` với cost tiêu chuẩn để băm và kiểm tra mã PIN nhân viên (4–8 chữ số).
-- **Hệ quả:** Tối ưu hóa hiệu năng và dung lượng bộ nhớ trên phần cứng POS cấu hình thấp (Celeron, 2–4GB RAM).
+## ADR-002: PIN Hashing Algorithm with `bcrypt`
+
+* **Decision Date:** 2026-09-09
+* **Status:** Accepted
+* **Context:** The legacy system used `argon2id` from a Node.js library. An optimal solution was required for the Go backend.
+* **Decision:** Use the standard `golang.org/x/crypto/bcrypt` package with default/standard cost to hash and verify staff PINs (4–8 digits).
+* **Consequences:** Optimizes performance and memory footprint on low-spec POS hardware (Celeron processors, 2–4GB RAM).
 
 ---
 
-## ADR-003: Cơ chế xác thực Token Hybrid (Bearer Header + Cookie)
-- **Ngày quyết định:** 2026-09-09
-- **Trạng thái:** Accepted
-- **Bối cảnh:** Cần phục vụ linh hoạt cho cả Web SPA client, Desktop Terminal và các ứng dụng phần cứng nhúng.
-- **Quyết định:** Hỗ trợ cơ chế Hybrid:
-  - Khi đăng nhập/mở khóa thành công, API trả về `token` trong JSON response body và đồng thời set HTTP-only cookie.
-  - Middleware `RequireAuth` ưu tiên đọc token từ header `Authorization: Bearer <token>`, nếu không có sẽ fallback đọc từ Cookie `staff_session_token`.
-- **Hệ quả:** Linh hoạt tối đa cho mọi loại client, dễ test qua Postman/curl và Swagger UI.
+## ADR-003: Hybrid Token Authentication Mechanism (Bearer Header + Cookie)
+
+* **Decision Date:** 2026-09-09
+* **Status:** Accepted
+* **Context:** Must flexibly accommodate Web SPA clients, Desktop Terminals, and embedded hardware applications.
+* **Decision:** Support a hybrid mechanism:
+* Upon successful login/unlock, the API returns `token` in the JSON response body and simultaneously sets an HTTP-only cookie.
+* The `RequireAuth` middleware prioritizes reading the token from the `Authorization: Bearer <token>` header, falling back to the `staff_session_token` cookie if absent.
+
+
+* **Consequences:** Maximum flexibility across all client types; straightforward testing via Postman/curl and Swagger UI.
 
 ---
 
-## ADR-004: Giới hạn kích thước cột tường minh (`VARCHAR(n)`)
-- **Ngày quyết định:** 2026-09-09
-- **Trạng thái:** Accepted
-- **Bối cảnh:** Mặc dù PostgreSQL lưu trữ `TEXT` và `VARCHAR` tương đương về RAM/Disk, nhưng việc không giới hạn độ dài ở tầng database có nguy cơ bị phình dữ liệu nếu client gửi payload quá lớn.
-- **Quyết định:** Sử dụng các kiểu dữ liệu có giới hạn độ dài tường minh cho các bảng:
-  - `display_name`: `VARCHAR(120)`
-  - `login_code`: `VARCHAR(24)`
-  - `pin_hash`: `VARCHAR(72)` (vừa vặn với chuỗi 60 ký tự của bcrypt)
-  - `token_hash`: `VARCHAR(64)` (chuỗi hex SHA-256)
-  - `role`, `state`, `active_workspace`: `VARCHAR(20)`
-- **Hệ quả:** Tăng cường tính toàn vẹn dữ liệu (Data Integrity) ngay từ tầng cơ sở dữ liệu.
+## ADR-004: Explicit Column Size Constraints (`VARCHAR(n)`)
+
+* **Decision Date:** 2026-09-09
+* **Status:** Accepted
+* **Context:** Although PostgreSQL stores `TEXT` and `VARCHAR` with equivalent RAM/disk efficiency, leaving column lengths unbounded at the database layer exposes the system to data bloat if clients submit oversized payloads.
+* **Decision:** Enforce explicit length constraints across tables:
+* `display_name`: `VARCHAR(120)`
+* `login_code`: `VARCHAR(24)`
+* `pin_hash`: `VARCHAR(72)` (fits bcrypt's 60-character output comfortably)
+* `token_hash`: `VARCHAR(64)` (SHA-256 hex string)
+* `role`, `state`, `active_workspace`: `VARCHAR(20)`
+
+
+* **Consequences:** Reinforces data integrity directly at the database tier.
 
 ---
 
-## ADR-005: Hợp nhất các bảng Idempotency thành bảng duy nhất (`idempotency_keys`)
-- **Ngày quyết định:** 2026-09-09
+## ADR-005: Consolidation of Idempotency Tables into a Single Table (`idempotency_keys`)
+
+* **Decision Date:** 2026-09-09
+* **Status:** Accepted
+* **Context:** The legacy TypeScript codebase provisioned a dedicated table per use case (`staff_identity_creation_requests`, `staff_identity_enabled_state_requests`, `staff_identity_role_replacement_requests`, `staff_identity_pin_reset_requests`), leading to the schema bloat anti-pattern and wasted resources.
+* **Decision:**
+* Replace all four legacy tables with a **single unified table** following standard Stripe / IETF patterns:
+```sql
+CREATE TABLE idempotency_keys (
+    key UUID NOT NULL,                       -- request_id from frontend
+    actor_id UUID,                           -- acting staff identity ID
+    action VARCHAR(50) NOT NULL,             -- 'staff.create', 'staff.set_enabled', etc.
+    request_hash VARCHAR(64) NOT NULL,       -- SHA-256 payload hash for mutation detection
+    response_code INT NOT NULL,              -- HTTP status code (200, 201...)
+    response_body JSONB NOT NULL,            -- Cached JSON payload to replay on retries
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (actor_id, key)
+);
+
+```
+
+
+* Reuse this table across all future slices such as `shift`, `sales`, and `payments` without adding extra tables.
+
+
+* **Consequences:**
+* Highly concise database schema that eliminates redundant boilerplate.
+* Enables instant response replaying during network instability or terminal double-clicks.
+* Simplifies cleanup automation via a scheduled cron job (purging records older than 24 hours).
+
+---
+
+## ADR-006: Provision sớm schema Sales cho Phase 3 (`service_sessions`, `table_assignments`)
+- **Ngày quyết định:** 2026-09-12
 - **Trạng thái:** Accepted
-- **Bối cảnh:** Hệ thống TypeScript cũ tạo mỗi use case một bảng (`staff_identity_creation_requests`, `staff_identity_enabled_state_requests`, `staff_identity_role_replacement_requests`, `staff_identity_pin_reset_requests`), dẫn đến anti-pattern phình schema (Schema Bloat) và lãng phí tài nguyên.
+- **Bối cảnh:** Theo `CONTEXT.md`, một Bàn "may be associated with one or more active Service Sessions". Read `overview` canonical của Tables phải trả về các Service Session đang chiếm bàn, tức là phụ thuộc vào `table_assignments` và `service_sessions` — hai bảng thuộc quyền sở hữu nghiệp vụ của `internal/sales` (Phase 5). Nếu chờ Phase 5, Phase 3 sẽ ship một contract API thiếu field và phải breaking change về sau.
 - **Quyết định:**
-  - Thay thế toàn bộ 4 bảng cũ bằng **1 bảng duy nhất** theo pattern chuẩn Stripe / IETF:
-    ```sql
-    CREATE TABLE idempotency_keys (
-        key UUID NOT NULL,                       -- request_id từ frontend
-        actor_id UUID,                           -- ID nhân viên thao tác
-        action VARCHAR(50) NOT NULL,             -- 'staff.create', 'staff.set_enabled', etc.
-        request_hash VARCHAR(64) NOT NULL,       -- SHA-256 payload để phát hiện sửa đổi
-        response_code INT NOT NULL,              -- HTTP status code (200, 201...)
-        response_body JSONB NOT NULL,            -- Kết quả JSON để replay khi retry
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        PRIMARY KEY (actor_id, key)
-    );
-    ```
-  - Bảng này sẽ được tái sử dụng chung cho toàn bộ các slice sau này như `shift`, `sales`, `payments` mà không cần tạo thêm bảng nào khác.
+  - Migration `000006` của Phase 3 tạo luôn `service_sessions` và `table_assignments`, kèm `COMMENT ON TABLE` ghi rõ quyền sở hữu thuộc `internal/sales` (Phase 5).
+  - `service_sessions` lược bỏ **duy nhất** cột `sales_shift_id` vì `sales_shifts` là bảng của Phase 4. Phase 5 bổ sung bằng `ALTER TABLE service_sessions ADD COLUMN sales_shift_id UUID NOT NULL REFERENCES sales_shifts(id)`.
+  - `internal/tables` **không** import `internal/sales`. Nó đọc occupancy qua query sqlc của riêng nó (`ListCurrentTableOccupants`), đúng nguyên tắc "dùng queries hoặc interface, đừng import struct" của MIGRATE_PLAN §4.1.
+  - Phase 3 chỉ **đọc** hai bảng này, không ghi qua API. Test integration seed trực tiếp bằng SQL.
 - **Hệ quả:**
-  - Database schema cực kỳ gọn gàng, loại bỏ hoàn toàn mã lặp.
-  - Hỗ trợ replay response tức thì khi mạng chập chờn hoặc máy POS bấm đúp.
-  - Dễ dàng thiết lập cronjob tự động dọn rác (clean up các record cũ hơn 24h).
+  - Contract công khai của Tables hoàn chỉnh và ổn định ngay từ Phase 3; frontend không phải chịu breaking change khi Phase 5 lên.
+  - Đổi lại, Phase 5 phải thực hiện đúng một thao tác `ALTER TABLE` bổ sung thay vì `CREATE TABLE`.
+
+---
+
+## ADR-007: Reaffirming the Shared `idempotency_keys` Table
+
+* **Decision Date:** 2026-09-12
+* **Status:** Accepted
+* **Context:** ADR-005 mandated that all slices share a single `idempotency_keys` table. However, Phase 2 (Catalog) created a dedicated `catalog_mutation_requests` table, contradicting this decision and reintroducing the exact schema bloat anti-pattern that ADR-005 aimed to eliminate.
+* **Decision:**
+* Starting from Phase 3 onwards, all slices must write idempotency records to the shared `idempotency_keys` table, using fully qualified action names for the `action` column (e.g., `tables.create_table`, `tables.rename_table`, `tables.set_table_availability`).
+* `catalog_mutation_requests` is acknowledged as a **historical exception**, not a precedent. Catalog will not be retrofitted during Phase 3; any cleanup will be handled as a separate task.
+* Each slice continues to own its respective executor. Sharing the **database table** does not imply sharing the **helper logic**: `internal/tables` must not import idempotency helpers from `internal/auth`.
+
+
+* **Consequences:**
+* Prevents schema bloat by avoiding a new table for every slice.
+* Preserves vertical slice boundaries at the code layer while consolidating the storage layer.

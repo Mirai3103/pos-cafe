@@ -15,6 +15,7 @@ type Querier interface {
 	// -- Advisory Lock --
 	CatalogAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogRequestParams) (CatalogMutationRequest, error)
+	ClaimIdempotencyRecord(ctx context.Context, arg ClaimIdempotencyRecordParams) (IdempotencyKey, error)
 	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
 	CountActiveManagers(ctx context.Context) (int64, error)
 	CountManagers(ctx context.Context) (int64, error)
@@ -38,6 +39,8 @@ type Querier interface {
 	CreateModifierOptions(ctx context.Context, arg CreateModifierOptionsParams) ([]ModifierOption, error)
 	CreateStaffIdentity(ctx context.Context, arg CreateStaffIdentityParams) (CreateStaffIdentityRow, error)
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
+	// -- Tables --
+	CreateTable(ctx context.Context, arg CreateTableParams) (Table, error)
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
@@ -48,6 +51,8 @@ type Querier interface {
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
+	// -- Shared idempotency (ADR-005) --
+	GetIdempotencyRecord(ctx context.Context, arg GetIdempotencyRecordParams) (IdempotencyKey, error)
 	GetMenuCategoryByID(ctx context.Context, id uuid.UUID) (MenuCategory, error)
 	GetMenuCategoryForUpdate(ctx context.Context, id uuid.UUID) (MenuCategory, error)
 	GetMenuItemByID(ctx context.Context, id uuid.UUID) (MenuItem, error)
@@ -62,6 +67,10 @@ type Querier interface {
 	GetStaffByID(ctx context.Context, id uuid.UUID) (StaffIdentity, error)
 	GetStaffByLoginCode(ctx context.Context, btrim string) (StaffIdentity, error)
 	GetStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	GetTableForUpdate(ctx context.Context, id uuid.UUID) (Table, error)
+	// -- Authority --
+	GetTablesSessionAuthority(ctx context.Context, arg GetTablesSessionAuthorityParams) (GetTablesSessionAuthorityRow, error)
+	GetTablesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
@@ -81,6 +90,8 @@ type Querier interface {
 	ListAllStaffRoles(ctx context.Context) ([]StaffOperationalRole, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
+	// -- Occupancy (read-only view of Sales-owned tables) --
+	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -91,11 +102,13 @@ type Querier interface {
 	ListModifierGroupDefaultOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ListModifierGroupDefaultOptionsByGroupRow, error)
 	ListModifierGroups(ctx context.Context) ([]ModifierGroup, error)
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
+	ListTables(ctx context.Context) ([]Table, error)
 	RenameMenuCategory(ctx context.Context, arg RenameMenuCategoryParams) (MenuCategory, error)
 	RenameMenuItem(ctx context.Context, arg RenameMenuItemParams) (MenuItem, error)
 	RenameMenuItemSize(ctx context.Context, arg RenameMenuItemSizeParams) (MenuItemSize, error)
 	RenameModifierGroup(ctx context.Context, arg RenameModifierGroupParams) (ModifierGroup, error)
 	RenameModifierOption(ctx context.Context, arg RenameModifierOptionParams) (ModifierOption, error)
+	RenameTable(ctx context.Context, arg RenameTableParams) (Table, error)
 	RepriceMenuItem(ctx context.Context, arg RepriceMenuItemParams) (MenuItem, error)
 	RepriceMenuItemSize(ctx context.Context, arg RepriceMenuItemSizeParams) (MenuItemSize, error)
 	RepriceModifierOption(ctx context.Context, arg RepriceModifierOptionParams) (ModifierOption, error)
@@ -110,7 +123,10 @@ type Querier interface {
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
+	SetTableAvailability(ctx context.Context, arg SetTableAvailabilityParams) (Table, error)
 	StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error
+	StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error
+	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
 	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error
