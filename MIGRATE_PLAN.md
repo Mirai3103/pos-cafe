@@ -125,6 +125,18 @@ The source project is already cleanly structured around domain boundaries. We ma
 ---
 
 ### Phase 5: Core Sales, Orders & Payments (`internal/sales`)
+*Approved Design Spec:* [`docs/superpowers/specs/2026-09-13-sales-session-draft-design.md`](docs/superpowers/specs/2026-09-13-sales-session-draft-design.md)
+*Implementation Plan:* [`docs/superpowers/plans/2026-09-13-sales-session-draft.md`](docs/superpowers/plans/2026-09-13-sales-session-draft.md)
+
+> The checklist below predates the canonical source review and is superseded by the spec above. It is kept only as a record of the original sketch. Phase 5 is delivered as four sub-phases (spec §3), each with its own design specification, implementation plan, and test suite; sub-phase spec links are added here as each lands.
+
+| Sub-phase | Scope | Status |
+| :--- | :--- | :---: |
+| **5A** — Service Session lifecycle, Table assignments, Order Draft | [spec](docs/superpowers/specs/2026-09-13-sales-session-draft-design.md) / [plan](docs/superpowers/plans/2026-09-13-sales-session-draft.md) | ✅ COMPLETED (2026-09-13) |
+| **5B** — Commit, Committed Items, Checks, Charge Allocations, Order Draft targeting | spec pending | ⏳ PENDING |
+| **5C** — Cash and Manual QR Payments, Check splitting and merging, settlement | spec pending | ⏳ PENDING |
+| **5D** — Submit, Orders, Preparation Units, Service Session closure, Completed Sale | spec pending | ⏳ PENDING |
+
 *Focus: The heart of the POS system. Low-latency order placement, bill splitting, payments.*
 
 - [ ] **5.1 Database Schema Migration:**
