@@ -46,17 +46,20 @@ func openSalesTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 
 // truncateSalesTables clears every table this slice writes, plus the shared
 // tables its fixtures seed. Order matters only for readability; CASCADE does
-// the work.
+// the work. The 5B tables (checks, committed_items and their children) lead
+// the list.
 func truncateSalesTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.Exec(`
-		TRUNCATE order_draft_item_modifier_options, order_draft_items, order_drafts,
-		         table_assignments, service_sessions, cash_movements, sales_shifts,
-		         tables, modifier_group_default_options, item_modifier_group_exclusions,
-		         item_modifier_groups, category_modifier_groups, modifier_options,
-		         modifier_groups, menu_item_sizes, menu_items, menu_categories,
-		         idempotency_keys, audit_events, staff_access_sessions,
-		         staff_operational_roles, staff_identities
+		TRUNCATE charge_allocations, committed_item_modifier_options, committed_items,
+		         checks, order_draft_item_modifier_options, order_draft_items,
+		         order_drafts, table_assignments, service_sessions, cash_movements,
+		         sales_shifts, tables, modifier_group_default_options,
+		         item_modifier_group_exclusions, item_modifier_groups,
+		         category_modifier_groups, modifier_options, modifier_groups,
+		         menu_item_sizes, menu_items, menu_categories, idempotency_keys,
+		         audit_events, staff_access_sessions, staff_operational_roles,
+		         staff_identities
 		RESTART IDENTITY CASCADE`)
 	require.NoError(t, err)
 }

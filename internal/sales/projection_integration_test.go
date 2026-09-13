@@ -125,3 +125,19 @@ func TestDraftItemProjectionReportsLiveAvailability(t *testing.T) {
 	require.Len(t, got.Draft.Items, 1)
 	assert.False(t, got.Draft.Items[0].Available)
 }
+
+// Task 6 deferred this test until Commit existed: a Check's stored charge_vnd
+// is a denormalization of its allocations, and a read that disagrees must fail
+// rather than serve a wrong total.
+func TestProjectionRejectsCorruptedCheckCharge(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.commitOneItemSession(t) // helper added in Task 8
+
+	_, err := env.DB.Exec(
+		`UPDATE checks SET charge_vnd = charge_vnd + 1 WHERE service_session_id = $1`,
+		session.ID)
+	require.NoError(t, err)
+
+	_, err = env.GetSession(t, session.ID)
+	require.ErrorIs(t, err, sales.ErrChargeInvariantViolated)
+}
