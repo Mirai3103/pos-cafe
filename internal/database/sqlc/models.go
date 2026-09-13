@@ -51,6 +51,49 @@ type CategoryModifierGroup struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+type ChargeAllocation struct {
+	ID              uuid.UUID `json:"id"`
+	CommittedItemID uuid.UUID `json:"committed_item_id"`
+	CheckID         uuid.UUID `json:"check_id"`
+	Quantity        int32     `json:"quantity"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+// Owned by internal/sales. 5B writes only OPEN; 5C adds settlement.
+type Check struct {
+	ID               uuid.UUID `json:"id"`
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	State            string    `json:"state"`
+	ChargeVnd        int64     `json:"charge_vnd"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+// Owned by internal/sales. Immutable after insert: no phase updates a row.
+type CommittedItem struct {
+	ID                uuid.UUID      `json:"id"`
+	OrderDraftID      uuid.UUID      `json:"order_draft_id"`
+	SourceDraftItemID uuid.UUID      `json:"source_draft_item_id"`
+	MenuItemID        uuid.UUID      `json:"menu_item_id"`
+	CategoryName      string         `json:"category_name"`
+	ItemName          string         `json:"item_name"`
+	SizeName          sql.NullString `json:"size_name"`
+	Quantity          int32          `json:"quantity"`
+	UnitPriceVnd      int64          `json:"unit_price_vnd"`
+	TotalVnd          int64          `json:"total_vnd"`
+	PreparationNote   sql.NullString `json:"preparation_note"`
+	CommittedAt       time.Time      `json:"committed_at"`
+}
+
+type CommittedItemModifierOption struct {
+	ID                 uuid.UUID `json:"id"`
+	CommittedItemID    uuid.UUID `json:"committed_item_id"`
+	ModifierGroupID    uuid.UUID `json:"modifier_group_id"`
+	ModifierGroupName  string    `json:"modifier_group_name"`
+	ModifierOptionID   uuid.UUID `json:"modifier_option_id"`
+	ModifierOptionName string    `json:"modifier_option_name"`
+	SurchargeVnd       int64     `json:"surcharge_vnd"`
+}
+
 type IdempotencyKey struct {
 	Key          uuid.UUID       `json:"key"`
 	ActorID      uuid.UUID       `json:"actor_id"`
@@ -151,6 +194,7 @@ type OrderDraft struct {
 	ServiceSessionID uuid.UUID `json:"service_session_id"`
 	State            string    `json:"state"`
 	CreatedAt        time.Time `json:"created_at"`
+	CheckTarget      string    `json:"check_target"`
 }
 
 type OrderDraftItem struct {
