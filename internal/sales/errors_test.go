@@ -113,3 +113,44 @@ func TestMapHTTPErrorPassesThroughCodedAndUnknown(t *testing.T) {
 
 	assert.NoError(t, MapHTTPError(nil))
 }
+
+func TestMapHTTPErrorCommitCodes(t *testing.T) {
+	cases := []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{ErrEmptyDraft, http.StatusConflict, "EMPTY_DRAFT"},
+		{ErrCommitMenuItemUnavailable, http.StatusConflict, "COMMIT_MENU_ITEM_UNAVAILABLE"},
+		{ErrCommitMenuItemRetired, http.StatusConflict, "COMMIT_MENU_ITEM_RETIRED"},
+		{ErrCommitSizeRequired, http.StatusConflict, "COMMIT_SIZE_REQUIRED"},
+		{ErrCommitSizeInvalid, http.StatusConflict, "COMMIT_SIZE_INVALID"},
+		{ErrCommitSizeUnavailable, http.StatusConflict, "COMMIT_SIZE_UNAVAILABLE"},
+		{ErrCommitSizeRetired, http.StatusConflict, "COMMIT_SIZE_RETIRED"},
+		{ErrCommitModifierOptionInvalid, http.StatusConflict, "COMMIT_MODIFIER_OPTION_INVALID"},
+		{ErrCommitModifierOptionUnavailable, http.StatusConflict, "COMMIT_MODIFIER_OPTION_UNAVAILABLE"},
+		{ErrCommitModifierOptionRetired, http.StatusConflict, "COMMIT_MODIFIER_OPTION_RETIRED"},
+		{ErrCommitModifierGroupInvalid, http.StatusConflict, "COMMIT_MODIFIER_GROUP_INVALID"},
+		{ErrCommitModifierGroupRetired, http.StatusConflict, "COMMIT_MODIFIER_GROUP_RETIRED"},
+		{ErrNewOrderDraftNotAvailable, http.StatusConflict, "NEW_ORDER_DRAFT_NOT_AVAILABLE"},
+		{ErrLineTotalOutOfRange, http.StatusUnprocessableEntity, "LINE_TOTAL_OUT_OF_RANGE"},
+		{ErrCheckChargeOutOfRange, http.StatusUnprocessableEntity, "CHECK_CHARGE_OUT_OF_RANGE"},
+		{ErrInvalidCheckTarget, http.StatusUnprocessableEntity, "INVALID_CHECK_TARGET"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			coded := codedFrom(t, fmt.Errorf("wrapped: %w", tc.err))
+			require.Equal(t, tc.status, coded.Status)
+			require.Equal(t, tc.code, coded.Code)
+		})
+	}
+}
+
+// The stored-charge invariant is a defect detector, never a business state:
+// it must not reach the client as a recognizable code. MapHTTPError leaves it
+// unmapped, so response.Error surfaces it as a logged 500.
+func TestChargeInvariantViolationIsNotAClientCode(t *testing.T) {
+	mapped := MapHTTPError(fmt.Errorf("wrapped: %w", ErrChargeInvariantViolated))
+	var coded *response.CodedError
+	assert.NotErrorAs(t, mapped, &coded)
+}
