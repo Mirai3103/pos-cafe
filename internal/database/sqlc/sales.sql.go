@@ -13,6 +13,24 @@ import (
 	"github.com/google/uuid"
 )
 
+const getEditableDraft = `-- name: GetEditableDraft :one
+SELECT id, service_session_id, state, created_at
+FROM order_drafts
+WHERE service_session_id = $1 AND state = 'EDITABLE'
+`
+
+func (q *Queries) GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error) {
+	row := q.db.QueryRowContext(ctx, getEditableDraft, serviceSessionID)
+	var i OrderDraft
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceSessionID,
+		&i.State,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getSalesSessionAuthority = `-- name: GetSalesSessionAuthority :one
 
 SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
@@ -83,6 +101,253 @@ func (q *Queries) GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid
 			return nil, err
 		}
 		items = append(items, role)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getServiceSession = `-- name: GetServiceSession :one
+SELECT id, service_number, sequence, service_mode, state, sales_shift_id,
+       created_by_staff_identity_id, created_at
+FROM service_sessions
+WHERE id = $1
+`
+
+type GetServiceSessionRow struct {
+	ID                       uuid.UUID `json:"id"`
+	ServiceNumber            string    `json:"service_number"`
+	Sequence                 int32     `json:"sequence"`
+	ServiceMode              string    `json:"service_mode"`
+	State                    string    `json:"state"`
+	SalesShiftID             uuid.UUID `json:"sales_shift_id"`
+	CreatedByStaffIdentityID uuid.UUID `json:"created_by_staff_identity_id"`
+	CreatedAt                time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetServiceSession(ctx context.Context, id uuid.UUID) (GetServiceSessionRow, error) {
+	row := q.db.QueryRowContext(ctx, getServiceSession, id)
+	var i GetServiceSessionRow
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceNumber,
+		&i.Sequence,
+		&i.ServiceMode,
+		&i.State,
+		&i.SalesShiftID,
+		&i.CreatedByStaffIdentityID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listActiveServiceSessions = `-- name: ListActiveServiceSessions :many
+SELECT id, service_number, sequence, service_mode, state, sales_shift_id,
+       created_by_staff_identity_id, created_at
+FROM service_sessions
+WHERE state = 'ACTIVE'
+ORDER BY created_at ASC, id ASC
+`
+
+type ListActiveServiceSessionsRow struct {
+	ID                       uuid.UUID `json:"id"`
+	ServiceNumber            string    `json:"service_number"`
+	Sequence                 int32     `json:"sequence"`
+	ServiceMode              string    `json:"service_mode"`
+	State                    string    `json:"state"`
+	SalesShiftID             uuid.UUID `json:"sales_shift_id"`
+	CreatedByStaffIdentityID uuid.UUID `json:"created_by_staff_identity_id"`
+	CreatedAt                time.Time `json:"created_at"`
+}
+
+func (q *Queries) ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveServiceSessions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveServiceSessionsRow{}
+	for rows.Next() {
+		var i ListActiveServiceSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ServiceNumber,
+			&i.Sequence,
+			&i.ServiceMode,
+			&i.State,
+			&i.SalesShiftID,
+			&i.CreatedByStaffIdentityID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDraftItemModifierOptions = `-- name: ListDraftItemModifierOptions :many
+SELECT m.order_draft_item_id, o.id AS option_id, o.name AS option_name,
+       o.surcharge_vnd, g.id AS group_id, g.name AS group_name
+FROM order_draft_item_modifier_options m
+JOIN modifier_options o ON o.id = m.modifier_option_id
+JOIN modifier_groups g ON g.id = o.modifier_group_id
+JOIN order_draft_items di ON di.id = m.order_draft_item_id
+WHERE di.order_draft_id = $1
+ORDER BY g.name ASC, o.name ASC, o.id ASC
+`
+
+type ListDraftItemModifierOptionsRow struct {
+	OrderDraftItemID uuid.UUID `json:"order_draft_item_id"`
+	OptionID         uuid.UUID `json:"option_id"`
+	OptionName       string    `json:"option_name"`
+	SurchargeVnd     int64     `json:"surcharge_vnd"`
+	GroupID          uuid.UUID `json:"group_id"`
+	GroupName        string    `json:"group_name"`
+}
+
+// Ordered by Group then Option name, which is the order the projection emits.
+func (q *Queries) ListDraftItemModifierOptions(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemModifierOptionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDraftItemModifierOptions, orderDraftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDraftItemModifierOptionsRow{}
+	for rows.Next() {
+		var i ListDraftItemModifierOptionsRow
+		if err := rows.Scan(
+			&i.OrderDraftItemID,
+			&i.OptionID,
+			&i.OptionName,
+			&i.SurchargeVnd,
+			&i.GroupID,
+			&i.GroupName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDraftItems = `-- name: ListDraftItems :many
+SELECT di.id, di.menu_item_id, mi.name AS menu_item_name,
+       di.size_id, s.name AS size_name,
+       COALESCE((SELECT s.price_vnd), mi.price_vnd) AS price_vnd,
+       di.quantity, di.preparation_note, di.modifier_key, di.created_at,
+       (mi.available AND mi.retired_at IS NULL
+        AND (di.size_id IS NULL OR (s.available AND s.retired_at IS NULL))) AS available
+FROM order_draft_items di
+JOIN menu_items mi ON mi.id = di.menu_item_id
+LEFT JOIN menu_item_sizes s ON s.id = di.size_id
+WHERE di.order_draft_id = $1
+ORDER BY di.created_at ASC, di.id ASC
+`
+
+type ListDraftItemsRow struct {
+	ID              uuid.UUID      `json:"id"`
+	MenuItemID      uuid.UUID      `json:"menu_item_id"`
+	MenuItemName    string         `json:"menu_item_name"`
+	SizeID          uuid.NullUUID  `json:"size_id"`
+	SizeName        sql.NullString `json:"size_name"`
+	PriceVnd        sql.NullInt64  `json:"price_vnd"`
+	Quantity        int32          `json:"quantity"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+	ModifierKey     string         `json:"modifier_key"`
+	CreatedAt       time.Time      `json:"created_at"`
+	Available       sql.NullBool   `json:"available"`
+}
+
+// price_vnd is the Size price when a Size is chosen and the Item price
+// otherwise, matching the canonical Menu Price rule. available is read live
+// rather than snapshotted: a draft is a live proposal, and an item that became
+// unavailable while the customer was deciding must show as such.
+//
+// price_vnd reads the Size price through a correlated scalar subquery rather
+// than the column directly. The subquery returns the same value (it references
+// the already-joined row), but sqlc infers scalar subqueries as nullable, so
+// COALESCE yields sql.NullInt64 instead of a bare int64 that cannot scan the
+// NULL price of a required-Size Item whose Size has not been chosen yet.
+func (q *Queries) ListDraftItems(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDraftItems, orderDraftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDraftItemsRow{}
+	for rows.Next() {
+		var i ListDraftItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MenuItemID,
+			&i.MenuItemName,
+			&i.SizeID,
+			&i.SizeName,
+			&i.PriceVnd,
+			&i.Quantity,
+			&i.PreparationNote,
+			&i.ModifierKey,
+			&i.CreatedAt,
+			&i.Available,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listServiceSessionTables = `-- name: ListServiceSessionTables :many
+SELECT t.id, t.name, a.sequence
+FROM table_assignments a
+JOIN tables t ON t.id = a.table_id
+WHERE a.service_session_id = $1 AND a.released_at IS NULL
+ORDER BY a.sequence ASC
+`
+
+type ListServiceSessionTablesRow struct {
+	ID       uuid.UUID `json:"id"`
+	Name     string    `json:"name"`
+	Sequence int32     `json:"sequence"`
+}
+
+// Current assignments only. Released rows are history, not occupancy.
+func (q *Queries) ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listServiceSessionTables, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListServiceSessionTablesRow{}
+	for rows.Next() {
+		var i ListServiceSessionTablesRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Sequence); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

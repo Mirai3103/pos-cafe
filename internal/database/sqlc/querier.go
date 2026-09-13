@@ -50,6 +50,7 @@ type Querier interface {
 	GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error)
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
+	GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	// -- Shared idempotency (ADR-005) --
 	GetIdempotencyRecord(ctx context.Context, arg GetIdempotencyRecordParams) (IdempotencyKey, error)
@@ -73,6 +74,7 @@ type Querier interface {
 	// shared table is shared, the helper logic is not.
 	GetSalesSessionAuthority(ctx context.Context, arg GetSalesSessionAuthorityParams) (GetSalesSessionAuthorityRow, error)
 	GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	GetServiceSession(ctx context.Context, id uuid.UUID) (GetServiceSessionRow, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
 	// -- Authority --
 	// Names are prefixed because sqlc query names are global across the package.
@@ -95,6 +97,7 @@ type Querier interface {
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
+	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
 	ListAllItemModifierGroupExclusions(ctx context.Context) ([]ListAllItemModifierGroupExclusionsRow, error)
 	ListAllItemModifierGroups(ctx context.Context) ([]ListAllItemModifierGroupsRow, error)
@@ -114,6 +117,19 @@ type Querier interface {
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
+	// Ordered by Group then Option name, which is the order the projection emits.
+	ListDraftItemModifierOptions(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemModifierOptionsRow, error)
+	// price_vnd is the Size price when a Size is chosen and the Item price
+	// otherwise, matching the canonical Menu Price rule. available is read live
+	// rather than snapshotted: a draft is a live proposal, and an item that became
+	// unavailable while the customer was deciding must show as such.
+	//
+	// price_vnd reads the Size price through a correlated scalar subquery rather
+	// than the column directly. The subquery returns the same value (it references
+	// the already-joined row), but sqlc infers scalar subqueries as nullable, so
+	// COALESCE yields sql.NullInt64 instead of a bare int64 that cannot scan the
+	// NULL price of a required-Size Item whose Size has not been chosen yet.
+	ListDraftItems(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemsRow, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -124,6 +140,8 @@ type Querier interface {
 	ListModifierGroupDefaultOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ListModifierGroupDefaultOptionsByGroupRow, error)
 	ListModifierGroups(ctx context.Context) ([]ModifierGroup, error)
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
+	// Current assignments only. Released rows are history, not occupancy.
+	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)

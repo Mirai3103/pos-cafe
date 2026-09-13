@@ -173,3 +173,14 @@ func assertAuditEvent(t *testing.T, db *sql.DB, eventType string, want int) {
 		`SELECT count(*) FROM audit_events WHERE event_type = $1`, eventType).Scan(&got))
 	assert.Equal(t, want, got, "audit_events rows of type %s", eventType)
 }
+
+// seedSize adds a Size to a Menu Item and returns its id.
+func seedSize(t *testing.T, db *sql.DB, menuItemID uuid.UUID, name string, priceVND int64) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO menu_item_sizes (menu_item_id, name, normalized_name, price_vnd, available)
+		VALUES ($1, $2, lower($2), $3, true) RETURNING id`,
+		menuItemID, name, priceVND).Scan(&id))
+	return id
+}
