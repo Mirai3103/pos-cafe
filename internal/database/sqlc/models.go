@@ -21,6 +21,20 @@ type AuditEvent struct {
 	OccurredAt time.Time       `json:"occurred_at"`
 }
 
+// Owned by internal/shift (Phase 4). Append-only: Phase 4 provides no edit, reverse, or delete operation. Direction is carried by method, never by a negative amount.
+type CashMovement struct {
+	ID                            uuid.UUID      `json:"id"`
+	SalesShiftID                  uuid.UUID      `json:"sales_shift_id"`
+	Method                        string         `json:"method"`
+	AmountVnd                     int64          `json:"amount_vnd"`
+	Reason                        string         `json:"reason"`
+	Note                          sql.NullString `json:"note"`
+	InitiatedByStaffIdentityID    uuid.UUID      `json:"initiated_by_staff_identity_id"`
+	InitiatedStaffAccessSessionID uuid.UUID      `json:"initiated_staff_access_session_id"`
+	ApprovedByStaffIdentityID     uuid.UUID      `json:"approved_by_staff_identity_id"`
+	OccurredAt                    time.Time      `json:"occurred_at"`
+}
+
 type CatalogMutationRequest struct {
 	ActorID      uuid.UUID       `json:"actor_id"`
 	RequestID    uuid.UUID       `json:"request_id"`
@@ -129,6 +143,15 @@ type ModifierOption struct {
 	RetirementNote   sql.NullString `json:"retirement_note"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
+}
+
+// Owned by internal/shift (Phase 4). At most one row may be in OPEN state. Phase 4 ships no close operation; see the Non-Goals in the Phase 4 design spec.
+type SalesShift struct {
+	ID                      uuid.UUID `json:"id"`
+	State                   string    `json:"state"`
+	OpenedByStaffIdentityID uuid.UUID `json:"opened_by_staff_identity_id"`
+	OpeningFloatVnd         int64     `json:"opening_float_vnd"`
+	OpenedAt                time.Time `json:"opened_at"`
 }
 
 // Owned by internal/sales (Phase 5). Provisioned in Phase 3 for the Tables overview read; sales_shift_id is added in Phase 5.

@@ -63,15 +63,30 @@ type Querier interface {
 	GetModifierGroupForUpdate(ctx context.Context, id uuid.UUID) (ModifierGroup, error)
 	GetModifierOptionByID(ctx context.Context, id uuid.UUID) (ModifierOption, error)
 	GetModifierOptionForUpdate(ctx context.Context, id uuid.UUID) (ModifierOption, error)
+	GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, error)
+	// Single-table so the row lock is unambiguous; the opener is fetched separately
+	// with GetStaffSummary.
+	GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) (GetOpenSalesShiftForUpdateRow, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
+	// -- Authority --
+	// Names are prefixed because sqlc query names are global across the package.
+	GetShiftSessionAuthority(ctx context.Context, arg GetShiftSessionAuthorityParams) (GetShiftSessionAuthorityRow, error)
+	GetShiftSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetStaffByID(ctx context.Context, id uuid.UUID) (StaffIdentity, error)
 	GetStaffByLoginCode(ctx context.Context, btrim string) (StaffIdentity, error)
+	// Locks the approver row so a concurrent disablement or role change cannot
+	// interleave between verification and use. Used by VerifyManagerApproval.
+	GetStaffByLoginCodeForUpdate(ctx context.Context, btrim string) (StaffIdentity, error)
 	GetStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	GetStaffRolesForUpdate(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	GetStaffSummary(ctx context.Context, id uuid.UUID) (GetStaffSummaryRow, error)
 	GetTableForUpdate(ctx context.Context, id uuid.UUID) (Table, error)
 	// -- Authority --
 	GetTablesSessionAuthority(ctx context.Context, arg GetTablesSessionAuthorityParams) (GetTablesSessionAuthorityRow, error)
 	GetTablesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
+	// -- Cash Movements --
+	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
@@ -89,6 +104,7 @@ type Querier interface {
 	ListAllStaff(ctx context.Context) ([]ListAllStaffRow, error)
 	ListAllStaffRoles(ctx context.Context) ([]StaffOperationalRole, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
+	ListCashMovements(ctx context.Context, salesShiftID uuid.UUID) ([]ListCashMovementsRow, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
@@ -103,6 +119,8 @@ type Querier interface {
 	ListModifierGroups(ctx context.Context) ([]ModifierGroup, error)
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	// -- Sales Shift --
+	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
 	RenameMenuCategory(ctx context.Context, arg RenameMenuCategoryParams) (MenuCategory, error)
 	RenameMenuItem(ctx context.Context, arg RenameMenuItemParams) (MenuItem, error)
 	RenameMenuItemSize(ctx context.Context, arg RenameMenuItemSizeParams) (MenuItemSize, error)
@@ -124,8 +142,10 @@ type Querier interface {
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	SetTableAvailability(ctx context.Context, arg SetTableAvailabilityParams) (Table, error)
+	ShiftAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error
 	StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error
+	SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) (SumCashMovementsRow, error)
 	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error

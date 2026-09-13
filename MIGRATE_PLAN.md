@@ -102,7 +102,12 @@ The source project is already cleanly structured around domain boundaries. We ma
 
 ---
 
-### Phase 4: Sales Shift & Cash Movements (`internal/shift`)
+### Phase 4: Sales Shift & Cash Movements (`internal/shift`) (✅ COMPLETED)
+*Approved Design Spec:* [`docs/superpowers/specs/2026-09-13-shift-slice-design.md`](docs/superpowers/specs/2026-09-13-shift-slice-design.md)
+*Implementation Plan:* [`docs/superpowers/plans/2026-09-13-shift-slice.md`](docs/superpowers/plans/2026-09-13-shift-slice.md)
+
+> The checklist below predates the canonical source review and is superseded by the spec above. It is kept only as a record of the original sketch.
+
 *Focus: Cash drawer control, preventing staff shrinkage, shift handoff.*
 
 - [ ] **4.1 Database Schema Migration:**
@@ -186,7 +191,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 | **1. Auth & Staff** | ✅ DONE | 4 | 4 / 4 | 2026-09-09 (PR #2) |
 | **2. Catalog & Menu** | ✅ DONE | 5 | 5 / 5 | Phase 2 |
 | **3. Tables & Layout** | ✅ DONE | 4 | 4 / 4 | 2026-09-12 |
-| **4. Sales Shift & Cash** | ⏳ PENDING | 3 | 0 / 3 | Phase 4 |
+| **4. Sales Shift & Cash** | ✅ DONE | 3 | 3 / 3 | 2026-09-13 |
 | **5. Sales, Orders & Pay** | ⏳ PENDING | 6 | 0 / 6 | Phase 5 |
 | **6. Preparation (Barista)** | ⏳ PENDING | 3 | 0 / 3 | Phase 6 |
 | **7. Frontend Single-Binary**| ⏳ PENDING | 2 | 0 / 2 | Phase 7 |
