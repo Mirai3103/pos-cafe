@@ -192,3 +192,45 @@ func (s *Slices) handleSetSessionTables(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleAddDraftItem adds one unit of a configured Menu Item to the draft.
+//
+//	@Summary		Add an Order Draft item
+//	@Description	Adds one unit of a configured Menu Item, merging into an existing line of the same composition. Omit modifier_option_ids to apply the menu's default options; send an empty array to apply none. The draft accepts an incomplete configuration; completeness is checked at Commit in Phase 5B.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string				true	"Service Session ID"
+//	@Param			request	body		AddDraftItemCommand	true	"Request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft/items [post]
+func (s *Slices) handleAddDraftItem(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[AddDraftItemCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// ServiceSessionID is json:"-": it comes from the path, never the body.
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd.ServiceSessionID = sessionID
+	status, result, err := s.AddDraftItem.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

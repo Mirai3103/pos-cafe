@@ -41,9 +41,11 @@ type Querier interface {
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	// -- Tables --
 	CreateTable(ctx context.Context, arg CreateTableParams) (Table, error)
+	DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
+	FindDraftItemByComposition(ctx context.Context, arg FindDraftItemByCompositionParams) (FindDraftItemByCompositionRow, error)
 	GetCatalogMutationRequest(ctx context.Context, arg GetCatalogMutationRequestParams) (CatalogMutationRequest, error)
 	// Catalog sqlc queries
 	// Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
@@ -62,6 +64,7 @@ type Querier interface {
 	GetMenuItemByID(ctx context.Context, id uuid.UUID) (MenuItem, error)
 	GetMenuItemForUpdate(ctx context.Context, id uuid.UUID) (MenuItem, error)
 	GetMenuItemSizeByID(ctx context.Context, id uuid.UUID) (MenuItemSize, error)
+	GetMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (GetMenuItemSizeForDraftRow, error)
 	GetMenuItemSizeForUpdate(ctx context.Context, id uuid.UUID) (MenuItemSize, error)
 	GetModifierGroupByID(ctx context.Context, id uuid.UUID) (ModifierGroup, error)
 	GetModifierGroupForUpdate(ctx context.Context, id uuid.UUID) (ModifierGroup, error)
@@ -106,6 +109,8 @@ type Querier interface {
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
 	// -- Cash Movements --
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
+	InsertDraftItem(ctx context.Context, arg InsertDraftItemParams) (InsertDraftItemRow, error)
+	InsertDraftItemModifierOption(ctx context.Context, arg InsertDraftItemModifierOptionParams) error
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
@@ -171,6 +176,18 @@ type Querier interface {
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
 	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
+	// Checks every precondition and takes the lock in one statement, so there is
+	// no window between the check and the write.
+	//
+	// No match means the Session is missing, closed, its draft already committed,
+	// or its Sales Shift closed. The caller reports EDITABLE_DRAFT_NOT_FOUND for
+	// all four: the remedy is the same, and distinguishing them would leak state
+	// about Sessions the caller did not ask about.
+	LockEditableDraft(ctx context.Context, id uuid.UUID) (LockEditableDraftRow, error)
+	// Locked FOR UPDATE so the Item cannot be retired between validation and
+	// write. Sales rows are always locked before Catalog rows, and
+	// internal/catalog never locks Sales rows, so no deadlock cycle exists.
+	LockMenuItemForDraft(ctx context.Context, id uuid.UUID) (LockMenuItemForDraftRow, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
 	// Locks the selected Tables in id order so two concurrent assignments over
 	// overlapping sets cannot deadlock against each other. The caller must sort
@@ -199,6 +216,7 @@ type Querier interface {
 	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
 	SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuantityParams) (SetDraftItemQuantityRow, error)
 	SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAvailabilityParams) (MenuItem, error)
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)

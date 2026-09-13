@@ -14,6 +14,51 @@ import (
 	"github.com/lib/pq"
 )
 
+const deleteDraftItemModifierOptions = `-- name: DeleteDraftItemModifierOptions :exec
+DELETE FROM order_draft_item_modifier_options WHERE order_draft_item_id = $1
+`
+
+func (q *Queries) DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteDraftItemModifierOptions, orderDraftItemID)
+	return err
+}
+
+const findDraftItemByComposition = `-- name: FindDraftItemByComposition :one
+SELECT id, quantity
+FROM order_draft_items
+WHERE order_draft_id = $1
+  AND menu_item_id = $2
+  AND size_key = COALESCE($4::uuid::text, '')
+  AND note_key = COALESCE($5::text, '')
+  AND modifier_key = $3
+`
+
+type FindDraftItemByCompositionParams struct {
+	OrderDraftID    uuid.UUID      `json:"order_draft_id"`
+	MenuItemID      uuid.UUID      `json:"menu_item_id"`
+	ModifierKey     string         `json:"modifier_key"`
+	SizeID          uuid.NullUUID  `json:"size_id"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+}
+
+type FindDraftItemByCompositionRow struct {
+	ID       uuid.UUID `json:"id"`
+	Quantity int32     `json:"quantity"`
+}
+
+func (q *Queries) FindDraftItemByComposition(ctx context.Context, arg FindDraftItemByCompositionParams) (FindDraftItemByCompositionRow, error) {
+	row := q.db.QueryRowContext(ctx, findDraftItemByComposition,
+		arg.OrderDraftID,
+		arg.MenuItemID,
+		arg.ModifierKey,
+		arg.SizeID,
+		arg.PreparationNote,
+	)
+	var i FindDraftItemByCompositionRow
+	err := row.Scan(&i.ID, &i.Quantity)
+	return i, err
+}
+
 const getEditableDraft = `-- name: GetEditableDraft :one
 SELECT id, service_session_id, state, created_at
 FROM order_drafts
@@ -45,6 +90,35 @@ func (q *Queries) GetHighestAssignmentSequence(ctx context.Context, serviceSessi
 	var highest int32
 	err := row.Scan(&highest)
 	return highest, err
+}
+
+const getMenuItemSizeForDraft = `-- name: GetMenuItemSizeForDraft :one
+SELECT id, menu_item_id, name, price_vnd, available, retired_at
+FROM menu_item_sizes
+WHERE id = $1
+`
+
+type GetMenuItemSizeForDraftRow struct {
+	ID         uuid.UUID    `json:"id"`
+	MenuItemID uuid.UUID    `json:"menu_item_id"`
+	Name       string       `json:"name"`
+	PriceVnd   int64        `json:"price_vnd"`
+	Available  bool         `json:"available"`
+	RetiredAt  sql.NullTime `json:"retired_at"`
+}
+
+func (q *Queries) GetMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (GetMenuItemSizeForDraftRow, error) {
+	row := q.db.QueryRowContext(ctx, getMenuItemSizeForDraft, id)
+	var i GetMenuItemSizeForDraftRow
+	err := row.Scan(
+		&i.ID,
+		&i.MenuItemID,
+		&i.Name,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+	)
+	return i, err
 }
 
 const getNextServiceSequence = `-- name: GetNextServiceSequence :one
@@ -199,6 +273,55 @@ func (q *Queries) GetServiceSession(ctx context.Context, id uuid.UUID) (GetServi
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertDraftItem = `-- name: InsertDraftItem :one
+INSERT INTO order_draft_items
+    (order_draft_id, menu_item_id, size_id, preparation_note, modifier_key, quantity)
+VALUES ($1, $2, $3, $4, $5, 1)
+RETURNING id, quantity
+`
+
+type InsertDraftItemParams struct {
+	OrderDraftID    uuid.UUID      `json:"order_draft_id"`
+	MenuItemID      uuid.UUID      `json:"menu_item_id"`
+	SizeID          uuid.NullUUID  `json:"size_id"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+	ModifierKey     string         `json:"modifier_key"`
+}
+
+type InsertDraftItemRow struct {
+	ID       uuid.UUID `json:"id"`
+	Quantity int32     `json:"quantity"`
+}
+
+func (q *Queries) InsertDraftItem(ctx context.Context, arg InsertDraftItemParams) (InsertDraftItemRow, error) {
+	row := q.db.QueryRowContext(ctx, insertDraftItem,
+		arg.OrderDraftID,
+		arg.MenuItemID,
+		arg.SizeID,
+		arg.PreparationNote,
+		arg.ModifierKey,
+	)
+	var i InsertDraftItemRow
+	err := row.Scan(&i.ID, &i.Quantity)
+	return i, err
+}
+
+const insertDraftItemModifierOption = `-- name: InsertDraftItemModifierOption :exec
+INSERT INTO order_draft_item_modifier_options (order_draft_item_id, modifier_option_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type InsertDraftItemModifierOptionParams struct {
+	OrderDraftItemID uuid.UUID `json:"order_draft_item_id"`
+	ModifierOptionID uuid.UUID `json:"modifier_option_id"`
+}
+
+func (q *Queries) InsertDraftItemModifierOption(ctx context.Context, arg InsertDraftItemModifierOptionParams) error {
+	_, err := q.db.ExecContext(ctx, insertDraftItemModifierOption, arg.OrderDraftItemID, arg.ModifierOptionID)
+	return err
 }
 
 const insertOrderDraft = `-- name: InsertOrderDraft :one
@@ -698,6 +821,71 @@ func (q *Queries) LockCurrentTableAssignments(ctx context.Context, serviceSessio
 	return items, nil
 }
 
+const lockEditableDraft = `-- name: LockEditableDraft :one
+SELECT d.id AS order_draft_id, s.id AS service_session_id, s.service_mode
+FROM service_sessions s
+JOIN order_drafts d ON d.service_session_id = s.id
+JOIN sales_shifts sh ON sh.id = s.sales_shift_id
+WHERE s.id = $1
+  AND s.state = 'ACTIVE'
+  AND d.state = 'EDITABLE'
+  AND sh.state = 'OPEN'
+FOR UPDATE OF d, s
+`
+
+type LockEditableDraftRow struct {
+	OrderDraftID     uuid.UUID `json:"order_draft_id"`
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	ServiceMode      string    `json:"service_mode"`
+}
+
+// Checks every precondition and takes the lock in one statement, so there is
+// no window between the check and the write.
+//
+// No match means the Session is missing, closed, its draft already committed,
+// or its Sales Shift closed. The caller reports EDITABLE_DRAFT_NOT_FOUND for
+// all four: the remedy is the same, and distinguishing them would leak state
+// about Sessions the caller did not ask about.
+func (q *Queries) LockEditableDraft(ctx context.Context, id uuid.UUID) (LockEditableDraftRow, error) {
+	row := q.db.QueryRowContext(ctx, lockEditableDraft, id)
+	var i LockEditableDraftRow
+	err := row.Scan(&i.OrderDraftID, &i.ServiceSessionID, &i.ServiceMode)
+	return i, err
+}
+
+const lockMenuItemForDraft = `-- name: LockMenuItemForDraft :one
+SELECT id, category_id, name, price_vnd, available, retired_at
+FROM menu_items
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockMenuItemForDraftRow struct {
+	ID         uuid.UUID     `json:"id"`
+	CategoryID uuid.UUID     `json:"category_id"`
+	Name       string        `json:"name"`
+	PriceVnd   sql.NullInt64 `json:"price_vnd"`
+	Available  bool          `json:"available"`
+	RetiredAt  sql.NullTime  `json:"retired_at"`
+}
+
+// Locked FOR UPDATE so the Item cannot be retired between validation and
+// write. Sales rows are always locked before Catalog rows, and
+// internal/catalog never locks Sales rows, so no deadlock cycle exists.
+func (q *Queries) LockMenuItemForDraft(ctx context.Context, id uuid.UUID) (LockMenuItemForDraftRow, error) {
+	row := q.db.QueryRowContext(ctx, lockMenuItemForDraft, id)
+	var i LockMenuItemForDraftRow
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.Name,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+	)
+	return i, err
+}
+
 const lockServiceSessionForUpdate = `-- name: LockServiceSessionForUpdate :one
 SELECT id, service_mode, state, sales_shift_id
 FROM service_sessions
@@ -790,4 +978,28 @@ SELECT pg_advisory_xact_lock($1)
 func (q *Queries) SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error {
 	_, err := q.db.ExecContext(ctx, salesAdvisoryLock, pgAdvisoryXactLock)
 	return err
+}
+
+const setDraftItemQuantity = `-- name: SetDraftItemQuantity :one
+UPDATE order_draft_items
+SET quantity = $2
+WHERE id = $1
+RETURNING id, quantity
+`
+
+type SetDraftItemQuantityParams struct {
+	ID       uuid.UUID `json:"id"`
+	Quantity int32     `json:"quantity"`
+}
+
+type SetDraftItemQuantityRow struct {
+	ID       uuid.UUID `json:"id"`
+	Quantity int32     `json:"quantity"`
+}
+
+func (q *Queries) SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuantityParams) (SetDraftItemQuantityRow, error) {
+	row := q.db.QueryRowContext(ctx, setDraftItemQuantity, arg.ID, arg.Quantity)
+	var i SetDraftItemQuantityRow
+	err := row.Scan(&i.ID, &i.Quantity)
+	return i, err
 }

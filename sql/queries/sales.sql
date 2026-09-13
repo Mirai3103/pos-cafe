@@ -207,3 +207,64 @@ SELECT o.id, o.modifier_group_id, o.available,
 FROM modifier_options o
 JOIN modifier_groups g ON g.id = o.modifier_group_id
 WHERE o.id = ANY(sqlc.arg(option_ids)::uuid[]);
+
+-- name: LockEditableDraft :one
+-- Checks every precondition and takes the lock in one statement, so there is
+-- no window between the check and the write.
+--
+-- No match means the Session is missing, closed, its draft already committed,
+-- or its Sales Shift closed. The caller reports EDITABLE_DRAFT_NOT_FOUND for
+-- all four: the remedy is the same, and distinguishing them would leak state
+-- about Sessions the caller did not ask about.
+SELECT d.id AS order_draft_id, s.id AS service_session_id, s.service_mode
+FROM service_sessions s
+JOIN order_drafts d ON d.service_session_id = s.id
+JOIN sales_shifts sh ON sh.id = s.sales_shift_id
+WHERE s.id = $1
+  AND s.state = 'ACTIVE'
+  AND d.state = 'EDITABLE'
+  AND sh.state = 'OPEN'
+FOR UPDATE OF d, s;
+
+-- name: LockMenuItemForDraft :one
+-- Locked FOR UPDATE so the Item cannot be retired between validation and
+-- write. Sales rows are always locked before Catalog rows, and
+-- internal/catalog never locks Sales rows, so no deadlock cycle exists.
+SELECT id, category_id, name, price_vnd, available, retired_at
+FROM menu_items
+WHERE id = $1
+FOR UPDATE;
+
+-- name: GetMenuItemSizeForDraft :one
+SELECT id, menu_item_id, name, price_vnd, available, retired_at
+FROM menu_item_sizes
+WHERE id = $1;
+
+-- name: FindDraftItemByComposition :one
+SELECT id, quantity
+FROM order_draft_items
+WHERE order_draft_id = $1
+  AND menu_item_id = $2
+  AND size_key = COALESCE(sqlc.narg(size_id)::uuid::text, '')
+  AND note_key = COALESCE(sqlc.narg(preparation_note)::text, '')
+  AND modifier_key = $3;
+
+-- name: InsertDraftItem :one
+INSERT INTO order_draft_items
+    (order_draft_id, menu_item_id, size_id, preparation_note, modifier_key, quantity)
+VALUES ($1, $2, $3, $4, $5, 1)
+RETURNING id, quantity;
+
+-- name: SetDraftItemQuantity :one
+UPDATE order_draft_items
+SET quantity = $2
+WHERE id = $1
+RETURNING id, quantity;
+
+-- name: DeleteDraftItemModifierOptions :exec
+DELETE FROM order_draft_item_modifier_options WHERE order_draft_item_id = $1;
+
+-- name: InsertDraftItemModifierOption :exec
+INSERT INTO order_draft_item_modifier_options (order_draft_item_id, modifier_option_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;

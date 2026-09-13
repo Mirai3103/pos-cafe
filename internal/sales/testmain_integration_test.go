@@ -201,3 +201,144 @@ func seedSize(t *testing.T, db *sql.DB, menuItemID uuid.UUID, name string, price
 		menuItemID, name, priceVND).Scan(&id))
 	return id
 }
+
+// seedMenuCategory creates a Menu Category and returns its id.
+func seedMenuCategory(t *testing.T, db *sql.DB, name string) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO menu_categories (name, normalized_name)
+		VALUES ($1, lower($1)) RETURNING id`, name).Scan(&id))
+	return id
+}
+
+// seedMenuItem creates a directly priced Menu Item in a fresh Category.
+func seedMenuItem(t *testing.T, db *sql.DB, name string, priceVND int64) uuid.UUID {
+	t.Helper()
+	categoryID := seedMenuCategory(t, db, "Cat "+name)
+	var id uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO menu_items (category_id, name, normalized_name, price_vnd, available)
+		VALUES ($1, $2, lower($2), $3, true) RETURNING id`,
+		categoryID, name, priceVND).Scan(&id))
+	return id
+}
+
+// seedSizedMenuItem creates a Menu Item priced only through its Sizes, so its
+// own price_vnd is NULL.
+func seedSizedMenuItem(t *testing.T, db *sql.DB, name string) uuid.UUID {
+	t.Helper()
+	categoryID := seedMenuCategory(t, db, "Cat "+name)
+	var id uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO menu_items (category_id, name, normalized_name, price_vnd, available)
+		VALUES ($1, $2, lower($2), NULL, true) RETURNING id`,
+		categoryID, name).Scan(&id))
+	return id
+}
+
+// seedModifierGroup creates a Modifier Group and returns its id.
+func seedModifierGroup(t *testing.T, db *sql.DB, name string) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO modifier_groups (name, normalized_name)
+		VALUES ($1, lower($1)) RETURNING id`, name).Scan(&id))
+	return id
+}
+
+// seedModifierOption creates an available Modifier Option in the Group and
+// returns its id.
+func seedModifierOption(t *testing.T, db *sql.DB, groupID uuid.UUID, name string) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO modifier_options (modifier_group_id, name, normalized_name)
+		VALUES ($1, $2, lower($2)) RETURNING id`, groupID, name).Scan(&id))
+	return id
+}
+
+// attachGroupToCategory makes the Group inherited by every Item in the
+// Category, through the same association Catalog writes.
+func attachGroupToCategory(t *testing.T, db *sql.DB, categoryID, groupID uuid.UUID) {
+	t.Helper()
+	_, err := db.Exec(`
+		INSERT INTO category_modifier_groups (menu_category_id, modifier_group_id)
+		VALUES ($1, $2)`, categoryID, groupID)
+	require.NoError(t, err)
+}
+
+// seedMenuItemInCategory creates a directly priced Menu Item in an existing
+// Category, for fixtures that need the Item inside a specific Category.
+func seedMenuItemInCategory(t *testing.T, db *sql.DB, categoryID uuid.UUID, name string, priceVND int64) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO menu_items (category_id, name, normalized_name, price_vnd, available)
+		VALUES ($1, $2, lower($2), $3, true) RETURNING id`,
+		categoryID, name, priceVND).Scan(&id))
+	return id
+}
+
+// seedItemWithDefaultOption creates a Menu Item whose effective Modifier Group
+// declares exactly one default Option, and returns both ids.
+func seedItemWithDefaultOption(t *testing.T, db *sql.DB) (itemID, defaultOptionID uuid.UUID) {
+	t.Helper()
+	categoryID := seedMenuCategory(t, db, "Danh mục mặc định")
+	groupID := seedModifierGroup(t, db, "Đá")
+	attachGroupToCategory(t, db, categoryID, groupID)
+	defaultOptionID = seedModifierOption(t, db, groupID, "Ít đá")
+	itemID = seedMenuItemInCategory(t, db, categoryID, "Cà phê mặc định", 30000)
+	_, err := db.Exec(`
+		INSERT INTO modifier_group_default_options (modifier_group_id, modifier_option_id)
+		VALUES ($1, $2)`, groupID, defaultOptionID)
+	require.NoError(t, err)
+	return itemID, defaultOptionID
+}
+
+// seedExclusionFixture creates one Category with an inherited Group, two Items
+// in it, and an item_modifier_group_exclusions row excluding the first Item
+// from that Group. The Group offers one selectable Option.
+func seedExclusionFixture(t *testing.T, db *sql.DB) (excludingItemID, inheritingItemID, optionID uuid.UUID) {
+	t.Helper()
+	categoryID := seedMenuCategory(t, db, "Danh mục loại trừ")
+	groupID := seedModifierGroup(t, db, "Topping")
+	attachGroupToCategory(t, db, categoryID, groupID)
+	optionID = seedModifierOption(t, db, groupID, "Trân châu")
+	excludingItemID = seedMenuItemInCategory(t, db, categoryID, "Món chặn", 20000)
+	inheritingItemID = seedMenuItemInCategory(t, db, categoryID, "Món kế thừa", 21000)
+	_, err := db.Exec(`
+		INSERT INTO item_modifier_group_exclusions (menu_item_id, modifier_group_id)
+		VALUES ($1, $2)`, excludingItemID, groupID)
+	require.NoError(t, err)
+	return excludingItemID, inheritingItemID, optionID
+}
+
+// seedItemWithTwoOptions creates a Menu Item whose effective Group offers two
+// selectable Options, and returns the item and both option ids.
+func seedItemWithTwoOptions(t *testing.T, db *sql.DB) (itemID, optionA, optionB uuid.UUID) {
+	t.Helper()
+	categoryID := seedMenuCategory(t, db, "Danh mục hai tuỳ chọn")
+	groupID := seedModifierGroup(t, db, "Đường")
+	attachGroupToCategory(t, db, categoryID, groupID)
+	optionA = seedModifierOption(t, db, groupID, "Ít đường")
+	optionB = seedModifierOption(t, db, groupID, "Nhiều đường")
+	itemID = seedMenuItemInCategory(t, db, categoryID, "Món hai tuỳ chọn", 25000)
+	return itemID, optionA, optionB
+}
+
+// assertModifierKeyIntegrity proves the denormalized key never drifts from the
+// authoritative option rows.
+func assertModifierKeyIntegrity(t *testing.T, db *sql.DB) {
+	t.Helper()
+	var drifted int
+	require.NoError(t, db.QueryRow(`
+		SELECT count(*)
+		FROM order_draft_items di
+		WHERE di.modifier_key <> COALESCE((
+		    SELECT string_agg(m.modifier_option_id::text, ',' ORDER BY m.modifier_option_id::text)
+		    FROM order_draft_item_modifier_options m
+		    WHERE m.order_draft_item_id = di.id
+		), '')`).Scan(&drifted))
+	assert.Equal(t, 0, drifted, "modifier_key must equal the sorted join of the stored options")
+}
