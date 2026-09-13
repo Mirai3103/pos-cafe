@@ -116,3 +116,35 @@ CREATE TABLE idempotency_keys (
 * **Consequences:**
 * Prevents schema bloat by avoiding a new table for every slice.
 * Preserves vertical slice boundaries at the code layer while consolidating the storage layer.
+
+---
+
+## ADR-008: Partial Expected Cash in Phase 4
+
+* **Decision Date:** 2026-09-13
+* **Status:** Accepted
+* **Context:** The canonical Expected Cash formula is Opening Float plus Cash Payments and Pay Ins, less Cash Refunds and Pay Outs. The Cash Payment and Cash Refund terms read the `payments` table, which references `checks`, which in turn references `service_sessions` and order drafts — the whole chain is owned by Phase 5. Provisioning it in Phase 4 would replicate the most intricate constraint set in the system a phase early, for a figure Phase 4 cannot yet produce anyway.
+* **Decision:**
+* Phase 4 computes `expected_cash_vnd` as Opening Float plus Pay Ins less Pay Outs, on read, never stored.
+* The API field ships in its final name and shape from Phase 4, so the response contract does not change when the formula completes.
+* Phase 5 adds the Cash Payment and Cash Refund terms to the single `SumCashMovements`-adjacent computation in `internal/shift/current.go`.
+* The Swagger description and the design spec both state that the figure is incomplete until Phase 5.
+* **Consequences:**
+* The public Shift API contract is complete and stable from Phase 4 onward.
+* Until Phase 5 lands, `expected_cash_vnd` reflects fund movements only and must not be presented to staff as a reconciliation figure.
+* The guard on the total is symmetric, because sustained Pay Outs can legitimately drive the partial figure negative.
+
+---
+
+## ADR-009: `auth.VerifyManagerApproval` as a Shared Second-Party Approval Primitive
+
+* **Decision Date:** 2026-09-13
+* **Status:** Accepted
+* **Context:** Recording a Cash Movement requires approval by a second identity holding the Manager role, who authenticates inline with a login code and PIN. This differs from the Catalog pattern, which re-verifies the actor's own PIN. Phase 5 requires the identical mechanism for Refund, Payment Void, and Comp.
+* **Decision:**
+* The verification lives in `internal/auth` as `VerifyManagerApproval`, and slices supply only the capability the approver must hold.
+* It locks the approver row with `FOR UPDATE`, runs PIN verification against a dummy hash when no identity matches so response timing reveals nothing, and reports one of four denial reasons.
+* Callers collapse every denial reason to one client-visible code. The specific reason reaches the server log and the denial audit event only.
+* **Consequences:**
+* Security-critical verification is implemented and tested once rather than copied into each slice that needs it.
+* This is a deliberate exception to the general rule that slices do not share helpers. It does not extend to idempotency helpers, which ADR-007 keeps slice-local.
