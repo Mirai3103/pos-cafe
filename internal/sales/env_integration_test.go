@@ -178,9 +178,8 @@ func (e *salesEnv) SeedEditableDraft(t *testing.T, sessionID uuid.UUID, target s
 }
 
 // SetCheckTarget sets the check_target of the Session's current EDITABLE draft
-// directly. This is fixture seeding, not a handler call: the
-// SetCheckTargetHandler does not exist until Task 11, so there is no API to
-// route through yet.
+// directly with SQL. This is fixture seeding, not a handler call; tests that
+// must exercise the SetCheckTargetHandler use TrySetCheckTarget instead.
 func (e *salesEnv) SetCheckTarget(t *testing.T, sessionID uuid.UUID, target string) {
 	t.Helper()
 	res, err := e.DB.Exec(`
@@ -197,6 +196,20 @@ func (e *salesEnv) SetCheckTarget(t *testing.T, sessionID uuid.UUID, target stri
 	n, err := res.RowsAffected()
 	require.NoError(t, err)
 	require.Equal(t, int64(1), n, "exactly one EDITABLE draft for session %s", sessionID)
+}
+
+// TrySetCheckTarget runs SetCheckTarget and returns its error untouched.
+func (e *salesEnv) TrySetCheckTarget(t *testing.T, sessionID uuid.UUID, target string) (
+	sales.ServiceSessionResponse, error,
+) {
+	t.Helper()
+	_, resp, err := sales.NewSetCheckTargetHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.SetCheckTargetCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: sessionID,
+			CheckTarget:      target,
+		})
+	return resp, err
 }
 
 // ---------- Commit ----------

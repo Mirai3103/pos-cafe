@@ -49,3 +49,57 @@ func TestStartNewOrderDraftDeniedForBarista(t *testing.T) {
 
 	require.ErrorIs(t, err, sales.ErrForbidden)
 }
+
+func TestSetCheckTargetUpdatesTheDraft(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.StartTakeaway(t)
+
+	// The brief's `got := env.SetCheckTarget(...)` exercises the handler
+	// through the handler-invoking Try variant; the SQL-seeding helper cannot
+	// return a projection.
+	got, err := env.TrySetCheckTarget(t, session.ID, "NEW_CHECK")
+	require.NoError(t, err)
+
+	require.Equal(t, "NEW_CHECK", got.Draft.CheckTarget)
+}
+
+func TestCheckTargetDefaultsToCurrentUnpaid(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.StartTakeaway(t)
+
+	require.Equal(t, "CURRENT_UNPAID", session.Draft.CheckTarget)
+}
+
+// The target belongs to the draft, not the Session.
+func TestCheckTargetResetsWhenANewDraftOpens(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.StartTakeaway(t)
+	env.SetCheckTarget(t, session.ID, "NEW_CHECK")
+	env.AddDraftItem(t, session.ID, env.CoffeeID, nil)
+	env.Commit(t, session.ID)
+
+	env.SeedEditableDraft(t, session.ID, "CURRENT_UNPAID")
+
+	got := env.GetSessionOK(t, session.ID)
+	require.Equal(t, "CURRENT_UNPAID", got.Draft.CheckTarget)
+}
+
+func TestSetCheckTargetRejectedOnceCommitted(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.StartTakeaway(t)
+	env.AddDraftItem(t, session.ID, env.CoffeeID, nil)
+	env.Commit(t, session.ID)
+
+	_, err := env.TrySetCheckTarget(t, session.ID, "NEW_CHECK")
+
+	require.ErrorIs(t, err, sales.ErrEditableDraftNotFound)
+}
+
+func TestSetCheckTargetRejectsAnUnknownValue(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.StartTakeaway(t)
+
+	_, err := env.TrySetCheckTarget(t, session.ID, "PAID")
+
+	require.ErrorIs(t, err, sales.ErrInvalidCheckTarget)
+}
