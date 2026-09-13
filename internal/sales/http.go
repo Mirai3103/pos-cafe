@@ -234,3 +234,101 @@ func (s *Slices) handleAddDraftItem(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleSetDraftItemQuantity sets an absolute quantity on one draft item.
+//
+//	@Summary		Set a draft item's quantity
+//	@Description	Sets an absolute quantity between 1 and 9999 on one Order Draft item. Zero is rejected: removal is its own command. Returns the whole Service Session projection.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path	string						true	"Service Session ID"
+//	@Param			item_id	path	string						true	"Order Draft Item ID"
+//	@Param			request	body	SetDraftItemQuantityCommand	true	"Request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft/items/{item_id}/quantity [patch]
+func (s *Slices) handleSetDraftItemQuantity(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[SetDraftItemQuantityCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
+	// never the body.
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	itemID, err := parseUUIDParam(c, "item_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd.ServiceSessionID = sessionID
+	cmd.DraftItemID = itemID
+	status, result, err := s.SetItemQuantity.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleRemoveDraftItem removes one draft item outright.
+//
+//	@Summary		Remove a draft item
+//	@Description	Removes one Order Draft item and its selected options, returning the whole Service Session projection with 200 rather than 204 so a client sees the resulting draft without a follow-up read.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path	string					true	"Service Session ID"
+//	@Param			item_id	path	string					true	"Order Draft Item ID"
+//	@Param			request	body	RemoveDraftItemCommand	true	"Request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft/items/{item_id} [delete]
+func (s *Slices) handleRemoveDraftItem(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[RemoveDraftItemCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
+	// never the body.
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	itemID, err := parseUUIDParam(c, "item_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd.ServiceSessionID = sessionID
+	cmd.DraftItemID = itemID
+	status, result, err := s.RemoveDraftItem.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

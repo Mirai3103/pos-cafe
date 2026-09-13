@@ -17,6 +17,8 @@ type Slices struct {
 	StartDineIn       *StartDineInSessionHandler
 	SetSessionTables  *SetSessionTablesHandler
 	AddDraftItem      *AddDraftItemHandler
+	SetItemQuantity   *SetDraftItemQuantityHandler
+	RemoveDraftItem   *RemoveDraftItemHandler
 }
 
 // NewSlices wires every Sales handler onto a shared Runner.
@@ -29,6 +31,8 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		StartDineIn:       NewStartDineInSessionHandler(runner),
 		SetSessionTables:  NewSetSessionTablesHandler(runner),
 		AddDraftItem:      NewAddDraftItemHandler(runner),
+		SetItemQuantity:   NewSetDraftItemQuantityHandler(runner),
+		RemoveDraftItem:   NewRemoveDraftItemHandler(runner),
 	}
 }
 
@@ -49,5 +53,9 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.PUT("/sales/service-sessions/:id/tables", s.handleSetSessionTables,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/sales/service-sessions/:id/draft/items", s.handleAddDraftItem,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.PATCH("/sales/service-sessions/:id/draft/items/:item_id/quantity", s.handleSetDraftItemQuantity,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.DELETE("/sales/service-sessions/:id/draft/items/:item_id", s.handleRemoveDraftItem,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 }

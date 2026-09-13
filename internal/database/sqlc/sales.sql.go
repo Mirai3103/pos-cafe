@@ -14,6 +14,15 @@ import (
 	"github.com/lib/pq"
 )
 
+const deleteDraftItem = `-- name: DeleteDraftItem :exec
+DELETE FROM order_draft_items WHERE id = $1
+`
+
+func (q *Queries) DeleteDraftItem(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteDraftItem, id)
+	return err
+}
+
 const deleteDraftItemModifierOptions = `-- name: DeleteDraftItemModifierOptions :exec
 DELETE FROM order_draft_item_modifier_options WHERE order_draft_item_id = $1
 `
@@ -567,6 +576,36 @@ func (q *Queries) ListDraftItemModifierOptions(ctx context.Context, orderDraftID
 	return items, nil
 }
 
+const listDraftItemOptionIDs = `-- name: ListDraftItemOptionIDs :many
+SELECT modifier_option_id
+FROM order_draft_item_modifier_options
+WHERE order_draft_item_id = $1
+ORDER BY modifier_option_id ASC
+`
+
+func (q *Queries) ListDraftItemOptionIDs(ctx context.Context, orderDraftItemID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listDraftItemOptionIDs, orderDraftItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_option_id uuid.UUID
+		if err := rows.Scan(&modifier_option_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_option_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDraftItems = `-- name: ListDraftItems :many
 SELECT di.id, di.menu_item_id, mi.name AS menu_item_name,
        di.size_id, s.name AS size_name,
@@ -819,6 +858,45 @@ func (q *Queries) LockCurrentTableAssignments(ctx context.Context, serviceSessio
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockDraftItem = `-- name: LockDraftItem :one
+SELECT id, order_draft_id, menu_item_id, size_id, quantity, preparation_note, modifier_key
+FROM order_draft_items
+WHERE id = $1 AND order_draft_id = $2
+FOR UPDATE
+`
+
+type LockDraftItemParams struct {
+	ID           uuid.UUID `json:"id"`
+	OrderDraftID uuid.UUID `json:"order_draft_id"`
+}
+
+type LockDraftItemRow struct {
+	ID              uuid.UUID      `json:"id"`
+	OrderDraftID    uuid.UUID      `json:"order_draft_id"`
+	MenuItemID      uuid.UUID      `json:"menu_item_id"`
+	SizeID          uuid.NullUUID  `json:"size_id"`
+	Quantity        int32          `json:"quantity"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+	ModifierKey     string         `json:"modifier_key"`
+}
+
+// Scoped to the draft, so a caller cannot reach an item of another Session by
+// guessing its id.
+func (q *Queries) LockDraftItem(ctx context.Context, arg LockDraftItemParams) (LockDraftItemRow, error) {
+	row := q.db.QueryRowContext(ctx, lockDraftItem, arg.ID, arg.OrderDraftID)
+	var i LockDraftItemRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrderDraftID,
+		&i.MenuItemID,
+		&i.SizeID,
+		&i.Quantity,
+		&i.PreparationNote,
+		&i.ModifierKey,
+	)
+	return i, err
 }
 
 const lockEditableDraft = `-- name: LockEditableDraft :one

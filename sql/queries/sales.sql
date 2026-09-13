@@ -261,6 +261,23 @@ SET quantity = $2
 WHERE id = $1
 RETURNING id, quantity;
 
+-- name: LockDraftItem :one
+-- Scoped to the draft, so a caller cannot reach an item of another Session by
+-- guessing its id.
+SELECT id, order_draft_id, menu_item_id, size_id, quantity, preparation_note, modifier_key
+FROM order_draft_items
+WHERE id = $1 AND order_draft_id = $2
+FOR UPDATE;
+
+-- name: ListDraftItemOptionIDs :many
+SELECT modifier_option_id
+FROM order_draft_item_modifier_options
+WHERE order_draft_item_id = $1
+ORDER BY modifier_option_id ASC;
+
+-- name: DeleteDraftItem :exec
+DELETE FROM order_draft_items WHERE id = $1;
+
 -- name: DeleteDraftItemModifierOptions :exec
 DELETE FROM order_draft_item_modifier_options WHERE order_draft_item_id = $1;
 

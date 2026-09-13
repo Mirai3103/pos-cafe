@@ -41,6 +41,7 @@ type Querier interface {
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	// -- Tables --
 	CreateTable(ctx context.Context, arg CreateTableParams) (Table, error)
+	DeleteDraftItem(ctx context.Context, id uuid.UUID) error
 	DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
@@ -141,6 +142,7 @@ type Querier interface {
 	ListDefaultModifierOptionIDs(ctx context.Context, groupIds []uuid.UUID) ([]uuid.UUID, error)
 	// Ordered by Group then Option name, which is the order the projection emits.
 	ListDraftItemModifierOptions(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemModifierOptionsRow, error)
+	ListDraftItemOptionIDs(ctx context.Context, orderDraftItemID uuid.UUID) ([]uuid.UUID, error)
 	// price_vnd is the Size price when a Size is chosen and the Item price
 	// otherwise, matching the canonical Menu Price rule. available is read live
 	// rather than snapshotted: a draft is a live proposal, and an item that became
@@ -176,6 +178,9 @@ type Querier interface {
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
 	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
+	// Scoped to the draft, so a caller cannot reach an item of another Session by
+	// guessing its id.
+	LockDraftItem(ctx context.Context, arg LockDraftItemParams) (LockDraftItemRow, error)
 	// Checks every precondition and takes the lock in one statement, so there is
 	// no window between the check and the write.
 	//
