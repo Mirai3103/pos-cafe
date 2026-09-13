@@ -18,6 +18,9 @@ type Slices struct {
 	SetSessionTables  *SetSessionTablesHandler
 	AddDraftItem      *AddDraftItemHandler
 	SetItemQuantity   *SetDraftItemQuantityHandler
+	SetItemSize       *SetDraftItemSizeHandler
+	SetItemNote       *SetDraftItemNoteHandler
+	SetItemModifiers  *SetDraftItemModifiersHandler
 	RemoveDraftItem   *RemoveDraftItemHandler
 }
 
@@ -32,6 +35,9 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		SetSessionTables:  NewSetSessionTablesHandler(runner),
 		AddDraftItem:      NewAddDraftItemHandler(runner),
 		SetItemQuantity:   NewSetDraftItemQuantityHandler(runner),
+		SetItemSize:       NewSetDraftItemSizeHandler(runner),
+		SetItemNote:       NewSetDraftItemNoteHandler(runner),
+		SetItemModifiers:  NewSetDraftItemModifiersHandler(runner),
 		RemoveDraftItem:   NewRemoveDraftItemHandler(runner),
 	}
 }
@@ -55,6 +61,12 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/sales/service-sessions/:id/draft/items", s.handleAddDraftItem,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.PATCH("/sales/service-sessions/:id/draft/items/:item_id/quantity", s.handleSetDraftItemQuantity,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.PATCH("/sales/service-sessions/:id/draft/items/:item_id/size", s.handleSetDraftItemSize,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.PATCH("/sales/service-sessions/:id/draft/items/:item_id/preparation-note", s.handleSetDraftItemNote,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.PATCH("/sales/service-sessions/:id/draft/items/:item_id/modifiers", s.handleSetDraftItemModifiers,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.DELETE("/sales/service-sessions/:id/draft/items/:item_id", s.handleRemoveDraftItem,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))

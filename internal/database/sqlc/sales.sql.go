@@ -68,6 +68,48 @@ func (q *Queries) FindDraftItemByComposition(ctx context.Context, arg FindDraftI
 	return i, err
 }
 
+const findDraftItemByCompositionExcluding = `-- name: FindDraftItemByCompositionExcluding :one
+SELECT id, quantity
+FROM order_draft_items
+WHERE order_draft_id = $1
+  AND menu_item_id = $2
+  AND size_key = COALESCE($5::uuid::text, '')
+  AND note_key = COALESCE($6::text, '')
+  AND modifier_key = $3
+  AND id <> $4
+`
+
+type FindDraftItemByCompositionExcludingParams struct {
+	OrderDraftID    uuid.UUID      `json:"order_draft_id"`
+	MenuItemID      uuid.UUID      `json:"menu_item_id"`
+	ModifierKey     string         `json:"modifier_key"`
+	ID              uuid.UUID      `json:"id"`
+	SizeID          uuid.NullUUID  `json:"size_id"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+}
+
+type FindDraftItemByCompositionExcludingRow struct {
+	ID       uuid.UUID `json:"id"`
+	Quantity int32     `json:"quantity"`
+}
+
+// findDraftItemByComposition plus an id <> $n clause, so the row being edited
+// never matches itself. A separate query rather than a nullable exclusion
+// parameter keeps the add path's query untouched.
+func (q *Queries) FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error) {
+	row := q.db.QueryRowContext(ctx, findDraftItemByCompositionExcluding,
+		arg.OrderDraftID,
+		arg.MenuItemID,
+		arg.ModifierKey,
+		arg.ID,
+		arg.SizeID,
+		arg.PreparationNote,
+	)
+	var i FindDraftItemByCompositionExcludingRow
+	err := row.Scan(&i.ID, &i.Quantity)
+	return i, err
+}
+
 const getEditableDraft = `-- name: GetEditableDraft :one
 SELECT id, service_session_id, state, created_at
 FROM order_drafts
@@ -1080,4 +1122,28 @@ func (q *Queries) SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuan
 	var i SetDraftItemQuantityRow
 	err := row.Scan(&i.ID, &i.Quantity)
 	return i, err
+}
+
+const updateDraftItemComposition = `-- name: UpdateDraftItemComposition :exec
+UPDATE order_draft_items
+SET size_id = $2, preparation_note = $3, modifier_key = $4
+WHERE id = $1
+`
+
+type UpdateDraftItemCompositionParams struct {
+	ID              uuid.UUID      `json:"id"`
+	SizeID          uuid.NullUUID  `json:"size_id"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+	ModifierKey     string         `json:"modifier_key"`
+}
+
+// size_key and note_key are generated columns, so they follow the write.
+func (q *Queries) UpdateDraftItemComposition(ctx context.Context, arg UpdateDraftItemCompositionParams) error {
+	_, err := q.db.ExecContext(ctx, updateDraftItemComposition,
+		arg.ID,
+		arg.SizeID,
+		arg.PreparationNote,
+		arg.ModifierKey,
+	)
+	return err
 }

@@ -47,6 +47,10 @@ type Querier interface {
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
 	FindDraftItemByComposition(ctx context.Context, arg FindDraftItemByCompositionParams) (FindDraftItemByCompositionRow, error)
+	// findDraftItemByComposition plus an id <> $n clause, so the row being edited
+	// never matches itself. A separate query rather than a nullable exclusion
+	// parameter keeps the add path's query untouched.
+	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
 	GetCatalogMutationRequest(ctx context.Context, arg GetCatalogMutationRequestParams) (CatalogMutationRequest, error)
 	// Catalog sqlc queries
 	// Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
@@ -232,6 +236,8 @@ type Querier interface {
 	StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error
 	SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) (SumCashMovementsRow, error)
 	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	// size_key and note_key are generated columns, so they follow the write.
+	UpdateDraftItemComposition(ctx context.Context, arg UpdateDraftItemCompositionParams) error
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
 	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error

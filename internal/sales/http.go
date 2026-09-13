@@ -284,6 +284,153 @@ func (s *Slices) handleSetDraftItemQuantity(c echo.Context) error {
 	return sendResult(c, status, result)
 }
 
+// handleSetDraftItemSize sets or clears one draft item's Size.
+//
+//	@Summary		Set a draft item's Size
+//	@Description	Sets or clears one Order Draft item's Size. A null size_id clears the Size and is accepted: the draft tolerates an incomplete configuration until Commit in Phase 5B. If the edit makes the item identical in composition to another line of the same draft, the two MERGE: the pre-existing line's quantity grows by this one's, this line's id is deleted, and the returned projection reflects the merge. A merged quantity above 9999 is rejected. Returns the whole Service Session projection.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path	string					true	"Service Session ID"
+//	@Param			item_id	path	string					true	"Order Draft Item ID"
+//	@Param			request	body	SetDraftItemSizeCommand	true	"Request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft/items/{item_id}/size [patch]
+func (s *Slices) handleSetDraftItemSize(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[SetDraftItemSizeCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
+	// never the body.
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	itemID, err := parseUUIDParam(c, "item_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd.ServiceSessionID = sessionID
+	cmd.DraftItemID = itemID
+	status, result, err := s.SetItemSize.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleSetDraftItemNote sets or clears one draft item's Preparation Note.
+//
+//	@Summary		Set a draft item's Preparation Note
+//	@Description	Sets or clears one Order Draft item's Preparation Note. The note is trimmed and may be at most 200 characters; a null or blank preparation_note clears it. If the edit makes the item identical in composition to another line of the same draft, the two MERGE: the pre-existing line's quantity grows by this one's, this line's id is deleted, and the returned projection reflects the merge. A merged quantity above 9999 is rejected. Returns the whole Service Session projection.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path	string					true	"Service Session ID"
+//	@Param			item_id	path	string					true	"Order Draft Item ID"
+//	@Param			request	body	SetDraftItemNoteCommand	true	"Request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft/items/{item_id}/preparation-note [patch]
+func (s *Slices) handleSetDraftItemNote(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[SetDraftItemNoteCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
+	// never the body.
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	itemID, err := parseUUIDParam(c, "item_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd.ServiceSessionID = sessionID
+	cmd.DraftItemID = itemID
+	status, result, err := s.SetItemNote.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleSetDraftItemModifiers replaces one draft item's selected options.
+//
+//	@Summary		Set a draft item's Modifier Options
+//	@Description	Replaces one Order Draft item's selected Modifier Options. Unlike adding an item, the list is taken literally: an empty modifier_option_ids selects no options and no defaults are applied. If the edit makes the item identical in composition to another line of the same draft, the two MERGE: the pre-existing line's quantity grows by this one's, this line's id is deleted, and the returned projection reflects the merge. A merged quantity above 9999 is rejected. Returns the whole Service Session projection.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path	string						true	"Service Session ID"
+//	@Param			item_id	path	string						true	"Order Draft Item ID"
+//	@Param			request	body	SetDraftItemModifiersCommand	true	"Request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft/items/{item_id}/modifiers [patch]
+func (s *Slices) handleSetDraftItemModifiers(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[SetDraftItemModifiersCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
+	// never the body.
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	itemID, err := parseUUIDParam(c, "item_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd.ServiceSessionID = sessionID
+	cmd.DraftItemID = itemID
+	status, result, err := s.SetItemModifiers.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
 // handleRemoveDraftItem removes one draft item outright.
 //
 //	@Summary		Remove a draft item

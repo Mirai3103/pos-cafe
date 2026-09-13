@@ -249,11 +249,30 @@ WHERE order_draft_id = $1
   AND note_key = COALESCE(sqlc.narg(preparation_note)::text, '')
   AND modifier_key = $3;
 
+-- name: FindDraftItemByCompositionExcluding :one
+-- findDraftItemByComposition plus an id <> $n clause, so the row being edited
+-- never matches itself. A separate query rather than a nullable exclusion
+-- parameter keeps the add path's query untouched.
+SELECT id, quantity
+FROM order_draft_items
+WHERE order_draft_id = $1
+  AND menu_item_id = $2
+  AND size_key = COALESCE(sqlc.narg(size_id)::uuid::text, '')
+  AND note_key = COALESCE(sqlc.narg(preparation_note)::text, '')
+  AND modifier_key = $3
+  AND id <> $4;
+
 -- name: InsertDraftItem :one
 INSERT INTO order_draft_items
     (order_draft_id, menu_item_id, size_id, preparation_note, modifier_key, quantity)
 VALUES ($1, $2, $3, $4, $5, 1)
 RETURNING id, quantity;
+
+-- name: UpdateDraftItemComposition :exec
+-- size_key and note_key are generated columns, so they follow the write.
+UPDATE order_draft_items
+SET size_id = $2, preparation_note = $3, modifier_key = $4
+WHERE id = $1;
 
 -- name: SetDraftItemQuantity :one
 UPDATE order_draft_items
