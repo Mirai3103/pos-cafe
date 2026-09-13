@@ -235,7 +235,7 @@ func TestShiftHTTPValidation(t *testing.T) {
 			path: "/api/v1/shifts/" + opened.ID.String() + "/cash-movements",
 			body: map[string]any{
 				"request_id": uuid.New(), "method": shift.MethodPayIn,
-				"reason": shift.ReasonAddChangeFund,
+				"reason":              shift.ReasonAddChangeFund,
 				"approver_login_code": "ZZ", "manager_pin": "8642",
 			},
 		},
@@ -244,7 +244,7 @@ func TestShiftHTTPValidation(t *testing.T) {
 			path: "/api/v1/shifts/" + opened.ID.String() + "/cash-movements",
 			body: map[string]any{
 				"request_id": uuid.New(), "method": shift.MethodPayIn, "amount_vnd": 1000,
-				"reason": shift.ReasonAddChangeFund,
+				"reason":              shift.ReasonAddChangeFund,
 				"approver_login_code": "ZZ", "manager_pin": "abc",
 			},
 		},
@@ -265,7 +265,7 @@ func TestShiftHTTPValidation(t *testing.T) {
 	t.Run("malformed shift_id", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{
 			"request_id": uuid.New(), "method": shift.MethodPayIn, "amount_vnd": 1000,
-			"reason": shift.ReasonAddChangeFund,
+			"reason":              shift.ReasonAddChangeFund,
 			"approver_login_code": "ZZ", "manager_pin": "8642",
 		})
 		rec := doRequest(t, e, http.MethodPost, "/api/v1/shifts/not-a-uuid/cash-movements", token, body)
@@ -300,7 +300,7 @@ func TestShiftHTTPErrorCodes(t *testing.T) {
 	t.Run("wrong manager pin is forbidden without naming the reason", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{
 			"request_id": uuid.New(), "method": shift.MethodPayOut, "amount_vnd": 50000,
-			"reason": shift.ReasonSafeDrop,
+			"reason":              shift.ReasonSafeDrop,
 			"approver_login_code": managerCode, "manager_pin": "0000",
 		})
 		rec := doRequest(t, e, http.MethodPost,
@@ -318,7 +318,7 @@ func TestShiftHTTPErrorCodes(t *testing.T) {
 	t.Run("unknown shift conflicts", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{
 			"request_id": uuid.New(), "method": shift.MethodPayOut, "amount_vnd": 50000,
-			"reason": shift.ReasonSafeDrop,
+			"reason":              shift.ReasonSafeDrop,
 			"approver_login_code": managerCode, "manager_pin": "8642",
 		})
 		rec := doRequest(t, e, http.MethodPost,
