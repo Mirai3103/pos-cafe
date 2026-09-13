@@ -7,6 +7,7 @@ package sales
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -20,17 +21,20 @@ const CapSalesOperate = "sales.operate"
 
 // Idempotency action names, stored in idempotency_keys.action (VARCHAR(50)).
 const (
-	OpStartTakeawaySession  = "sales.start_takeaway_session"
-	OpStartDineInSession    = "sales.start_dine_in_session"
-	OpSetSessionTables      = "sales.set_session_tables"
-	OpAddDraftItem          = "sales.add_draft_item"
-	OpSetDraftItemQuantity  = "sales.set_draft_item_quantity"
-	OpSetDraftItemSize      = "sales.set_draft_item_size"
-	OpSetDraftItemNote      = "sales.set_draft_item_note"
-	OpSetDraftItemModifiers = "sales.set_draft_item_modifiers"
-	OpRemoveDraftItem       = "sales.remove_draft_item"
-	OpGetServiceSession     = "sales.get_service_session"
-	OpListServiceSessions   = "sales.list_service_sessions"
+	OpStartTakeawaySession     = "sales.start_takeaway_session"
+	OpStartDineInSession       = "sales.start_dine_in_session"
+	OpSetSessionTables         = "sales.set_session_tables"
+	OpAddDraftItem             = "sales.add_draft_item"
+	OpSetDraftItemQuantity     = "sales.set_draft_item_quantity"
+	OpSetDraftItemSize         = "sales.set_draft_item_size"
+	OpSetDraftItemNote         = "sales.set_draft_item_note"
+	OpSetDraftItemModifiers    = "sales.set_draft_item_modifiers"
+	OpRemoveDraftItem          = "sales.remove_draft_item"
+	OpGetServiceSession        = "sales.get_service_session"
+	OpListServiceSessions      = "sales.list_service_sessions"
+	OpCommitOrderDraft         = "sales.commit_order_draft"
+	OpStartNewOrderDraft       = "sales.start_new_order_draft"
+	OpSetOrderDraftCheckTarget = "sales.set_order_draft_check_target"
 )
 
 // Audit event types. Business events are UPPER_SNAKE_CASE and the denial event
@@ -52,6 +56,12 @@ const (
 	// the change.
 	EventDraftItemsMerged    = "ORDER_DRAFT_ITEMS_MERGED"
 	EventAuthorizationDenied = "sales.authorization_denied"
+	// EventOrderDraftCommitted drops the canonical TAKEAWAY_CHECKOUT_ prefix.
+	// Commit is mode-agnostic — the canonical source runs one handler for
+	// Dine-in too — and 5A already dropped that prefix throughout.
+	EventOrderDraftCommitted      = "ORDER_DRAFT_COMMITTED"
+	EventOrderDraftStarted        = "ORDER_DRAFT_STARTED"
+	EventOrderDraftCheckTargetSet = "ORDER_DRAFT_CHECK_TARGET_SET"
 )
 
 // Service Session states. 5A writes only StateActive; 5D writes StateClosed.
@@ -161,4 +171,66 @@ func FormatServiceNumber(seq int32) (string, error) {
 			ErrServiceSequenceExhausted, seq, MaxServiceSequence)
 	}
 	return fmt.Sprintf("S%05d", seq), nil
+}
+
+// Check states. 5B writes only CheckStateOpen; 5C writes the other two.
+// The domain ships complete so the CURRENT_UNPAID target query's state filter
+// is meaningful rather than vacuous. See ADR-014.
+const (
+	CheckStateOpen    = "OPEN"
+	CheckStateSettled = "SETTLED"
+	CheckStateMerged  = "MERGED"
+)
+
+// Order Draft Check targets. The target belongs to the draft, not the
+// Session, and resets to CheckTargetCurrentUnpaid when a new draft opens.
+const (
+	CheckTargetCurrentUnpaid = "CURRENT_UNPAID"
+	CheckTargetNewCheck      = "NEW_CHECK"
+)
+
+// ValidateCheckTarget rejects a target outside the domain.
+func ValidateCheckTarget(target string) error {
+	switch target {
+	case CheckTargetCurrentUnpaid, CheckTargetNewCheck:
+		return nil
+	default:
+		return fmt.Errorf("%w: check_target must be %s or %s",
+			ErrInvalidCheckTarget, CheckTargetCurrentUnpaid, CheckTargetNewCheck)
+	}
+}
+
+// LineTotal computes quantity * unitPriceVND with an explicit overflow guard.
+//
+// The canonical implementation guards against Number.MAX_SAFE_INTEGER because
+// JavaScript loses integer precision beyond it. Go has no such limit, but its
+// integer arithmetic wraps silently, so money arithmetic that does not check
+// can produce a negative total without failing. The bound is int64's, not a
+// business ceiling. See ADR-013.
+func LineTotal(quantity int32, unitPriceVND int64) (int64, error) {
+	if quantity < MinQuantity || quantity > MaxQuantity {
+		return 0, fmt.Errorf("%w: quantity %d out of range", ErrLineTotalOutOfRange, quantity)
+	}
+	if unitPriceVND <= 0 {
+		return 0, fmt.Errorf("%w: unit price %d is not positive", ErrLineTotalOutOfRange, unitPriceVND)
+	}
+	if unitPriceVND > math.MaxInt64/int64(quantity) {
+		return 0, fmt.Errorf("%w: %d x %d overflows", ErrLineTotalOutOfRange, quantity, unitPriceVND)
+	}
+	return int64(quantity) * unitPriceVND, nil
+}
+
+// AddCharge accumulates a Check's charge with an explicit overflow guard.
+func AddCharge(totalVND, deltaVND int64) (int64, error) {
+	if deltaVND > 0 && totalVND > math.MaxInt64-deltaVND {
+		return 0, fmt.Errorf("%w: %d + %d overflows", ErrCheckChargeOutOfRange, totalVND, deltaVND)
+	}
+	if deltaVND < 0 && totalVND < math.MinInt64-deltaVND {
+		return 0, fmt.Errorf("%w: %d + %d underflows", ErrCheckChargeOutOfRange, totalVND, deltaVND)
+	}
+	sum := totalVND + deltaVND
+	if sum < 0 {
+		return 0, fmt.Errorf("%w: %d is negative", ErrCheckChargeOutOfRange, sum)
+	}
+	return sum, nil
 }
