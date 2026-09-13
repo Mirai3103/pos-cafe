@@ -112,3 +112,58 @@ func TestOneEditableDraftPerSession(t *testing.T) {
 		fx.ServiceSessionID)
 	require.NoError(t, err)
 }
+
+func TestCommitSchema(t *testing.T) {
+	db, _ := openSalesTestDB(t)
+	ctx := context.Background()
+
+	t.Run("order_drafts carries check_target defaulting to CURRENT_UNPAID", func(t *testing.T) {
+		var def string
+		err := db.QueryRowContext(ctx, `
+			SELECT column_default FROM information_schema.columns
+			WHERE table_name = 'order_drafts' AND column_name = 'check_target'`).Scan(&def)
+		require.NoError(t, err)
+		require.Contains(t, def, "CURRENT_UNPAID")
+	})
+
+	t.Run("checks state domain admits all three canonical values", func(t *testing.T) {
+		var clause string
+		err := db.QueryRowContext(ctx, `
+			SELECT pg_get_constraintdef(oid) FROM pg_constraint
+			WHERE conname = 'check_state_valid'`).Scan(&clause)
+		require.NoError(t, err)
+		require.Contains(t, clause, "OPEN")
+		require.Contains(t, clause, "SETTLED")
+		require.Contains(t, clause, "MERGED")
+	})
+
+	t.Run("no settlement column exists until 5C", func(t *testing.T) {
+		var n int
+		err := db.QueryRowContext(ctx, `
+			SELECT count(*) FROM information_schema.columns
+			WHERE table_name = 'checks'
+			  AND column_name IN ('settled_at', 'merged_into_check_id',
+			                      'settled_by_staff_identity_id')`).Scan(&n)
+		require.NoError(t, err)
+		require.Equal(t, 0, n)
+	})
+
+	t.Run("committed_items enforces total equals quantity times unit price", func(t *testing.T) {
+		var clause string
+		err := db.QueryRowContext(ctx, `
+			SELECT pg_get_constraintdef(oid) FROM pg_constraint
+			WHERE conname = 'committed_item_total_vnd_valid'`).Scan(&clause)
+		require.NoError(t, err)
+		require.Contains(t, clause, "quantity")
+		require.Contains(t, clause, "unit_price_vnd")
+	})
+
+	t.Run("charge_allocations is unique per committed item and check", func(t *testing.T) {
+		var n int
+		err := db.QueryRowContext(ctx, `
+			SELECT count(*) FROM pg_indexes
+			WHERE indexname = 'charge_allocation_item_check_unique'`).Scan(&n)
+		require.NoError(t, err)
+		require.Equal(t, 1, n)
+	})
+}
