@@ -249,6 +249,21 @@ func (e *salesEnv) commitOneItemSession(t *testing.T) sales.ServiceSessionRespon
 	return e.Commit(t, session.ID)
 }
 
+// ---------- Round lifecycle ----------
+
+// TryStartNewDraft runs StartNewOrderDraft and returns its error untouched.
+func (e *salesEnv) TryStartNewDraft(t *testing.T, sessionID uuid.UUID) (
+	sales.ServiceSessionResponse, error,
+) {
+	t.Helper()
+	_, resp, err := sales.NewStartNewOrderDraftHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.StartNewOrderDraftCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: sessionID,
+		})
+	return resp, err
+}
+
 // ---------- Reads ----------
 
 // GetSession returns the Session projection and its error untouched, for
