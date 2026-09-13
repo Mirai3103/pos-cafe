@@ -148,20 +148,20 @@ func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd
 			}
 
 			return 201, CashMovementResult{
-				Movement:        movement,
-				ExpectedCashVND: expected,
-			}, AuditRecord{
-				EventType: EventCashMovementRecorded,
-				Details: cashMovementAuditDetails{
-					CashMovementID:           movement.ID,
-					SalesShiftID:             openShift.ID,
-					Method:                   movement.Method,
-					AmountVND:                movement.AmountVND,
-					Reason:                   movement.Reason,
-					Note:                     movement.Note,
-					InitiatorStaffIdentityID: initiator.ID,
-					ApproverStaffIdentityID:  mc.Approver.ID,
-				},
-			}, nil
+					Movement:        movement,
+					ExpectedCashVND: expected,
+				}, AuditRecord{
+					EventType: EventCashMovementRecorded,
+					Details: cashMovementAuditDetails{
+						CashMovementID:           movement.ID,
+						SalesShiftID:             openShift.ID,
+						Method:                   movement.Method,
+						AmountVND:                movement.AmountVND,
+						Reason:                   movement.Reason,
+						Note:                     movement.Note,
+						InitiatorStaffIdentityID: initiator.ID,
+						ApproverStaffIdentityID:  mc.Approver.ID,
+					},
+				}, nil
 		})
 }
