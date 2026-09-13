@@ -6,7 +6,6 @@ package sales
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -163,10 +162,3 @@ func FormatServiceNumber(seq int32) (string, error) {
 	}
 	return fmt.Sprintf("S%05d", seq), nil
 }
-
-// Temporary: removed in Task 3 when errors.go defines these for real.
-var (
-	ErrInvalidPreparationNote   = errors.New("invalid preparation note")
-	ErrInvalidQuantity          = errors.New("invalid quantity")
-	ErrServiceSequenceExhausted = errors.New("service sequence exhausted")
-)
