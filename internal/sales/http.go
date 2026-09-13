@@ -503,3 +503,126 @@ func (s *Slices) handleRemoveDraftItem(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleCommitDraft godoc
+//
+//	@Summary		Commit the Order Draft
+//	@Description	Revalidates the draft, freezes prices into immutable Committed Items, and charges a Check. The response's checks[].payments and checks[].total_applied_vnd are filled by Phase 5C; allocations[].submitted is filled by Phase 5D.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string					true	"Service Session ID"
+//	@Param			body	body		CommitOrderDraftCommand	true	"Commit request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		422		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft/commit [post]
+func (s *Slices) handleCommitDraft(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[CommitOrderDraftCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.ServiceSessionID = sessionID
+
+	status, result, err := s.CommitDraft.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleStartNewDraft godoc
+//
+//	@Summary		Start a new Order Draft
+//	@Description	Opens the Service Session's next Order Draft. Rejected while the Session holds an editable draft, or a committed draft with no Order — in Phase 5B the latter blocks every committed draft, because Submit arrives in 5D.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string						true	"Service Session ID"
+//	@Param			body	body		StartNewOrderDraftCommand	true	"Start request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft [post]
+func (s *Slices) handleStartNewDraft(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[StartNewOrderDraftCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.ServiceSessionID = sessionID
+
+	status, result, err := s.StartNewDraft.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleSetCheckTarget godoc
+//
+//	@Summary		Set the Order Draft's Check target
+//	@Description	Steers where the next Commit's charges land. CURRENT_UNPAID reuses the Session's most recent open Check; NEW_CHECK always opens one. The target belongs to the draft and resets when a new draft opens.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string					true	"Service Session ID"
+//	@Param			body	body		SetCheckTargetCommand	true	"Check target request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		422		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/draft/check-target [put]
+func (s *Slices) handleSetCheckTarget(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[SetCheckTargetCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.ServiceSessionID = sessionID
+
+	status, result, err := s.SetCheckTarget.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

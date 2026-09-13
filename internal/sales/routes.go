@@ -23,6 +23,9 @@ type Slices struct {
 	SetItemNote        *SetDraftItemNoteHandler
 	SetItemModifiers   *SetDraftItemModifiersHandler
 	RemoveDraftItem    *RemoveDraftItemHandler
+	CommitDraft        *CommitOrderDraftHandler
+	StartNewDraft      *StartNewOrderDraftHandler
+	SetCheckTarget     *SetCheckTargetHandler
 }
 
 // NewSlices wires every Sales handler onto a shared Runner.
@@ -41,6 +44,9 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		SetItemNote:        NewSetDraftItemNoteHandler(runner),
 		SetItemModifiers:   NewSetDraftItemModifiersHandler(runner),
 		RemoveDraftItem:    NewRemoveDraftItemHandler(runner),
+		CommitDraft:        NewCommitOrderDraftHandler(runner),
+		StartNewDraft:      NewStartNewOrderDraftHandler(runner),
+		SetCheckTarget:     NewSetCheckTargetHandler(runner),
 	}
 }
 
@@ -73,5 +79,11 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.PATCH("/sales/service-sessions/:id/draft/items/:item_id/modifiers", s.handleSetDraftItemModifiers,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.DELETE("/sales/service-sessions/:id/draft/items/:item_id", s.handleRemoveDraftItem,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/service-sessions/:id/draft/commit", s.handleCommitDraft,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/service-sessions/:id/draft", s.handleStartNewDraft,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.PUT("/sales/service-sessions/:id/draft/check-target", s.handleSetCheckTarget,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 }
