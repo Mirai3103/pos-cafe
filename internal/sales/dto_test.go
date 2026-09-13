@@ -87,3 +87,62 @@ func TestAddDraftItemCommandDistinguishesAbsentFromEmpty(t *testing.T) {
 	require.NotNil(t, empty.ModifierOptionIDs, "empty must be a non-nil pointer to an empty slice")
 	assert.Empty(t, *empty.ModifierOptionIDs)
 }
+
+func TestCheckResponseSerialization(t *testing.T) {
+	check := CheckResponse{
+		ID:              uuid.New(),
+		State:           "OPEN",
+		ChargeVND:       85_000,
+		TotalAppliedVND: 0,
+		BalanceVND:      85_000,
+		Payments:        make([]struct{}, 0),
+		Allocations:     make([]ChargeAllocationResponse, 0),
+	}
+	b, err := json.Marshal(check)
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"payments":[]`)
+	require.Contains(t, string(b), `"allocations":[]`)
+	require.Contains(t, string(b), `"total_applied_vnd":0`)
+	// pending_refund_vnd is omitted, not stubbed: Refund is outside Phase 5.
+	require.NotContains(t, string(b), "pending_refund_vnd")
+}
+
+func TestChargeAllocationSerializationMarksUnsubmitted(t *testing.T) {
+	alloc := ChargeAllocationResponse{
+		ID:                uuid.New(),
+		CommittedItemID:   uuid.New(),
+		Modifiers:         make([]CommittedModifierResponse, 0),
+		AllocatedQuantity: 2,
+		AmountVND:         85_000,
+	}
+	b, err := json.Marshal(alloc)
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"submitted":false`)
+	require.Contains(t, string(b), `"modifiers":[]`)
+}
+
+func TestOrderDraftCarriesCheckTarget(t *testing.T) {
+	draft := OrderDraftResponse{
+		ID:          uuid.New(),
+		State:       "EDITABLE",
+		CheckTarget: "CURRENT_UNPAID",
+		Items:       make([]DraftItemResponse, 0),
+	}
+	b, err := json.Marshal(draft)
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"check_target":"CURRENT_UNPAID"`)
+}
+
+func TestServiceSessionSerializesNullDraftAfterCommit(t *testing.T) {
+	session := ServiceSessionResponse{
+		Tables:           make([]SessionTableResponse, 0),
+		Checks:           make([]CheckResponse, 0),
+		Orders:           make([]struct{}, 0),
+		PreparationUnits: make([]struct{}, 0),
+		Draft:            nil,
+	}
+	b, err := json.Marshal(session)
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"draft":null`)
+	require.Contains(t, string(b), `"checks":[]`)
+}

@@ -15,7 +15,7 @@ import (
 func newServiceSessionResponse() ServiceSessionResponse {
 	return ServiceSessionResponse{
 		Tables:           make([]SessionTableResponse, 0),
-		Checks:           make([]struct{}, 0),
+		Checks:           make([]CheckResponse, 0),
 		Orders:           make([]struct{}, 0),
 		PreparationUnits: make([]struct{}, 0),
 	}
