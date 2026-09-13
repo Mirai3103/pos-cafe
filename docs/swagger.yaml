@@ -740,6 +740,99 @@ definitions:
       success:
         type: boolean
     type: object
+  shift.CashMovementResponse:
+    properties:
+      amount_vnd:
+        type: integer
+      approver:
+        $ref: '#/definitions/shift.StaffSummary'
+      id:
+        type: string
+      initiator:
+        $ref: '#/definitions/shift.StaffSummary'
+      method:
+        type: string
+      note:
+        type: string
+      occurred_at:
+        type: string
+      reason:
+        type: string
+      sales_shift_id:
+        type: string
+    type: object
+  shift.CashMovementResult:
+    properties:
+      expected_cash_vnd:
+        type: integer
+      movement:
+        $ref: '#/definitions/shift.CashMovementResponse'
+    type: object
+  shift.CurrentSalesShiftResponse:
+    properties:
+      cash_movements:
+        items:
+          $ref: '#/definitions/shift.CashMovementResponse'
+        type: array
+      expected_cash_vnd:
+        type: integer
+      id:
+        type: string
+      opened_at:
+        type: string
+      opener:
+        $ref: '#/definitions/shift.StaffSummary'
+      opening_float_vnd:
+        type: integer
+      state:
+        type: string
+    type: object
+  shift.OpenShiftCommand:
+    properties:
+      opening_float_vnd:
+        type: integer
+      request_id:
+        type: string
+    type: object
+  shift.RecordCashMovementCommand:
+    properties:
+      amount_vnd:
+        type: integer
+      approver_login_code:
+        type: string
+      manager_pin:
+        type: string
+      method:
+        type: string
+      note:
+        type: string
+      reason:
+        type: string
+      request_id:
+        type: string
+    type: object
+  shift.SalesShiftResponse:
+    properties:
+      id:
+        type: string
+      opened_at:
+        type: string
+      opener:
+        $ref: '#/definitions/shift.StaffSummary'
+      opening_float_vnd:
+        type: integer
+      state:
+        type: string
+    type: object
+  shift.StaffSummary:
+    properties:
+      display_name:
+        type: string
+      id:
+        type: string
+      login_code:
+        type: string
+    type: object
   tables.CreateTableCommand:
     properties:
       name:
@@ -2694,6 +2787,135 @@ paths:
       summary: Ngừng kinh doanh kích thước món
       tags:
       - Catalog
+  /shifts:
+    post:
+      consumes:
+      - application/json
+      description: Opens a Sales Shift with a counted Opening Float. At most one Sales
+        Shift may be open across the whole system.
+      parameters:
+      - description: Opening Float
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/shift.OpenShiftCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.SalesShiftResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Open a Sales Shift
+      tags:
+      - shifts
+  /shifts/{shift_id}/cash-movements:
+    post:
+      consumes:
+      - application/json
+      description: Records a Pay In or Pay Out against an open Sales Shift. Requires
+        inline approval by an enabled Manager, who authenticates with their own login
+        code and PIN. Returns the resulting Expected Cash.
+      parameters:
+      - description: Sales Shift ID
+        in: path
+        name: shift_id
+        required: true
+        type: string
+      - description: Cash Movement to record
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/shift.RecordCashMovementCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.CashMovementResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Record a Cash Movement
+      tags:
+      - shifts
+  /shifts/current:
+    get:
+      description: Returns the open Sales Shift with its Expected Cash and Cash Movements,
+        or null when no Shift is open. expected_cash_vnd covers the Opening Float
+        and Cash Movements only; Cash Payments and Cash Refunds join the figure in
+        Phase 5 (ADR-008).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.CurrentSalesShiftResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Current Sales Shift
+      tags:
+      - shifts
   /staff:
     get:
       description: Trả về danh sách tất cả nhân viên kèm vai trò
