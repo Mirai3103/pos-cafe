@@ -82,6 +82,29 @@ func (s *Slices) handleGetServiceSession(c echo.Context) error {
 	return sendResult(c, http.StatusOK, result)
 }
 
+// handleListActiveSessions returns every ACTIVE Service Session.
+//
+//	@Summary		List active Service Sessions
+//	@Description	Returns every ACTIVE Service Session with its full projection, ordered by creation. This is the cashier's open-tabs view.
+//	@Tags			sales
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{object}	response.APIResponse{data=[]ServiceSessionResponse}
+//	@Failure		401	{object}	response.APIResponse
+//	@Failure		403	{object}	response.APIResponse
+//	@Router			/sales/service-sessions [get]
+func (s *Slices) handleListActiveSessions(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	result, err := s.ListActiveSessions.Handle(c.Request().Context(), actor)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, http.StatusOK, result)
+}
+
 // handleStartTakeaway opens a Takeaway Service Session.
 //
 //	@Summary		Open a Takeaway Service Session
