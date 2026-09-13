@@ -3,6 +3,7 @@ package sales
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -573,14 +574,27 @@ func nullString(v *string) sql.NullString {
 	return sql.NullString{String: *v, Valid: true}
 }
 
-// resolveTargetCheck is a temporary Task 8 stub: it always creates a new
-// Check, which is correct for every first-Commit case this task's tests
-// exercise. Task 9 replaces it with the CURRENT_UNPAID/NEW_CHECK branch.
+// resolveTargetCheck returns the Check the Commit's charges join, creating one
+// when needed, and its current charge.
 //
-//nolint:revive // target is the branch selector Task 9 implements; the stub is NEW_CHECK only.
+// CURRENT_UNPAID reuses the Session's most recent OPEN Check; NEW_CHECK always
+// opens one. The name is canonical and "unpaid" is vacuous in 5B, where no
+// Check can be paid — the state = 'OPEN' filter is what gives it meaning from
+// 5C, when it must skip settled Checks and reuse only one still awaiting
+// money.
 func resolveTargetCheck(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID,
 	target string, at time.Time,
 ) (uuid.UUID, int64, error) {
+	if target == CheckTargetCurrentUnpaid {
+		existing, err := q.LockCurrentOpenCheck(ctx, sessionID)
+		if err == nil {
+			return existing.ID, existing.ChargeVnd, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return uuid.Nil, 0, fmt.Errorf("lock current open check: %w", err)
+		}
+	}
+
 	created, err := q.InsertCheck(ctx, sqlc.InsertCheckParams{
 		ServiceSessionID: sessionID,
 		CreatedAt:        at,

@@ -163,6 +163,42 @@ func (e *salesEnv) AddDraftItemWithOptions(t *testing.T, sessionID, itemID,
 	return resp
 }
 
+// ---------- Check targeting ----------
+
+// SeedEditableDraft inserts an EDITABLE draft directly. 5B's
+// START_NEW_ORDER_DRAFT refuses while a COMMITTED draft has no Order, which
+// no phase before 5D can produce, so the reuse path is reachable only this
+// way. See the spec's accepted consequences.
+func (e *salesEnv) SeedEditableDraft(t *testing.T, sessionID uuid.UUID, target string) {
+	t.Helper()
+	_, err := e.DB.Exec(
+		`INSERT INTO order_drafts (service_session_id, state, check_target)
+		 VALUES ($1, 'EDITABLE', $2)`, sessionID, target)
+	require.NoError(t, err)
+}
+
+// SetCheckTarget sets the check_target of the Session's current EDITABLE draft
+// directly. This is fixture seeding, not a handler call: the
+// SetCheckTargetHandler does not exist until Task 11, so there is no API to
+// route through yet.
+func (e *salesEnv) SetCheckTarget(t *testing.T, sessionID uuid.UUID, target string) {
+	t.Helper()
+	res, err := e.DB.Exec(`
+		UPDATE order_drafts
+		SET check_target = $2
+		WHERE id = (
+			SELECT id
+			FROM order_drafts
+			WHERE service_session_id = $1 AND state = 'EDITABLE'
+			ORDER BY created_at DESC, id DESC
+			LIMIT 1
+		)`, sessionID, target)
+	require.NoError(t, err)
+	n, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), n, "exactly one EDITABLE draft for session %s", sessionID)
+}
+
 // ---------- Commit ----------
 
 // Commit runs Commit and fails the test when it errors.
