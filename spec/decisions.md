@@ -133,6 +133,7 @@ CREATE TABLE idempotency_keys (
 * The public Shift API contract is complete and stable from Phase 4 onward.
 * Until Phase 5 lands, `expected_cash_vnd` reflects fund movements only and must not be presented to staff as a reconciliation figure.
 * The guard on the total is symmetric, because sustained Pay Outs can legitimately drive the partial figure negative.
+* **Superseded in part by ADR-020** for the Cash Refund term.
 
 ---
 
@@ -224,3 +225,71 @@ CREATE TABLE idempotency_keys (
 * 5A's single-row `FOR UPDATE` in the add-draft-item path is left unchanged rather than churned.
 * **Consequences:**
 * Concurrent Commits sharing menu items proceed in parallel while retirement and availability changes remain excluded; the Sales-before-Catalog lock order of 5A §10 is preserved, so no deadlock cycle is introduced.
+
+---
+
+## ADR-016: One Check lock protocol for every 5C command
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical source locks `checks`, `service_sessions`, and `sales_shifts` all `FOR UPDATE` in the Payment path, but only `FOR UPDATE OF checks` in the restructuring path, with a source comment noting that locking parent rows there "can create a reverse dependency when Payment already owns one of the affected Check rows" — a deadlock hazard documented rather than removed.
+* **Decision:**
+* All four 5C commands lock `checks` `FOR UPDATE` in ascending id order, and `service_sessions` and `sales_shifts` `FOR SHARE`.
+* `FOR SHARE` matches what the commands do, which is read parent state to evaluate a precondition.
+* **Consequences:**
+* No deadlock cycle exists among the 5C commands or against 5A and 5B; two cashiers paying different Checks of one Session proceed in parallel; Session and Shift closure, which take `FOR UPDATE`, remain excluded for the duration of each transaction.
+
+---
+
+## ADR-017: Settlement is a consequence of Payment, evaluated as a zero balance
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical `evaluateCheckSettlement` takes three inputs — `balanceVnd`, `hasPendingRefund`, `hasCustomerExcess` — of which the latter two are supplied as compile-time `false` constants from a `NO_RECORDED_CHECK_CORRECTIONS` object, because Refund does not exist yet.
+* **Decision:**
+* 5C has no settlement command and no settlement route; a Payment that brings the balance to zero settles the Check in the same transaction, writing all four evidence columns and a separate `CHECK_SETTLED` audit event.
+* The condition is written as `balance == 0`.
+* **Consequences:**
+* A fully paid but unsettled Check cannot exist, guarded by the database constraint and the read invariant from both sides; Refund, when it arrives, brings its own readiness definition rather than inheriting a pre-built extension point nobody has designed against.
+
+---
+
+## ADR-018: Sales error codes are keyed by condition, not by operation
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical source declares twenty-seven codes across Payments, Split, and Merge, of which six pairs differ only by an operation prefix for an identical condition (`SALES_SHIFT_NOT_OPEN_FOR_SPLIT` against `MERGE_SALES_SHIFT_NOT_OPEN`, both describing what 5A already calls `OPEN_SALES_SHIFT_REQUIRED`), and three more describe field-shape violations that 5A's conventions treat as request validation.
+* **Decision:**
+* 5C declares thirteen new codes, one per condition, reuses 5A's and 5B's codes where the condition is the same, and demotes field-shape codes to request validation.
+* `CHECK_CREATION_FAILED` is not migrated, per 5B §6.4.
+* The design spec carries the complete canonical-to-5C mapping table.
+* **Consequences:**
+* A client handles one code per situation instead of one per situation per operation; the trace back to the canonical source stays mechanical through the mapping table; distinguishing `CHECK_NOT_FOUND` from `CHECK_NOT_OPEN` — which the canonical source collapses into one empty `WHERE` result — additionally makes the failure actionable for a cashier.
+
+---
+
+## ADR-019: A Payment stores its own Sales Shift and no attestation column
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical `payments` table stores `salesShiftId` even though it is reachable through `check → service_session → sales_shift`, and the Manual QR command takes a `receiptObservedInBankApp` boolean that must be `true` for the Payment to exist.
+* **Decision:**
+* `sales_shift_id` is stored on the Payment, because the Shift in which the money reached the cashier is an independent fact — a Session opened in one Shift can be paid in the next, and the derived path would answer the reconciliation question wrongly.
+* No `receipt_observed_in_bank_app` column is created; the attestation is required in the request body and recorded in the audit event's details.
+* **Consequences:**
+* Expected Cash is a single-table scan over a partial index; a Payment's Shift attribution survives any later change to its Session; and the database stores no column whose value is `true` on every row.
+
+---
+
+## ADR-020: Expected Cash gains its Cash Payment term in 5C; the Cash Refund term is deferred to Refund
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** ADR-008 shipped `expected_cash_vnd` as Opening Float plus Pay Ins less Pay Outs, and recorded that "Phase 5 adds the Cash Payment and Cash Refund terms". 5C is the first sub-phase that creates a Cash Payment, and no sub-phase of Phase 5 creates a Refund.
+* **Decision:**
+* `internal/shift` adds one sqlc query summing applied amounts of `CASH` Payments for a Shift, and `ComputeExpectedCash` becomes Opening Float plus Cash Payments and Pay Ins, less Pay Outs.
+* The sum is over applied amounts rather than tendered amounts, per `CONTEXT.md`.
+* The Cash Refund term is deferred to whichever phase introduces Refund, and the Swagger description names Refund as the outstanding dependency rather than "Phase 5".
+* `internal/shift` reads the `payments` table through its own query and does not import `internal/sales`, following ADR-012.
+* **Consequences:**
+* Expected Cash becomes a usable reconciliation figure for every cafe that does not issue cash refunds, which is the current operating reality; the remaining gap is named precisely instead of being attributed to a phase that will close without filling it.

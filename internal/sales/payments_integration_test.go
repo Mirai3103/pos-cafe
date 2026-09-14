@@ -294,3 +294,53 @@ func paymentErrorCode(t *testing.T, err error) string {
 	require.ErrorAs(t, mapped, &coded, "expected a coded error, got %v", mapped)
 	return coded.Code
 }
+
+// Every 5C route must deny a BARISTA and an actor whose capability was
+// removed mid-session, and must change nothing when it does.
+func TestPhase5CAuthorization(t *testing.T) {
+	env := newSalesEnv(t)
+
+	session := env.commitTakeawayDraft(t, 2)
+	checkID := env.soleCheckID(t, session.ID)
+	allocations := env.checkAllocations(t, session.ID, checkID)
+	charge := env.checkCharge(t, checkID)
+
+	calls := map[string]func(actor sales.Actor) (int, error){
+		"pay cash": func(actor sales.Actor) (int, error) {
+			_, status, err := env.payCashAs(t, actor, checkID, 1_000, 1_000)
+			return status, err
+		},
+		"pay manual qr": func(actor sales.Actor) (int, error) {
+			_, status, err := env.payManualQRAs(t, actor, checkID, 1_000, true, nil)
+			return status, err
+		},
+		"split check": func(actor sales.Actor) (int, error) {
+			_, status, err := env.splitToNewCheckAs(t, actor, checkID, []sales.SplitItem{
+				{CommittedItemID: allocations[0].CommittedItemID, Quantity: 1},
+			})
+			return status, err
+		},
+		"merge checks": func(actor sales.Actor) (int, error) {
+			_, status, err := env.mergeChecksAs(t, actor, checkID, uuid.New())
+			return status, err
+		},
+	}
+
+	for name, call := range calls {
+		t.Run(name+" denies a barista", func(t *testing.T) {
+			status, err := call(env.BaristaActor())
+			require.Error(t, err)
+			require.Equal(t, http.StatusForbidden, status)
+		})
+	}
+
+	t.Run("authority is reloaded inside the transaction", func(t *testing.T) {
+		actor := env.newCashierActor(t)
+		env.revokeCapability(t, actor, sales.CapSalesOperate)
+
+		_, status, err := env.payCashAs(t, actor, checkID, charge, charge)
+		require.Error(t, err)
+		require.Equal(t, http.StatusForbidden, status)
+		require.Equal(t, 0, env.countPayments(t, checkID))
+	})
+}

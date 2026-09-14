@@ -7,8 +7,10 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 
+	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
@@ -105,6 +107,35 @@ func (e *salesEnv) AsBarista() *salesEnv {
 // BaristaActor returns the seeded BARISTA actor, who holds no sales.operate,
 // for helpers that take an explicit actor.
 func (e *salesEnv) BaristaActor() sales.Actor { return e.barista }
+
+// newCashierActor creates a second identity holding CASHIER — which grants
+// sales.operate — with its own active access session, for tests that strip
+// authority while the session stays alive.
+func (e *salesEnv) newCashierActor(t *testing.T) sales.Actor {
+	t.Helper()
+	return seedActor(t, e.Queries, []string{auth.RoleCashier})
+}
+
+// revokeCapability deletes every role of the actor's identity that grants the
+// capability, while the actor's access session stays alive. Because the Sales
+// executor reloads roles inside its transaction, the very next operation must
+// be denied — authority is not cached at token issue.
+func (e *salesEnv) revokeCapability(t *testing.T, actor sales.Actor, capability string) {
+	t.Helper()
+	var granting []string
+	for role, capabilities := range auth.RoleCapabilities {
+		if slices.Contains(capabilities, capability) {
+			granting = append(granting, role)
+		}
+	}
+	require.NotEmpty(t, granting, "some role must grant %q", capability)
+	for _, role := range granting {
+		_, err := e.DB.Exec(
+			`DELETE FROM staff_operational_roles WHERE staff_identity_id = $1 AND role = $2`,
+			actor.StaffID, role)
+		require.NoError(t, err)
+	}
+}
 
 // ---------- Session lifecycle ----------
 
@@ -520,6 +551,25 @@ func (e *salesEnv) splitToNewCheck(t *testing.T, sourceCheckID uuid.UUID,
 	return resp, status, err
 }
 
+// splitToNewCheckAs moves quantities from one Check onto a newly created Check
+// as the given actor, for authorization denial tests.
+func (e *salesEnv) splitToNewCheckAs(t *testing.T, actor sales.Actor, sourceCheckID uuid.UUID,
+	items []sales.SplitItem,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewSplitCheckHandler(e.Runner).
+		Handle(context.Background(), actor, sales.SplitCheckCommand{
+			RequestID:     uuid.New(),
+			SourceCheckID: sourceCheckID,
+			Destination:   sales.SplitDestination{Type: sales.SplitDestinationNewCheck},
+			Items:         items,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
 // splitToExistingCheck moves quantities from one Check onto another Check that
 // already exists, returning the projection, HTTP status, and error untouched.
 func (e *salesEnv) splitToExistingCheck(t *testing.T, sourceCheckID,
@@ -549,6 +599,24 @@ func (e *salesEnv) mergeChecks(t *testing.T, survivingCheckID, absorbedCheckID u
 	t.Helper()
 	status, resp, err := sales.NewMergeChecksHandler(e.Runner).
 		Handle(context.Background(), e.Actor, sales.MergeChecksCommand{
+			RequestID:        uuid.New(),
+			SurvivingCheckID: survivingCheckID,
+			AbsorbedCheckID:  absorbedCheckID,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+// mergeChecksAs absorbs one Check into another as the given actor, for
+// authorization denial tests.
+func (e *salesEnv) mergeChecksAs(t *testing.T, actor sales.Actor, survivingCheckID,
+	absorbedCheckID uuid.UUID,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewMergeChecksHandler(e.Runner).
+		Handle(context.Background(), actor, sales.MergeChecksCommand{
 			RequestID:        uuid.New(),
 			SurvivingCheckID: survivingCheckID,
 			AbsorbedCheckID:  absorbedCheckID,

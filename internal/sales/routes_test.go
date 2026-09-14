@@ -97,3 +97,12 @@ func TestCommitRoutesRequireSalesOperate(t *testing.T) {
 func TestSalesExposesEighteenOperations(t *testing.T) {
 	require.Len(t, registeredSalesRoutes(t), 18)
 }
+
+func TestPhase5CRoutesAreRegistered(t *testing.T) {
+	routes := registeredSalesRoutes(t)
+	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/payments/cash")
+	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/payments/manual-qr")
+	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/split")
+	require.Contains(t, routes, "POST /api/v1/sales/checks/merge")
+	require.Len(t, routes, 18, "Phase 5C brings the Sales surface to eighteen operations")
+}
