@@ -25,8 +25,9 @@ type resolutionFixture struct {
 }
 
 // TestSalesResolutionMatchesCatalog is ADR-012's safety net. Sales expresses
-// (inherited - exclusions) + direct in SQL and Catalog expresses it in Go; if
-// the two ever disagree, this fails in CI rather than in a cafe.
+// (inherited - exclusions) + direct in SQL twice — once per Menu Item for the
+// draft path and once batched for Commit — and Catalog expresses it in Go; if
+// any of the three ever disagree, this fails in CI rather than in a cafe.
 func TestSalesResolutionMatchesCatalog(t *testing.T) {
 	db, q := openSalesTestDB(t)
 	ctx := context.Background()
@@ -41,6 +42,7 @@ func TestSalesResolutionMatchesCatalog(t *testing.T) {
 		{"inherited and excluded", buildInheritedAndExcluded},
 		{"excluded and directly attached", buildExcludedAndDirect},
 		{"retired group still resolves as a member", buildRetiredGroup},
+		{"inherited and directly attached (dedupes)", buildInheritedAndDirectSameGroup},
 	}
 
 	for _, tc := range cases {
@@ -48,21 +50,59 @@ func TestSalesResolutionMatchesCatalog(t *testing.T) {
 			truncateSalesTables(t, db)
 			fx := tc.build(t, db, q)
 
-			fromSQL, err := q.ListEffectiveModifierGroupIDs(ctx, fx.MenuItemID)
+			fromCatalog := catalog.EffectiveGroupIDs(fx.Inherited, fx.Excluded, fx.Direct)
+
+			perItem, err := q.ListEffectiveModifierGroupIDs(ctx, fx.MenuItemID)
 			require.NoError(t, err)
 
-			fromGo := catalog.EffectiveGroupIDs(fx.Inherited, fx.Excluded, fx.Direct)
-			// EffectiveGroupIDs returns a nil slice for an empty set while
-			// sqlc (emit_empty_slices) returns an empty one; reflect.DeepEqual
-			// distinguishes the two, so normalize before comparing.
-			if fromGo == nil {
-				fromGo = []uuid.UUID{}
+			batchRows, err := q.ListEffectiveModifierGroupsForCommit(ctx,
+				[]uuid.UUID{fx.MenuItemID})
+			require.NoError(t, err)
+			batched := make([]uuid.UUID, 0, len(batchRows))
+			for _, row := range batchRows {
+				batched = append(batched, row.ModifierGroupID)
 			}
 
-			assert.Equal(t, fromGo, fromSQL,
-				"sales SQL resolution must equal catalog.EffectiveGroupIDs")
+			// ElementsMatch treats nil and empty as equal, so
+			// EffectiveGroupIDs' nil-for-empty convention needs no normalizing
+			// here.
+			require.ElementsMatch(t, fromCatalog, perItem,
+				"the single-item query must match catalog.EffectiveGroupIDs")
+			require.ElementsMatch(t, fromCatalog, batched,
+				"the batched commit query must match catalog.EffectiveGroupIDs")
 		})
 	}
+}
+
+// TestBatchedResolutionDoesNotLeakGroupsAcrossItems pins the batched commit
+// query to per-Item scope: Coffee's inherited Topping group must resolve under
+// Coffee alone, Tea (no groups at all) must stay empty, and no row may name a
+// Menu Item outside the requested batch.
+func TestBatchedResolutionDoesNotLeakGroupsAcrossItems(t *testing.T) {
+	env := newSalesEnv(t)
+	ctx := context.Background()
+
+	rows, err := env.Queries.ListEffectiveModifierGroupsForCommit(ctx,
+		[]uuid.UUID{env.CoffeeID, env.TeaID})
+	require.NoError(t, err)
+
+	requested := []uuid.UUID{env.CoffeeID, env.TeaID}
+	byItem := make(map[uuid.UUID][]uuid.UUID)
+	for _, row := range rows {
+		require.Contains(t, requested, row.MenuItemID,
+			"the batched query must only resolve the requested Menu Items")
+		byItem[row.MenuItemID] = append(byItem[row.MenuItemID], row.ModifierGroupID)
+	}
+
+	coffeeOnly, err := env.Queries.ListEffectiveModifierGroupIDs(ctx, env.CoffeeID)
+	require.NoError(t, err)
+	teaOnly, err := env.Queries.ListEffectiveModifierGroupIDs(ctx, env.TeaID)
+	require.NoError(t, err)
+
+	require.ElementsMatch(t, coffeeOnly, byItem[env.CoffeeID],
+		"the batched set for Coffee must match its single-item set")
+	require.ElementsMatch(t, teaOnly, byItem[env.TeaID],
+		"the batched set for Tea must match its single-item set")
 }
 
 // A Group that is both inherited and directly attached appears once.

@@ -2,6 +2,7 @@ package sales
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
@@ -35,7 +36,27 @@ func TestRouteRegistration(t *testing.T) {
 		"PATCH /api/v1/sales/service-sessions/:id/draft/items/:item_id/preparation-note": true,
 		"PATCH /api/v1/sales/service-sessions/:id/draft/items/:item_id/modifiers":        true,
 		"DELETE /api/v1/sales/service-sessions/:id/draft/items/:item_id":                 true,
+		"POST /api/v1/sales/service-sessions/:id/draft/commit":                           true,
+		"POST /api/v1/sales/service-sessions/:id/draft":                                  true,
+		"PUT /api/v1/sales/service-sessions/:id/draft/check-target":                      true,
 	}
+
+	got := make(map[string]bool)
+	for _, route := range registeredSalesRoutes(t) {
+		got[route] = true
+	}
+
+	for route := range want {
+		assert.True(t, got[route], "route %q must be registered", route)
+	}
+	require.Equal(t, len(want), len(got),
+		"the router must expose exactly the Sales routes and nothing else; got %v", got)
+}
+
+// registeredSalesRoutes registers the Sales routes on a fresh router and
+// returns every route the router exposes as "METHOD path" strings.
+func registeredSalesRoutes(t *testing.T) []string {
+	t.Helper()
 
 	e := echo.New()
 	v1 := e.Group("/api/v1")
@@ -45,14 +66,30 @@ func TestRouteRegistration(t *testing.T) {
 	slices := NewSlices(nil, nil)
 	slices.RegisterRoutes(v1, &auth.Middleware{})
 
-	got := make(map[string]bool)
+	routes := make([]string, 0, len(e.Routes()))
 	for _, route := range e.Routes() {
-		got[fmt.Sprintf("%s %s", route.Method, route.Path)] = true
+		routes = append(routes, fmt.Sprintf("%s %s", route.Method, route.Path))
 	}
+	return routes
+}
 
-	for route := range want {
-		assert.True(t, got[route], "route %q must be registered", route)
+func TestCommitRoutesRequireSalesOperate(t *testing.T) {
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/v1/sales/service-sessions/:id/draft/commit"},
+		{http.MethodPost, "/api/v1/sales/service-sessions/:id/draft"},
+		{http.MethodPut, "/api/v1/sales/service-sessions/:id/draft/check-target"},
 	}
-	require.Equal(t, len(want), len(got),
-		"the router must expose exactly the Sales routes and nothing else; got %v", got)
+	registered := registeredSalesRoutes(t)
+	for _, r := range routes {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			require.Contains(t, registered, r.method+" "+r.path)
+		})
+	}
+}
+
+func TestSalesExposesFourteenOperations(t *testing.T) {
+	require.Len(t, registeredSalesRoutes(t), 14)
 }

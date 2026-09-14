@@ -88,6 +88,25 @@ type RemoveDraftItemCommand struct {
 	DraftItemID      uuid.UUID `json:"-"`
 }
 
+// CommitOrderDraftCommand fixes the draft's prices into a Check.
+type CommitOrderDraftCommand struct {
+	RequestID        uuid.UUID `json:"request_id"`
+	ServiceSessionID uuid.UUID `json:"-"`
+}
+
+// StartNewOrderDraftCommand opens the Session's next Order Draft.
+type StartNewOrderDraftCommand struct {
+	RequestID        uuid.UUID `json:"request_id"`
+	ServiceSessionID uuid.UUID `json:"-"`
+}
+
+// SetCheckTargetCommand steers where the next Commit's charges land.
+type SetCheckTargetCommand struct {
+	RequestID        uuid.UUID `json:"request_id"`
+	ServiceSessionID uuid.UUID `json:"-"`
+	CheckTarget      string    `json:"check_target"`
+}
+
 // ---------- Responses ----------
 
 // SessionTableResponse is a Table currently assigned to a Service Session.
@@ -124,10 +143,15 @@ type DraftItemResponse struct {
 }
 
 // OrderDraftResponse is the editable Order Draft.
+//
+// CheckTarget belongs to the draft, not the Session: it resets to
+// CURRENT_UNPAID every time a new draft opens, so a cashier who directed one
+// round to a new Check does not silently direct the next one there too.
 type OrderDraftResponse struct {
-	ID    uuid.UUID           `json:"id"`
-	State string              `json:"state"`
-	Items []DraftItemResponse `json:"items"`
+	ID          uuid.UUID           `json:"id"`
+	State       string              `json:"state"`
+	CheckTarget string              `json:"check_target"`
+	Items       []DraftItemResponse `json:"items"`
 }
 
 // ServiceSessionResponse is the one projection every Sales operation returns.
@@ -155,10 +179,61 @@ type ServiceSessionResponse struct {
 	CreatedAt          time.Time              `json:"created_at"`
 	Draft              *OrderDraftResponse    `json:"draft"`
 
-	// Filled by 5B and 5C.
-	Checks []struct{} `json:"checks"`
+	// Filled from 5B; payments within each Check are filled by 5C.
+	Checks []CheckResponse `json:"checks"`
 	// Filled by 5D.
 	Orders []struct{} `json:"orders"`
 	// Filled by 5D.
 	PreparationUnits []struct{} `json:"preparation_units"`
+}
+
+// CommittedModifierResponse is one frozen Modifier Option on a Committed Item.
+// Names and surcharge are snapshots: a later rename in Catalog must not
+// rewrite what a customer was charged for.
+type CommittedModifierResponse struct {
+	GroupID      uuid.UUID `json:"group_id"`
+	GroupName    string    `json:"group_name"`
+	OptionID     uuid.UUID `json:"option_id"`
+	OptionName   string    `json:"option_name"`
+	SurchargeVND int64     `json:"surcharge_vnd"`
+}
+
+// ChargeAllocationResponse is one Committed Item's charge against one Check.
+//
+// Submitted is a constant false in 5B and is filled by 5D, which introduces
+// the orders table this flag is derived from.
+type ChargeAllocationResponse struct {
+	ID                uuid.UUID                   `json:"id"`
+	CommittedItemID   uuid.UUID                   `json:"committed_item_id"`
+	MenuItemID        uuid.UUID                   `json:"menu_item_id"`
+	CategoryName      string                      `json:"category_name"`
+	Name              string                      `json:"name"`
+	SizeName          *string                     `json:"size_name"`
+	PreparationNote   *string                     `json:"preparation_note"`
+	Modifiers         []CommittedModifierResponse `json:"modifiers"`
+	CommittedQuantity int32                       `json:"committed_quantity"`
+	CommittedTotalVND int64                       `json:"committed_total_vnd"`
+	AllocatedQuantity int32                       `json:"allocated_quantity"`
+	AmountVND         int64                       `json:"amount_vnd"`
+	CreatedAt         time.Time                   `json:"created_at"`
+	Submitted         bool                        `json:"submitted"`
+}
+
+// CheckResponse is a grouping of charges awaiting settlement.
+//
+// TotalAppliedVND is the sum of the Check's Payments and is therefore always
+// zero in 5B; BalanceVND is ChargeVND minus it. Both ship in their final shape
+// and are filled by 5C, following the precedent ADR-008 set for
+// expected_cash_vnd. PendingRefundVND is deliberately absent: Refund is
+// outside Phase 5 entirely.
+type CheckResponse struct {
+	ID              uuid.UUID `json:"id"`
+	State           string    `json:"state"`
+	ChargeVND       int64     `json:"charge_vnd"`
+	TotalAppliedVND int64     `json:"total_applied_vnd"`
+	BalanceVND      int64     `json:"balance_vnd"`
+	CreatedAt       time.Time `json:"created_at"`
+	// Filled by 5C.
+	Payments    []struct{}                 `json:"payments"`
+	Allocations []ChargeAllocationResponse `json:"allocations"`
 }

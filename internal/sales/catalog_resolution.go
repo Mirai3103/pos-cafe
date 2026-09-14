@@ -103,18 +103,13 @@ func validateModifierOptionsForGroups(ctx context.Context, q *sqlc.Queries,
 		if _, applies := effective[row.ModifierGroupID]; !applies {
 			return fmt.Errorf("%w: %s is not offered for this menu item", ErrModifierOptionNotFound, id)
 		}
-		// sqlc cannot infer the boolean type of the query's
-		// `(retired_at IS NOT NULL)` expressions for the database/sql
-		// engine, so the generated fields are interface{}; pgx scans
-		// PostgreSQL booleans into bool. A mismatch here must fail closed
-		// rather than silently treat a retired row as active.
-		optionRetired, ok := row.OptionRetired.(bool)
-		if !ok {
-			return fmt.Errorf("scan modifier option retirement flag: unexpected type %T", row.OptionRetired)
+		optionRetired, err := sqlBool(row.OptionRetired, "modifier option retirement")
+		if err != nil {
+			return err
 		}
-		groupRetired, ok := row.GroupRetired.(bool)
-		if !ok {
-			return fmt.Errorf("scan modifier group retirement flag: unexpected type %T", row.GroupRetired)
+		groupRetired, err := sqlBool(row.GroupRetired, "modifier group retirement")
+		if err != nil {
+			return err
 		}
 		if optionRetired || groupRetired {
 			return fmt.Errorf("%w: %s", ErrModifierOptionRetired, id)

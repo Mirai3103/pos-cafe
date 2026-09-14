@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/google/uuid"
@@ -15,7 +16,7 @@ import (
 func newServiceSessionResponse() ServiceSessionResponse {
 	return ServiceSessionResponse{
 		Tables:           make([]SessionTableResponse, 0),
-		Checks:           make([]struct{}, 0),
+		Checks:           make([]CheckResponse, 0),
 		Orders:           make([]struct{}, 0),
 		PreparationUnits: make([]struct{}, 0),
 	}
@@ -62,6 +63,15 @@ func LoadServiceSession(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUI
 		out.Tables = append(out.Tables, SessionTableResponse{ID: row.ID, Name: row.Name})
 	}
 
+	// Checks load before the draft block: a Session that has committed its
+	// only draft has Checks but no EDITABLE draft, so the no-draft path below
+	// must still carry them.
+	checks, err := loadChecks(ctx, q, sessionID)
+	if err != nil {
+		return out, err
+	}
+	out.Checks = checks
+
 	draft, err := q.GetEditableDraft(ctx, sessionID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -76,7 +86,12 @@ func LoadServiceSession(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUI
 	if err != nil {
 		return out, err
 	}
-	out.Draft = &OrderDraftResponse{ID: draft.ID, State: draft.State, Items: items}
+	out.Draft = &OrderDraftResponse{
+		ID:          draft.ID,
+		State:       draft.State,
+		CheckTarget: draft.CheckTarget,
+		Items:       items,
+	}
 
 	return out, nil
 }
@@ -146,4 +161,133 @@ func loadDraftItems(ctx context.Context, q *sqlc.Queries, draftID uuid.UUID) (
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+// loadChecks assembles every Check of a Service Session with its allocations.
+//
+// The Check's stored charge_vnd is a denormalization of the sum over its
+// allocations, in the same spirit as 5A's modifier_key: derived, never
+// authoritative. It is stored rather than always derived because 5C freezes
+// the charge of a settled or merged Check, at which point the live sum stops
+// being the right answer. Every read therefore recomputes and compares, and a
+// mismatch fails the read rather than serving a wrong total.
+func loadChecks(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
+	[]CheckResponse, error,
+) {
+	checkRows, err := q.ListSessionChecks(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("load session checks: %w", err)
+	}
+
+	out := make([]CheckResponse, 0, len(checkRows))
+	for _, row := range checkRows {
+		allocations, allocatedVND, err := loadCheckAllocations(ctx, q, row.ID)
+		if err != nil {
+			return nil, err
+		}
+		if allocatedVND != row.ChargeVnd {
+			slog.Error("check charge does not match its allocations",
+				"check_id", row.ID,
+				"stored_charge_vnd", row.ChargeVnd,
+				"allocated_vnd", allocatedVND)
+			return nil, fmt.Errorf("%w: check %s", ErrChargeInvariantViolated, row.ID)
+		}
+
+		// No Payment exists before 5C, so applied is zero and the balance is
+		// the whole charge. Both ship in their final shape.
+		out = append(out, CheckResponse{
+			ID:              row.ID,
+			State:           row.State,
+			ChargeVND:       row.ChargeVnd,
+			TotalAppliedVND: 0,
+			BalanceVND:      row.ChargeVnd,
+			CreatedAt:       row.CreatedAt,
+			Payments:        make([]struct{}, 0),
+			Allocations:     allocations,
+		})
+	}
+	return out, nil
+}
+
+// loadCheckAllocations returns one Check's allocations and their summed amount.
+func loadCheckAllocations(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID) (
+	[]ChargeAllocationResponse, int64, error,
+) {
+	rows, err := q.ListCheckAllocations(ctx, checkID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("load check allocations: %w", err)
+	}
+
+	itemIDs := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		itemIDs = append(itemIDs, row.CommittedItemID)
+	}
+	modifiers, err := loadCommittedModifiers(ctx, q, itemIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	out := make([]ChargeAllocationResponse, 0, len(rows))
+	var totalVND int64
+	for _, row := range rows {
+		amountVND, err := LineTotal(row.AllocatedQuantity, row.UnitPriceVnd)
+		if err != nil {
+			return nil, 0, err
+		}
+		totalVND, err = AddCharge(totalVND, amountVND)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		mods := modifiers[row.CommittedItemID]
+		if mods == nil {
+			mods = make([]CommittedModifierResponse, 0)
+		}
+		out = append(out, ChargeAllocationResponse{
+			ID:                row.ID,
+			CommittedItemID:   row.CommittedItemID,
+			MenuItemID:        row.MenuItemID,
+			CategoryName:      row.CategoryName,
+			Name:              row.ItemName,
+			SizeName:          nullStringPtr(row.SizeName),
+			PreparationNote:   nullStringPtr(row.PreparationNote),
+			Modifiers:         mods,
+			CommittedQuantity: row.CommittedQuantity,
+			CommittedTotalVND: row.CommittedTotalVnd,
+			AllocatedQuantity: row.AllocatedQuantity,
+			AmountVND:         amountVND,
+			CreatedAt:         row.CreatedAt,
+			// Filled by 5D, which introduces the orders table this is
+			// derived from.
+			Submitted: false,
+		})
+	}
+	return out, totalVND, nil
+}
+
+// loadCommittedModifiers groups frozen modifier snapshots by Committed Item.
+// The query orders by (group name, option name), so presentation order comes
+// from the read rather than from insert order — the table carries no ordering
+// column, exactly as 5A's selected options do not.
+func loadCommittedModifiers(ctx context.Context, q *sqlc.Queries, itemIDs []uuid.UUID) (
+	map[uuid.UUID][]CommittedModifierResponse, error,
+) {
+	out := make(map[uuid.UUID][]CommittedModifierResponse, len(itemIDs))
+	if len(itemIDs) == 0 {
+		return out, nil
+	}
+	rows, err := q.ListCommittedItemModifiers(ctx, itemIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load committed item modifiers: %w", err)
+	}
+	for _, row := range rows {
+		out[row.CommittedItemID] = append(out[row.CommittedItemID], CommittedModifierResponse{
+			GroupID:      row.ModifierGroupID,
+			GroupName:    row.ModifierGroupName,
+			OptionID:     row.ModifierOptionID,
+			OptionName:   row.ModifierOptionName,
+			SurchargeVND: row.SurchargeVnd,
+		})
+	}
+	return out, nil
 }

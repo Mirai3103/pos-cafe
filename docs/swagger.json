@@ -3337,6 +3337,252 @@
                 }
             }
         },
+        "/sales/service-sessions/{id}/draft": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Opens the Service Session's next Order Draft. Rejected while the Session holds an editable draft, or a committed draft with no Order — in Phase 5B the latter blocks every committed draft, because Submit arrives in 5D.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Start a new Order Draft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Start request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.StartNewOrderDraftCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/service-sessions/{id}/draft/check-target": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Steers where the next Commit's charges land. CURRENT_UNPAID reuses the Session's most recent open Check; NEW_CHECK always opens one. The target belongs to the draft and resets when a new draft opens.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Set the Order Draft's Check target",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Check target request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.SetCheckTargetCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/service-sessions/{id}/draft/commit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Revalidates the draft, freezes prices into immutable Committed Items, and charges a Check. The response's checks[].payments and checks[].total_applied_vnd are filled by Phase 5C; allocations[].submitted is filled by Phase 5D.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Commit the Order Draft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Commit request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.CommitOrderDraftCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/sales/service-sessions/{id}/draft/items": {
             "post": {
                 "security": [
@@ -6100,6 +6346,120 @@
                 }
             }
         },
+        "sales.ChargeAllocationResponse": {
+            "type": "object",
+            "properties": {
+                "allocated_quantity": {
+                    "type": "integer"
+                },
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "category_name": {
+                    "type": "string"
+                },
+                "committed_item_id": {
+                    "type": "string"
+                },
+                "committed_quantity": {
+                    "type": "integer"
+                },
+                "committed_total_vnd": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "menu_item_id": {
+                    "type": "string"
+                },
+                "modifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.CommittedModifierResponse"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "preparation_note": {
+                    "type": "string"
+                },
+                "size_name": {
+                    "type": "string"
+                },
+                "submitted": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "sales.CheckResponse": {
+            "type": "object",
+            "properties": {
+                "allocations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.ChargeAllocationResponse"
+                    }
+                },
+                "balance_vnd": {
+                    "type": "integer"
+                },
+                "charge_vnd": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "payments": {
+                    "description": "Filled by 5C.",
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "state": {
+                    "type": "string"
+                },
+                "total_applied_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sales.CommitOrderDraftCommand": {
+            "type": "object",
+            "properties": {
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.CommittedModifierResponse": {
+            "type": "object",
+            "properties": {
+                "group_id": {
+                    "type": "string"
+                },
+                "group_name": {
+                    "type": "string"
+                },
+                "option_id": {
+                    "type": "string"
+                },
+                "option_name": {
+                    "type": "string"
+                },
+                "surcharge_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
         "sales.DraftItemResponse": {
             "type": "object",
             "properties": {
@@ -6141,6 +6501,9 @@
         "sales.OrderDraftResponse": {
             "type": "object",
             "properties": {
+                "check_target": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -6187,10 +6550,10 @@
             "type": "object",
             "properties": {
                 "checks": {
-                    "description": "Filled by 5B and 5C.",
+                    "description": "Filled from 5B; payments within each Check are filled by 5C.",
                     "type": "array",
                     "items": {
-                        "type": "object"
+                        "$ref": "#/definitions/sales.CheckResponse"
                     }
                 },
                 "created_at": {
@@ -6246,6 +6609,17 @@
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.SetCheckTargetCommand": {
+            "type": "object",
+            "properties": {
+                "check_target": {
+                    "type": "string"
+                },
+                "request_id": {
                     "type": "string"
                 }
             }
@@ -6322,6 +6696,14 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "sales.StartNewOrderDraftCommand": {
+            "type": "object",
+            "properties": {
+                "request_id": {
+                    "type": "string"
                 }
             }
         },

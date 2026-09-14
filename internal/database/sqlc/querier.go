@@ -46,6 +46,16 @@ type Querier interface {
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
+	// A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
+	// corresponding Order.
+	//
+	// 5B has no orders table, so the second clause matches every COMMITTED draft
+	// and a Session that has committed once cannot open another draft. That dead
+	// end is deliberate and disappears when 5D adds the orders join here: the
+	// rule exists to stop staff stacking rounds ahead of the kitchen, and
+	// relaxing it now would ship a rule no phase wants. See the spec's accepted
+	// consequences.
+	FindBlockingDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error)
 	FindDraftItemByComposition(ctx context.Context, arg FindDraftItemByCompositionParams) (FindDraftItemByCompositionRow, error)
 	// findDraftItemByComposition plus an id <> $n clause, so the row being edited
 	// never matches itself. A separate query rather than a nullable exclusion
@@ -57,7 +67,7 @@ type Querier interface {
 	GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error)
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
-	GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
+	GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (GetEditableDraftRow, error)
 	// Includes released assignments, so a released sequence number is never
 	// reused and the audit trail stays unambiguous.
 	GetHighestAssignmentSequence(ctx context.Context, serviceSessionID uuid.UUID) (int32, error)
@@ -85,6 +95,7 @@ type Querier interface {
 	// Sales reads the Shift-owned table through its own query rather than
 	// importing internal/shift, per ADR-006's precedent.
 	GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error)
+	GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (string, error)
 	// Queries for internal/sales (Phase 5A).
 	//
 	// Authority, role, and advisory-lock queries are slice-local by ADR-007: the
@@ -125,10 +136,15 @@ type Querier interface {
 	InsertAuditEventsBatch(ctx context.Context, arg InsertAuditEventsBatchParams) error
 	// -- Cash Movements --
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
+	InsertChargeAllocation(ctx context.Context, arg InsertChargeAllocationParams) error
+	InsertCheck(ctx context.Context, arg InsertCheckParams) (InsertCheckRow, error)
+	InsertCommittedItem(ctx context.Context, arg InsertCommittedItemParams) (uuid.UUID, error)
+	InsertCommittedItemModifierOption(ctx context.Context, arg InsertCommittedItemModifierOptionParams) error
 	InsertDraftItem(ctx context.Context, arg InsertDraftItemParams) (InsertDraftItemRow, error)
 	InsertDraftItemModifierOption(ctx context.Context, arg InsertDraftItemModifierOptionParams) error
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
-	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error)
+	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (InsertOrderDraftRow, error)
+	InsertOrderDraftForSession(ctx context.Context, arg InsertOrderDraftForSessionParams) (InsertOrderDraftForSessionRow, error)
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
 	// Batches assignTables' per-Table insert loop into one round trip. Two
 	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
@@ -155,6 +171,8 @@ type Querier interface {
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 	ListCashMovements(ctx context.Context, salesShiftID uuid.UUID) ([]ListCashMovementsRow, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
+	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
+	ListCommittedItemModifiers(ctx context.Context, committedItemIds []uuid.UUID) ([]ListCommittedItemModifiersRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
 	// Declared defaults of the given Groups, filtered to what is currently
@@ -163,6 +181,11 @@ type Querier interface {
 	// Ordered by Group then Option name, which is the order the projection emits.
 	ListDraftItemModifierOptions(ctx context.Context, orderDraftID uuid.UUID) ([]ListDraftItemModifierOptionsRow, error)
 	ListDraftItemOptionIDs(ctx context.Context, orderDraftItemID uuid.UUID) ([]uuid.UUID, error)
+	// The selected Options of the given draft items, with the Group facts the
+	// Commit rules need. The Options are locked FOR SHARE per ADR-015's lock
+	// list, so a retirement or availability change cannot land between the
+	// Commit validation and its writes; modifier_groups stay unlocked.
+	ListDraftItemOptionsForCommit(ctx context.Context, draftItemIds []uuid.UUID) ([]ListDraftItemOptionsForCommitRow, error)
 	// price_vnd is the Size price when a Size is chosen and the Item price
 	// otherwise, matching the canonical Menu Price rule. available is read live
 	// rather than snapshotted: a draft is a live proposal, and an item that became
@@ -183,6 +206,15 @@ type Querier interface {
 	// keeps the duplication to one function against one query, which
 	// TestSalesResolutionMatchesCatalog pins together. See ADR-012.
 	ListEffectiveModifierGroupIDs(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
+	// (inherited - exclusions) + direct, for a SET of Menu Items, returning the
+	// selection rules Commit enforces.
+	//
+	// This is the second expression of the algebra ListEffectiveModifierGroupIDs
+	// already encodes. TestSalesResolutionMatchesCatalog pins both to
+	// catalog.EffectiveGroupIDs over shared fixtures so they cannot drift. The
+	// single-item query is left alone: the draft path does not need min/max and
+	// should not pay for them. See ADR-012.
+	ListEffectiveModifierGroupsForCommit(ctx context.Context, menuItemIds []uuid.UUID) ([]ListEffectiveModifierGroupsForCommitRow, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -196,11 +228,20 @@ type Querier interface {
 	ListModifierOptionsForValidation(ctx context.Context, optionIds []uuid.UUID) ([]ListModifierOptionsForValidationRow, error)
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
+	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	// The Session's most recent OPEN Check, for the CURRENT_UNPAID target.
+	LockCurrentOpenCheck(ctx context.Context, serviceSessionID uuid.UUID) (LockCurrentOpenCheckRow, error)
 	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
 	// Scoped to the draft, so a caller cannot reach an item of another Session by
 	// guessing its id.
 	LockDraftItem(ctx context.Context, arg LockDraftItemParams) (LockDraftItemRow, error)
+	// Every draft item with the Catalog facts Commit revalidates against, locked
+	// so the rows cannot change between validation and write: the draft items FOR
+	// UPDATE, and the joined Menu Items FOR SHARE per ADR-015's lock list.
+	// Ordered by (created_at, id), which also fixes the order of the Committed
+	// Items.
+	LockDraftItemsForCommit(ctx context.Context, orderDraftID uuid.UUID) ([]LockDraftItemsForCommitRow, error)
 	// Checks every precondition and takes the lock in one statement, so there is
 	// no window between the check and the write.
 	//
@@ -217,13 +258,21 @@ type Querier interface {
 	// concurrent retirement of this Size can slip between validation and the
 	// draft-item write.
 	LockMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (LockMenuItemSizeForDraftRow, error)
+	// Locked FOR SHARE: Commit only reads these rows and must merely prevent a
+	// retirement or availability change landing mid-transaction. FOR UPDATE would
+	// serialize two cashiers committing orders that share a popular item, on the
+	// busiest path in the system, for no correctness gain. internal/catalog's
+	// mutations take FOR UPDATE and are still excluded. See ADR-015.
+	LockMenuItemSizesForCommit(ctx context.Context, sizeIds []uuid.UUID) ([]LockMenuItemSizesForCommitRow, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
 	// Locks the selected Tables in id order so two concurrent assignments over
 	// overlapping sets cannot deadlock against each other. The caller must sort
 	// the ids before calling.
 	LockTablesForAssignment(ctx context.Context, tableIds []uuid.UUID) ([]LockTablesForAssignmentRow, error)
+	MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
+	RaiseCheckCharge(ctx context.Context, arg RaiseCheckChargeParams) error
 	// released_at and released_by_staff_identity_id must be set together; the
 	// table_assignment_release_evidence_valid constraint from migration 000006
 	// rejects one without the other.
@@ -249,6 +298,7 @@ type Querier interface {
 	SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAvailabilityParams) (MenuItem, error)
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
+	SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	SetTableAvailability(ctx context.Context, arg SetTableAvailabilityParams) (Table, error)
 	ShiftAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error

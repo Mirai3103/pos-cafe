@@ -32,6 +32,32 @@ func (q *Queries) DeleteDraftItemModifierOptions(ctx context.Context, orderDraft
 	return err
 }
 
+const findBlockingDraft = `-- name: FindBlockingDraft :one
+SELECT id
+FROM order_drafts
+WHERE service_session_id = $1
+  AND state IN ('EDITABLE', 'COMMITTED')
+ORDER BY created_at ASC, id ASC
+LIMIT 1
+FOR UPDATE
+`
+
+// A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
+// corresponding Order.
+//
+// 5B has no orders table, so the second clause matches every COMMITTED draft
+// and a Session that has committed once cannot open another draft. That dead
+// end is deliberate and disappears when 5D adds the orders join here: the
+// rule exists to stop staff stacking rounds ahead of the kitchen, and
+// relaxing it now would ship a rule no phase wants. See the spec's accepted
+// consequences.
+func (q *Queries) FindBlockingDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, findBlockingDraft, serviceSessionID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const findDraftItemByComposition = `-- name: FindDraftItemByComposition :one
 SELECT id, quantity
 FROM order_draft_items
@@ -111,18 +137,27 @@ func (q *Queries) FindDraftItemByCompositionExcluding(ctx context.Context, arg F
 }
 
 const getEditableDraft = `-- name: GetEditableDraft :one
-SELECT id, service_session_id, state, created_at
+SELECT id, service_session_id, state, check_target, created_at
 FROM order_drafts
 WHERE service_session_id = $1 AND state = 'EDITABLE'
 `
 
-func (q *Queries) GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error) {
+type GetEditableDraftRow struct {
+	ID               uuid.UUID `json:"id"`
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	State            string    `json:"state"`
+	CheckTarget      string    `json:"check_target"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (GetEditableDraftRow, error) {
 	row := q.db.QueryRowContext(ctx, getEditableDraft, serviceSessionID)
-	var i OrderDraft
+	var i GetEditableDraftRow
 	err := row.Scan(
 		&i.ID,
 		&i.ServiceSessionID,
 		&i.State,
+		&i.CheckTarget,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -170,6 +205,17 @@ func (q *Queries) GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getOrderDraftCheckTarget = `-- name: GetOrderDraftCheckTarget :one
+SELECT check_target FROM order_drafts WHERE id = $1
+`
+
+func (q *Queries) GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getOrderDraftCheckTarget, id)
+	var check_target string
+	err := row.Scan(&check_target)
+	return check_target, err
 }
 
 const getSalesSessionAuthority = `-- name: GetSalesSessionAuthority :one
@@ -297,6 +343,121 @@ func (q *Queries) GetServiceSession(ctx context.Context, id uuid.UUID) (GetServi
 	return i, err
 }
 
+const insertChargeAllocation = `-- name: InsertChargeAllocation :exec
+INSERT INTO charge_allocations (committed_item_id, check_id, quantity, created_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type InsertChargeAllocationParams struct {
+	CommittedItemID uuid.UUID `json:"committed_item_id"`
+	CheckID         uuid.UUID `json:"check_id"`
+	Quantity        int32     `json:"quantity"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+func (q *Queries) InsertChargeAllocation(ctx context.Context, arg InsertChargeAllocationParams) error {
+	_, err := q.db.ExecContext(ctx, insertChargeAllocation,
+		arg.CommittedItemID,
+		arg.CheckID,
+		arg.Quantity,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertCheck = `-- name: InsertCheck :one
+INSERT INTO checks (service_session_id, created_at)
+VALUES ($1, $2)
+RETURNING id, charge_vnd
+`
+
+type InsertCheckParams struct {
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+type InsertCheckRow struct {
+	ID        uuid.UUID `json:"id"`
+	ChargeVnd int64     `json:"charge_vnd"`
+}
+
+func (q *Queries) InsertCheck(ctx context.Context, arg InsertCheckParams) (InsertCheckRow, error) {
+	row := q.db.QueryRowContext(ctx, insertCheck, arg.ServiceSessionID, arg.CreatedAt)
+	var i InsertCheckRow
+	err := row.Scan(&i.ID, &i.ChargeVnd)
+	return i, err
+}
+
+const insertCommittedItem = `-- name: InsertCommittedItem :one
+INSERT INTO committed_items (
+    order_draft_id, source_draft_item_id, menu_item_id, category_name,
+    item_name, size_name, quantity, unit_price_vnd, total_vnd,
+    preparation_note, committed_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id
+`
+
+type InsertCommittedItemParams struct {
+	OrderDraftID      uuid.UUID      `json:"order_draft_id"`
+	SourceDraftItemID uuid.UUID      `json:"source_draft_item_id"`
+	MenuItemID        uuid.UUID      `json:"menu_item_id"`
+	CategoryName      string         `json:"category_name"`
+	ItemName          string         `json:"item_name"`
+	SizeName          sql.NullString `json:"size_name"`
+	Quantity          int32          `json:"quantity"`
+	UnitPriceVnd      int64          `json:"unit_price_vnd"`
+	TotalVnd          int64          `json:"total_vnd"`
+	PreparationNote   sql.NullString `json:"preparation_note"`
+	CommittedAt       time.Time      `json:"committed_at"`
+}
+
+func (q *Queries) InsertCommittedItem(ctx context.Context, arg InsertCommittedItemParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, insertCommittedItem,
+		arg.OrderDraftID,
+		arg.SourceDraftItemID,
+		arg.MenuItemID,
+		arg.CategoryName,
+		arg.ItemName,
+		arg.SizeName,
+		arg.Quantity,
+		arg.UnitPriceVnd,
+		arg.TotalVnd,
+		arg.PreparationNote,
+		arg.CommittedAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertCommittedItemModifierOption = `-- name: InsertCommittedItemModifierOption :exec
+INSERT INTO committed_item_modifier_options (
+    committed_item_id, modifier_group_id, modifier_group_name,
+    modifier_option_id, modifier_option_name, surcharge_vnd
+) VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertCommittedItemModifierOptionParams struct {
+	CommittedItemID    uuid.UUID `json:"committed_item_id"`
+	ModifierGroupID    uuid.UUID `json:"modifier_group_id"`
+	ModifierGroupName  string    `json:"modifier_group_name"`
+	ModifierOptionID   uuid.UUID `json:"modifier_option_id"`
+	ModifierOptionName string    `json:"modifier_option_name"`
+	SurchargeVnd       int64     `json:"surcharge_vnd"`
+}
+
+func (q *Queries) InsertCommittedItemModifierOption(ctx context.Context, arg InsertCommittedItemModifierOptionParams) error {
+	_, err := q.db.ExecContext(ctx, insertCommittedItemModifierOption,
+		arg.CommittedItemID,
+		arg.ModifierGroupID,
+		arg.ModifierGroupName,
+		arg.ModifierOptionID,
+		arg.ModifierOptionName,
+		arg.SurchargeVnd,
+	)
+	return err
+}
+
 const insertDraftItem = `-- name: InsertDraftItem :one
 INSERT INTO order_draft_items
     (order_draft_id, menu_item_id, size_id, preparation_note, modifier_key, quantity)
@@ -351,15 +512,46 @@ INSERT INTO order_drafts (service_session_id) VALUES ($1)
 RETURNING id, service_session_id, state, created_at
 `
 
-func (q *Queries) InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (OrderDraft, error) {
+type InsertOrderDraftRow struct {
+	ID               uuid.UUID `json:"id"`
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	State            string    `json:"state"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+func (q *Queries) InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (InsertOrderDraftRow, error) {
 	row := q.db.QueryRowContext(ctx, insertOrderDraft, serviceSessionID)
-	var i OrderDraft
+	var i InsertOrderDraftRow
 	err := row.Scan(
 		&i.ID,
 		&i.ServiceSessionID,
 		&i.State,
 		&i.CreatedAt,
 	)
+	return i, err
+}
+
+const insertOrderDraftForSession = `-- name: InsertOrderDraftForSession :one
+INSERT INTO order_drafts (service_session_id, created_at)
+VALUES ($1, $2)
+RETURNING id, state, check_target
+`
+
+type InsertOrderDraftForSessionParams struct {
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+type InsertOrderDraftForSessionRow struct {
+	ID          uuid.UUID `json:"id"`
+	State       string    `json:"state"`
+	CheckTarget string    `json:"check_target"`
+}
+
+func (q *Queries) InsertOrderDraftForSession(ctx context.Context, arg InsertOrderDraftForSessionParams) (InsertOrderDraftForSessionRow, error) {
+	row := q.db.QueryRowContext(ctx, insertOrderDraftForSession, arg.ServiceSessionID, arg.CreatedAt)
+	var i InsertOrderDraftForSessionRow
+	err := row.Scan(&i.ID, &i.State, &i.CheckTarget)
 	return i, err
 }
 
@@ -523,6 +715,116 @@ func (q *Queries) ListActiveServiceSessions(ctx context.Context) ([]ListActiveSe
 	return items, nil
 }
 
+const listCheckAllocations = `-- name: ListCheckAllocations :many
+SELECT ca.id, ca.quantity AS allocated_quantity, ca.created_at,
+       ci.id AS committed_item_id, ci.menu_item_id, ci.category_name,
+       ci.item_name, ci.size_name, ci.quantity AS committed_quantity,
+       ci.unit_price_vnd, ci.total_vnd AS committed_total_vnd,
+       ci.preparation_note
+FROM charge_allocations ca
+JOIN committed_items ci ON ci.id = ca.committed_item_id
+WHERE ca.check_id = $1
+ORDER BY ci.committed_at ASC, ci.id ASC
+`
+
+type ListCheckAllocationsRow struct {
+	ID                uuid.UUID      `json:"id"`
+	AllocatedQuantity int32          `json:"allocated_quantity"`
+	CreatedAt         time.Time      `json:"created_at"`
+	CommittedItemID   uuid.UUID      `json:"committed_item_id"`
+	MenuItemID        uuid.UUID      `json:"menu_item_id"`
+	CategoryName      string         `json:"category_name"`
+	ItemName          string         `json:"item_name"`
+	SizeName          sql.NullString `json:"size_name"`
+	CommittedQuantity int32          `json:"committed_quantity"`
+	UnitPriceVnd      int64          `json:"unit_price_vnd"`
+	CommittedTotalVnd int64          `json:"committed_total_vnd"`
+	PreparationNote   sql.NullString `json:"preparation_note"`
+}
+
+func (q *Queries) ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCheckAllocations, checkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCheckAllocationsRow{}
+	for rows.Next() {
+		var i ListCheckAllocationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AllocatedQuantity,
+			&i.CreatedAt,
+			&i.CommittedItemID,
+			&i.MenuItemID,
+			&i.CategoryName,
+			&i.ItemName,
+			&i.SizeName,
+			&i.CommittedQuantity,
+			&i.UnitPriceVnd,
+			&i.CommittedTotalVnd,
+			&i.PreparationNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCommittedItemModifiers = `-- name: ListCommittedItemModifiers :many
+SELECT committed_item_id, modifier_group_id, modifier_group_name,
+       modifier_option_id, modifier_option_name, surcharge_vnd
+FROM committed_item_modifier_options
+WHERE committed_item_id = ANY($1::uuid[])
+ORDER BY modifier_group_name ASC, modifier_option_name ASC
+`
+
+type ListCommittedItemModifiersRow struct {
+	CommittedItemID    uuid.UUID `json:"committed_item_id"`
+	ModifierGroupID    uuid.UUID `json:"modifier_group_id"`
+	ModifierGroupName  string    `json:"modifier_group_name"`
+	ModifierOptionID   uuid.UUID `json:"modifier_option_id"`
+	ModifierOptionName string    `json:"modifier_option_name"`
+	SurchargeVnd       int64     `json:"surcharge_vnd"`
+}
+
+func (q *Queries) ListCommittedItemModifiers(ctx context.Context, committedItemIds []uuid.UUID) ([]ListCommittedItemModifiersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCommittedItemModifiers, pq.Array(committedItemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCommittedItemModifiersRow{}
+	for rows.Next() {
+		var i ListCommittedItemModifiersRow
+		if err := rows.Scan(
+			&i.CommittedItemID,
+			&i.ModifierGroupID,
+			&i.ModifierGroupName,
+			&i.ModifierOptionID,
+			&i.ModifierOptionName,
+			&i.SurchargeVnd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDefaultModifierOptionIDs = `-- name: ListDefaultModifierOptionIDs :many
 SELECT DISTINCT o.id
 FROM modifier_group_default_options d
@@ -631,6 +933,69 @@ func (q *Queries) ListDraftItemOptionIDs(ctx context.Context, orderDraftItemID u
 			return nil, err
 		}
 		items = append(items, modifier_option_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDraftItemOptionsForCommit = `-- name: ListDraftItemOptionsForCommit :many
+SELECT dio.order_draft_item_id, o.id AS option_id, o.name AS option_name,
+       o.surcharge_vnd, o.available,
+       (o.retired_at IS NOT NULL) AS option_retired,
+       g.id AS group_id, g.name AS group_name,
+       (g.retired_at IS NOT NULL) AS group_retired
+FROM order_draft_item_modifier_options dio
+JOIN modifier_options o ON o.id = dio.modifier_option_id
+JOIN modifier_groups g ON g.id = o.modifier_group_id
+WHERE dio.order_draft_item_id = ANY($1::uuid[])
+ORDER BY g.name ASC, o.name ASC, o.id ASC
+FOR SHARE OF o
+`
+
+type ListDraftItemOptionsForCommitRow struct {
+	OrderDraftItemID uuid.UUID   `json:"order_draft_item_id"`
+	OptionID         uuid.UUID   `json:"option_id"`
+	OptionName       string      `json:"option_name"`
+	SurchargeVnd     int64       `json:"surcharge_vnd"`
+	Available        bool        `json:"available"`
+	OptionRetired    interface{} `json:"option_retired"`
+	GroupID          uuid.UUID   `json:"group_id"`
+	GroupName        string      `json:"group_name"`
+	GroupRetired     interface{} `json:"group_retired"`
+}
+
+// The selected Options of the given draft items, with the Group facts the
+// Commit rules need. The Options are locked FOR SHARE per ADR-015's lock
+// list, so a retirement or availability change cannot land between the
+// Commit validation and its writes; modifier_groups stay unlocked.
+func (q *Queries) ListDraftItemOptionsForCommit(ctx context.Context, draftItemIds []uuid.UUID) ([]ListDraftItemOptionsForCommitRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDraftItemOptionsForCommit, pq.Array(draftItemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDraftItemOptionsForCommitRow{}
+	for rows.Next() {
+		var i ListDraftItemOptionsForCommitRow
+		if err := rows.Scan(
+			&i.OrderDraftItemID,
+			&i.OptionID,
+			&i.OptionName,
+			&i.SurchargeVnd,
+			&i.Available,
+			&i.OptionRetired,
+			&i.GroupID,
+			&i.GroupName,
+			&i.GroupRetired,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -774,6 +1139,86 @@ func (q *Queries) ListEffectiveModifierGroupIDs(ctx context.Context, id uuid.UUI
 	return items, nil
 }
 
+const listEffectiveModifierGroupsForCommit = `-- name: ListEffectiveModifierGroupsForCommit :many
+WITH targets AS (
+    SELECT id, category_id FROM menu_items
+    WHERE id = ANY($1::uuid[])
+),
+inherited AS (
+    SELECT t.id AS menu_item_id, cmg.modifier_group_id
+    FROM targets t
+    JOIN category_modifier_groups cmg ON cmg.menu_category_id = t.category_id
+    WHERE NOT EXISTS (
+        SELECT 1 FROM item_modifier_group_exclusions ex
+        WHERE ex.menu_item_id = t.id
+          AND ex.modifier_group_id = cmg.modifier_group_id
+    )
+),
+direct AS (
+    SELECT t.id AS menu_item_id, img.modifier_group_id
+    FROM targets t
+    JOIN item_modifier_groups img ON img.menu_item_id = t.id
+),
+effective AS (
+    SELECT menu_item_id, modifier_group_id FROM inherited
+    UNION
+    SELECT menu_item_id, modifier_group_id FROM direct
+)
+SELECT e.menu_item_id, e.modifier_group_id, g.name AS group_name,
+       g.min_selections, g.max_selections,
+       (g.retired_at IS NOT NULL) AS group_retired
+FROM effective e
+JOIN modifier_groups g ON g.id = e.modifier_group_id
+ORDER BY e.menu_item_id ASC, e.modifier_group_id ASC
+`
+
+type ListEffectiveModifierGroupsForCommitRow struct {
+	MenuItemID      uuid.UUID   `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID   `json:"modifier_group_id"`
+	GroupName       string      `json:"group_name"`
+	MinSelections   int32       `json:"min_selections"`
+	MaxSelections   int32       `json:"max_selections"`
+	GroupRetired    interface{} `json:"group_retired"`
+}
+
+// (inherited - exclusions) + direct, for a SET of Menu Items, returning the
+// selection rules Commit enforces.
+//
+// This is the second expression of the algebra ListEffectiveModifierGroupIDs
+// already encodes. TestSalesResolutionMatchesCatalog pins both to
+// catalog.EffectiveGroupIDs over shared fixtures so they cannot drift. The
+// single-item query is left alone: the draft path does not need min/max and
+// should not pay for them. See ADR-012.
+func (q *Queries) ListEffectiveModifierGroupsForCommit(ctx context.Context, menuItemIds []uuid.UUID) ([]ListEffectiveModifierGroupsForCommitRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEffectiveModifierGroupsForCommit, pq.Array(menuItemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEffectiveModifierGroupsForCommitRow{}
+	for rows.Next() {
+		var i ListEffectiveModifierGroupsForCommitRow
+		if err := rows.Scan(
+			&i.MenuItemID,
+			&i.ModifierGroupID,
+			&i.GroupName,
+			&i.MinSelections,
+			&i.MaxSelections,
+			&i.GroupRetired,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listModifierOptionsForValidation = `-- name: ListModifierOptionsForValidation :many
 SELECT o.id, o.modifier_group_id, o.available,
        (o.retired_at IS NOT NULL) AS option_retired,
@@ -858,6 +1303,70 @@ func (q *Queries) ListServiceSessionTables(ctx context.Context, serviceSessionID
 	return items, nil
 }
 
+const listSessionChecks = `-- name: ListSessionChecks :many
+SELECT id, state, charge_vnd, created_at
+FROM checks
+WHERE service_session_id = $1
+ORDER BY created_at ASC, id ASC
+`
+
+type ListSessionChecksRow struct {
+	ID        uuid.UUID `json:"id"`
+	State     string    `json:"state"`
+	ChargeVnd int64     `json:"charge_vnd"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionChecks, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSessionChecksRow{}
+	for rows.Next() {
+		var i ListSessionChecksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.State,
+			&i.ChargeVnd,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockCurrentOpenCheck = `-- name: LockCurrentOpenCheck :one
+SELECT id, charge_vnd
+FROM checks
+WHERE service_session_id = $1 AND state = 'OPEN'
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+FOR UPDATE
+`
+
+type LockCurrentOpenCheckRow struct {
+	ID        uuid.UUID `json:"id"`
+	ChargeVnd int64     `json:"charge_vnd"`
+}
+
+// The Session's most recent OPEN Check, for the CURRENT_UNPAID target.
+func (q *Queries) LockCurrentOpenCheck(ctx context.Context, serviceSessionID uuid.UUID) (LockCurrentOpenCheckRow, error) {
+	row := q.db.QueryRowContext(ctx, lockCurrentOpenCheck, serviceSessionID)
+	var i LockCurrentOpenCheckRow
+	err := row.Scan(&i.ID, &i.ChargeVnd)
+	return i, err
+}
+
 const lockCurrentTableAssignments = `-- name: LockCurrentTableAssignments :many
 SELECT id, table_id, sequence
 FROM table_assignments
@@ -932,6 +1441,72 @@ func (q *Queries) LockDraftItem(ctx context.Context, arg LockDraftItemParams) (L
 		&i.ModifierKey,
 	)
 	return i, err
+}
+
+const lockDraftItemsForCommit = `-- name: LockDraftItemsForCommit :many
+SELECT di.id, di.menu_item_id, di.size_id, di.quantity, di.preparation_note,
+       mi.name AS item_name, mi.price_vnd AS item_price_vnd,
+       mi.available AS item_available,
+       (mi.retired_at IS NOT NULL) AS item_retired,
+       mc.name AS category_name
+FROM order_draft_items di
+JOIN menu_items mi ON mi.id = di.menu_item_id
+JOIN menu_categories mc ON mc.id = mi.category_id
+WHERE di.order_draft_id = $1
+ORDER BY di.created_at ASC, di.id ASC
+FOR UPDATE OF di FOR SHARE OF mi
+`
+
+type LockDraftItemsForCommitRow struct {
+	ID              uuid.UUID      `json:"id"`
+	MenuItemID      uuid.UUID      `json:"menu_item_id"`
+	SizeID          uuid.NullUUID  `json:"size_id"`
+	Quantity        int32          `json:"quantity"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+	ItemName        string         `json:"item_name"`
+	ItemPriceVnd    sql.NullInt64  `json:"item_price_vnd"`
+	ItemAvailable   bool           `json:"item_available"`
+	ItemRetired     interface{}    `json:"item_retired"`
+	CategoryName    string         `json:"category_name"`
+}
+
+// Every draft item with the Catalog facts Commit revalidates against, locked
+// so the rows cannot change between validation and write: the draft items FOR
+// UPDATE, and the joined Menu Items FOR SHARE per ADR-015's lock list.
+// Ordered by (created_at, id), which also fixes the order of the Committed
+// Items.
+func (q *Queries) LockDraftItemsForCommit(ctx context.Context, orderDraftID uuid.UUID) ([]LockDraftItemsForCommitRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockDraftItemsForCommit, orderDraftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockDraftItemsForCommitRow{}
+	for rows.Next() {
+		var i LockDraftItemsForCommitRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MenuItemID,
+			&i.SizeID,
+			&i.Quantity,
+			&i.PreparationNote,
+			&i.ItemName,
+			&i.ItemPriceVnd,
+			&i.ItemAvailable,
+			&i.ItemRetired,
+			&i.CategoryName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockEditableDraft = `-- name: LockEditableDraft :one
@@ -1032,6 +1607,59 @@ func (q *Queries) LockMenuItemSizeForDraft(ctx context.Context, id uuid.UUID) (L
 	return i, err
 }
 
+const lockMenuItemSizesForCommit = `-- name: LockMenuItemSizesForCommit :many
+SELECT id, menu_item_id, name, price_vnd, available,
+       (retired_at IS NOT NULL) AS size_retired
+FROM menu_item_sizes
+WHERE id = ANY($1::uuid[])
+ORDER BY id ASC
+FOR SHARE
+`
+
+type LockMenuItemSizesForCommitRow struct {
+	ID          uuid.UUID   `json:"id"`
+	MenuItemID  uuid.UUID   `json:"menu_item_id"`
+	Name        string      `json:"name"`
+	PriceVnd    int64       `json:"price_vnd"`
+	Available   bool        `json:"available"`
+	SizeRetired interface{} `json:"size_retired"`
+}
+
+// Locked FOR SHARE: Commit only reads these rows and must merely prevent a
+// retirement or availability change landing mid-transaction. FOR UPDATE would
+// serialize two cashiers committing orders that share a popular item, on the
+// busiest path in the system, for no correctness gain. internal/catalog's
+// mutations take FOR UPDATE and are still excluded. See ADR-015.
+func (q *Queries) LockMenuItemSizesForCommit(ctx context.Context, sizeIds []uuid.UUID) ([]LockMenuItemSizesForCommitRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockMenuItemSizesForCommit, pq.Array(sizeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockMenuItemSizesForCommitRow{}
+	for rows.Next() {
+		var i LockMenuItemSizesForCommitRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MenuItemID,
+			&i.Name,
+			&i.PriceVnd,
+			&i.Available,
+			&i.SizeRetired,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockServiceSessionForUpdate = `-- name: LockServiceSessionForUpdate :one
 SELECT id, service_mode, state, sales_shift_id
 FROM service_sessions
@@ -1098,6 +1726,29 @@ func (q *Queries) LockTablesForAssignment(ctx context.Context, tableIds []uuid.U
 	return items, nil
 }
 
+const markOrderDraftCommitted = `-- name: MarkOrderDraftCommitted :exec
+UPDATE order_drafts SET state = 'COMMITTED' WHERE id = $1
+`
+
+func (q *Queries) MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, markOrderDraftCommitted, id)
+	return err
+}
+
+const raiseCheckCharge = `-- name: RaiseCheckCharge :exec
+UPDATE checks SET charge_vnd = $2 WHERE id = $1
+`
+
+type RaiseCheckChargeParams struct {
+	ID        uuid.UUID `json:"id"`
+	ChargeVnd int64     `json:"charge_vnd"`
+}
+
+func (q *Queries) RaiseCheckCharge(ctx context.Context, arg RaiseCheckChargeParams) error {
+	_, err := q.db.ExecContext(ctx, raiseCheckCharge, arg.ID, arg.ChargeVnd)
+	return err
+}
+
 const releaseTableAssignment = `-- name: ReleaseTableAssignment :exec
 UPDATE table_assignments
 SET released_at = now(), released_by_staff_identity_id = $2
@@ -1148,6 +1799,20 @@ func (q *Queries) SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuan
 	var i SetDraftItemQuantityRow
 	err := row.Scan(&i.ID, &i.Quantity)
 	return i, err
+}
+
+const setOrderDraftCheckTarget = `-- name: SetOrderDraftCheckTarget :exec
+UPDATE order_drafts SET check_target = $2 WHERE id = $1
+`
+
+type SetOrderDraftCheckTargetParams struct {
+	ID          uuid.UUID `json:"id"`
+	CheckTarget string    `json:"check_target"`
+}
+
+func (q *Queries) SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error {
+	_, err := q.db.ExecContext(ctx, setOrderDraftCheckTarget, arg.ID, arg.CheckTarget)
+	return err
 }
 
 const updateDraftItemComposition = `-- name: UpdateDraftItemComposition :exec

@@ -755,6 +755,81 @@ definitions:
       size_id:
         type: string
     type: object
+  sales.ChargeAllocationResponse:
+    properties:
+      allocated_quantity:
+        type: integer
+      amount_vnd:
+        type: integer
+      category_name:
+        type: string
+      committed_item_id:
+        type: string
+      committed_quantity:
+        type: integer
+      committed_total_vnd:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: string
+      menu_item_id:
+        type: string
+      modifiers:
+        items:
+          $ref: '#/definitions/sales.CommittedModifierResponse'
+        type: array
+      name:
+        type: string
+      preparation_note:
+        type: string
+      size_name:
+        type: string
+      submitted:
+        type: boolean
+    type: object
+  sales.CheckResponse:
+    properties:
+      allocations:
+        items:
+          $ref: '#/definitions/sales.ChargeAllocationResponse'
+        type: array
+      balance_vnd:
+        type: integer
+      charge_vnd:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: string
+      payments:
+        description: Filled by 5C.
+        items:
+          type: object
+        type: array
+      state:
+        type: string
+      total_applied_vnd:
+        type: integer
+    type: object
+  sales.CommitOrderDraftCommand:
+    properties:
+      request_id:
+        type: string
+    type: object
+  sales.CommittedModifierResponse:
+    properties:
+      group_id:
+        type: string
+      group_name:
+        type: string
+      option_id:
+        type: string
+      option_name:
+        type: string
+      surcharge_vnd:
+        type: integer
+    type: object
   sales.DraftItemResponse:
     properties:
       available:
@@ -782,6 +857,8 @@ definitions:
     type: object
   sales.OrderDraftResponse:
     properties:
+      check_target:
+        type: string
       id:
         type: string
       items:
@@ -812,9 +889,9 @@ definitions:
   sales.ServiceSessionResponse:
     properties:
       checks:
-        description: Filled by 5B and 5C.
+        description: Filled from 5B; payments within each Check are filled by 5C.
         items:
-          type: object
+          $ref: '#/definitions/sales.CheckResponse'
         type: array
       created_at:
         type: string
@@ -852,6 +929,13 @@ definitions:
       id:
         type: string
       name:
+        type: string
+    type: object
+  sales.SetCheckTargetCommand:
+    properties:
+      check_target:
+        type: string
+      request_id:
         type: string
     type: object
   sales.SetDraftItemModifiersCommand:
@@ -901,6 +985,11 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  sales.StartNewOrderDraftCommand:
+    properties:
+      request_id:
+        type: string
     type: object
   sales.StartTakeawaySessionCommand:
     properties:
@@ -3023,6 +3112,162 @@ paths:
       security:
       - BearerAuth: []
       summary: Get a Service Session
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft:
+    post:
+      consumes:
+      - application/json
+      description: Opens the Service Session's next Order Draft. Rejected while the
+        Session holds an editable draft, or a committed draft with no Order — in Phase
+        5B the latter blocks every committed draft, because Submit arrives in 5D.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Start request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.StartNewOrderDraftCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Start a new Order Draft
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft/check-target:
+    put:
+      consumes:
+      - application/json
+      description: Steers where the next Commit's charges land. CURRENT_UNPAID reuses
+        the Session's most recent open Check; NEW_CHECK always opens one. The target
+        belongs to the draft and resets when a new draft opens.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Check target request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.SetCheckTargetCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Set the Order Draft's Check target
+      tags:
+      - sales
+  /sales/service-sessions/{id}/draft/commit:
+    post:
+      consumes:
+      - application/json
+      description: Revalidates the draft, freezes prices into immutable Committed
+        Items, and charges a Check. The response's checks[].payments and checks[].total_applied_vnd
+        are filled by Phase 5C; allocations[].submitted is filled by Phase 5D.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Commit request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.CommitOrderDraftCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Commit the Order Draft
       tags:
       - sales
   /sales/service-sessions/{id}/draft/items:

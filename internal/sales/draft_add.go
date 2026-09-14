@@ -291,6 +291,14 @@ func nullUUID(id *uuid.UUID) uuid.NullUUID {
 	return uuid.NullUUID{UUID: *id, Valid: true}
 }
 
+// nullStringPtr converts a nullable text column to an optional string.
+func nullStringPtr(v sql.NullString) *string {
+	if !v.Valid {
+		return nil
+	}
+	return &v.String
+}
+
 // trimmedForFingerprint returns a pointer to the trimmed note, or nil when it
 // trims to empty, so a replay differing only in surrounding whitespace is a
 // replay rather than a conflict.

@@ -31,6 +31,10 @@ var (
 	ErrInvalidPreparationNote = errors.New("invalid preparation note")
 	ErrInvalidQuantity        = errors.New("invalid quantity")
 
+	ErrLineTotalOutOfRange   = errors.New("line total out of range")
+	ErrCheckChargeOutOfRange = errors.New("check charge out of range")
+	ErrInvalidCheckTarget    = errors.New("invalid check target")
+
 	ErrTableSelectionRequired     = errors.New("at least one table is required for a dine-in session")
 	ErrTableSelectionDuplicate    = errors.New("the same table was selected twice")
 	ErrTableNotFound              = errors.New("table not found")
@@ -47,6 +51,30 @@ var (
 	// a typed failure instead of emitting a seventh character that the
 	// database check would reject as an unmapped 23514.
 	ErrServiceSequenceExhausted = errors.New("service number sequence exhausted for this shift")
+
+	ErrEmptyDraft = errors.New("order draft has no items")
+
+	ErrCommitMenuItemUnavailable = errors.New("menu item is unavailable at commit")
+	ErrCommitMenuItemRetired     = errors.New("menu item is retired at commit")
+
+	ErrCommitSizeRequired    = errors.New("a size must be chosen before commit")
+	ErrCommitSizeInvalid     = errors.New("size is not valid for this menu item")
+	ErrCommitSizeUnavailable = errors.New("size is unavailable at commit")
+	ErrCommitSizeRetired     = errors.New("size is retired at commit")
+
+	ErrCommitModifierOptionInvalid     = errors.New("modifier option is not selectable for this menu item")
+	ErrCommitModifierOptionUnavailable = errors.New("modifier option is unavailable at commit")
+	ErrCommitModifierOptionRetired     = errors.New("modifier option is retired at commit")
+	ErrCommitModifierGroupInvalid      = errors.New("modifier group selection rules are not satisfied")
+	ErrCommitModifierGroupRetired      = errors.New("a required modifier group is retired")
+
+	ErrNewOrderDraftNotAvailable = errors.New("a new order draft cannot be started yet")
+
+	// ErrChargeInvariantViolated reports that a Check's stored charge_vnd
+	// disagrees with the sum of its allocations. That is a defect, not a
+	// business state, so it is deliberately absent from MapHTTPError and
+	// surfaces as a 500 with the Check id logged.
+	ErrChargeInvariantViolated = errors.New("check charge does not match its allocations")
 )
 
 // serviceSessionSalesShiftFK is the auto-generated name of the only foreign
@@ -177,6 +205,39 @@ func MapHTTPError(err error) error {
 	// it lands on the generic validation code alongside every other bad field.
 	case errors.Is(err, response.ErrInvalid), errors.Is(err, ErrInvalidQuantity):
 		return response.NewCodedError(http.StatusBadRequest, "INVALID_INPUT", err.Error(), err)
+
+	case errors.Is(err, ErrEmptyDraft):
+		return coded(http.StatusConflict, "EMPTY_DRAFT", ErrEmptyDraft)
+	case errors.Is(err, ErrCommitMenuItemRetired):
+		return coded(http.StatusConflict, "COMMIT_MENU_ITEM_RETIRED", ErrCommitMenuItemRetired)
+	case errors.Is(err, ErrCommitMenuItemUnavailable):
+		return coded(http.StatusConflict, "COMMIT_MENU_ITEM_UNAVAILABLE", ErrCommitMenuItemUnavailable)
+	case errors.Is(err, ErrCommitSizeRequired):
+		return coded(http.StatusConflict, "COMMIT_SIZE_REQUIRED", ErrCommitSizeRequired)
+	case errors.Is(err, ErrCommitSizeInvalid):
+		return coded(http.StatusConflict, "COMMIT_SIZE_INVALID", ErrCommitSizeInvalid)
+	case errors.Is(err, ErrCommitSizeRetired):
+		return coded(http.StatusConflict, "COMMIT_SIZE_RETIRED", ErrCommitSizeRetired)
+	case errors.Is(err, ErrCommitSizeUnavailable):
+		return coded(http.StatusConflict, "COMMIT_SIZE_UNAVAILABLE", ErrCommitSizeUnavailable)
+	case errors.Is(err, ErrCommitModifierOptionInvalid):
+		return coded(http.StatusConflict, "COMMIT_MODIFIER_OPTION_INVALID", ErrCommitModifierOptionInvalid)
+	case errors.Is(err, ErrCommitModifierOptionRetired):
+		return coded(http.StatusConflict, "COMMIT_MODIFIER_OPTION_RETIRED", ErrCommitModifierOptionRetired)
+	case errors.Is(err, ErrCommitModifierOptionUnavailable):
+		return coded(http.StatusConflict, "COMMIT_MODIFIER_OPTION_UNAVAILABLE", ErrCommitModifierOptionUnavailable)
+	case errors.Is(err, ErrCommitModifierGroupRetired):
+		return coded(http.StatusConflict, "COMMIT_MODIFIER_GROUP_RETIRED", ErrCommitModifierGroupRetired)
+	case errors.Is(err, ErrCommitModifierGroupInvalid):
+		return coded(http.StatusConflict, "COMMIT_MODIFIER_GROUP_INVALID", ErrCommitModifierGroupInvalid)
+	case errors.Is(err, ErrNewOrderDraftNotAvailable):
+		return coded(http.StatusConflict, "NEW_ORDER_DRAFT_NOT_AVAILABLE", ErrNewOrderDraftNotAvailable)
+	case errors.Is(err, ErrLineTotalOutOfRange):
+		return coded(http.StatusUnprocessableEntity, "LINE_TOTAL_OUT_OF_RANGE", ErrLineTotalOutOfRange)
+	case errors.Is(err, ErrCheckChargeOutOfRange):
+		return coded(http.StatusUnprocessableEntity, "CHECK_CHARGE_OUT_OF_RANGE", ErrCheckChargeOutOfRange)
+	case errors.Is(err, ErrInvalidCheckTarget):
+		return coded(http.StatusUnprocessableEntity, "INVALID_CHECK_TARGET", ErrInvalidCheckTarget)
 	default:
 		return err
 	}

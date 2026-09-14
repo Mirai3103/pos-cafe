@@ -35,7 +35,7 @@ WHERE a.service_session_id = $1 AND a.released_at IS NULL
 ORDER BY a.sequence ASC;
 
 -- name: GetEditableDraft :one
-SELECT id, service_session_id, state, created_at
+SELECT id, service_session_id, state, check_target, created_at
 FROM order_drafts
 WHERE service_session_id = $1 AND state = 'EDITABLE';
 
@@ -314,3 +314,182 @@ DELETE FROM order_draft_item_modifier_options WHERE order_draft_item_id = $1;
 INSERT INTO order_draft_item_modifier_options (order_draft_item_id, modifier_option_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
+
+-- name: LockDraftItemsForCommit :many
+-- Every draft item with the Catalog facts Commit revalidates against, locked
+-- so the rows cannot change between validation and write: the draft items FOR
+-- UPDATE, and the joined Menu Items FOR SHARE per ADR-015's lock list.
+-- Ordered by (created_at, id), which also fixes the order of the Committed
+-- Items.
+SELECT di.id, di.menu_item_id, di.size_id, di.quantity, di.preparation_note,
+       mi.name AS item_name, mi.price_vnd AS item_price_vnd,
+       mi.available AS item_available,
+       (mi.retired_at IS NOT NULL) AS item_retired,
+       mc.name AS category_name
+FROM order_draft_items di
+JOIN menu_items mi ON mi.id = di.menu_item_id
+JOIN menu_categories mc ON mc.id = mi.category_id
+WHERE di.order_draft_id = $1
+ORDER BY di.created_at ASC, di.id ASC
+FOR UPDATE OF di FOR SHARE OF mi;
+
+-- name: ListDraftItemOptionsForCommit :many
+-- The selected Options of the given draft items, with the Group facts the
+-- Commit rules need. The Options are locked FOR SHARE per ADR-015's lock
+-- list, so a retirement or availability change cannot land between the
+-- Commit validation and its writes; modifier_groups stay unlocked.
+SELECT dio.order_draft_item_id, o.id AS option_id, o.name AS option_name,
+       o.surcharge_vnd, o.available,
+       (o.retired_at IS NOT NULL) AS option_retired,
+       g.id AS group_id, g.name AS group_name,
+       (g.retired_at IS NOT NULL) AS group_retired
+FROM order_draft_item_modifier_options dio
+JOIN modifier_options o ON o.id = dio.modifier_option_id
+JOIN modifier_groups g ON g.id = o.modifier_group_id
+WHERE dio.order_draft_item_id = ANY(sqlc.arg(draft_item_ids)::uuid[])
+ORDER BY g.name ASC, o.name ASC, o.id ASC
+FOR SHARE OF o;
+
+-- name: ListEffectiveModifierGroupsForCommit :many
+-- (inherited - exclusions) + direct, for a SET of Menu Items, returning the
+-- selection rules Commit enforces.
+--
+-- This is the second expression of the algebra ListEffectiveModifierGroupIDs
+-- already encodes. TestSalesResolutionMatchesCatalog pins both to
+-- catalog.EffectiveGroupIDs over shared fixtures so they cannot drift. The
+-- single-item query is left alone: the draft path does not need min/max and
+-- should not pay for them. See ADR-012.
+WITH targets AS (
+    SELECT id, category_id FROM menu_items
+    WHERE id = ANY(sqlc.arg(menu_item_ids)::uuid[])
+),
+inherited AS (
+    SELECT t.id AS menu_item_id, cmg.modifier_group_id
+    FROM targets t
+    JOIN category_modifier_groups cmg ON cmg.menu_category_id = t.category_id
+    WHERE NOT EXISTS (
+        SELECT 1 FROM item_modifier_group_exclusions ex
+        WHERE ex.menu_item_id = t.id
+          AND ex.modifier_group_id = cmg.modifier_group_id
+    )
+),
+direct AS (
+    SELECT t.id AS menu_item_id, img.modifier_group_id
+    FROM targets t
+    JOIN item_modifier_groups img ON img.menu_item_id = t.id
+),
+effective AS (
+    SELECT menu_item_id, modifier_group_id FROM inherited
+    UNION
+    SELECT menu_item_id, modifier_group_id FROM direct
+)
+SELECT e.menu_item_id, e.modifier_group_id, g.name AS group_name,
+       g.min_selections, g.max_selections,
+       (g.retired_at IS NOT NULL) AS group_retired
+FROM effective e
+JOIN modifier_groups g ON g.id = e.modifier_group_id
+ORDER BY e.menu_item_id ASC, e.modifier_group_id ASC;
+
+-- name: LockMenuItemSizesForCommit :many
+-- Locked FOR SHARE: Commit only reads these rows and must merely prevent a
+-- retirement or availability change landing mid-transaction. FOR UPDATE would
+-- serialize two cashiers committing orders that share a popular item, on the
+-- busiest path in the system, for no correctness gain. internal/catalog's
+-- mutations take FOR UPDATE and are still excluded. See ADR-015.
+SELECT id, menu_item_id, name, price_vnd, available,
+       (retired_at IS NOT NULL) AS size_retired
+FROM menu_item_sizes
+WHERE id = ANY(sqlc.arg(size_ids)::uuid[])
+ORDER BY id ASC
+FOR SHARE;
+
+-- name: LockCurrentOpenCheck :one
+-- The Session's most recent OPEN Check, for the CURRENT_UNPAID target.
+SELECT id, charge_vnd
+FROM checks
+WHERE service_session_id = $1 AND state = 'OPEN'
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+FOR UPDATE;
+
+-- name: InsertCheck :one
+INSERT INTO checks (service_session_id, created_at)
+VALUES ($1, $2)
+RETURNING id, charge_vnd;
+
+-- name: RaiseCheckCharge :exec
+UPDATE checks SET charge_vnd = $2 WHERE id = $1;
+
+-- name: InsertCommittedItem :one
+INSERT INTO committed_items (
+    order_draft_id, source_draft_item_id, menu_item_id, category_name,
+    item_name, size_name, quantity, unit_price_vnd, total_vnd,
+    preparation_note, committed_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id;
+
+-- name: InsertCommittedItemModifierOption :exec
+INSERT INTO committed_item_modifier_options (
+    committed_item_id, modifier_group_id, modifier_group_name,
+    modifier_option_id, modifier_option_name, surcharge_vnd
+) VALUES ($1, $2, $3, $4, $5, $6);
+
+-- name: InsertChargeAllocation :exec
+INSERT INTO charge_allocations (committed_item_id, check_id, quantity, created_at)
+VALUES ($1, $2, $3, $4);
+
+-- name: MarkOrderDraftCommitted :exec
+UPDATE order_drafts SET state = 'COMMITTED' WHERE id = $1;
+
+-- name: SetOrderDraftCheckTarget :exec
+UPDATE order_drafts SET check_target = $2 WHERE id = $1;
+
+-- name: GetOrderDraftCheckTarget :one
+SELECT check_target FROM order_drafts WHERE id = $1;
+
+-- name: FindBlockingDraft :one
+-- A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
+-- corresponding Order.
+--
+-- 5B has no orders table, so the second clause matches every COMMITTED draft
+-- and a Session that has committed once cannot open another draft. That dead
+-- end is deliberate and disappears when 5D adds the orders join here: the
+-- rule exists to stop staff stacking rounds ahead of the kitchen, and
+-- relaxing it now would ship a rule no phase wants. See the spec's accepted
+-- consequences.
+SELECT id
+FROM order_drafts
+WHERE service_session_id = $1
+  AND state IN ('EDITABLE', 'COMMITTED')
+ORDER BY created_at ASC, id ASC
+LIMIT 1
+FOR UPDATE;
+
+-- name: InsertOrderDraftForSession :one
+INSERT INTO order_drafts (service_session_id, created_at)
+VALUES ($1, $2)
+RETURNING id, state, check_target;
+
+-- name: ListSessionChecks :many
+SELECT id, state, charge_vnd, created_at
+FROM checks
+WHERE service_session_id = $1
+ORDER BY created_at ASC, id ASC;
+
+-- name: ListCheckAllocations :many
+SELECT ca.id, ca.quantity AS allocated_quantity, ca.created_at,
+       ci.id AS committed_item_id, ci.menu_item_id, ci.category_name,
+       ci.item_name, ci.size_name, ci.quantity AS committed_quantity,
+       ci.unit_price_vnd, ci.total_vnd AS committed_total_vnd,
+       ci.preparation_note
+FROM charge_allocations ca
+JOIN committed_items ci ON ci.id = ca.committed_item_id
+WHERE ca.check_id = $1
+ORDER BY ci.committed_at ASC, ci.id ASC;
+
+-- name: ListCommittedItemModifiers :many
+SELECT committed_item_id, modifier_group_id, modifier_group_name,
+       modifier_option_id, modifier_option_name, surcharge_vnd
+FROM committed_item_modifier_options
+WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[])
+ORDER BY modifier_group_name ASC, modifier_option_name ASC;
