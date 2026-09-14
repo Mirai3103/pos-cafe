@@ -26,6 +26,7 @@ type Slices struct {
 	CommitDraft        *CommitOrderDraftHandler
 	StartNewDraft      *StartNewOrderDraftHandler
 	SetCheckTarget     *SetCheckTargetHandler
+	PayCash            *PayCashHandler
 }
 
 // NewSlices wires every Sales handler onto a shared Runner.
@@ -47,6 +48,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		CommitDraft:        NewCommitOrderDraftHandler(runner),
 		StartNewDraft:      NewStartNewOrderDraftHandler(runner),
 		SetCheckTarget:     NewSetCheckTargetHandler(runner),
+		PayCash:            NewPayCashHandler(runner),
 	}
 }
 
@@ -85,5 +87,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/sales/service-sessions/:id/draft", s.handleStartNewDraft,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.PUT("/sales/service-sessions/:id/draft/check-target", s.handleSetCheckTarget,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/checks/:check_id/payments/cash", s.handlePayCash,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 }

@@ -71,6 +71,13 @@ const (
 	StateClosed = "CLOSED"
 )
 
+// Cross-slice state literals Sales compares against. They are declared here
+// rather than imported, because internal/sales imports no slice but auth.
+const (
+	SessionStateActive = "ACTIVE"
+	ShiftStateOpen     = "OPEN"
+)
+
 // Order Draft states. 5A writes only DraftStateEditable; 5B writes
 // DraftStateCommitted.
 const (

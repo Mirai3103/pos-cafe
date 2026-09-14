@@ -501,3 +501,45 @@ SELECT committed_item_id, modifier_group_id, modifier_group_name,
 FROM committed_item_modifier_options
 WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[])
 ORDER BY modifier_group_name ASC, modifier_option_name ASC;
+
+-- name: LockCheckForPayment :one
+-- The uniform 5C lock protocol (ADR-016): the Check row FOR UPDATE, its
+-- parents FOR SHARE. The parents are only read to evaluate a precondition, so
+-- locking them FOR UPDATE would serialize two cashiers paying different
+-- Checks of one Session for no correctness gain.
+--
+-- No row means the Check id does not exist. The state columns come back
+-- unfiltered so the caller can report which precondition failed.
+SELECT c.id, c.state, c.charge_vnd,
+       s.id AS service_session_id, s.state AS service_session_state,
+       sh.id AS sales_shift_id, sh.state AS sales_shift_state
+FROM checks c
+JOIN service_sessions s ON s.id = c.service_session_id
+JOIN sales_shifts sh ON sh.id = s.sales_shift_id
+WHERE c.id = $1
+FOR UPDATE OF c
+FOR SHARE OF s, sh;
+
+-- name: SumCheckPayments :one
+SELECT COALESCE(SUM(applied_amount_vnd), 0)::BIGINT AS total_applied_vnd
+FROM payments
+WHERE check_id = $1;
+
+-- name: InsertPayment :one
+INSERT INTO payments (
+    check_id, sales_shift_id, actor_staff_identity_id, staff_access_session_id,
+    applied_amount_vnd, method, cash_tendered_vnd, change_due_vnd,
+    transaction_reference, received_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id;
+
+-- name: SettleCheck :exec
+-- Writes all four evidence columns together, because the composite constraint
+-- check_settlement_evidence_valid rejects any partial set.
+UPDATE checks
+SET state = 'SETTLED',
+    settled_at = $2,
+    settled_by_staff_identity_id = $3,
+    settled_during_sales_shift_id = $4,
+    settled_staff_access_session_id = $5
+WHERE id = $1;

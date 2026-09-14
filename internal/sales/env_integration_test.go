@@ -5,9 +5,12 @@ package sales_test
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -98,6 +101,10 @@ func (e *salesEnv) AsBarista() *salesEnv {
 	view.Actor = e.barista
 	return &view
 }
+
+// BaristaActor returns the seeded BARISTA actor, who holds no sales.operate,
+// for helpers that take an explicit actor.
+func (e *salesEnv) BaristaActor() sales.Actor { return e.barista }
 
 // ---------- Session lifecycle ----------
 
@@ -345,6 +352,100 @@ func (e *salesEnv) insertCashPayment(t *testing.T, checkID uuid.UUID, appliedVND
 		VALUES ($1, $2, $3, $4, $5, 'CASH', $5, 0) RETURNING id`,
 		checkID, e.ShiftID, e.Actor.StaffID, e.Actor.SessionID, appliedVND).Scan(&id))
 	return id
+}
+
+// ---------- Payments ----------
+
+// mapErrorStatus reproduces the HTTP layer's error mapping: sendError runs
+// sales.MapHTTPError and response.Error writes the coded status. These suites
+// call handlers directly, bypassing echo, so the status a request would have
+// answered with is derived here for tests that assert it. The mapped error
+// still unwraps to the original sentinel, so ErrorIs keeps working.
+func mapErrorStatus(err error) (int, error) {
+	mapped := sales.MapHTTPError(err)
+	var coded *response.CodedError
+	if errors.As(mapped, &coded) {
+		return coded.Status, mapped
+	}
+	return http.StatusInternalServerError, mapped
+}
+
+// payCash records a Cash Payment as the env actor with a fresh request id,
+// returning the projection, HTTP status, and error untouched, so tests can
+// assert on all three.
+func (e *salesEnv) payCash(t *testing.T, checkID uuid.UUID, appliedVND, tenderedVND int64) (
+	sales.ServiceSessionResponse, int, error,
+) {
+	t.Helper()
+	return e.payCashWithRequestID(t, uuid.New(), checkID, appliedVND, tenderedVND)
+}
+
+// payCashWithRequestID records a Cash Payment under a caller-chosen request
+// id, so a test can drive the idempotency replay itself.
+func (e *salesEnv) payCashWithRequestID(t *testing.T, requestID, checkID uuid.UUID,
+	appliedVND, tenderedVND int64,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewPayCashHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.PayCashCommand{
+			RequestID:        requestID,
+			CheckID:          checkID,
+			AppliedAmountVND: appliedVND,
+			CashTenderedVND:  tenderedVND,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+// payCashAs records a Cash Payment as the given actor, for authorization
+// denial tests.
+func (e *salesEnv) payCashAs(t *testing.T, actor sales.Actor, checkID uuid.UUID,
+	appliedVND, tenderedVND int64,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewPayCashHandler(e.Runner).
+		Handle(context.Background(), actor, sales.PayCashCommand{
+			RequestID:        uuid.New(),
+			CheckID:          checkID,
+			AppliedAmountVND: appliedVND,
+			CashTenderedVND:  tenderedVND,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+// countPayments counts the Payments recorded against one Check.
+func (e *salesEnv) countPayments(t *testing.T, checkID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM payments WHERE check_id = $1`, checkID).Scan(&n))
+	return n
+}
+
+// countAuditEvents returns the number of audit_events rows of one type.
+func (e *salesEnv) countAuditEvents(t *testing.T, eventType string) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM audit_events WHERE event_type = $1`, eventType).Scan(&n))
+	return n
+}
+
+// countAuditEventsForCheck returns the number of audit_events rows of one type
+// whose details name the Check.
+func (e *salesEnv) countAuditEventsForCheck(t *testing.T, eventType string, checkID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT count(*) FROM audit_events
+		WHERE event_type = $1 AND details->>'check_id' = $2`,
+		eventType, checkID).Scan(&n))
+	return n
 }
 
 // ---------- Round lifecycle ----------

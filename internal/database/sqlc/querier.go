@@ -145,6 +145,7 @@ type Querier interface {
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
 	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (InsertOrderDraftRow, error)
 	InsertOrderDraftForSession(ctx context.Context, arg InsertOrderDraftForSessionParams) (InsertOrderDraftForSessionRow, error)
+	InsertPayment(ctx context.Context, arg InsertPaymentParams) (uuid.UUID, error)
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
 	// Batches assignTables' per-Table insert loop into one round trip. Two
 	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
@@ -232,6 +233,14 @@ type Querier interface {
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	// The uniform 5C lock protocol (ADR-016): the Check row FOR UPDATE, its
+	// parents FOR SHARE. The parents are only read to evaluate a precondition, so
+	// locking them FOR UPDATE would serialize two cashiers paying different
+	// Checks of one Session for no correctness gain.
+	//
+	// No row means the Check id does not exist. The state columns come back
+	// unfiltered so the caller can report which precondition failed.
+	LockCheckForPayment(ctx context.Context, id uuid.UUID) (LockCheckForPaymentRow, error)
 	// The Session's most recent OPEN Check, for the CURRENT_UNPAID target.
 	LockCurrentOpenCheck(ctx context.Context, serviceSessionID uuid.UUID) (LockCurrentOpenCheckRow, error)
 	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
@@ -303,10 +312,14 @@ type Querier interface {
 	SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	SetTableAvailability(ctx context.Context, arg SetTableAvailabilityParams) (Table, error)
+	// Writes all four evidence columns together, because the composite constraint
+	// check_settlement_evidence_valid rejects any partial set.
+	SettleCheck(ctx context.Context, arg SettleCheckParams) error
 	ShiftAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error
 	StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error
 	SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) (SumCashMovementsRow, error)
+	SumCheckPayments(ctx context.Context, checkID uuid.UUID) (int64, error)
 	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	// size_key and note_key are generated columns, so they follow the write.
 	UpdateDraftItemComposition(ctx context.Context, arg UpdateDraftItemCompositionParams) error

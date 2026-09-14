@@ -555,6 +555,46 @@ func (q *Queries) InsertOrderDraftForSession(ctx context.Context, arg InsertOrde
 	return i, err
 }
 
+const insertPayment = `-- name: InsertPayment :one
+INSERT INTO payments (
+    check_id, sales_shift_id, actor_staff_identity_id, staff_access_session_id,
+    applied_amount_vnd, method, cash_tendered_vnd, change_due_vnd,
+    transaction_reference, received_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id
+`
+
+type InsertPaymentParams struct {
+	CheckID              uuid.UUID      `json:"check_id"`
+	SalesShiftID         uuid.UUID      `json:"sales_shift_id"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	AppliedAmountVnd     int64          `json:"applied_amount_vnd"`
+	Method               string         `json:"method"`
+	CashTenderedVnd      sql.NullInt64  `json:"cash_tendered_vnd"`
+	ChangeDueVnd         sql.NullInt64  `json:"change_due_vnd"`
+	TransactionReference sql.NullString `json:"transaction_reference"`
+	ReceivedAt           time.Time      `json:"received_at"`
+}
+
+func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, insertPayment,
+		arg.CheckID,
+		arg.SalesShiftID,
+		arg.ActorStaffIdentityID,
+		arg.StaffAccessSessionID,
+		arg.AppliedAmountVnd,
+		arg.Method,
+		arg.CashTenderedVnd,
+		arg.ChangeDueVnd,
+		arg.TransactionReference,
+		arg.ReceivedAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertServiceSession = `-- name: InsertServiceSession :one
 INSERT INTO service_sessions
     (service_number, sequence, service_mode, state,
@@ -1399,6 +1439,50 @@ func (q *Queries) ListSessionChecks(ctx context.Context, serviceSessionID uuid.U
 	return items, nil
 }
 
+const lockCheckForPayment = `-- name: LockCheckForPayment :one
+SELECT c.id, c.state, c.charge_vnd,
+       s.id AS service_session_id, s.state AS service_session_state,
+       sh.id AS sales_shift_id, sh.state AS sales_shift_state
+FROM checks c
+JOIN service_sessions s ON s.id = c.service_session_id
+JOIN sales_shifts sh ON sh.id = s.sales_shift_id
+WHERE c.id = $1
+FOR UPDATE OF c
+FOR SHARE OF s, sh
+`
+
+type LockCheckForPaymentRow struct {
+	ID                  uuid.UUID `json:"id"`
+	State               string    `json:"state"`
+	ChargeVnd           int64     `json:"charge_vnd"`
+	ServiceSessionID    uuid.UUID `json:"service_session_id"`
+	ServiceSessionState string    `json:"service_session_state"`
+	SalesShiftID        uuid.UUID `json:"sales_shift_id"`
+	SalesShiftState     string    `json:"sales_shift_state"`
+}
+
+// The uniform 5C lock protocol (ADR-016): the Check row FOR UPDATE, its
+// parents FOR SHARE. The parents are only read to evaluate a precondition, so
+// locking them FOR UPDATE would serialize two cashiers paying different
+// Checks of one Session for no correctness gain.
+//
+// No row means the Check id does not exist. The state columns come back
+// unfiltered so the caller can report which precondition failed.
+func (q *Queries) LockCheckForPayment(ctx context.Context, id uuid.UUID) (LockCheckForPaymentRow, error) {
+	row := q.db.QueryRowContext(ctx, lockCheckForPayment, id)
+	var i LockCheckForPaymentRow
+	err := row.Scan(
+		&i.ID,
+		&i.State,
+		&i.ChargeVnd,
+		&i.ServiceSessionID,
+		&i.ServiceSessionState,
+		&i.SalesShiftID,
+		&i.SalesShiftState,
+	)
+	return i, err
+}
+
 const lockCurrentOpenCheck = `-- name: LockCurrentOpenCheck :one
 SELECT id, charge_vnd
 FROM checks
@@ -1867,6 +1951,50 @@ type SetOrderDraftCheckTargetParams struct {
 func (q *Queries) SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error {
 	_, err := q.db.ExecContext(ctx, setOrderDraftCheckTarget, arg.ID, arg.CheckTarget)
 	return err
+}
+
+const settleCheck = `-- name: SettleCheck :exec
+UPDATE checks
+SET state = 'SETTLED',
+    settled_at = $2,
+    settled_by_staff_identity_id = $3,
+    settled_during_sales_shift_id = $4,
+    settled_staff_access_session_id = $5
+WHERE id = $1
+`
+
+type SettleCheckParams struct {
+	ID                          uuid.UUID     `json:"id"`
+	SettledAt                   sql.NullTime  `json:"settled_at"`
+	SettledByStaffIdentityID    uuid.NullUUID `json:"settled_by_staff_identity_id"`
+	SettledDuringSalesShiftID   uuid.NullUUID `json:"settled_during_sales_shift_id"`
+	SettledStaffAccessSessionID uuid.NullUUID `json:"settled_staff_access_session_id"`
+}
+
+// Writes all four evidence columns together, because the composite constraint
+// check_settlement_evidence_valid rejects any partial set.
+func (q *Queries) SettleCheck(ctx context.Context, arg SettleCheckParams) error {
+	_, err := q.db.ExecContext(ctx, settleCheck,
+		arg.ID,
+		arg.SettledAt,
+		arg.SettledByStaffIdentityID,
+		arg.SettledDuringSalesShiftID,
+		arg.SettledStaffAccessSessionID,
+	)
+	return err
+}
+
+const sumCheckPayments = `-- name: SumCheckPayments :one
+SELECT COALESCE(SUM(applied_amount_vnd), 0)::BIGINT AS total_applied_vnd
+FROM payments
+WHERE check_id = $1
+`
+
+func (q *Queries) SumCheckPayments(ctx context.Context, checkID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumCheckPayments, checkID)
+	var total_applied_vnd int64
+	err := row.Scan(&total_applied_vnd)
+	return total_applied_vnd, err
 }
 
 const updateDraftItemComposition = `-- name: UpdateDraftItemComposition :exec

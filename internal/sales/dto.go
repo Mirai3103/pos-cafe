@@ -107,6 +107,16 @@ type SetCheckTargetCommand struct {
 	CheckTarget      string    `json:"check_target"`
 }
 
+// PayCashCommand records cash received against one Check. The applied amount
+// and the cash tendered are separate facts: the applied amount is what the
+// customer owed, the tendered amount is what they handed over.
+type PayCashCommand struct {
+	RequestID        uuid.UUID `json:"request_id"`
+	CheckID          uuid.UUID `json:"-"`
+	AppliedAmountVND int64     `json:"applied_amount_vnd"`
+	CashTenderedVND  int64     `json:"cash_tendered_vnd"`
+}
+
 // ---------- Responses ----------
 
 // SessionTableResponse is a Table currently assigned to a Service Session.

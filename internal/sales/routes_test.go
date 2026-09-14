@@ -39,6 +39,7 @@ func TestRouteRegistration(t *testing.T) {
 		"POST /api/v1/sales/service-sessions/:id/draft/commit":                           true,
 		"POST /api/v1/sales/service-sessions/:id/draft":                                  true,
 		"PUT /api/v1/sales/service-sessions/:id/draft/check-target":                      true,
+		"POST /api/v1/sales/checks/:check_id/payments/cash":                              true,
 	}
 
 	got := make(map[string]bool)
@@ -90,6 +91,6 @@ func TestCommitRoutesRequireSalesOperate(t *testing.T) {
 	}
 }
 
-func TestSalesExposesFourteenOperations(t *testing.T) {
-	require.Len(t, registeredSalesRoutes(t), 14)
+func TestSalesExposesFifteenOperations(t *testing.T) {
+	require.Len(t, registeredSalesRoutes(t), 15)
 }
