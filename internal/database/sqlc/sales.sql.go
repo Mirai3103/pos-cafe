@@ -778,6 +778,58 @@ func (q *Queries) ListCheckAllocations(ctx context.Context, checkID uuid.UUID) (
 	return items, nil
 }
 
+const listCheckPayments = `-- name: ListCheckPayments :many
+SELECT id, method, applied_amount_vnd, cash_tendered_vnd, change_due_vnd,
+       transaction_reference, sales_shift_id, received_at
+FROM payments
+WHERE check_id = $1
+ORDER BY received_at ASC, id ASC
+`
+
+type ListCheckPaymentsRow struct {
+	ID                   uuid.UUID      `json:"id"`
+	Method               string         `json:"method"`
+	AppliedAmountVnd     int64          `json:"applied_amount_vnd"`
+	CashTenderedVnd      sql.NullInt64  `json:"cash_tendered_vnd"`
+	ChangeDueVnd         sql.NullInt64  `json:"change_due_vnd"`
+	TransactionReference sql.NullString `json:"transaction_reference"`
+	SalesShiftID         uuid.UUID      `json:"sales_shift_id"`
+	ReceivedAt           time.Time      `json:"received_at"`
+}
+
+// Ordered by (received_at, id), served directly by payment_check_index.
+func (q *Queries) ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]ListCheckPaymentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCheckPayments, checkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCheckPaymentsRow{}
+	for rows.Next() {
+		var i ListCheckPaymentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Method,
+			&i.AppliedAmountVnd,
+			&i.CashTenderedVnd,
+			&i.ChangeDueVnd,
+			&i.TransactionReference,
+			&i.SalesShiftID,
+			&i.ReceivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCommittedItemModifiers = `-- name: ListCommittedItemModifiers :many
 SELECT committed_item_id, modifier_group_id, modifier_group_name,
        modifier_option_id, modifier_option_name, surcharge_vnd
@@ -1304,17 +1356,18 @@ func (q *Queries) ListServiceSessionTables(ctx context.Context, serviceSessionID
 }
 
 const listSessionChecks = `-- name: ListSessionChecks :many
-SELECT id, state, charge_vnd, created_at
+SELECT id, state, charge_vnd, merged_into_check_id, created_at
 FROM checks
 WHERE service_session_id = $1
 ORDER BY created_at ASC, id ASC
 `
 
 type ListSessionChecksRow struct {
-	ID        uuid.UUID `json:"id"`
-	State     string    `json:"state"`
-	ChargeVnd int64     `json:"charge_vnd"`
-	CreatedAt time.Time `json:"created_at"`
+	ID                uuid.UUID     `json:"id"`
+	State             string        `json:"state"`
+	ChargeVnd         int64         `json:"charge_vnd"`
+	MergedIntoCheckID uuid.NullUUID `json:"merged_into_check_id"`
+	CreatedAt         time.Time     `json:"created_at"`
 }
 
 func (q *Queries) ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error) {
@@ -1330,6 +1383,7 @@ func (q *Queries) ListSessionChecks(ctx context.Context, serviceSessionID uuid.U
 			&i.ID,
 			&i.State,
 			&i.ChargeVnd,
+			&i.MergedIntoCheckID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

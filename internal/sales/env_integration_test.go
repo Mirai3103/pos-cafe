@@ -34,6 +34,10 @@ type salesEnv struct {
 	Actor   sales.Actor
 	barista sales.Actor
 
+	// ShiftID is the seeded open Sales Shift, the shift every Payment these
+	// suites record is received during.
+	ShiftID uuid.UUID
+
 	// CoffeeID is a directly priced Menu Item (25,000 VND) whose Category
 	// carries the Topping group.
 	CoffeeID uuid.UUID
@@ -67,7 +71,7 @@ func newSalesEnv(t *testing.T) *salesEnv {
 	env := &salesEnv{DB: db, Queries: q, Runner: runner}
 	env.Actor = seedActor(t, q, []string{"MANAGER"})
 	env.barista = seedActor(t, q, []string{"BARISTA"})
-	seedOpenShift(t, q, env.Actor.StaffID)
+	env.ShiftID = seedOpenShift(t, q, env.Actor.StaffID)
 
 	coffeeCategoryID := seedMenuCategory(t, db, "Cà phê")
 	env.ToppingGroupID = seedModifierGroup(t, db, "Topping")
@@ -271,6 +275,76 @@ func (e *salesEnv) commitOneItemSession(t *testing.T) sales.ServiceSessionRespon
 	session := e.StartTakeaway(t)
 	e.AddDraftItem(t, session.ID, e.CoffeeID, nil)
 	return e.Commit(t, session.ID)
+}
+
+// commitTakeawayDraft commits a Takeaway Session whose draft holds n DISTINCT
+// Menu Items: the first at quantity 2, every later one at quantity 1. The
+// seeded catalog offers exactly three items, so n is bounded by 3; with Coffee
+// (25,000 VND) first, the charges are 50,000 / 70,000 / 100,000 VND for
+// n = 1..3.
+func (e *salesEnv) commitTakeawayDraft(t *testing.T, n int) sales.ServiceSessionResponse {
+	t.Helper()
+	require.GreaterOrEqual(t, n, 1, "the draft must hold at least one item")
+	require.LessOrEqual(t, n, 3, "the seeded catalog offers exactly three items")
+
+	items := []struct {
+		id     uuid.UUID
+		sizeID *uuid.UUID
+	}{
+		{e.CoffeeID, nil},
+		{e.TeaID, nil},
+		{e.SizedItemID, &e.LargeSizeID},
+	}
+
+	session := e.StartTakeaway(t)
+	e.AddDraftItem(t, session.ID, items[0].id, items[0].sizeID)
+	// The composition merge folds the second unit into the same draft item,
+	// raising its quantity to 2.
+	e.AddDraftItem(t, session.ID, items[0].id, items[0].sizeID)
+	for i := 1; i < n; i++ {
+		e.AddDraftItem(t, session.ID, items[i].id, items[i].sizeID)
+	}
+	return e.Commit(t, session.ID)
+}
+
+// ---------- Check fixtures ----------
+
+// soleCheckID returns the Session's only Check's id. A committed Takeaway
+// Session has exactly one.
+func (e *salesEnv) soleCheckID(t *testing.T, sessionID uuid.UUID) uuid.UUID {
+	t.Helper()
+	var count int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM checks WHERE service_session_id = $1`, sessionID).Scan(&count))
+	require.Equal(t, 1, count, "a committed takeaway session has exactly one check")
+	var id uuid.UUID
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT id FROM checks WHERE service_session_id = $1`, sessionID).Scan(&id))
+	return id
+}
+
+// checkCharge returns the Check's stored charge_vnd.
+func (e *salesEnv) checkCharge(t *testing.T, checkID uuid.UUID) int64 {
+	t.Helper()
+	var charge int64
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT charge_vnd FROM checks WHERE id = $1`, checkID).Scan(&charge))
+	return charge
+}
+
+// insertCashPayment inserts a CASH Payment directly. It is fixture seeding for
+// read-path tests, not a handler call: tendered equals applied and change due
+// is zero, which satisfies payment_method_facts_valid.
+func (e *salesEnv) insertCashPayment(t *testing.T, checkID uuid.UUID, appliedVND int64) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	require.NoError(t, e.DB.QueryRowContext(context.Background(), `
+		INSERT INTO payments (check_id, sales_shift_id, actor_staff_identity_id,
+		                      staff_access_session_id, applied_amount_vnd, method,
+		                      cash_tendered_vnd, change_due_vnd)
+		VALUES ($1, $2, $3, $4, $5, 'CASH', $5, 0) RETURNING id`,
+		checkID, e.ShiftID, e.Actor.StaffID, e.Actor.SessionID, appliedVND).Scan(&id))
+	return id
 }
 
 // ---------- Round lifecycle ----------

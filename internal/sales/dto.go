@@ -219,21 +219,38 @@ type ChargeAllocationResponse struct {
 	Submitted         bool                        `json:"submitted"`
 }
 
+// PaymentResponse is one confirmed receipt of money applied to a Check.
+//
+// The method-dependent fields are pointers with omitempty, so a Manual QR
+// Payment does not carry two null cash fields and a Cash Payment does not
+// carry a null bank reference.
+type PaymentResponse struct {
+	ID                   uuid.UUID `json:"id"`
+	Method               string    `json:"method"`
+	AppliedAmountVND     int64     `json:"applied_amount_vnd"`
+	CashTenderedVND      *int64    `json:"cash_tendered_vnd,omitempty"`
+	ChangeDueVND         *int64    `json:"change_due_vnd,omitempty"`
+	TransactionReference *string   `json:"transaction_reference,omitempty"`
+	SalesShiftID         uuid.UUID `json:"sales_shift_id"`
+	ReceivedAt           time.Time `json:"received_at"`
+}
+
 // CheckResponse is a grouping of charges awaiting settlement.
 //
-// TotalAppliedVND is the sum of the Check's Payments and is therefore always
-// zero in 5B; BalanceVND is ChargeVND minus it. Both ship in their final shape
-// and are filled by 5C, following the precedent ADR-008 set for
-// expected_cash_vnd. PendingRefundVND is deliberately absent: Refund is
-// outside Phase 5 entirely.
+// TotalAppliedVND is the sum of the Check's Payments and BalanceVND is
+// ChargeVND minus it; both carry real values from 5C. MergedIntoCheckID is
+// present only on a MERGED Check — an open Check does not carry a field
+// pointing nowhere. PendingRefundVND is deliberately absent: Refund is
+// outside Phase 5 entirely, and a Payment can never exceed the balance.
 type CheckResponse struct {
-	ID              uuid.UUID `json:"id"`
-	State           string    `json:"state"`
-	ChargeVND       int64     `json:"charge_vnd"`
-	TotalAppliedVND int64     `json:"total_applied_vnd"`
-	BalanceVND      int64     `json:"balance_vnd"`
-	CreatedAt       time.Time `json:"created_at"`
-	// Filled by 5C.
-	Payments    []struct{}                 `json:"payments"`
+	ID                uuid.UUID  `json:"id"`
+	State             string     `json:"state"`
+	ChargeVND         int64      `json:"charge_vnd"`
+	TotalAppliedVND   int64      `json:"total_applied_vnd"`
+	BalanceVND        int64      `json:"balance_vnd"`
+	MergedIntoCheckID *uuid.UUID `json:"merged_into_check_id,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+
+	Payments    []PaymentResponse          `json:"payments"`
 	Allocations []ChargeAllocationResponse `json:"allocations"`
 }

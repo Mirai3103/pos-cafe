@@ -141,3 +141,41 @@ func TestProjectionRejectsCorruptedCheckCharge(t *testing.T) {
 	_, err = env.GetSession(t, session.ID)
 	require.ErrorIs(t, err, sales.ErrChargeInvariantViolated)
 }
+
+// The projection must report a directly inserted Payment, and must refuse to
+// serve a Check whose state contradicts its balance.
+func TestProjectionReportsPaymentsAndGuardsSettlement(t *testing.T) {
+	env := newSalesEnv(t)
+	ctx := context.Background()
+
+	session := env.commitTakeawayDraft(t, 2) // two items, one OPEN Check
+	checkID := env.soleCheckID(t, session.ID)
+	charge := env.checkCharge(t, checkID)
+
+	t.Run("a partial payment lowers the balance and stays OPEN", func(t *testing.T) {
+		env.insertCashPayment(t, checkID, charge/2)
+
+		got := env.GetSessionOK(t, session.ID)
+		require.Len(t, got.Checks, 1)
+		require.Equal(t, sales.CheckStateOpen, got.Checks[0].State)
+		require.Equal(t, charge/2, got.Checks[0].TotalAppliedVND)
+		require.Equal(t, charge-charge/2, got.Checks[0].BalanceVND)
+		require.Len(t, got.Checks[0].Payments, 1)
+		require.Equal(t, sales.PaymentMethodCash, got.Checks[0].Payments[0].Method)
+		require.NotNil(t, got.Checks[0].Payments[0].CashTenderedVND)
+	})
+
+	t.Run("a state that contradicts the balance fails the read", func(t *testing.T) {
+		_, err := env.DB.ExecContext(ctx, `
+			UPDATE checks SET state = 'SETTLED', settled_at = now(),
+			  settled_by_staff_identity_id = $2,
+			  settled_during_sales_shift_id = $3,
+			  settled_staff_access_session_id = $4
+			WHERE id = $1`,
+			checkID, env.Actor.StaffID, env.ShiftID, env.Actor.SessionID)
+		require.NoError(t, err)
+
+		_, err = env.GetSession(t, session.ID)
+		require.ErrorIs(t, err, sales.ErrSettlementInvariantViolated)
+	})
+}

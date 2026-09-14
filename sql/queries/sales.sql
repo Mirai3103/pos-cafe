@@ -471,10 +471,18 @@ VALUES ($1, $2)
 RETURNING id, state, check_target;
 
 -- name: ListSessionChecks :many
-SELECT id, state, charge_vnd, created_at
+SELECT id, state, charge_vnd, merged_into_check_id, created_at
 FROM checks
 WHERE service_session_id = $1
 ORDER BY created_at ASC, id ASC;
+
+-- name: ListCheckPayments :many
+-- Ordered by (received_at, id), served directly by payment_check_index.
+SELECT id, method, applied_amount_vnd, cash_tendered_vnd, change_due_vnd,
+       transaction_reference, sales_shift_id, received_at
+FROM payments
+WHERE check_id = $1
+ORDER BY received_at ASC, id ASC;
 
 -- name: ListCheckAllocations :many
 SELECT ca.id, ca.quantity AS allocated_quantity, ca.created_at,

@@ -193,20 +193,88 @@ func loadChecks(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 			return nil, fmt.Errorf("%w: check %s", ErrChargeInvariantViolated, row.ID)
 		}
 
-		// No Payment exists before 5C, so applied is zero and the balance is
-		// the whole charge. Both ship in their final shape.
-		out = append(out, CheckResponse{
+		payments, totalAppliedVND, err := loadCheckPayments(ctx, q, row.ID)
+		if err != nil {
+			return nil, err
+		}
+		balanceVND, err := SubtractCharge(row.ChargeVnd, totalAppliedVND)
+		if err != nil {
+			return nil, fmt.Errorf("check %s balance: %w", row.ID, err)
+		}
+
+		// The read-path half of the settlement guard. The database constraint
+		// guarantees that a SETTLED Check carries complete evidence; this
+		// guarantees that its state matches the money. A MERGED Check is
+		// exempt: its charge and allocations moved to the survivor.
+		if row.State != CheckStateMerged &&
+			(row.State == CheckStateSettled) != SettlesCheck(balanceVND) {
+			slog.Error("check state does not match its balance",
+				"check_id", row.ID, "state", row.State, "balance_vnd", balanceVND)
+			return nil, fmt.Errorf("%w: check %s", ErrSettlementInvariantViolated, row.ID)
+		}
+		if row.State == CheckStateMerged && !row.MergedIntoCheckID.Valid {
+			slog.Error("merged check has no surviving check", "check_id", row.ID)
+			return nil, fmt.Errorf("%w: merged check %s", ErrSettlementInvariantViolated, row.ID)
+		}
+
+		check := CheckResponse{
 			ID:              row.ID,
 			State:           row.State,
 			ChargeVND:       row.ChargeVnd,
-			TotalAppliedVND: 0,
-			BalanceVND:      row.ChargeVnd,
+			TotalAppliedVND: totalAppliedVND,
+			BalanceVND:      balanceVND,
 			CreatedAt:       row.CreatedAt,
-			Payments:        make([]struct{}, 0),
+			Payments:        payments,
 			Allocations:     allocations,
-		})
+		}
+		if row.MergedIntoCheckID.Valid {
+			into := row.MergedIntoCheckID.UUID
+			check.MergedIntoCheckID = &into
+		}
+		out = append(out, check)
 	}
 	return out, nil
+}
+
+// loadCheckPayments returns one Check's Payments and their summed applied
+// amount, in (received_at, id) order.
+func loadCheckPayments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID) (
+	[]PaymentResponse, int64, error,
+) {
+	rows, err := q.ListCheckPayments(ctx, checkID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("load check payments: %w", err)
+	}
+
+	out := make([]PaymentResponse, 0, len(rows))
+	var totalAppliedVND int64
+	for _, row := range rows {
+		totalAppliedVND, err = AddCharge(totalAppliedVND, row.AppliedAmountVnd)
+		if err != nil {
+			return nil, 0, fmt.Errorf("sum payments of check %s: %w", checkID, err)
+		}
+		payment := PaymentResponse{
+			ID:               row.ID,
+			Method:           row.Method,
+			AppliedAmountVND: row.AppliedAmountVnd,
+			SalesShiftID:     row.SalesShiftID,
+			ReceivedAt:       row.ReceivedAt,
+		}
+		if row.CashTenderedVnd.Valid {
+			v := row.CashTenderedVnd.Int64
+			payment.CashTenderedVND = &v
+		}
+		if row.ChangeDueVnd.Valid {
+			v := row.ChangeDueVnd.Int64
+			payment.ChangeDueVND = &v
+		}
+		if row.TransactionReference.Valid {
+			v := row.TransactionReference.String
+			payment.TransactionReference = &v
+		}
+		out = append(out, payment)
+	}
+	return out, totalAppliedVND, nil
 }
 
 // loadCheckAllocations returns one Check's allocations and their summed amount.

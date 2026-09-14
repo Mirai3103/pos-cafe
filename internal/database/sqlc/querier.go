@@ -172,6 +172,8 @@ type Querier interface {
 	ListCashMovements(ctx context.Context, salesShiftID uuid.UUID) ([]ListCashMovementsRow, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
+	// Ordered by (received_at, id), served directly by payment_check_index.
+	ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]ListCheckPaymentsRow, error)
 	ListCommittedItemModifiers(ctx context.Context, committedItemIds []uuid.UUID) ([]ListCommittedItemModifiersRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
