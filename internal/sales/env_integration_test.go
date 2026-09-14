@@ -459,6 +459,89 @@ func (e *salesEnv) payManualQRAs(t *testing.T, actor sales.Actor, checkID uuid.U
 	return resp, status, err
 }
 
+// ---------- Check restructuring ----------
+
+// checkAllocations returns one Check's allocations as the Session projection
+// presents them.
+func (e *salesEnv) checkAllocations(t *testing.T, sessionID, checkID uuid.UUID,
+) []sales.ChargeAllocationResponse {
+	t.Helper()
+	session := e.GetSessionOK(t, sessionID)
+	return e.findCheck(t, session, checkID).Allocations
+}
+
+// findCheck returns the Check with the given id from a Session projection,
+// failing the test when the projection does not carry it.
+func (e *salesEnv) findCheck(t *testing.T, session sales.ServiceSessionResponse,
+	checkID uuid.UUID,
+) sales.CheckResponse {
+	t.Helper()
+	for _, check := range session.Checks {
+		if check.ID == checkID {
+			return check
+		}
+	}
+	t.Fatalf("check %s is not in session %s's projection", checkID, session.ID)
+	return sales.CheckResponse{}
+}
+
+// otherCheckID returns the id of the projection's Check that is not the given
+// one: the destination a split onto a new Check created.
+func (e *salesEnv) otherCheckID(t *testing.T, session sales.ServiceSessionResponse,
+	sourceID uuid.UUID,
+) uuid.UUID {
+	t.Helper()
+	for _, check := range session.Checks {
+		if check.ID != sourceID {
+			return check.ID
+		}
+	}
+	t.Fatalf("session %s's projection has no check other than %s", session.ID, sourceID)
+	return uuid.Nil
+}
+
+// splitToNewCheck moves quantities from one Check onto a newly created Check,
+// returning the projection, HTTP status, and error untouched, so tests can
+// assert on all three.
+func (e *salesEnv) splitToNewCheck(t *testing.T, sourceCheckID uuid.UUID,
+	items []sales.SplitItem,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewSplitCheckHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.SplitCheckCommand{
+			RequestID:     uuid.New(),
+			SourceCheckID: sourceCheckID,
+			Destination:   sales.SplitDestination{Type: sales.SplitDestinationNewCheck},
+			Items:         items,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+// splitToExistingCheck moves quantities from one Check onto another Check that
+// already exists, returning the projection, HTTP status, and error untouched.
+func (e *salesEnv) splitToExistingCheck(t *testing.T, sourceCheckID,
+	destinationCheckID uuid.UUID, items []sales.SplitItem,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewSplitCheckHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.SplitCheckCommand{
+			RequestID:     uuid.New(),
+			SourceCheckID: sourceCheckID,
+			Destination: sales.SplitDestination{
+				Type:    sales.SplitDestinationExistingCheck,
+				CheckID: &destinationCheckID,
+			},
+			Items: items,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
 // countPayments counts the Payments recorded against one Check.
 func (e *salesEnv) countPayments(t *testing.T, checkID uuid.UUID) int {
 	t.Helper()

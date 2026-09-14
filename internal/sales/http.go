@@ -710,3 +710,45 @@ func (s *Slices) handlePayManualQR(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleSplitCheck godoc
+//
+//	@Summary		Split a Check
+//	@Description	Moves a quantity of one or more Committed Items from this Check onto another, either a newly created Check or an existing OPEN Check of the same Service Session. Rejected once either Check carries a Payment, because a paid Check is reconciliation evidence rather than a sorting tool. Neither the source nor the destination may be left with nothing charged.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			check_id	path		string				true	"Source Check ID"
+//	@Param			body		body		SplitCheckCommand	true	"Split request"
+//	@Success		200			{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Router			/sales/checks/{check_id}/split [post]
+func (s *Slices) handleSplitCheck(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	checkID, err := parseUUIDParam(c, "check_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[SplitCheckCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.SourceCheckID = checkID
+
+	status, result, err := s.SplitCheck.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

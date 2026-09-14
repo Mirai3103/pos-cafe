@@ -19,6 +19,7 @@ type Querier interface {
 	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
 	CountActiveManagers(ctx context.Context) (int64, error)
 	CountManagers(ctx context.Context) (int64, error)
+	CountPaymentsForChecks(ctx context.Context, dollar_1 []uuid.UUID) (int64, error)
 	CreateCategoryModifierGroup(ctx context.Context, arg CreateCategoryModifierGroupParams) error
 	// -- Association Queries --
 	CreateItemModifierGroup(ctx context.Context, arg CreateItemModifierGroupParams) error
@@ -41,6 +42,7 @@ type Querier interface {
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	// -- Tables --
 	CreateTable(ctx context.Context, arg CreateTableParams) (Table, error)
+	DeleteAllocation(ctx context.Context, id uuid.UUID) error
 	DeleteDraftItem(ctx context.Context, id uuid.UUID) error
 	DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
@@ -169,9 +171,16 @@ type Querier interface {
 	ListAllModifierOptionsPaginated(ctx context.Context, arg ListAllModifierOptionsPaginatedParams) ([]ModifierOption, error)
 	ListAllStaff(ctx context.Context) ([]ListAllStaffRow, error)
 	ListAllStaffRoles(ctx context.Context) ([]StaffOperationalRole, error)
+	// One Check's allocations restricted to a set of Committed Items, with the
+	// frozen unit price the moved amount is computed from.
+	//
+	// The array argument is named through sqlc.arg so the generated params struct
+	// carries CommittedItemIds rather than a positional Column2.
+	ListAllocationsForItems(ctx context.Context, arg ListAllocationsForItemsParams) ([]ListAllocationsForItemsRow, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 	ListCashMovements(ctx context.Context, salesShiftID uuid.UUID) ([]ListCashMovementsRow, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
+	ListCheckAllocationQuantities(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationQuantitiesRow, error)
 	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
 	// Ordered by (received_at, id), served directly by payment_check_index.
 	ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]ListCheckPaymentsRow, error)
@@ -241,6 +250,10 @@ type Querier interface {
 	// No row means the Check id does not exist. The state columns come back
 	// unfiltered so the caller can report which precondition failed.
 	LockCheckForPayment(ctx context.Context, id uuid.UUID) (LockCheckForPaymentRow, error)
+	// The uniform 5C lock protocol over a set of Checks, ordered by id so two
+	// concurrent restructurings take the rows in the same order and cannot
+	// deadlock against each other or against a Payment. See ADR-016.
+	LockChecksForRestructuring(ctx context.Context, dollar_1 []uuid.UUID) ([]LockChecksForRestructuringRow, error)
 	// The Session's most recent OPEN Check, for the CURRENT_UNPAID target.
 	LockCurrentOpenCheck(ctx context.Context, serviceSessionID uuid.UUID) (LockCurrentOpenCheckRow, error)
 	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
@@ -280,7 +293,11 @@ type Querier interface {
 	// overlapping sets cannot deadlock against each other. The caller must sort
 	// the ids before calling.
 	LockTablesForAssignment(ctx context.Context, tableIds []uuid.UUID) ([]LockTablesForAssignmentRow, error)
+	// The absorbed Check keeps no charge and points at the survivor, which is
+	// what the MERGED branch of check_settlement_evidence_valid requires.
+	MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error
 	MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error
+	MoveAllocationToCheck(ctx context.Context, arg MoveAllocationToCheckParams) error
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
 	RaiseCheckCharge(ctx context.Context, arg RaiseCheckChargeParams) error
@@ -305,6 +322,8 @@ type Querier interface {
 	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
 	SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	SetAllocationQuantity(ctx context.Context, arg SetAllocationQuantityParams) error
+	SetCheckCharge(ctx context.Context, arg SetCheckChargeParams) error
 	SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuantityParams) (SetDraftItemQuantityRow, error)
 	SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAvailabilityParams) (MenuItem, error)
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)

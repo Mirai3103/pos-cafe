@@ -543,3 +543,61 @@ SET state = 'SETTLED',
     settled_during_sales_shift_id = $4,
     settled_staff_access_session_id = $5
 WHERE id = $1;
+
+-- name: LockChecksForRestructuring :many
+-- The uniform 5C lock protocol over a set of Checks, ordered by id so two
+-- concurrent restructurings take the rows in the same order and cannot
+-- deadlock against each other or against a Payment. See ADR-016.
+SELECT c.id, c.state, c.charge_vnd, c.service_session_id,
+       s.state AS service_session_state,
+       s.sales_shift_id, sh.state AS sales_shift_state
+FROM checks c
+JOIN service_sessions s ON s.id = c.service_session_id
+JOIN sales_shifts sh ON sh.id = s.sales_shift_id
+WHERE c.id = ANY($1::uuid[])
+ORDER BY c.id
+FOR UPDATE OF c
+FOR SHARE OF s, sh;
+
+-- name: CountPaymentsForChecks :one
+SELECT count(*)::BIGINT AS payment_count
+FROM payments
+WHERE check_id = ANY($1::uuid[]);
+
+-- name: ListAllocationsForItems :many
+-- One Check's allocations restricted to a set of Committed Items, with the
+-- frozen unit price the moved amount is computed from.
+--
+-- The array argument is named through sqlc.arg so the generated params struct
+-- carries CommittedItemIds rather than a positional Column2.
+SELECT ca.id, ca.committed_item_id, ca.quantity, ci.unit_price_vnd
+FROM charge_allocations ca
+JOIN committed_items ci ON ci.id = ca.committed_item_id
+WHERE ca.check_id = sqlc.arg(check_id)
+  AND ca.committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[])
+ORDER BY ca.committed_item_id;
+
+-- name: ListCheckAllocationQuantities :many
+SELECT id, committed_item_id, quantity
+FROM charge_allocations
+WHERE check_id = $1
+ORDER BY committed_item_id;
+
+-- name: SetAllocationQuantity :exec
+UPDATE charge_allocations SET quantity = $2 WHERE id = $1;
+
+-- name: DeleteAllocation :exec
+DELETE FROM charge_allocations WHERE id = $1;
+
+-- name: MoveAllocationToCheck :exec
+UPDATE charge_allocations SET check_id = $2 WHERE id = $1;
+
+-- name: SetCheckCharge :exec
+UPDATE checks SET charge_vnd = $2 WHERE id = $1;
+
+-- name: MarkCheckMerged :exec
+-- The absorbed Check keeps no charge and points at the survivor, which is
+-- what the MERGED branch of check_settlement_evidence_valid requires.
+UPDATE checks
+SET state = 'MERGED', charge_vnd = 0, merged_into_check_id = $2
+WHERE id = $1;

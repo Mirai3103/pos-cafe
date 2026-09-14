@@ -14,6 +14,28 @@ import (
 	"github.com/lib/pq"
 )
 
+const countPaymentsForChecks = `-- name: CountPaymentsForChecks :one
+SELECT count(*)::BIGINT AS payment_count
+FROM payments
+WHERE check_id = ANY($1::uuid[])
+`
+
+func (q *Queries) CountPaymentsForChecks(ctx context.Context, dollar_1 []uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPaymentsForChecks, pq.Array(dollar_1))
+	var payment_count int64
+	err := row.Scan(&payment_count)
+	return payment_count, err
+}
+
+const deleteAllocation = `-- name: DeleteAllocation :exec
+DELETE FROM charge_allocations WHERE id = $1
+`
+
+func (q *Queries) DeleteAllocation(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteAllocation, id)
+	return err
+}
+
 const deleteDraftItem = `-- name: DeleteDraftItem :exec
 DELETE FROM order_draft_items WHERE id = $1
 `
@@ -755,6 +777,96 @@ func (q *Queries) ListActiveServiceSessions(ctx context.Context) ([]ListActiveSe
 	return items, nil
 }
 
+const listAllocationsForItems = `-- name: ListAllocationsForItems :many
+SELECT ca.id, ca.committed_item_id, ca.quantity, ci.unit_price_vnd
+FROM charge_allocations ca
+JOIN committed_items ci ON ci.id = ca.committed_item_id
+WHERE ca.check_id = $1
+  AND ca.committed_item_id = ANY($2::uuid[])
+ORDER BY ca.committed_item_id
+`
+
+type ListAllocationsForItemsParams struct {
+	CheckID          uuid.UUID   `json:"check_id"`
+	CommittedItemIds []uuid.UUID `json:"committed_item_ids"`
+}
+
+type ListAllocationsForItemsRow struct {
+	ID              uuid.UUID `json:"id"`
+	CommittedItemID uuid.UUID `json:"committed_item_id"`
+	Quantity        int32     `json:"quantity"`
+	UnitPriceVnd    int64     `json:"unit_price_vnd"`
+}
+
+// One Check's allocations restricted to a set of Committed Items, with the
+// frozen unit price the moved amount is computed from.
+//
+// The array argument is named through sqlc.arg so the generated params struct
+// carries CommittedItemIds rather than a positional Column2.
+func (q *Queries) ListAllocationsForItems(ctx context.Context, arg ListAllocationsForItemsParams) ([]ListAllocationsForItemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllocationsForItems, arg.CheckID, pq.Array(arg.CommittedItemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllocationsForItemsRow{}
+	for rows.Next() {
+		var i ListAllocationsForItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CommittedItemID,
+			&i.Quantity,
+			&i.UnitPriceVnd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCheckAllocationQuantities = `-- name: ListCheckAllocationQuantities :many
+SELECT id, committed_item_id, quantity
+FROM charge_allocations
+WHERE check_id = $1
+ORDER BY committed_item_id
+`
+
+type ListCheckAllocationQuantitiesRow struct {
+	ID              uuid.UUID `json:"id"`
+	CommittedItemID uuid.UUID `json:"committed_item_id"`
+	Quantity        int32     `json:"quantity"`
+}
+
+func (q *Queries) ListCheckAllocationQuantities(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationQuantitiesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCheckAllocationQuantities, checkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCheckAllocationQuantitiesRow{}
+	for rows.Next() {
+		var i ListCheckAllocationQuantitiesRow
+		if err := rows.Scan(&i.ID, &i.CommittedItemID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCheckAllocations = `-- name: ListCheckAllocations :many
 SELECT ca.id, ca.quantity AS allocated_quantity, ca.created_at,
        ci.id AS committed_item_id, ci.menu_item_id, ci.category_name,
@@ -1483,6 +1595,63 @@ func (q *Queries) LockCheckForPayment(ctx context.Context, id uuid.UUID) (LockCh
 	return i, err
 }
 
+const lockChecksForRestructuring = `-- name: LockChecksForRestructuring :many
+SELECT c.id, c.state, c.charge_vnd, c.service_session_id,
+       s.state AS service_session_state,
+       s.sales_shift_id, sh.state AS sales_shift_state
+FROM checks c
+JOIN service_sessions s ON s.id = c.service_session_id
+JOIN sales_shifts sh ON sh.id = s.sales_shift_id
+WHERE c.id = ANY($1::uuid[])
+ORDER BY c.id
+FOR UPDATE OF c
+FOR SHARE OF s, sh
+`
+
+type LockChecksForRestructuringRow struct {
+	ID                  uuid.UUID `json:"id"`
+	State               string    `json:"state"`
+	ChargeVnd           int64     `json:"charge_vnd"`
+	ServiceSessionID    uuid.UUID `json:"service_session_id"`
+	ServiceSessionState string    `json:"service_session_state"`
+	SalesShiftID        uuid.UUID `json:"sales_shift_id"`
+	SalesShiftState     string    `json:"sales_shift_state"`
+}
+
+// The uniform 5C lock protocol over a set of Checks, ordered by id so two
+// concurrent restructurings take the rows in the same order and cannot
+// deadlock against each other or against a Payment. See ADR-016.
+func (q *Queries) LockChecksForRestructuring(ctx context.Context, dollar_1 []uuid.UUID) ([]LockChecksForRestructuringRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockChecksForRestructuring, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockChecksForRestructuringRow{}
+	for rows.Next() {
+		var i LockChecksForRestructuringRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.State,
+			&i.ChargeVnd,
+			&i.ServiceSessionID,
+			&i.ServiceSessionState,
+			&i.SalesShiftID,
+			&i.SalesShiftState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockCurrentOpenCheck = `-- name: LockCurrentOpenCheck :one
 SELECT id, charge_vnd
 FROM checks
@@ -1864,12 +2033,44 @@ func (q *Queries) LockTablesForAssignment(ctx context.Context, tableIds []uuid.U
 	return items, nil
 }
 
+const markCheckMerged = `-- name: MarkCheckMerged :exec
+UPDATE checks
+SET state = 'MERGED', charge_vnd = 0, merged_into_check_id = $2
+WHERE id = $1
+`
+
+type MarkCheckMergedParams struct {
+	ID                uuid.UUID     `json:"id"`
+	MergedIntoCheckID uuid.NullUUID `json:"merged_into_check_id"`
+}
+
+// The absorbed Check keeps no charge and points at the survivor, which is
+// what the MERGED branch of check_settlement_evidence_valid requires.
+func (q *Queries) MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error {
+	_, err := q.db.ExecContext(ctx, markCheckMerged, arg.ID, arg.MergedIntoCheckID)
+	return err
+}
+
 const markOrderDraftCommitted = `-- name: MarkOrderDraftCommitted :exec
 UPDATE order_drafts SET state = 'COMMITTED' WHERE id = $1
 `
 
 func (q *Queries) MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, markOrderDraftCommitted, id)
+	return err
+}
+
+const moveAllocationToCheck = `-- name: MoveAllocationToCheck :exec
+UPDATE charge_allocations SET check_id = $2 WHERE id = $1
+`
+
+type MoveAllocationToCheckParams struct {
+	ID      uuid.UUID `json:"id"`
+	CheckID uuid.UUID `json:"check_id"`
+}
+
+func (q *Queries) MoveAllocationToCheck(ctx context.Context, arg MoveAllocationToCheckParams) error {
+	_, err := q.db.ExecContext(ctx, moveAllocationToCheck, arg.ID, arg.CheckID)
 	return err
 }
 
@@ -1912,6 +2113,34 @@ SELECT pg_advisory_xact_lock($1)
 
 func (q *Queries) SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error {
 	_, err := q.db.ExecContext(ctx, salesAdvisoryLock, pgAdvisoryXactLock)
+	return err
+}
+
+const setAllocationQuantity = `-- name: SetAllocationQuantity :exec
+UPDATE charge_allocations SET quantity = $2 WHERE id = $1
+`
+
+type SetAllocationQuantityParams struct {
+	ID       uuid.UUID `json:"id"`
+	Quantity int32     `json:"quantity"`
+}
+
+func (q *Queries) SetAllocationQuantity(ctx context.Context, arg SetAllocationQuantityParams) error {
+	_, err := q.db.ExecContext(ctx, setAllocationQuantity, arg.ID, arg.Quantity)
+	return err
+}
+
+const setCheckCharge = `-- name: SetCheckCharge :exec
+UPDATE checks SET charge_vnd = $2 WHERE id = $1
+`
+
+type SetCheckChargeParams struct {
+	ID        uuid.UUID `json:"id"`
+	ChargeVnd int64     `json:"charge_vnd"`
+}
+
+func (q *Queries) SetCheckCharge(ctx context.Context, arg SetCheckChargeParams) error {
+	_, err := q.db.ExecContext(ctx, setCheckCharge, arg.ID, arg.ChargeVnd)
 	return err
 }
 

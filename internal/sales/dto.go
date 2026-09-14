@@ -132,6 +132,30 @@ type PayManualQRCommand struct {
 	TransactionReference     *string   `json:"transaction_reference"`
 }
 
+// SplitItem is one Committed Item and the quantity of it being moved.
+type SplitItem struct {
+	CommittedItemID uuid.UUID `json:"committed_item_id"`
+	Quantity        int32     `json:"quantity"`
+}
+
+// SplitDestination names where the moved charge lands. Type is NEW_CHECK or
+// EXISTING_CHECK; CheckID is required for the latter and forbidden for the
+// former.
+type SplitDestination struct {
+	Type    string     `json:"type"`
+	CheckID *uuid.UUID `json:"check_id,omitempty"`
+}
+
+// SplitCheckCommand moves part of a Check's charge onto another Check. Both
+// Checks must be OPEN, belong to the same Service Session, and carry no
+// Payment.
+type SplitCheckCommand struct {
+	RequestID     uuid.UUID        `json:"request_id"`
+	SourceCheckID uuid.UUID        `json:"-"`
+	Destination   SplitDestination `json:"destination"`
+	Items         []SplitItem      `json:"items"`
+}
+
 // ---------- Responses ----------
 
 // SessionTableResponse is a Table currently assigned to a Service Session.
