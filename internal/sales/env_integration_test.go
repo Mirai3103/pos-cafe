@@ -542,6 +542,23 @@ func (e *salesEnv) splitToExistingCheck(t *testing.T, sourceCheckID,
 	return resp, status, err
 }
 
+// mergeChecks absorbs one Check into another, returning the projection, HTTP
+// status, and error untouched, so tests can assert on all three.
+func (e *salesEnv) mergeChecks(t *testing.T, survivingCheckID, absorbedCheckID uuid.UUID,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewMergeChecksHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.MergeChecksCommand{
+			RequestID:        uuid.New(),
+			SurvivingCheckID: survivingCheckID,
+			AbsorbedCheckID:  absorbedCheckID,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
 // countPayments counts the Payments recorded against one Check.
 func (e *salesEnv) countPayments(t *testing.T, checkID uuid.UUID) int {
 	t.Helper()

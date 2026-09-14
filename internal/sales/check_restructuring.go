@@ -337,3 +337,124 @@ func (h *SplitCheckHandler) Handle(ctx context.Context, actor Actor, cmd SplitCh
 			}, nil
 		})
 }
+
+type mergeFingerprint struct {
+	SurvivingCheckID uuid.UUID `json:"surviving_check_id"`
+	AbsorbedCheckID  uuid.UUID `json:"absorbed_check_id"`
+}
+
+type mergeAudit struct {
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	SurvivingCheckID uuid.UUID `json:"surviving_check_id"`
+	AbsorbedCheckID  uuid.UUID `json:"absorbed_check_id"`
+	MergedChargeVND  int64     `json:"merged_charge_vnd"`
+}
+
+// MergeChecksHandler absorbs one Check into another.
+type MergeChecksHandler struct{ runner *Runner }
+
+// NewMergeChecksHandler creates a new MergeChecksHandler.
+func NewMergeChecksHandler(runner *Runner) *MergeChecksHandler {
+	return &MergeChecksHandler{runner: runner}
+}
+
+// Handle moves every allocation of the absorbed Check onto the survivor.
+func (h *MergeChecksHandler) Handle(ctx context.Context, actor Actor, cmd MergeChecksCommand) (
+	int, ServiceSessionResponse, error,
+) {
+	var zero ServiceSessionResponse
+	if cmd.SurvivingCheckID == cmd.AbsorbedCheckID {
+		return 0, zero, fmt.Errorf("%w: a check cannot absorb itself", ErrInvalidCheckMerge)
+	}
+
+	spec := MutationSpec{
+		RequestID: cmd.RequestID,
+		Operation: OpMergeChecks,
+		Fingerprint: mergeFingerprint{
+			SurvivingCheckID: cmd.SurvivingCheckID,
+			AbsorbedCheckID:  cmd.AbsorbedCheckID,
+		},
+		Required: []string{CapSalesOperate},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec,
+		func(mc MutationContext) (int, ServiceSessionResponse, AuditRecord, error) {
+			q := mc.Queries
+
+			ids := []uuid.UUID{cmd.SurvivingCheckID, cmd.AbsorbedCheckID}
+			locked, err := lockChecks(ctx, q, ids)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			if err := assertNoPayments(ctx, q, ids); err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			surviving := locked[cmd.SurvivingCheckID]
+			absorbed := locked[cmd.AbsorbedCheckID]
+
+			absorbedAllocations, err := q.ListCheckAllocationQuantities(ctx, absorbed.ID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("list absorbed allocations: %w", err)
+			}
+			survivingAllocations, err := q.ListCheckAllocationQuantities(ctx, surviving.ID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("list surviving allocations: %w", err)
+			}
+			survivingByItem := make(map[uuid.UUID]sqlc.ListCheckAllocationQuantitiesRow,
+				len(survivingAllocations))
+			for _, row := range survivingAllocations {
+				survivingByItem[row.CommittedItemID] = row
+			}
+
+			for _, allocation := range absorbedAllocations {
+				existing, ok := survivingByItem[allocation.CommittedItemID]
+				if !ok {
+					// Nothing to combine with: the row simply changes Check.
+					if err := q.MoveAllocationToCheck(ctx, sqlc.MoveAllocationToCheckParams{
+						ID: allocation.ID, CheckID: surviving.ID,
+					}); err != nil {
+						return 0, zero, AuditRecord{}, fmt.Errorf("move allocation: %w", err)
+					}
+					continue
+				}
+				if err := q.SetAllocationQuantity(ctx, sqlc.SetAllocationQuantityParams{
+					ID: existing.ID, Quantity: existing.Quantity + allocation.Quantity,
+				}); err != nil {
+					return 0, zero, AuditRecord{}, fmt.Errorf("combine allocation: %w", err)
+				}
+				if err := q.DeleteAllocation(ctx, allocation.ID); err != nil {
+					return 0, zero, AuditRecord{}, fmt.Errorf("delete absorbed allocation: %w", err)
+				}
+			}
+
+			mergedChargeVND, err := AddCharge(surviving.ChargeVND, absorbed.ChargeVND)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			if err := q.SetCheckCharge(ctx, sqlc.SetCheckChargeParams{
+				ID: surviving.ID, ChargeVnd: mergedChargeVND,
+			}); err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("raise surviving charge: %w", err)
+			}
+			if err := q.MarkCheckMerged(ctx, sqlc.MarkCheckMergedParams{
+				ID:                absorbed.ID,
+				MergedIntoCheckID: uuid.NullUUID{UUID: surviving.ID, Valid: true},
+			}); err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("mark check merged: %w", err)
+			}
+
+			result, err := LoadServiceSession(ctx, q, surviving.ServiceSessionID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			return 200, result, AuditRecord{
+				EventType: EventCheckMerged,
+				Details: mergeAudit{
+					ServiceSessionID: surviving.ServiceSessionID,
+					SurvivingCheckID: surviving.ID,
+					AbsorbedCheckID:  absorbed.ID,
+					MergedChargeVND:  mergedChargeVND,
+				},
+			}, nil
+		})
+}

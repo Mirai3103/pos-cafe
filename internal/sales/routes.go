@@ -29,6 +29,7 @@ type Slices struct {
 	PayCash            *PayCashHandler
 	PayManualQR        *PayManualQRHandler
 	SplitCheck         *SplitCheckHandler
+	MergeChecks        *MergeChecksHandler
 }
 
 // NewSlices wires every Sales handler onto a shared Runner.
@@ -53,6 +54,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		PayCash:            NewPayCashHandler(runner),
 		PayManualQR:        NewPayManualQRHandler(runner),
 		SplitCheck:         NewSplitCheckHandler(runner),
+		MergeChecks:        NewMergeChecksHandler(runner),
 	}
 }
 
@@ -91,6 +93,10 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/sales/service-sessions/:id/draft", s.handleStartNewDraft,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.PUT("/sales/service-sessions/:id/draft/check-target", s.handleSetCheckTarget,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	// The flat merge route is registered before the /sales/checks/:check_id
+	// routes so a literal segment is never shadowed by the parameter route.
+	v1.POST("/sales/checks/merge", s.handleMergeChecks,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/sales/checks/:check_id/payments/cash", s.handlePayCash,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))

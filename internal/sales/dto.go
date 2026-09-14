@@ -156,6 +156,14 @@ type SplitCheckCommand struct {
 	Items         []SplitItem      `json:"items"`
 }
 
+// MergeChecksCommand absorbs one Check into another. Both must be OPEN,
+// belong to the same Service Session, and carry no Payment.
+type MergeChecksCommand struct {
+	RequestID        uuid.UUID `json:"request_id"`
+	SurvivingCheckID uuid.UUID `json:"surviving_check_id"`
+	AbsorbedCheckID  uuid.UUID `json:"absorbed_check_id"`
+}
+
 // ---------- Responses ----------
 
 // SessionTableResponse is a Table currently assigned to a Service Session.

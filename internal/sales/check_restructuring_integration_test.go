@@ -134,3 +134,100 @@ func TestSplitCheck(t *testing.T) {
 		require.Len(t, reread.Checks, len(got.Checks))
 	})
 }
+
+func TestMergeChecks(t *testing.T) {
+	env := newSalesEnv(t)
+
+	// Merge is reachable through the public API in 5C: splitting creates the
+	// second Check that merging then absorbs. No fixture is seeded.
+	splitThenTwoChecks := func(t *testing.T) (sessionID, survivingID, absorbedID uuid.UUID, total int64) {
+		t.Helper()
+		session := env.commitTakeawayDraft(t, 2)
+		sourceID := env.soleCheckID(t, session.ID)
+		total = env.checkCharge(t, sourceID)
+		allocations := env.checkAllocations(t, session.ID, sourceID)
+
+		got, _, err := env.splitToNewCheck(t, sourceID, []sales.SplitItem{
+			{CommittedItemID: allocations[0].CommittedItemID, Quantity: 1},
+		})
+		require.NoError(t, err)
+		return session.ID, sourceID, env.otherCheckID(t, got, sourceID), total
+	}
+
+	t.Run("merging returns the whole charge to the survivor", func(t *testing.T) {
+		sessionID, survivingID, absorbedID, total := splitThenTwoChecks(t)
+
+		got, _, err := env.mergeChecks(t, survivingID, absorbedID)
+		require.NoError(t, err)
+
+		surviving := env.findCheck(t, got, survivingID)
+		absorbed := env.findCheck(t, got, absorbedID)
+		require.Equal(t, sales.CheckStateOpen, surviving.State)
+		require.Equal(t, total, surviving.ChargeVND)
+		require.Equal(t, sales.CheckStateMerged, absorbed.State)
+		require.Equal(t, int64(0), absorbed.ChargeVND)
+		require.NotNil(t, absorbed.MergedIntoCheckID)
+		require.Equal(t, survivingID, *absorbed.MergedIntoCheckID)
+		require.Empty(t, absorbed.Allocations)
+		_ = sessionID
+	})
+
+	t.Run("overlapping allocations combine into one row", func(t *testing.T) {
+		_, survivingID, absorbedID, _ := splitThenTwoChecks(t)
+
+		got, _, err := env.mergeChecks(t, survivingID, absorbedID)
+		require.NoError(t, err)
+
+		surviving := env.findCheck(t, got, survivingID)
+		seen := make(map[uuid.UUID]int)
+		for _, allocation := range surviving.Allocations {
+			seen[allocation.CommittedItemID]++
+		}
+		for item, n := range seen {
+			require.Equal(t, 1, n, "committed item %s has more than one allocation", item)
+		}
+	})
+
+	t.Run("merging a check into itself is rejected", func(t *testing.T) {
+		_, survivingID, _, _ := splitThenTwoChecks(t)
+
+		_, _, err := env.mergeChecks(t, survivingID, survivingID)
+		require.ErrorIs(t, err, sales.ErrInvalidCheckMerge)
+	})
+
+	t.Run("a paid check cannot be merged", func(t *testing.T) {
+		_, survivingID, absorbedID, _ := splitThenTwoChecks(t)
+
+		_, _, err := env.payCash(t, survivingID, 1_000, 1_000)
+		require.NoError(t, err)
+
+		_, _, err = env.mergeChecks(t, survivingID, absorbedID)
+		require.ErrorIs(t, err, sales.ErrCheckHasPayment)
+	})
+
+	t.Run("a merged check cannot be merged again", func(t *testing.T) {
+		_, survivingID, absorbedID, _ := splitThenTwoChecks(t)
+
+		_, _, err := env.mergeChecks(t, survivingID, absorbedID)
+		require.NoError(t, err)
+
+		_, _, err = env.mergeChecks(t, survivingID, absorbedID)
+		require.ErrorIs(t, err, sales.ErrCheckNotOpen)
+	})
+
+	t.Run("checks of different sessions cannot be merged", func(t *testing.T) {
+		_, survivingID, _, _ := splitThenTwoChecks(t)
+		otherSession := env.commitTakeawayDraft(t, 1)
+		foreignID := env.soleCheckID(t, otherSession.ID)
+
+		_, _, err := env.mergeChecks(t, survivingID, foreignID)
+		require.ErrorIs(t, err, sales.ErrChecksDifferentSession)
+	})
+
+	t.Run("an unknown check reports CHECK_NOT_FOUND", func(t *testing.T) {
+		_, survivingID, _, _ := splitThenTwoChecks(t)
+
+		_, _, err := env.mergeChecks(t, survivingID, uuid.New())
+		require.ErrorIs(t, err, sales.ErrCheckNotFound)
+	})
+}

@@ -752,3 +752,39 @@ func (s *Slices) handleSplitCheck(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleMergeChecks godoc
+//
+//	@Summary		Merge two Checks
+//	@Description	Absorbs one Check into another. Both must be OPEN, belong to the same Service Session, and carry no Payment. The absorbed Check keeps no charge and records the Check it merged into. The route is flat rather than nested, because merging acts on two peer Checks.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			body	body		MergeChecksCommand	true	"Merge request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/checks/merge [post]
+func (s *Slices) handleMergeChecks(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[MergeChecksCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+
+	status, result, err := s.MergeChecks.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

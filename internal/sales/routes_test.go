@@ -42,6 +42,7 @@ func TestRouteRegistration(t *testing.T) {
 		"POST /api/v1/sales/checks/:check_id/payments/cash":                              true,
 		"POST /api/v1/sales/checks/:check_id/payments/manual-qr":                         true,
 		"POST /api/v1/sales/checks/:check_id/split":                                      true,
+		"POST /api/v1/sales/checks/merge":                                                true,
 	}
 
 	got := make(map[string]bool)
@@ -93,6 +94,6 @@ func TestCommitRoutesRequireSalesOperate(t *testing.T) {
 	}
 }
 
-func TestSalesExposesSeventeenOperations(t *testing.T) {
-	require.Len(t, registeredSalesRoutes(t), 17)
+func TestSalesExposesEighteenOperations(t *testing.T) {
+	require.Len(t, registeredSalesRoutes(t), 18)
 }
