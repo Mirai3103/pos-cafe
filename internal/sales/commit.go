@@ -585,7 +585,8 @@ func nullString(v *string) sql.NullString {
 func resolveTargetCheck(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID,
 	target string, at time.Time,
 ) (uuid.UUID, int64, error) {
-	if target == CheckTargetCurrentUnpaid {
+	switch target {
+	case CheckTargetCurrentUnpaid:
 		existing, err := q.LockCurrentOpenCheck(ctx, sessionID)
 		if err == nil {
 			return existing.ID, existing.ChargeVnd, nil
@@ -593,6 +594,10 @@ func resolveTargetCheck(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUI
 		if !errors.Is(err, sql.ErrNoRows) {
 			return uuid.Nil, 0, fmt.Errorf("lock current open check: %w", err)
 		}
+	case CheckTargetNewCheck:
+		// Falls through to the insert below.
+	default:
+		return uuid.Nil, 0, fmt.Errorf("%w: %s", ErrInvalidCheckTarget, target)
 	}
 
 	created, err := q.InsertCheck(ctx, sqlc.InsertCheckParams{

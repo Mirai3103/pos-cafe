@@ -2,7 +2,9 @@ package sales
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/google/uuid"
@@ -57,6 +59,14 @@ func (h *ListActiveSessionsHandler) Handle(ctx context.Context, actor Actor) (
 			for _, row := range rows {
 				session, err := LoadServiceSession(ctx, q, row.ID)
 				if err != nil {
+					// A Check invariant violation is a defect confined to that
+					// one Session's data; the rest of the open-tabs list must
+					// still reach the cashier rather than 500 in its entirety.
+					if errors.Is(err, ErrChargeInvariantViolated) {
+						slog.Error("excluding service session from open-tabs list",
+							"session_id", row.ID, "error", err)
+						continue
+					}
 					return nil, err
 				}
 				out = append(out, session)

@@ -87,7 +87,7 @@ func TestCheckTargetResetsWhenANewDraftOpens(t *testing.T) {
 	env.AddDraftItem(t, session.ID, env.CoffeeID, nil)
 	env.Commit(t, session.ID)
 
-	env.SeedEditableDraft(t, session.ID, "CURRENT_UNPAID")
+	env.SeedEditableDraftWithDefaultTarget(t, session.ID)
 
 	got := env.GetSessionOK(t, session.ID)
 	require.Equal(t, "CURRENT_UNPAID", got.Draft.CheckTarget)

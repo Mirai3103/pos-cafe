@@ -177,6 +177,17 @@ func (e *salesEnv) SeedEditableDraft(t *testing.T, sessionID uuid.UUID, target s
 	require.NoError(t, err)
 }
 
+// SeedEditableDraftWithDefaultTarget inserts an EDITABLE draft without
+// setting check_target, so the column's own DEFAULT decides its value —
+// the same path StartNewOrderDraftHandler takes when a new round opens.
+func (e *salesEnv) SeedEditableDraftWithDefaultTarget(t *testing.T, sessionID uuid.UUID) {
+	t.Helper()
+	_, err := e.DB.Exec(
+		`INSERT INTO order_drafts (service_session_id, state)
+		 VALUES ($1, 'EDITABLE')`, sessionID)
+	require.NoError(t, err)
+}
+
 // SetCheckTarget sets the check_target of the Session's current EDITABLE draft
 // directly with SQL. This is fixture seeding, not a handler call; tests that
 // must exercise the SetCheckTargetHandler use TrySetCheckTarget instead.
