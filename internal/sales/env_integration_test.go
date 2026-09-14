@@ -418,6 +418,47 @@ func (e *salesEnv) payCashAs(t *testing.T, actor sales.Actor, checkID uuid.UUID,
 	return resp, status, err
 }
 
+// payManualQR records a Manual QR Payment as the env actor with a fresh
+// request id, returning the projection, HTTP status, and error untouched, so
+// tests can assert on all three.
+func (e *salesEnv) payManualQR(t *testing.T, checkID uuid.UUID, appliedVND int64,
+	receiptObserved bool, reference *string,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewPayManualQRHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.PayManualQRCommand{
+			RequestID:                uuid.New(),
+			CheckID:                  checkID,
+			AppliedAmountVND:         appliedVND,
+			ReceiptObservedInBankApp: receiptObserved,
+			TransactionReference:     reference,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+// payManualQRAs records a Manual QR Payment as the given actor, for
+// authorization denial tests.
+func (e *salesEnv) payManualQRAs(t *testing.T, actor sales.Actor, checkID uuid.UUID,
+	appliedVND int64, receiptObserved bool, reference *string,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewPayManualQRHandler(e.Runner).
+		Handle(context.Background(), actor, sales.PayManualQRCommand{
+			RequestID:                uuid.New(),
+			CheckID:                  checkID,
+			AppliedAmountVND:         appliedVND,
+			ReceiptObservedInBankApp: receiptObserved,
+			TransactionReference:     reference,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
 // countPayments counts the Payments recorded against one Check.
 func (e *salesEnv) countPayments(t *testing.T, checkID uuid.UUID) int {
 	t.Helper()

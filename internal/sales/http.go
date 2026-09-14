@@ -668,3 +668,45 @@ func (s *Slices) handlePayCash(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handlePayManualQR godoc
+//
+//	@Summary		Record a Manual QR Payment
+//	@Description	Applies a bank transfer staff have confirmed as received to an open Check. receipt_observed_in_bank_app must be true, because a Manual QR Payment carries no automatic bank or gateway confirmation. The applied amount may not exceed the Check's balance. When the Payment brings the balance to zero the Check settles in the same transaction.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			check_id	path		string				true	"Check ID"
+//	@Param			body		body		PayManualQRCommand	true	"Manual QR payment request"
+//	@Success		200			{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Router			/sales/checks/{check_id}/payments/manual-qr [post]
+func (s *Slices) handlePayManualQR(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	checkID, err := parseUUIDParam(c, "check_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[PayManualQRCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.CheckID = checkID
+
+	status, result, err := s.PayManualQR.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

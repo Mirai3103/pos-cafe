@@ -297,3 +297,95 @@ func marshalAuditDetails(v any) ([]byte, error) {
 	}
 	return b, nil
 }
+
+type manualQRPaymentAudit struct {
+	PaymentID                uuid.UUID `json:"payment_id"`
+	CheckID                  uuid.UUID `json:"check_id"`
+	SalesShiftID             uuid.UUID `json:"sales_shift_id"`
+	AppliedAmountVND         int64     `json:"applied_amount_vnd"`
+	ReceiptObservedInBankApp bool      `json:"receipt_observed_in_bank_app"`
+	TransactionReference     *string   `json:"transaction_reference"`
+}
+
+type payManualQRFingerprint struct {
+	CheckID              uuid.UUID `json:"check_id"`
+	AppliedAmountVND     int64     `json:"applied_amount_vnd"`
+	TransactionReference *string   `json:"transaction_reference"`
+}
+
+// PayManualQRFingerprintFor exposes the normalized business fingerprint.
+//
+// The reference is trimmed first, so a request that differs only in
+// surrounding whitespace is the same request. The receipt attestation is not
+// part of the fingerprint: it is required to be true, so it cannot vary
+// between two requests that both succeed.
+func PayManualQRFingerprintFor(cmd PayManualQRCommand) any {
+	normalized, err := ValidateTransactionReference(cmd.TransactionReference)
+	if err != nil {
+		normalized = cmd.TransactionReference
+	}
+	return payManualQRFingerprint{
+		CheckID:              cmd.CheckID,
+		AppliedAmountVND:     cmd.AppliedAmountVND,
+		TransactionReference: normalized,
+	}
+}
+
+// PayManualQRHandler records a Manual QR Payment against a Check.
+type PayManualQRHandler struct{ runner *Runner }
+
+// NewPayManualQRHandler creates a new PayManualQRHandler.
+func NewPayManualQRHandler(runner *Runner) *PayManualQRHandler {
+	return &PayManualQRHandler{runner: runner}
+}
+
+// Handle applies a confirmed bank transfer to a Check.
+func (h *PayManualQRHandler) Handle(ctx context.Context, actor Actor,
+	cmd PayManualQRCommand,
+) (int, ServiceSessionResponse, error) {
+	var zero ServiceSessionResponse
+	if cmd.AppliedAmountVND <= 0 {
+		return 0, zero, fmt.Errorf("%w: applied_amount_vnd must be positive", response.ErrInvalid)
+	}
+	reference, err := ValidateTransactionReference(cmd.TransactionReference)
+	if err != nil {
+		return 0, zero, err
+	}
+	// A policy, not a field shape: no Payment exists before a staff member
+	// has seen the money arrive, so this gets its own code rather than
+	// landing on the generic validation one.
+	if !cmd.ReceiptObservedInBankApp {
+		return 0, zero, fmt.Errorf("%w: check %s", ErrManualQRReceiptRequired, cmd.CheckID)
+	}
+
+	spec := MutationSpec{
+		RequestID:   cmd.RequestID,
+		Operation:   OpPayManualQR,
+		Fingerprint: PayManualQRFingerprintFor(cmd),
+		Required:    []string{CapSalesOperate},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec,
+		func(mc MutationContext) (int, ServiceSessionResponse, AuditRecord, error) {
+			result, audit, err := recordPayment(ctx, mc.Queries, actor, cmd.CheckID, paymentInput{
+				Method:               PaymentMethodManualQR,
+				AppliedAmountVND:     cmd.AppliedAmountVND,
+				TransactionReference: reference,
+				AuditEvent:           EventManualQRPaymentRecorded,
+				AuditDetails: func(paymentID uuid.UUID, check lockedCheck) any {
+					return manualQRPaymentAudit{
+						PaymentID:                paymentID,
+						CheckID:                  check.ID,
+						SalesShiftID:             check.SalesShiftID,
+						AppliedAmountVND:         cmd.AppliedAmountVND,
+						ReceiptObservedInBankApp: true,
+						TransactionReference:     reference,
+					}
+				},
+			})
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			return 200, result, audit, nil
+		})
+}

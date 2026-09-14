@@ -36,3 +36,20 @@ func TestValidateCashAmounts(t *testing.T) {
 	require.Error(t, sales.ValidateCashAmounts(-1, 100_000))
 	require.Error(t, sales.ValidateCashAmounts(85_000, 0))
 }
+
+func TestManualQRFingerprintNormalizesTheReference(t *testing.T) {
+	checkID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
+	padded := "  FT24012345  "
+	tight := "FT24012345"
+
+	withPadding := sales.PayManualQRFingerprintFor(sales.PayManualQRCommand{
+		CheckID: checkID, AppliedAmountVND: 85_000,
+		ReceiptObservedInBankApp: true, TransactionReference: &padded,
+	})
+	withoutPadding := sales.PayManualQRFingerprintFor(sales.PayManualQRCommand{
+		CheckID: checkID, AppliedAmountVND: 85_000,
+		ReceiptObservedInBankApp: true, TransactionReference: &tight,
+	})
+	require.Equal(t, withPadding, withoutPadding,
+		"a reference that differs only in whitespace is the same request")
+}

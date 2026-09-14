@@ -117,6 +117,21 @@ type PayCashCommand struct {
 	CashTenderedVND  int64     `json:"cash_tendered_vnd"`
 }
 
+// PayManualQRCommand records a bank transfer staff confirmed as received.
+//
+// ReceiptObservedInBankApp is required to be true: a Manual QR Payment has no
+// automatic bank or gateway confirmation, so a staff member seeing the money
+// arrive is the only evidence there is. It is not stored as a column — a
+// value that is true on every row stores nothing — but it is recorded in the
+// audit event. See ADR-019.
+type PayManualQRCommand struct {
+	RequestID                uuid.UUID `json:"request_id"`
+	CheckID                  uuid.UUID `json:"-"`
+	AppliedAmountVND         int64     `json:"applied_amount_vnd"`
+	ReceiptObservedInBankApp bool      `json:"receipt_observed_in_bank_app"`
+	TransactionReference     *string   `json:"transaction_reference"`
+}
+
 // ---------- Responses ----------
 
 // SessionTableResponse is a Table currently assigned to a Service Session.
