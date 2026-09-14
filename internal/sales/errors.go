@@ -31,9 +31,10 @@ var (
 	ErrInvalidPreparationNote = errors.New("invalid preparation note")
 	ErrInvalidQuantity        = errors.New("invalid quantity")
 
-	ErrLineTotalOutOfRange   = errors.New("line total out of range")
-	ErrCheckChargeOutOfRange = errors.New("check charge out of range")
-	ErrInvalidCheckTarget    = errors.New("invalid check target")
+	ErrLineTotalOutOfRange      = errors.New("line total out of range")
+	ErrCheckChargeOutOfRange    = errors.New("check charge out of range")
+	ErrInsufficientCashTendered = errors.New("cash tendered is below the applied amount")
+	ErrInvalidCheckTarget       = errors.New("invalid check target")
 
 	ErrTableSelectionRequired     = errors.New("at least one table is required for a dine-in session")
 	ErrTableSelectionDuplicate    = errors.New("the same table was selected twice")

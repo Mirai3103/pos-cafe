@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -177,4 +178,89 @@ func TestValidateCheckTarget(t *testing.T) {
 	require.NoError(t, sales.ValidateCheckTarget("NEW_CHECK"))
 	require.Error(t, sales.ValidateCheckTarget("PAID"))
 	require.Error(t, sales.ValidateCheckTarget(""))
+}
+
+func TestSubtractCharge(t *testing.T) {
+	t.Run("subtracts within range", func(t *testing.T) {
+		got, err := sales.SubtractCharge(85_000, 25_000)
+		require.NoError(t, err)
+		require.Equal(t, int64(60_000), got)
+	})
+
+	t.Run("reaching zero is allowed", func(t *testing.T) {
+		got, err := sales.SubtractCharge(85_000, 85_000)
+		require.NoError(t, err)
+		require.Equal(t, int64(0), got)
+	})
+
+	t.Run("a negative result is rejected", func(t *testing.T) {
+		_, err := sales.SubtractCharge(85_000, 85_001)
+		require.ErrorIs(t, err, sales.ErrCheckChargeOutOfRange)
+	})
+
+	t.Run("underflow is rejected rather than wrapped", func(t *testing.T) {
+		_, err := sales.SubtractCharge(math.MinInt64+1, 10)
+		require.ErrorIs(t, err, sales.ErrCheckChargeOutOfRange)
+	})
+}
+
+func TestChangeDue(t *testing.T) {
+	t.Run("exact tender leaves no change", func(t *testing.T) {
+		got, err := sales.ChangeDue(85_000, 85_000)
+		require.NoError(t, err)
+		require.Equal(t, int64(0), got)
+	})
+
+	t.Run("over-tender returns the difference", func(t *testing.T) {
+		got, err := sales.ChangeDue(100_000, 85_000)
+		require.NoError(t, err)
+		require.Equal(t, int64(15_000), got)
+	})
+
+	t.Run("under-tender is rejected", func(t *testing.T) {
+		_, err := sales.ChangeDue(80_000, 85_000)
+		require.ErrorIs(t, err, sales.ErrInsufficientCashTendered)
+	})
+}
+
+func TestSettlesCheck(t *testing.T) {
+	require.True(t, sales.SettlesCheck(0))
+	require.False(t, sales.SettlesCheck(1))
+	require.False(t, sales.SettlesCheck(85_000))
+}
+
+func TestValidateTransactionReference(t *testing.T) {
+	t.Run("nil stays nil", func(t *testing.T) {
+		got, err := sales.ValidateTransactionReference(nil)
+		require.NoError(t, err)
+		require.Nil(t, got)
+	})
+
+	t.Run("surrounding whitespace is trimmed", func(t *testing.T) {
+		in := "  FT24012345  "
+		got, err := sales.ValidateTransactionReference(&in)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.Equal(t, "FT24012345", *got)
+	})
+
+	t.Run("empty after trimming becomes nil", func(t *testing.T) {
+		in := "   "
+		got, err := sales.ValidateTransactionReference(&in)
+		require.NoError(t, err)
+		require.Nil(t, got)
+	})
+
+	t.Run("one hundred characters is accepted", func(t *testing.T) {
+		in := strings.Repeat("A", 100)
+		got, err := sales.ValidateTransactionReference(&in)
+		require.NoError(t, err)
+		require.Equal(t, 100, len(*got))
+	})
+
+	t.Run("one hundred and one characters is rejected", func(t *testing.T) {
+		in := strings.Repeat("A", 101)
+		_, err := sales.ValidateTransactionReference(&in)
+		require.ErrorIs(t, err, response.ErrInvalid)
+	})
 }
