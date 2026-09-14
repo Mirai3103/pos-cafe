@@ -72,7 +72,7 @@ func sendError(c echo.Context, err error) error {
 // handleGetCurrent returns the open Sales Shift, or null when none is open.
 //
 //	@Summary		Current Sales Shift
-//	@Description	Returns the open Sales Shift with its Expected Cash and Cash Movements, or null when no Shift is open. expected_cash_vnd covers the Opening Float and Cash Movements only; Cash Payments and Cash Refunds join the figure in Phase 5 (ADR-008).
+//	@Description	Returns the open Sales Shift with its Expected Cash and Cash Movements, or null when no Shift is open. expected_cash_vnd covers the Opening Float, Cash Payments, and Cash Movements. The Cash Refund term is still outstanding, because Refund is not implemented (ADR-020).
 //	@Tags			shifts
 //	@Produce		json
 //	@Security		BearerAuth

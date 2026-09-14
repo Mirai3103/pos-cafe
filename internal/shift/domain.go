@@ -137,15 +137,16 @@ func ValidateNote(note *string, reason string) error {
 
 // ComputeExpectedCash returns the Sales Shift's calculated cash responsibility.
 //
-// Phase 4 formula: Opening Float plus Pay Ins less Pay Outs. Phase 5 adds Cash
-// Payments and subtracts Cash Refunds; until then this figure reflects fund
-// movements only and is not a reconciliation figure. See ADR-008.
+// Opening Float plus Cash Payments and Pay Ins, less Pay Outs. The Cash Refund
+// term of the canonical formula has no data source: Refund is outside Phase 5
+// entirely, and this figure completes when Refund arrives. See ADR-020, which
+// supersedes ADR-008's claim that Phase 5 completes both terms.
 //
-// The guard is symmetric because sustained Pay Outs can drive the partial
-// Phase 4 figure negative. A total outside the bound indicates corrupt data,
-// not a legitimate drawer balance.
-func ComputeExpectedCash(openingFloatVND, payInVND, payOutVND int64) (int64, error) {
-	total := openingFloatVND + payInVND - payOutVND
+// The guard is symmetric because sustained Pay Outs can legitimately drive the
+// figure negative. A total outside the bound indicates corrupt data, not a
+// legitimate drawer balance.
+func ComputeExpectedCash(openingFloatVND, cashPaymentVND, payInVND, payOutVND int64) (int64, error) {
+	total := openingFloatVND + cashPaymentVND + payInVND - payOutVND
 	if total > MaxAmountVND || total < -MaxAmountVND {
 		return 0, fmt.Errorf("%w: expected cash %d is outside [%d, %d]",
 			ErrExpectedCashOutOfRange, total, -MaxAmountVND, MaxAmountVND)

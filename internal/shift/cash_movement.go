@@ -129,7 +129,13 @@ func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd
 			if err != nil {
 				return 0, zero, AuditRecord{}, fmt.Errorf("sum cash movements: %w", err)
 			}
-			expected, err := ComputeExpectedCash(openShift.OpeningFloatVnd, sums.PayInVnd, sums.PayOutVnd)
+			cashPaymentVND, err := mc.Queries.SumCashPaymentsForShift(ctx, openShift.ID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("sum cash payments for shift: %w", err)
+			}
+
+			expected, err := ComputeExpectedCash(openShift.OpeningFloatVnd, cashPaymentVND,
+				sums.PayInVnd, sums.PayOutVnd)
 			if err != nil {
 				return 0, zero, AuditRecord{}, err
 			}
@@ -151,20 +157,20 @@ func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd
 			}
 
 			return 201, CashMovementResult{
-					Movement:        movement,
-					ExpectedCashVND: expected,
-				}, AuditRecord{
-					EventType: EventCashMovementRecorded,
-					Details: cashMovementAuditDetails{
-						CashMovementID:           movement.ID,
-						SalesShiftID:             openShift.ID,
-						Method:                   movement.Method,
-						AmountVND:                movement.AmountVND,
-						Reason:                   movement.Reason,
-						Note:                     movement.Note,
-						InitiatorStaffIdentityID: initiator.ID,
-						ApproverStaffIdentityID:  mc.Approver.ID,
-					},
-				}, nil
+				Movement:        movement,
+				ExpectedCashVND: expected,
+			}, AuditRecord{
+				EventType: EventCashMovementRecorded,
+				Details: cashMovementAuditDetails{
+					CashMovementID:           movement.ID,
+					SalesShiftID:             openShift.ID,
+					Method:                   movement.Method,
+					AmountVND:                movement.AmountVND,
+					Reason:                   movement.Reason,
+					Note:                     movement.Note,
+					InitiatorStaffIdentityID: initiator.ID,
+					ApproverStaffIdentityID:  mc.Approver.ID,
+				},
+			}, nil
 		})
 }

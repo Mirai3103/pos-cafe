@@ -67,9 +67,10 @@ type CashMovementResponse struct {
 
 // CurrentSalesShiftResponse is the current-Shift read.
 //
-// ExpectedCashVND is complete in shape but partial in value until Phase 5 adds
-// Cash Payments and Cash Refunds. CashMovements is always an array and is
-// serialized as [] when empty, never as null.
+// ExpectedCashVND covers the Opening Float, Cash Payments, and Cash Movements;
+// only the Cash Refund term is still outstanding, because Refund is not
+// implemented. CashMovements is always an array and is serialized as [] when
+// empty, never as null.
 type CurrentSalesShiftResponse struct {
 	SalesShiftResponse
 	ExpectedCashVND int64                  `json:"expected_cash_vnd"`
