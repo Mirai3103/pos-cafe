@@ -154,3 +154,43 @@ func TestChargeInvariantViolationIsNotAClientCode(t *testing.T) {
 	var coded *response.CodedError
 	assert.NotErrorAs(t, mapped, &coded)
 }
+
+func TestMapHTTPErrorPhase5C(t *testing.T) {
+	cases := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{"check not found", ErrCheckNotFound, http.StatusNotFound, "CHECK_NOT_FOUND"},
+		{"check not open", ErrCheckNotOpen, http.StatusConflict, "CHECK_NOT_OPEN"},
+		{"check has payment", ErrCheckHasPayment, http.StatusConflict, "CHECK_HAS_PAYMENT"},
+		{"different session", ErrChecksDifferentSession, http.StatusConflict, "CHECKS_DIFFERENT_SERVICE_SESSION"},
+		{"over balance", ErrPaymentExceedsBalance, http.StatusConflict, "PAYMENT_EXCEEDS_CHECK_BALANCE"},
+		{"under tender", ErrInsufficientCashTendered, http.StatusConflict, "INSUFFICIENT_CASH_TENDERED"},
+		{"receipt required", ErrManualQRReceiptRequired, http.StatusConflict, "MANUAL_QR_RECEIPT_CONFIRMATION_REQUIRED"},
+		{"invalid split", ErrInvalidCheckSplit, http.StatusConflict, "INVALID_CHECK_SPLIT"},
+		{"allocation missing", ErrSplitAllocationNotFound, http.StatusConflict, "SPLIT_ALLOCATION_NOT_FOUND"},
+		{"quantity exceeds", ErrSplitQuantityExceedsAllocation, http.StatusConflict, "SPLIT_QUANTITY_EXCEEDS_ALLOCATION"},
+		{"source empty", ErrSplitSourceWouldBeEmpty, http.StatusConflict, "SPLIT_SOURCE_WOULD_BE_EMPTY"},
+		{"destination empty", ErrSplitDestinationWouldBeEmpty, http.StatusConflict, "SPLIT_DESTINATION_WOULD_BE_EMPTY"},
+		{"invalid merge", ErrInvalidCheckMerge, http.StatusConflict, "INVALID_CHECK_MERGE"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var coded *response.CodedError
+			require.ErrorAs(t, MapHTTPError(fmt.Errorf("wrapped: %w", tc.err)), &coded)
+			require.Equal(t, tc.status, coded.Status)
+			require.Equal(t, tc.code, coded.Code)
+		})
+	}
+}
+
+// The settlement invariant is a defect, not a business state. It must reach
+// the client as an unmapped 500, exactly as the charge invariant does.
+func TestSettlementInvariantIsNotMapped(t *testing.T) {
+	err := MapHTTPError(fmt.Errorf("wrapped: %w", ErrSettlementInvariantViolated))
+	var coded *response.CodedError
+	require.False(t, errors.As(err, &coded),
+		"a settlement invariant violation must not become a client-visible code")
+}
