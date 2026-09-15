@@ -11,7 +11,7 @@ import (
 )
 
 var allowedPackages = map[string]struct{}{
-	"auth": {}, "catalog": {}, "database": {},
+	"auth": {}, "catalog": {}, "database": {}, "preparation": {},
 	"sales": {}, "shift": {}, "tables": {},
 }
 

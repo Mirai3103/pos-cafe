@@ -101,6 +101,7 @@ type Querier interface {
 	// importing internal/shift, per ADR-006's precedent.
 	GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error)
 	GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (string, error)
+	GetPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
 	// Queries for internal/sales (Phase 5A).
 	//
 	// Authority, role, and advisory-lock queries are slice-local by ADR-007: the
@@ -159,6 +160,7 @@ type Querier interface {
 	InsertOrderItem(ctx context.Context, arg InsertOrderItemParams) (uuid.UUID, error)
 	InsertPayment(ctx context.Context, arg InsertPaymentParams) (uuid.UUID, error)
 	InsertPreparationUnit(ctx context.Context, arg InsertPreparationUnitParams) error
+	InsertPreparationUnitTransition(ctx context.Context, arg InsertPreparationUnitTransitionParams) error
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
 	// Batches assignTables' per-Table insert loop into one round trip. Two
 	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
@@ -356,6 +358,12 @@ type Querier interface {
 	//
 	// No row means no Shift is open.
 	LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, error)
+	// Preparation slice queries.
+	//
+	// Boundary (ADR-024): nothing here writes orders, order_items, or
+	// completed_sales. internal/sales creates Preparation Units at Submit and
+	// reads their state during closure; this package owns every transition.
+	LockPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
 	// The Service Session and its committed-but-unsubmitted Order Draft.
 	//
@@ -408,6 +416,7 @@ type Querier interface {
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error
+	SetPreparationUnitState(ctx context.Context, arg SetPreparationUnitStateParams) error
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	SetTableAvailability(ctx context.Context, arg SetTableAvailabilityParams) (Table, error)
 	// Writes all four evidence columns together, because the composite constraint
