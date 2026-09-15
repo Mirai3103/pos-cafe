@@ -451,19 +451,25 @@ SELECT check_target FROM order_drafts WHERE id = $1;
 -- A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
 -- corresponding Order.
 --
--- 5B has no orders table, so the second clause matches every COMMITTED draft
--- and a Session that has committed once cannot open another draft. That dead
--- end is deliberate and disappears when 5D adds the orders join here: the
--- rule exists to stop staff stacking rounds ahead of the kitchen, and
--- relaxing it now would ship a rule no phase wants. See the spec's accepted
--- consequences.
+-- 5D added the orders table and completed the second clause as 5B's comment
+-- promised. The rule stops staff stacking rounds ahead of the kitchen; it does
+-- not limit a Service Session to one round.
+--
+-- NOT EXISTS rather than a LEFT JOIN, for the reason LockSubmittableDraft
+-- gives: PostgreSQL refuses row locks across a LEFT JOIN's nullable side.
+-- (The outer service_session_id is spelled order_drafts.service_session_id
+-- because sqlc's analyzer, unlike PostgreSQL, sees the subquery's orders
+-- column of the same name and calls the bare reference ambiguous.)
 SELECT id
 FROM order_drafts
-WHERE service_session_id = $1
-  AND state IN ('EDITABLE', 'COMMITTED')
-ORDER BY created_at ASC, id ASC
-LIMIT 1
-FOR UPDATE;
+WHERE order_drafts.service_session_id = $1
+  AND (
+        state = 'EDITABLE'
+     OR (state = 'COMMITTED'
+         AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = order_drafts.id))
+  )
+FOR UPDATE
+LIMIT 1;
 
 -- name: InsertOrderDraftForSession :one
 INSERT INTO order_drafts (service_session_id, created_at)

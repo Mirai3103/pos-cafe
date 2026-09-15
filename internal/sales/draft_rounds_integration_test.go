@@ -112,3 +112,46 @@ func TestSetCheckTargetRejectsAnUnknownValue(t *testing.T) {
 
 	require.ErrorIs(t, err, sales.ErrInvalidCheckTarget)
 }
+
+// The brief writes `_, _, err := env.TryStartNewDraft(...)`, but this env's
+// helper returns (response, error); dropping the second blank is the minimal
+// equivalent change.
+func TestMultipleRounds(t *testing.T) {
+	env := newSalesEnv(t)
+
+	t.Run("a submitted round unblocks the next draft", func(t *testing.T) {
+		session := env.commitDineInDraft(t, 1)
+		env.Submit(t, session.ID)
+
+		_, err := env.TryStartNewDraft(t, session.ID)
+		require.NoError(t, err)
+
+		env.AddDraftItem(t, session.ID, env.TeaID, nil)
+		second := env.Commit(t, session.ID)
+		require.Len(t, second.Checks[0].Allocations, 2,
+			"the second round joins the session's open Check")
+
+		got := env.Submit(t, session.ID)
+		require.Len(t, got.Orders, 2)
+	})
+
+	t.Run("an unsubmitted committed round still blocks", func(t *testing.T) {
+		// The rule exists to stop staff stacking rounds ahead of the kitchen,
+		// not to limit a Service Session to one round.
+		session := env.commitDineInDraft(t, 1)
+
+		_, err := env.TryStartNewDraft(t, session.ID)
+		require.ErrorIs(t, err, sales.ErrNewOrderDraftNotAvailable)
+	})
+
+	t.Run("an editable draft still blocks", func(t *testing.T) {
+		// The brief also seeds an EDITABLE draft here, but StartDineIn already
+		// opens the Session's initial editable draft and the
+		// order_draft_editable_per_session_unique constraint rejects a second
+		// one; the initial draft is the blocking draft this subtest needs.
+		session := env.StartDineIn(t, env.TableID)
+
+		_, err := env.TryStartNewDraft(t, session.ID)
+		require.ErrorIs(t, err, sales.ErrNewOrderDraftNotAvailable)
+	})
+}
