@@ -17,6 +17,14 @@ import (
 // template preparation across concurrently running integration test processes.
 const templateLockID int64 = 7142982
 
+// cleanupLockID is the session-level advisory lock key that coordinates
+// stale-clone cleanup with clone activation. A harness holds it while opening
+// a clone's package pool — the window in which the clone exists but has no
+// sessions yet — and Cleanup holds it for its whole scan-and-drop loop, so
+// cleanup can never observe that window and force-drop a clone that is about
+// to become active.
+const cleanupLockID int64 = templateLockID + 1
+
 // instance holds the resources provisioned for one integration test package.
 type instance struct {
 	db          *sql.DB
@@ -103,32 +111,56 @@ func provision(ctx context.Context, rawURL, packageName, suffix string) (*instan
 		return nil, fmt.Errorf("prepare template database for %s: %w", packageName, lockErr)
 	}
 
-	pool, err := openClonePool(ctx, cfg.cloneDSN)
-	if err != nil {
-		err = errors.Join(err, inst.Close(ctx))
-		return nil, fmt.Errorf("open package pool for %s: %w", packageName, err)
+	// Hold the cleanup-coordination lock while the package pool opens, closing
+	// the zero-session window between CREATE DATABASE and the pool's first
+	// connection that a concurrent Cleanup would otherwise mistake for a stale
+	// clone.
+	poolErr := withCleanupLock(ctx, maintenance, func(*sql.Conn) error {
+		pool, err := openClonePool(ctx, cfg.cloneDSN)
+		if err != nil {
+			return err
+		}
+		inst.db = pool
+		return nil
+	})
+	if poolErr != nil {
+		poolErr = errors.Join(poolErr, inst.Close(ctx))
+		return nil, fmt.Errorf("open package pool for %s: %w", packageName, poolErr)
 	}
-	inst.db = pool
 
 	return inst, nil
 }
 
 // withTemplateLock reserves exactly one maintenance connection, acquires the
-// template advisory lock on it, invokes fn on that same connection, and releases
-// the lock on it before closing it, so the session-level lock can never migrate
+// template advisory lock on it, invokes fn on that same connection, and
+// releases the lock on it before closing it, so the session-level lock can
+// never migrate between pooled sessions. Callback, unlock, and close errors
+// are joined.
+func withTemplateLock(ctx context.Context, maintenance *sql.DB, fn func(*sql.Conn) error) error {
+	return withAdvisoryLock(ctx, maintenance, templateLockID, "template", fn)
+}
+
+// withCleanupLock is withTemplateLock for the cleanup-coordination lock.
+func withCleanupLock(ctx context.Context, maintenance *sql.DB, fn func(*sql.Conn) error) error {
+	return withAdvisoryLock(ctx, maintenance, cleanupLockID, "cleanup coordination", fn)
+}
+
+// withAdvisoryLock reserves exactly one maintenance connection, acquires the
+// named session-level advisory lock on it, invokes fn on that same connection,
+// and releases the lock on it before closing it, so the lock can never migrate
 // between pooled sessions. Callback, unlock, and close errors are joined.
-func withTemplateLock(ctx context.Context, maintenance *sql.DB, fn func(*sql.Conn) error) (err error) {
+func withAdvisoryLock(ctx context.Context, maintenance *sql.DB, key int64, label string, fn func(*sql.Conn) error) (err error) {
 	conn, err := maintenance.Conn(ctx)
 	if err != nil {
-		return fmt.Errorf("reserve maintenance connection for template lock: %w", err)
+		return fmt.Errorf("reserve maintenance connection for %s lock: %w", label, err)
 	}
 
 	locked := false
 	defer func() {
 		var unlockErr error
 		if locked {
-			if _, unlockErr = conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", templateLockID); unlockErr != nil {
-				unlockErr = fmt.Errorf("release template advisory lock: %w", unlockErr)
+			if _, unlockErr = conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", key); unlockErr != nil {
+				unlockErr = fmt.Errorf("release %s advisory lock: %w", label, unlockErr)
 			}
 		}
 		closeErr := conn.Close()
@@ -138,8 +170,8 @@ func withTemplateLock(ctx context.Context, maintenance *sql.DB, fn func(*sql.Con
 		err = errors.Join(err, unlockErr, closeErr)
 	}()
 
-	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", templateLockID); err != nil {
-		return fmt.Errorf("acquire template advisory lock: %w", err)
+	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", key); err != nil {
+		return fmt.Errorf("acquire %s advisory lock: %w", label, err)
 	}
 	locked = true
 
@@ -232,13 +264,13 @@ func (i *instance) Close(ctx context.Context) error {
 // validated. PostgreSQL does not accept identifiers as query parameters, so the
 // name is re-checked against the identifier allowlist and quoted with
 // pq.QuoteIdentifier immediately before it is interpolated.
-func dropDatabase(ctx context.Context, maintenance *sql.DB, name string) error {
+func dropDatabase(ctx context.Context, db dbtx, name string) error {
 	if !identifierPattern.MatchString(name) {
 		return fmt.Errorf("refuse to drop database with unsafe name %q", name)
 	}
 	statement := fmt.Sprintf("DROP DATABASE %s WITH (FORCE)", pq.QuoteIdentifier(name))
 	//nolint:gosec // G701 cannot see that name is allowlist-validated and quoted on the line above.
-	if _, err := maintenance.ExecContext(ctx, statement); err != nil {
+	if _, err := db.ExecContext(ctx, statement); err != nil {
 		return err
 	}
 	return nil
@@ -247,7 +279,10 @@ func dropDatabase(ctx context.Context, maintenance *sql.DB, name string) error {
 // Cleanup removes ephemeral clone databases left behind by interrupted test
 // runs. Only databases matching the harness-owned base/package/suffix
 // convention with no attached session are dropped; the base and template
-// databases are never candidates.
+// databases are never candidates. The whole scan runs under the
+// cleanup-coordination advisory lock, so a clone being activated by a running
+// harness cannot fall into the zero-session window between its creation and
+// its pool's first connection.
 func Cleanup(ctx context.Context, rawURL string) error {
 	return sanitizeError(cleanupStaleClones(ctx, rawURL), rawURL)
 }
@@ -274,36 +309,50 @@ func cleanupStaleClones(ctx context.Context, rawURL string) (err error) {
 		return fmt.Errorf("connect to maintenance database: %w", err)
 	}
 
-	names, err := listDatabases(ctx, maintenance)
-	if err != nil {
-		return err
-	}
-
-	var failures []error
-	for _, name := range names {
-		if !isEphemeralClone(base.baseName, name) {
-			continue
-		}
-		active, err := activeSessions(ctx, maintenance, name)
+	lockErr := withCleanupLock(ctx, maintenance, func(conn *sql.Conn) error {
+		names, err := listDatabases(ctx, conn)
 		if err != nil {
-			failures = append(failures, err)
-			continue
+			return err
 		}
-		if active > 0 {
-			continue
-		}
-		if err := dropDatabase(ctx, maintenance, name); err != nil {
-			failures = append(failures, fmt.Errorf("drop stale clone database %s: %w", name, err))
-		}
-	}
 
-	return errors.Join(failures...)
+		var failures []error
+		for _, name := range names {
+			if !isEphemeralClone(base.baseName, name) {
+				continue
+			}
+			active, err := activeSessions(ctx, conn, name)
+			if err != nil {
+				failures = append(failures, err)
+				continue
+			}
+			if active > 0 {
+				continue
+			}
+			if err := dropDatabase(ctx, conn, name); err != nil {
+				failures = append(failures, fmt.Errorf("drop stale clone database %s: %w", name, err))
+			}
+		}
+		return errors.Join(failures...)
+	})
+	if lockErr != nil {
+		return fmt.Errorf("scan for stale clone databases: %w", lockErr)
+	}
+	return nil
+}
+
+// dbtx is the subset of *sql.DB and *sql.Conn the harness queries through, so
+// the same helpers run inside an advisory lock's reserved connection and on a
+// bare pool.
+type dbtx interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
 // listDatabases collects every database name before any further query runs on
-// the same pool.
-func listDatabases(ctx context.Context, maintenance *sql.DB) ([]string, error) {
-	rows, err := maintenance.QueryContext(ctx, `SELECT datname FROM pg_database`)
+// the same connection.
+func listDatabases(ctx context.Context, db dbtx) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database`)
 	if err != nil {
 		return nil, fmt.Errorf("list databases: %w", err)
 	}
@@ -324,9 +373,9 @@ func listDatabases(ctx context.Context, maintenance *sql.DB) ([]string, error) {
 }
 
 // activeSessions counts connections attached to one database.
-func activeSessions(ctx context.Context, maintenance *sql.DB, name string) (int, error) {
+func activeSessions(ctx context.Context, db dbtx, name string) (int, error) {
 	var count int
-	if err := maintenance.QueryRowContext(ctx,
+	if err := db.QueryRowContext(ctx,
 		`SELECT count(*) FROM pg_stat_activity WHERE datname = $1`, name,
 	).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count sessions for database %s: %w", name, err)

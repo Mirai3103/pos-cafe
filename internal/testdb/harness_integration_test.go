@@ -176,3 +176,48 @@ func countDatabase(ctx context.Context, maintenance *sql.DB, name string) (int, 
 	}
 	return count, nil
 }
+
+// TestCleanupSkipsActiveClone proves the coordination between Cleanup and a
+// running harness: while a clone's package pool is open, the clone has live
+// sessions and Cleanup must leave it — and the template and base databases —
+// untouched without reporting an error. Dropping an in-use clone would erase a
+// running package's database mid-run.
+func TestCleanupSkipsActiveClone(t *testing.T) {
+	rawURL := os.Getenv("TEST_DATABASE_URL")
+	require.NotEmpty(t, rawURL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), provisionTimeout)
+	defer cancel()
+
+	suffix, err := newSuffix()
+	require.NoError(t, err)
+	inst, err := provision(ctx, rawURL, "sales", suffix)
+	require.NoError(t, err)
+	closed := false
+	closeOnCleanup(t, inst, &closed)
+
+	require.NoError(t, Cleanup(ctx, rawURL))
+
+	// The instance's maintenance pool is closed by Close, so the catalog is
+	// observed through the test's own window.
+	maintenance, err := sql.Open("pgx", inst.cfg.maintenanceDSN)
+	require.NoError(t, err)
+	require.NoError(t, maintenance.PingContext(ctx))
+	t.Cleanup(func() { require.NoError(t, maintenance.Close()) })
+
+	cloneCount, err := countDatabase(ctx, maintenance, inst.cfg.cloneName)
+	require.NoError(t, err)
+	assert.Equal(t, 1, cloneCount, "Cleanup dropped the active clone %s", inst.cfg.cloneName)
+
+	templateCount, err := countDatabase(ctx, maintenance, inst.cfg.templateName)
+	require.NoError(t, err)
+	assert.Equal(t, 1, templateCount, "Cleanup dropped the persistent template database")
+
+	baseCount, err := countDatabase(ctx, maintenance, inst.cfg.baseName)
+	require.NoError(t, err)
+	assert.Equal(t, 1, baseCount, "Cleanup dropped the base test database")
+
+	require.NoError(t, inst.Close(ctx))
+	closed = true
+	assertCloneDropped(ctx, t, maintenance, inst.cfg)
+}
