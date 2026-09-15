@@ -2560,6 +2560,35 @@ func (q *Queries) LockServiceSessionForClosure(ctx context.Context, id uuid.UUID
 	return i, err
 }
 
+const lockServiceSessionForSubmission = `-- name: LockServiceSessionForSubmission :one
+SELECT id, service_number, service_mode, state
+FROM service_sessions
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockServiceSessionForSubmissionRow struct {
+	ID            uuid.UUID `json:"id"`
+	ServiceNumber string    `json:"service_number"`
+	ServiceMode   string    `json:"service_mode"`
+	State         string    `json:"state"`
+}
+
+// The Submit source's Service Session, locked first. The state is returned
+// rather than filtered so an unknown Session and a closed one map to their own
+// errors instead of collapsing into ErrNothingToSubmit, per spec §9.3.
+func (q *Queries) LockServiceSessionForSubmission(ctx context.Context, id uuid.UUID) (LockServiceSessionForSubmissionRow, error) {
+	row := q.db.QueryRowContext(ctx, lockServiceSessionForSubmission, id)
+	var i LockServiceSessionForSubmissionRow
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceNumber,
+		&i.ServiceMode,
+		&i.State,
+	)
+	return i, err
+}
+
 const lockServiceSessionForUpdate = `-- name: LockServiceSessionForUpdate :one
 SELECT id, service_mode, state, sales_shift_id
 FROM service_sessions
@@ -2587,41 +2616,34 @@ func (q *Queries) LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID)
 }
 
 const lockSubmittableDraft = `-- name: LockSubmittableDraft :one
-SELECT ss.id AS service_session_id, ss.service_number, ss.service_mode,
-       od.id AS order_draft_id
-FROM service_sessions ss
-JOIN order_drafts od ON od.service_session_id = ss.id
-WHERE ss.id = $1
-  AND ss.state = 'ACTIVE'
+SELECT od.id AS order_draft_id
+FROM order_drafts od
+WHERE od.service_session_id = $1
   AND od.state = 'COMMITTED'
   AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = od.id)
 FOR UPDATE
 LIMIT 1
 `
 
-type LockSubmittableDraftRow struct {
-	ServiceSessionID uuid.UUID `json:"service_session_id"`
-	ServiceNumber    string    `json:"service_number"`
-	ServiceMode      string    `json:"service_mode"`
-	OrderDraftID     uuid.UUID `json:"order_draft_id"`
-}
-
-// The Service Session and its committed-but-unsubmitted Order Draft.
+// The committed-but-unsubmitted Order Draft of the Session the caller has
+// already locked with LockServiceSessionForSubmission. Only the draft is
+// locked here: the Session lock is its own query so a missing or closed
+// Session can be told apart from "nothing to submit".
 //
 // NOT EXISTS rather than the canonical LEFT JOIN ... IS NULL: PostgreSQL
 // refuses row locks across a LEFT JOIN's nullable side, which forces the
 // canonical source to scope FOR UPDATE by hand and explain the workaround in
 // two places. Written this way the restriction does not arise.
-func (q *Queries) LockSubmittableDraft(ctx context.Context, id uuid.UUID) (LockSubmittableDraftRow, error) {
-	row := q.db.QueryRowContext(ctx, lockSubmittableDraft, id)
-	var i LockSubmittableDraftRow
-	err := row.Scan(
-		&i.ServiceSessionID,
-		&i.ServiceNumber,
-		&i.ServiceMode,
-		&i.OrderDraftID,
-	)
-	return i, err
+//
+// Known remaining window, recorded rather than reordered (ADR-031): this
+// query runs after the Session lock and before LockChecksForSubmission, the
+// reverse of Payment's Check-then-Session order, so Submit and a concurrent
+// Payment can abort one side with 40P01 across a one-round-trip window.
+func (q *Queries) LockSubmittableDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, lockSubmittableDraft, serviceSessionID)
+	var order_draft_id uuid.UUID
+	err := row.Scan(&order_draft_id)
+	return order_draft_id, err
 }
 
 const lockTablesForAssignment = `-- name: LockTablesForAssignment :many

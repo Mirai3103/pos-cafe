@@ -4,6 +4,7 @@ package sales_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/sales"
@@ -53,6 +54,23 @@ func TestSubmitTakeaway(t *testing.T) {
 
 		_, _, err := env.TrySubmit(t, session.ID)
 		require.ErrorIs(t, err, sales.ErrNothingToSubmit)
+	})
+
+	t.Run("an unknown session is not found", func(t *testing.T) {
+		// Spec §9.3: a missing source is 404, not the blanket 409 the old
+		// single-joint lock query collapsed every miss into.
+		_, status, err := env.TrySubmit(t, uuid.New())
+		require.ErrorIs(t, err, sales.ErrServiceSessionNotFound)
+		require.Equal(t, http.StatusNotFound, status)
+	})
+
+	t.Run("a closed session is refused, not 'nothing to submit'", func(t *testing.T) {
+		session := readyToClose(t, env, 1)
+		env.Close(t, session.ID)
+
+		_, status, err := env.TrySubmit(t, session.ID)
+		require.ErrorIs(t, err, sales.ErrServiceSessionClosed)
+		require.Equal(t, http.StatusConflict, status)
 	})
 
 	t.Run("submitting twice with a fresh request id is a no-op", func(t *testing.T) {

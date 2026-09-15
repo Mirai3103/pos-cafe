@@ -706,19 +706,33 @@ SELECT committed_item_id
 FROM order_items
 WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[]);
 
+-- name: LockServiceSessionForSubmission :one
+-- The Submit source's Service Session, locked first. The state is returned
+-- rather than filtered so an unknown Session and a closed one map to their own
+-- errors instead of collapsing into ErrNothingToSubmit, per spec §9.3.
+SELECT id, service_number, service_mode, state
+FROM service_sessions
+WHERE id = $1
+FOR UPDATE;
+
 -- name: LockSubmittableDraft :one
--- The Service Session and its committed-but-unsubmitted Order Draft.
+-- The committed-but-unsubmitted Order Draft of the Session the caller has
+-- already locked with LockServiceSessionForSubmission. Only the draft is
+-- locked here: the Session lock is its own query so a missing or closed
+-- Session can be told apart from "nothing to submit".
 --
 -- NOT EXISTS rather than the canonical LEFT JOIN ... IS NULL: PostgreSQL
 -- refuses row locks across a LEFT JOIN's nullable side, which forces the
 -- canonical source to scope FOR UPDATE by hand and explain the workaround in
 -- two places. Written this way the restriction does not arise.
-SELECT ss.id AS service_session_id, ss.service_number, ss.service_mode,
-       od.id AS order_draft_id
-FROM service_sessions ss
-JOIN order_drafts od ON od.service_session_id = ss.id
-WHERE ss.id = $1
-  AND ss.state = 'ACTIVE'
+--
+-- Known remaining window, recorded rather than reordered (ADR-031): this
+-- query runs after the Session lock and before LockChecksForSubmission, the
+-- reverse of Payment's Check-then-Session order, so Submit and a concurrent
+-- Payment can abort one side with 40P01 across a one-round-trip window.
+SELECT od.id AS order_draft_id
+FROM order_drafts od
+WHERE od.service_session_id = $1
   AND od.state = 'COMMITTED'
   AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = od.id)
 FOR UPDATE

@@ -299,7 +299,7 @@ CREATE TABLE idempotency_keys (
 ## ADR-021: A Check command locks the Shift that is open, not the one its Session was opened in
 
 * **Decision Date:** 2026-09-15
-* **Status:** Accepted
+* **Status:** Accepted; **superseded in part by ADR-030** for the Session-lock clause.
 * **Context:** ADR-019 stores a Payment's `sales_shift_id` because the Shift in which money reached the cashier is an independent fact, and a Session opened in one Shift can be paid in the next. The 5C implementation nonetheless read both that attribution and the "Shift must be open" precondition by joining `checks → service_sessions → sales_shifts`, recovering exactly the derived value ADR-019 exists to avoid. The two disagree as soon as a Session outlives its Shift.
 * **Decision:**
 * `LockCheckForPayment` and `LockChecksForRestructuring` no longer join `sales_shifts`. They lock the Check `FOR UPDATE` and its Session `FOR SHARE`, as ADR-016 requires.
@@ -425,3 +425,17 @@ CREATE TABLE idempotency_keys (
 * **Consequences:**
 * Sibling-Check parallelism within a Session is given up deliberately. Payments on different Sessions, and every other command, are unaffected.
 * **Known remaining hole, recorded rather than fixed:** the other commands that call `LoadServiceSession` (Commit, draft add/edit/remove) do not take the Session lock at all, so a concurrent Payment can still tear *their* read-model rebuild. No test exercises that pairing, and closing it belongs in its own change.
+
+---
+
+## ADR-031: Submit keeps its Session-then-Checks lock order, recording the Submit-Payment AB-BA window
+
+* **Decision Date:** 2026-09-16
+* **Status:** Accepted
+* **Context:** Submit locks its source in the order the 5D plan mandates — the Service Session and its committed draft first, the Checks second — while ADR-030 has every 5C command lock the Check first and the Session second. A Submit racing a Payment on the same Session is therefore an AB-BA: Submit holds the Session and waits on the Check while Payment holds the Check and waits on the Session. §10's "serialize rather than deadlock" claim holds for the Check locks, which both sides take in ascending (created_at, id) order, but not for the Session lock. The window is one query round-trip wide, and Task 11's `TestSubmitAgainstConcurrentPayment` ran clean over 30+ `-race` runs, so the exposure is real but narrow — and when PostgreSQL does abort one side with 40P01, the abort rolls the transaction back including its idempotency claim, so a client retry runs clean.
+* **Decision:**
+* Keep Submit's Session+Draft → Checks order. §6.1's step order and the idempotency/audit machinery all treat the locked source as the fact the mutation committed against; the window is accepted and recorded rather than reordered, and no lock retry is added.
+* The caveat lives where the window does, in the comment on `LockSubmittableDraft` in `sql/queries/sales.sql`.
+* **Consequences:**
+* A concurrent Payment racing a Submit on one Session can surface a single 500 (40P01) and succeed on retry; the rollback leaves no partial state and no stored result, so the retry is a first attempt, not a replay.
+* The exposure stays bounded by the one-round-trip width and the empirical record of clean `-race` runs. If the window ever observably hurts, reordering Submit to Checks-then-Session remains open for Phase 6 as its own measured change.

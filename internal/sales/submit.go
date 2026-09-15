@@ -47,7 +47,26 @@ func (h *SubmitOrderHandler) Handle(ctx context.Context, actor Actor,
 			var zero ServiceSessionResponse
 			q := mc.Queries
 
-			source, err := q.LockSubmittableDraft(ctx, cmd.ServiceSessionID)
+			// The Session is locked before the Checks, unchanged: a missing or
+			// closed source is told apart from "nothing to submit" here, per
+			// spec §9.3, while the draft lock below stays the sole arbiter of
+			// whether any committed work awaits submission. Submit's lock
+			// order is Session+Draft then Checks; the AB-BA window that leaves
+			// against Payment's Check-then-Session order is ADR-031's.
+			source, err := q.LockServiceSessionForSubmission(ctx, cmd.ServiceSessionID)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return 0, zero, AuditRecord{}, fmt.Errorf(
+						"%w: %s", ErrServiceSessionNotFound, cmd.ServiceSessionID)
+				}
+				return 0, zero, AuditRecord{}, fmt.Errorf("lock service session: %w", err)
+			}
+			if source.State != StateActive {
+				return 0, zero, AuditRecord{}, fmt.Errorf(
+					"%w: %s", ErrServiceSessionClosed, cmd.ServiceSessionID)
+			}
+
+			draftID, err := q.LockSubmittableDraft(ctx, cmd.ServiceSessionID)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					return 0, zero, AuditRecord{}, fmt.Errorf(
@@ -56,7 +75,7 @@ func (h *SubmitOrderHandler) Handle(ctx context.Context, actor Actor,
 				return 0, zero, AuditRecord{}, fmt.Errorf("lock submittable draft: %w", err)
 			}
 
-			checks, err := q.LockChecksForSubmission(ctx, source.OrderDraftID)
+			checks, err := q.LockChecksForSubmission(ctx, draftID)
 			if err != nil {
 				return 0, zero, AuditRecord{}, fmt.Errorf("lock checks for submission: %w", err)
 			}
@@ -76,8 +95,8 @@ func (h *SubmitOrderHandler) Handle(ctx context.Context, actor Actor,
 
 			occurredAt := time.Now()
 			orderID, err := q.InsertOrder(ctx, sqlc.InsertOrderParams{
-				ServiceSessionID:              source.ServiceSessionID,
-				OrderDraftID:                  source.OrderDraftID,
+				ServiceSessionID:              cmd.ServiceSessionID,
+				OrderDraftID:                  draftID,
 				SubmittedByStaffIdentityID:    actor.StaffID,
 				SubmittedStaffAccessSessionID: actor.SessionID,
 				SubmittedAt:                   occurredAt,
@@ -88,12 +107,12 @@ func (h *SubmitOrderHandler) Handle(ctx context.Context, actor Actor,
 					// transaction submitted this draft first. The row lock
 					// makes this unreachable; the branch is the backstop.
 					return 0, zero, AuditRecord{}, fmt.Errorf(
-						"%w: %s", ErrNothingToSubmit, source.OrderDraftID)
+						"%w: %s", ErrNothingToSubmit, draftID)
 				}
 				return 0, zero, AuditRecord{}, fmt.Errorf("insert order: %w", err)
 			}
 
-			items, err := q.ListCommittedItemsForSubmission(ctx, source.OrderDraftID)
+			items, err := q.ListCommittedItemsForSubmission(ctx, draftID)
 			if err != nil {
 				return 0, zero, AuditRecord{}, fmt.Errorf("list committed items: %w", err)
 			}
@@ -155,8 +174,8 @@ func (h *SubmitOrderHandler) Handle(ctx context.Context, actor Actor,
 			return http.StatusOK, out, AuditRecord{
 				EventType: EventOrderSubmitted,
 				Details: map[string]any{
-					"service_session_id":     source.ServiceSessionID,
-					"order_draft_id":         source.OrderDraftID,
+					"service_session_id":     cmd.ServiceSessionID,
+					"order_draft_id":         draftID,
 					"order_id":               orderID,
 					"check_ids":              checkIDs,
 					"order_item_count":       len(items),

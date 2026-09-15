@@ -371,14 +371,26 @@ type Querier interface {
 	// reads their state during closure; this package owns every transition.
 	LockPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
 	LockServiceSessionForClosure(ctx context.Context, id uuid.UUID) (LockServiceSessionForClosureRow, error)
+	// The Submit source's Service Session, locked first. The state is returned
+	// rather than filtered so an unknown Session and a closed one map to their own
+	// errors instead of collapsing into ErrNothingToSubmit, per spec §9.3.
+	LockServiceSessionForSubmission(ctx context.Context, id uuid.UUID) (LockServiceSessionForSubmissionRow, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
-	// The Service Session and its committed-but-unsubmitted Order Draft.
+	// The committed-but-unsubmitted Order Draft of the Session the caller has
+	// already locked with LockServiceSessionForSubmission. Only the draft is
+	// locked here: the Session lock is its own query so a missing or closed
+	// Session can be told apart from "nothing to submit".
 	//
 	// NOT EXISTS rather than the canonical LEFT JOIN ... IS NULL: PostgreSQL
 	// refuses row locks across a LEFT JOIN's nullable side, which forces the
 	// canonical source to scope FOR UPDATE by hand and explain the workaround in
 	// two places. Written this way the restriction does not arise.
-	LockSubmittableDraft(ctx context.Context, id uuid.UUID) (LockSubmittableDraftRow, error)
+	//
+	// Known remaining window, recorded rather than reordered (ADR-031): this
+	// query runs after the Session lock and before LockChecksForSubmission, the
+	// reverse of Payment's Check-then-Session order, so Submit and a concurrent
+	// Payment can abort one side with 40P01 across a one-round-trip window.
+	LockSubmittableDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error)
 	// Locks the selected Tables in id order so two concurrent assignments over
 	// overlapping sets cannot deadlock against each other. The caller must sort
 	// the ids before calling.
