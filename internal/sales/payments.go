@@ -70,7 +70,7 @@ func lockOpenSalesShift(ctx context.Context, q *sqlc.Queries) (uuid.UUID, error)
 //
 // The two locks are separate statements, in that order: SQL does not guarantee
 // that one statement's FOR UPDATE OF c, s acquires the two relations' tuple
-// locks in OF-list order, and the protocol's no-deadlock argument (ADR-023)
+// locks in OF-list order, and the protocol's no-deadlock argument (ADR-030)
 // depends on every command taking Check before Session. This is the same order
 // lockChecks uses for restructurings; the Shift lock follows the Session lock
 // in both.
@@ -81,7 +81,7 @@ func lockOpenSalesShift(ctx context.Context, q *sqlc.Queries) (uuid.UUID, error)
 // through LoadServiceSession, which reads a Check's header and its payments in
 // several statements. A sibling Check's commit landing between them is observed
 // half-applied and trips the settlement invariant, rolling back a valid
-// Payment. See ADR-023.
+// Payment. See ADR-030.
 //
 // The lock query and the precondition evaluation are deliberately separate.
 // The canonical source folds every condition into one WHERE clause and reports

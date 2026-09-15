@@ -54,7 +54,7 @@ func TestConcurrentPaymentsOnOneCheck(t *testing.T) {
 }
 
 // Two Payments on different Checks of one Session both succeed, and they
-// serialize on the Session row: ADR-023 restored the canonical FOR UPDATE
+// serialize on the Session row: ADR-030 restored the canonical FOR UPDATE
 // there, because each Payment rebuilds the whole Session read model inside its
 // transaction.
 func TestConcurrentPaymentsOnTwoChecksOfOneSession(t *testing.T) {

@@ -330,7 +330,7 @@ CREATE TABLE idempotency_keys (
 
 ---
 
-## ADR-023: A Check command locks its Service Session `FOR UPDATE`
+## ADR-030: A Check command locks its Service Session `FOR UPDATE`
 
 * **Decision Date:** 2026-09-15
 * **Status:** Accepted; supersedes the Session-lock clause of ADR-016

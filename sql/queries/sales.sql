@@ -509,12 +509,12 @@ WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[])
 ORDER BY modifier_group_name ASC, modifier_option_name ASC;
 
 -- name: LockCheckForPayment :one
--- The 5C lock protocol (ADR-016 as amended by ADR-023), first half: the Check
+-- The 5C lock protocol (ADR-016 as amended by ADR-030), first half: the Check
 -- row FOR UPDATE. SQL does not guarantee that one statement's FOR UPDATE OF c, s
 -- acquires the two relations' tuple locks in OF-list order, so the Session lock
 -- is a separate statement: the caller locks the Check here and its Session
 -- through LockServiceSessionForUpdate immediately afterwards, which is the same
--- Check-then-Session order lockChecks uses for restructurings. See ADR-023.
+-- Check-then-Session order lockChecks uses for restructurings. See ADR-030.
 --
 -- The Session is exclusive (FOR UPDATE, not FOR SHARE), because a Payment does
 -- not merely read the Session to evaluate a precondition -- it rebuilds the
@@ -592,7 +592,7 @@ SET state = 'SETTLED',
 WHERE id = $1;
 
 -- name: LockChecksForRestructuring :many
--- The 5C lock protocol over a set of Checks (ADR-016 as amended by ADR-023),
+-- The 5C lock protocol over a set of Checks (ADR-016 as amended by ADR-030),
 -- ordered by id so two concurrent restructurings take the rows in the same
 -- order and cannot deadlock against each other or against a Payment.
 --
@@ -601,7 +601,7 @@ WHERE id = $1;
 -- locks (check(A) -> session -> check(B)) and create a cycle against a Payment
 -- that already holds check(B) and is waiting for the Session. The caller locks
 -- every Check first and the Session afterwards, which is the same order
--- LockCheckForPayment uses. See lockChecks and ADR-023.
+-- LockCheckForPayment uses. See lockChecks and ADR-030.
 --
 -- As in LockCheckForPayment, the Shift is not joined: the Shift precondition
 -- is about the Shift open now, which LockOpenSalesShiftForShare reads.
