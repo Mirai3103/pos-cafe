@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
+	"github.com/Mirai3103/pos-cafe/internal/testdb"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,17 +31,35 @@ func testLoginCode(prefix string) string {
 	return prefix + strings.ReplaceAll(uuid.NewString(), "-", "")[:room]
 }
 
-// openSalesTestDB connects to the integration database and runs migrations
-// (database.Open applies every pending embedded migration, including 000008).
-// Mirrors openShiftTestDB in internal/shift.
+// salesTestDB is the single pool every Sales integration test shares, bound by
+// TestMain before any test runs.
+var salesTestDB *sql.DB
+
+// TestMain provisions this package's isolated clone of the migrated test
+// template and binds one shared pool for the whole package. The clone is
+// already migrated, so tests never run migrations themselves.
+func TestMain(m *testing.M) {
+	os.Exit(testdb.Run(m, "sales", func(db *sql.DB) {
+		salesTestDB = db
+	}))
+}
+
+// openSalesTestDB returns the shared package pool and its queries. The pool is
+// owned by TestMain and closed when the package's clone is dropped, so callers
+// must not close it.
 func openSalesTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	require.Contains(t, dsn, "_test")
-	db, err := database.Open(context.Background(), dsn)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	return db, sqlc.New(db)
+	require.NotNil(t, salesTestDB)
+	return salesTestDB, sqlc.New(salesTestDB)
+}
+
+// TestSalesPackageUsesSharedDatabase pins the harness contract: every test in
+// the package reaches the same pool, so the package opens one database view
+// rather than one per test.
+func TestSalesPackageUsesSharedDatabase(t *testing.T) {
+	first, _ := openSalesTestDB(t)
+	second, _ := openSalesTestDB(t)
+	require.Same(t, first, second)
 }
 
 // truncateSalesTables clears every table this slice writes, plus the shared
