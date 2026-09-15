@@ -5,6 +5,7 @@ package shift
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"unicode/utf8"
 )
@@ -137,18 +138,55 @@ func ValidateNote(note *string, reason string) error {
 
 // ComputeExpectedCash returns the Sales Shift's calculated cash responsibility.
 //
-// Phase 4 formula: Opening Float plus Pay Ins less Pay Outs. Phase 5 adds Cash
-// Payments and subtracts Cash Refunds; until then this figure reflects fund
-// movements only and is not a reconciliation figure. See ADR-008.
+// Opening Float plus Cash Payments and Pay Ins, less Pay Outs. The Cash Refund
+// term of the canonical formula has no data source: Refund is outside Phase 5
+// entirely, and this figure completes when Refund arrives. See ADR-020, which
+// supersedes ADR-008's claim that Phase 5 completes both terms.
 //
-// The guard is symmetric because sustained Pay Outs can drive the partial
-// Phase 4 figure negative. A total outside the bound indicates corrupt data,
-// not a legitimate drawer balance.
-func ComputeExpectedCash(openingFloatVND, payInVND, payOutVND int64) (int64, error) {
-	total := openingFloatVND + payInVND - payOutVND
+// The guard is symmetric because sustained Pay Outs can legitimately drive the
+// figure negative. A total outside the bound indicates corrupt data, not a
+// legitimate drawer balance.
+func ComputeExpectedCash(openingFloatVND, cashPaymentVND, payInVND, payOutVND int64) (int64, error) {
+	total, err := addAmount(openingFloatVND, cashPaymentVND)
+	if err != nil {
+		return 0, err
+	}
+	if total, err = addAmount(total, payInVND); err != nil {
+		return 0, err
+	}
+	if total, err = subtractAmount(total, payOutVND); err != nil {
+		return 0, err
+	}
 	if total > MaxAmountVND || total < -MaxAmountVND {
 		return 0, fmt.Errorf("%w: expected cash %d is outside [%d, %d]",
 			ErrExpectedCashOutOfRange, total, -MaxAmountVND, MaxAmountVND)
 	}
 	return total, nil
+}
+
+// addAmount and subtractAmount are the guarded arithmetic this formula runs
+// through.
+//
+// The bound check below is only meaningful on a total that has not already
+// wrapped, and Go's integer arithmetic wraps silently. The Cash Payment term is
+// a SUM over a Shift's Payments, which has no upper bound of its own, so an
+// unguarded sum would defeat the very check it feeds.
+func addAmount(a, b int64) (int64, error) {
+	if b > 0 && a > math.MaxInt64-b {
+		return 0, fmt.Errorf("%w: %d + %d overflows", ErrExpectedCashOutOfRange, a, b)
+	}
+	if b < 0 && a < math.MinInt64-b {
+		return 0, fmt.Errorf("%w: %d + %d underflows", ErrExpectedCashOutOfRange, a, b)
+	}
+	return a + b, nil
+}
+
+func subtractAmount(a, b int64) (int64, error) {
+	if b > 0 && a < math.MinInt64+b {
+		return 0, fmt.Errorf("%w: %d - %d underflows", ErrExpectedCashOutOfRange, a, b)
+	}
+	if b < 0 && a > math.MaxInt64+b {
+		return 0, fmt.Errorf("%w: %d - %d overflows", ErrExpectedCashOutOfRange, a, b)
+	}
+	return a - b, nil
 }

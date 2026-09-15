@@ -39,6 +39,10 @@ func TestRouteRegistration(t *testing.T) {
 		"POST /api/v1/sales/service-sessions/:id/draft/commit":                           true,
 		"POST /api/v1/sales/service-sessions/:id/draft":                                  true,
 		"PUT /api/v1/sales/service-sessions/:id/draft/check-target":                      true,
+		"POST /api/v1/sales/checks/:check_id/payments/cash":                              true,
+		"POST /api/v1/sales/checks/:check_id/payments/manual-qr":                         true,
+		"POST /api/v1/sales/checks/:check_id/split":                                      true,
+		"POST /api/v1/sales/checks/merge":                                                true,
 	}
 
 	got := make(map[string]bool)
@@ -90,6 +94,15 @@ func TestCommitRoutesRequireSalesOperate(t *testing.T) {
 	}
 }
 
-func TestSalesExposesFourteenOperations(t *testing.T) {
-	require.Len(t, registeredSalesRoutes(t), 14)
+func TestSalesExposesEighteenOperations(t *testing.T) {
+	require.Len(t, registeredSalesRoutes(t), 18)
+}
+
+func TestPhase5CRoutesAreRegistered(t *testing.T) {
+	routes := registeredSalesRoutes(t)
+	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/payments/cash")
+	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/payments/manual-qr")
+	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/split")
+	require.Contains(t, routes, "POST /api/v1/sales/checks/merge")
+	require.Len(t, routes, 18, "Phase 5C brings the Sales surface to eighteen operations")
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -137,17 +138,6 @@ func TestCommitSchema(t *testing.T) {
 		require.Contains(t, clause, "MERGED")
 	})
 
-	t.Run("no settlement column exists until 5C", func(t *testing.T) {
-		var n int
-		err := db.QueryRowContext(ctx, `
-			SELECT count(*) FROM information_schema.columns
-			WHERE table_name = 'checks'
-			  AND column_name IN ('settled_at', 'merged_into_check_id',
-			                      'settled_by_staff_identity_id')`).Scan(&n)
-		require.NoError(t, err)
-		require.Equal(t, 0, n)
-	})
-
 	t.Run("committed_items enforces total equals quantity times unit price", func(t *testing.T) {
 		var clause string
 		err := db.QueryRowContext(ctx, `
@@ -166,4 +156,79 @@ func TestCommitSchema(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, n)
 	})
+}
+
+// TestPaymentSchema proves Phase 5C's settlement columns, constraint, and
+// payment table exist exactly as migration 000010 declares them.
+func TestPaymentSchema(t *testing.T) {
+	db, _ := openSalesTestDB(t)
+	ctx := context.Background()
+
+	t.Run("checks carries all five settlement columns", func(t *testing.T) {
+		var n int
+		err := db.QueryRowContext(ctx, `
+			SELECT count(*) FROM information_schema.columns
+			WHERE table_name = 'checks'
+			  AND column_name IN ('merged_into_check_id', 'settled_at',
+			                      'settled_by_staff_identity_id',
+			                      'settled_during_sales_shift_id',
+			                      'settled_staff_access_session_id')`).Scan(&n)
+		require.NoError(t, err)
+		require.Equal(t, 5, n)
+	})
+
+	t.Run("settlement evidence constraint covers all three states", func(t *testing.T) {
+		var clause string
+		err := db.QueryRowContext(ctx, `
+			SELECT pg_get_constraintdef(oid) FROM pg_constraint
+			WHERE conname = 'check_settlement_evidence_valid'`).Scan(&clause)
+		require.NoError(t, err)
+		require.Contains(t, clause, "OPEN")
+		require.Contains(t, clause, "SETTLED")
+		require.Contains(t, clause, "MERGED")
+	})
+
+	t.Run("payments enforces the cash and manual QR fact sets", func(t *testing.T) {
+		var clause string
+		err := db.QueryRowContext(ctx, `
+			SELECT pg_get_constraintdef(oid) FROM pg_constraint
+			WHERE conname = 'payment_method_facts_valid'`).Scan(&clause)
+		require.NoError(t, err)
+		require.Contains(t, clause, "cash_tendered_vnd")
+		require.Contains(t, clause, "transaction_reference")
+	})
+
+	t.Run("payments carries both indexes", func(t *testing.T) {
+		var n int
+		err := db.QueryRowContext(ctx, `
+			SELECT count(*) FROM pg_indexes
+			WHERE tablename = 'payments'
+			  AND indexname IN ('payment_check_index', 'payment_cash_shift_index')`).Scan(&n)
+		require.NoError(t, err)
+		require.Equal(t, 2, n)
+	})
+}
+
+// TestSettlementEvidenceConstraintRejectsPartialEvidence proves the database,
+// not only Go, rejects a Check whose state claims settlement evidence the row
+// does not carry.
+func TestSettlementEvidenceConstraintRejectsPartialEvidence(t *testing.T) {
+	env := newSalesEnv(t)
+	ctx := context.Background()
+
+	session := env.StartTakeaway(t)
+
+	var checkID uuid.UUID
+	require.NoError(t, env.DB.QueryRowContext(ctx,
+		`INSERT INTO checks (service_session_id, charge_vnd) VALUES ($1, 1000) RETURNING id`,
+		session.ID).Scan(&checkID))
+
+	_, err := env.DB.ExecContext(ctx,
+		`UPDATE checks SET state = 'SETTLED', settled_at = now() WHERE id = $1`, checkID)
+	require.Error(t, err, "SETTLED without the other three evidence columns must be rejected")
+	require.Contains(t, err.Error(), "check_settlement_evidence_valid")
+
+	_, err = env.DB.ExecContext(ctx,
+		`UPDATE checks SET state = 'MERGED', merged_into_check_id = $1 WHERE id = $1`, checkID)
+	require.Error(t, err, "MERGED with a non-zero charge must be rejected")
 }

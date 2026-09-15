@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
 
@@ -65,6 +66,10 @@ const (
 )
 
 // Service Session states. 5A writes only StateActive; 5D writes StateClosed.
+//
+// There is no separate literal for the Shift's open state: whether a Shift is
+// open is answered by reading sales_shifts, not by comparing a string, so no
+// command needs the value.
 const (
 	StateActive = "ACTIVE"
 	StateClosed = "CLOSED"
@@ -233,4 +238,90 @@ func AddCharge(totalVND, deltaVND int64) (int64, error) {
 		return 0, fmt.Errorf("%w: %d is negative", ErrCheckChargeOutOfRange, sum)
 	}
 	return sum, nil
+}
+
+const (
+	OpPayCash     = "sales.pay_cash"
+	OpPayManualQR = "sales.pay_manual_qr"
+	OpSplitCheck  = "sales.split_check"
+	OpMergeChecks = "sales.merge_checks"
+)
+
+const (
+	EventCashPaymentRecorded     = "CASH_PAYMENT_RECORDED"
+	EventManualQRPaymentRecorded = "MANUAL_QR_PAYMENT_RECORDED"
+	EventCheckSettled            = "CHECK_SETTLED"
+	EventCheckSplit              = "CHECK_SPLIT"
+	EventCheckMerged             = "CHECK_MERGED"
+)
+
+// Payment methods. The canonical domain has exactly these two; Card is named
+// in MIGRATE_PLAN's superseded sketch but exists nowhere in the canonical
+// model, so it is not declared.
+const (
+	PaymentMethodCash     = "CASH"
+	PaymentMethodManualQR = "MANUAL_QR"
+)
+
+// Split destinations.
+const (
+	SplitDestinationNewCheck      = "NEW_CHECK"
+	SplitDestinationExistingCheck = "EXISTING_CHECK"
+)
+
+// MaxTransactionReferenceLength bounds a Manual QR Payment's bank reference.
+const MaxTransactionReferenceLength = 100
+
+// SubtractCharge reduces a running charge, refusing to go negative.
+//
+// Go's integer arithmetic wraps silently, so money arithmetic that does not
+// check is money arithmetic that can produce a positive total out of an
+// underflow. The check is one comparison.
+func SubtractCharge(totalVND, deltaVND int64) (int64, error) {
+	result := totalVND - deltaVND
+	if deltaVND > 0 && result > totalVND {
+		return 0, fmt.Errorf("%w: subtracting %d from %d underflows",
+			ErrCheckChargeOutOfRange, deltaVND, totalVND)
+	}
+	if result < 0 {
+		return 0, fmt.Errorf("%w: subtracting %d from %d is negative",
+			ErrCheckChargeOutOfRange, deltaVND, totalVND)
+	}
+	return result, nil
+}
+
+// ChangeDue is the cash handed back: tendered less applied.
+//
+// A cashier cannot hand back money they were not given, so under-tender is a
+// business rejection rather than an arithmetic one.
+func ChangeDue(tenderedVND, appliedVND int64) (int64, error) {
+	if tenderedVND < appliedVND {
+		return 0, fmt.Errorf("%w: tendered %d is below applied %d",
+			ErrInsufficientCashTendered, tenderedVND, appliedVND)
+	}
+	return tenderedVND - appliedVND, nil
+}
+
+// SettlesCheck reports whether a resulting balance closes the Check.
+//
+// Refund and customer excess do not exist in Phase 5, so the canonical
+// three-input readiness policy reduces to exactly this. See ADR-017.
+func SettlesCheck(balanceVND int64) bool { return balanceVND == 0 }
+
+// ValidateTransactionReference trims a Manual QR bank reference and bounds it.
+// A reference that is empty after trimming is treated as absent, matching the
+// canonical `command.transactionReference?.trim() || null`.
+func ValidateTransactionReference(ref *string) (*string, error) {
+	if ref == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*ref)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if len([]rune(trimmed)) > MaxTransactionReferenceLength {
+		return nil, fmt.Errorf("%w: transaction_reference is %d characters, maximum is %d",
+			response.ErrInvalid, len([]rune(trimmed)), MaxTransactionReferenceLength)
+	}
+	return &trimmed, nil
 }

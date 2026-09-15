@@ -133,6 +133,7 @@ CREATE TABLE idempotency_keys (
 * The public Shift API contract is complete and stable from Phase 4 onward.
 * Until Phase 5 lands, `expected_cash_vnd` reflects fund movements only and must not be presented to staff as a reconciliation figure.
 * The guard on the total is symmetric, because sustained Pay Outs can legitimately drive the partial figure negative.
+* **Superseded in part by ADR-020** for the Cash Refund term.
 
 ---
 
@@ -224,3 +225,105 @@ CREATE TABLE idempotency_keys (
 * 5A's single-row `FOR UPDATE` in the add-draft-item path is left unchanged rather than churned.
 * **Consequences:**
 * Concurrent Commits sharing menu items proceed in parallel while retirement and availability changes remain excluded; the Sales-before-Catalog lock order of 5A §10 is preserved, so no deadlock cycle is introduced.
+
+---
+
+## ADR-016: One Check lock protocol for every 5C command
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical source locks `checks`, `service_sessions`, and `sales_shifts` all `FOR UPDATE` in the Payment path, but only `FOR UPDATE OF checks` in the restructuring path, with a source comment noting that locking parent rows there "can create a reverse dependency when Payment already owns one of the affected Check rows" — a deadlock hazard documented rather than removed.
+* **Decision:**
+* All four 5C commands lock `checks` `FOR UPDATE` in ascending id order, and `service_sessions` and `sales_shifts` `FOR SHARE`.
+* `FOR SHARE` matches what the commands do, which is read parent state to evaluate a precondition.
+* **Consequences:**
+* No deadlock cycle exists among the 5C commands or against 5A and 5B; two cashiers paying different Checks of one Session proceed in parallel; Session and Shift closure, which take `FOR UPDATE`, remain excluded for the duration of each transaction.
+
+---
+
+## ADR-017: Settlement is a consequence of Payment, evaluated as a zero balance
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical `evaluateCheckSettlement` takes three inputs — `balanceVnd`, `hasPendingRefund`, `hasCustomerExcess` — of which the latter two are supplied as compile-time `false` constants from a `NO_RECORDED_CHECK_CORRECTIONS` object, because Refund does not exist yet.
+* **Decision:**
+* 5C has no settlement command and no settlement route; a Payment that brings the balance to zero settles the Check in the same transaction, writing all four evidence columns and a separate `CHECK_SETTLED` audit event.
+* The condition is written as `balance == 0`.
+* **Consequences:**
+* A fully paid but unsettled Check cannot exist, guarded by the database constraint and the read invariant from both sides; Refund, when it arrives, brings its own readiness definition rather than inheriting a pre-built extension point nobody has designed against.
+
+---
+
+## ADR-018: Sales error codes are keyed by condition, not by operation
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical source declares twenty-seven codes across Payments, Split, and Merge, of which six pairs differ only by an operation prefix for an identical condition (`SALES_SHIFT_NOT_OPEN_FOR_SPLIT` against `MERGE_SALES_SHIFT_NOT_OPEN`, both describing what 5A already calls `OPEN_SALES_SHIFT_REQUIRED`), and three more describe field-shape violations that 5A's conventions treat as request validation.
+* **Decision:**
+* 5C declares thirteen new codes, one per condition, reuses 5A's and 5B's codes where the condition is the same, and demotes field-shape codes to request validation.
+* `CHECK_CREATION_FAILED` is not migrated, per 5B §6.4.
+* The design spec carries the complete canonical-to-5C mapping table.
+* **Consequences:**
+* A client handles one code per situation instead of one per situation per operation; the trace back to the canonical source stays mechanical through the mapping table; distinguishing `CHECK_NOT_FOUND` from `CHECK_NOT_OPEN` — which the canonical source collapses into one empty `WHERE` result — additionally makes the failure actionable for a cashier.
+
+---
+
+## ADR-019: A Payment stores its own Sales Shift and no attestation column
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** The canonical `payments` table stores `salesShiftId` even though it is reachable through `check → service_session → sales_shift`, and the Manual QR command takes a `receiptObservedInBankApp` boolean that must be `true` for the Payment to exist.
+* **Decision:**
+* `sales_shift_id` is stored on the Payment, because the Shift in which the money reached the cashier is an independent fact — a Session opened in one Shift can be paid in the next, and the derived path would answer the reconciliation question wrongly.
+* No `receipt_observed_in_bank_app` column is created; the attestation is required in the request body and recorded in the audit event's details.
+* **Consequences:**
+* Expected Cash is a single-table scan over a partial index; a Payment's Shift attribution survives any later change to its Session; and the database stores no column whose value is `true` on every row.
+
+---
+
+## ADR-020: Expected Cash gains its Cash Payment term in 5C; the Cash Refund term is deferred to Refund
+
+* **Decision Date:** 2026-09-14
+* **Status:** Accepted
+* **Context:** ADR-008 shipped `expected_cash_vnd` as Opening Float plus Pay Ins less Pay Outs, and recorded that "Phase 5 adds the Cash Payment and Cash Refund terms". 5C is the first sub-phase that creates a Cash Payment, and no sub-phase of Phase 5 creates a Refund.
+* **Decision:**
+* `internal/shift` adds one sqlc query summing applied amounts of `CASH` Payments for a Shift, and `ComputeExpectedCash` becomes Opening Float plus Cash Payments and Pay Ins, less Pay Outs.
+* The sum is over applied amounts rather than tendered amounts, per `CONTEXT.md`.
+* The Cash Refund term is deferred to whichever phase introduces Refund, and the Swagger description names Refund as the outstanding dependency rather than "Phase 5".
+* `internal/shift` reads the `payments` table through its own query and does not import `internal/sales`, following ADR-012.
+* **Consequences:**
+* Expected Cash becomes a usable reconciliation figure for every cafe that does not issue cash refunds, which is the current operating reality; the remaining gap is named precisely instead of being attributed to a phase that will close without filling it.
+
+---
+
+## ADR-021: A Check command locks the Shift that is open, not the one its Session was opened in
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** ADR-019 stores a Payment's `sales_shift_id` because the Shift in which money reached the cashier is an independent fact, and a Session opened in one Shift can be paid in the next. The 5C implementation nonetheless read both that attribution and the "Shift must be open" precondition by joining `checks → service_sessions → sales_shifts`, recovering exactly the derived value ADR-019 exists to avoid. The two disagree as soon as a Session outlives its Shift.
+* **Decision:**
+* `LockCheckForPayment` and `LockChecksForRestructuring` no longer join `sales_shifts`. They lock the Check `FOR UPDATE` and its Session `FOR SHARE`, as ADR-016 requires.
+* A separate query, `LockOpenSalesShiftForShare`, takes the Shift whose state is `OPEN` `FOR SHARE` and returns its id. `sales_shift_only_one_open_unique` makes "the open Shift" unambiguous, so the query needs no ordering.
+* The Shift a Payment is attributed to, the Shift its settlement records, and the Shift precondition every Check command evaluates are all that row.
+* The lock order is unchanged: `checks`, then `service_sessions`, then `sales_shifts`. The Shift lock is a second statement rather than part of the join, but no transaction takes these in a different order, so ADR-016's no-deadlock-cycle guarantee holds.
+* **Consequences:**
+* A Session that outlives its Shift stays payable, and its Payments are attributed to the Shift that was open when the money arrived — which is what reconciliation reads and what ADR-019 promised.
+* The precondition is now "a Shift is open" rather than "the Session's Shift is open", matching §6.4's wording and removing a rejection that no cashier could act on.
+* `internal/sales` no longer carries a `ShiftStateOpen` literal: whether a Shift is open is answered by reading `sales_shifts`, not by comparing a string.
+
+---
+
+## ADR-022: Split and Merge run the same charge invariant and preconditions as Payment
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** 5B established that a Check's stored `charge_vnd` is a denormalization of the sum over its allocations, and that a disagreement is a defect surfacing as a logged 500 rather than a business state. Payment implemented that check. Split and Merge, which also rewrite a charge, trusted the stored value instead. The three commands also evaluated the same three preconditions in two different orders, so identical bad state produced different error codes depending on which endpoint was called.
+* **Decision:**
+* One assertion, `assertChargeMatchesAllocations`, recomputes a Check's charge and fails on disagreement. Every command that rewrites a charge runs it before computing anything from the stored value.
+* One function, `checkPreconditions`, evaluates Check state, then Session state, then Shift state, in the precedence §6.2 documents. Every command calls it, so a given state yields one code across the whole surface.
+* The invariant reads one aggregate query rather than the full allocation projection, so Payment no longer loads every allocation and its modifiers to compute a single sum.
+* Split and Merge plan their whole allocation redistribution in Go and apply it in a fixed number of batched statements, so the work done while both Checks are locked does not grow with the number of items moved.
+* **Consequences:**
+* A charge that has drifted fails the command that would have built on it, instead of being propagated into a second Check before the read path notices.
+* Split and Merge each cost one extra aggregate read inside the transaction; that is the price of not trusting a denormalization, and it is bounded.
+* A Check that is `SETTLED` with its Session and Shift also closed now reports `CHECK_NOT_OPEN` from every endpoint, rather than `CHECK_NOT_OPEN` from Split and `SERVICE_SESSION_ALREADY_CLOSED` from Pay Cash.

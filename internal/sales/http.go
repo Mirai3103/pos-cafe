@@ -626,3 +626,165 @@ func (s *Slices) handleSetCheckTarget(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handlePayCash godoc
+//
+//	@Summary		Record a Cash Payment
+//	@Description	Applies cash to an open Check. The applied amount may not exceed the Check's balance, and the cash tendered may not be below the applied amount. When the Payment brings the balance to zero the Check settles in the same transaction. A replayed response reproduces the original outcome, so it may show a balance that a later Payment has since reduced.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			check_id	path		string			true	"Check ID"
+//	@Param			body		body		PayCashCommand	true	"Cash payment request"
+//	@Success		200			{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Router			/sales/checks/{check_id}/payments/cash [post]
+func (s *Slices) handlePayCash(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	checkID, err := parseUUIDParam(c, "check_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[PayCashCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.CheckID = checkID
+
+	status, result, err := s.PayCash.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handlePayManualQR godoc
+//
+//	@Summary		Record a Manual QR Payment
+//	@Description	Applies a bank transfer staff have confirmed as received to an open Check. receipt_observed_in_bank_app must be true, because a Manual QR Payment carries no automatic bank or gateway confirmation. The applied amount may not exceed the Check's balance. When the Payment brings the balance to zero the Check settles in the same transaction.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			check_id	path		string				true	"Check ID"
+//	@Param			body		body		PayManualQRCommand	true	"Manual QR payment request"
+//	@Success		200			{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Router			/sales/checks/{check_id}/payments/manual-qr [post]
+func (s *Slices) handlePayManualQR(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	checkID, err := parseUUIDParam(c, "check_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[PayManualQRCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.CheckID = checkID
+
+	status, result, err := s.PayManualQR.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleSplitCheck godoc
+//
+//	@Summary		Split a Check
+//	@Description	Moves a quantity of one or more Committed Items from this Check onto another, either a newly created Check or an existing OPEN Check of the same Service Session. Rejected once either Check carries a Payment, because a paid Check is reconciliation evidence rather than a sorting tool. Neither the source nor the destination may be left with nothing charged.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			check_id	path		string				true	"Source Check ID"
+//	@Param			body		body		SplitCheckCommand	true	"Split request"
+//	@Success		200			{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Router			/sales/checks/{check_id}/split [post]
+func (s *Slices) handleSplitCheck(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	checkID, err := parseUUIDParam(c, "check_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[SplitCheckCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.SourceCheckID = checkID
+
+	status, result, err := s.SplitCheck.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleMergeChecks godoc
+//
+//	@Summary		Merge two Checks
+//	@Description	Absorbs one Check into another. Both must be OPEN, belong to the same Service Session, and carry no Payment. The absorbed Check keeps no charge and records the Check it merged into. The route is flat rather than nested, because merging acts on two peer Checks.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			body	body		MergeChecksCommand	true	"Merge request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/checks/merge [post]
+func (s *Slices) handleMergeChecks(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[MergeChecksCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+
+	status, result, err := s.MergeChecks.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

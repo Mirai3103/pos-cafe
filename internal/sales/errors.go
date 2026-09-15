@@ -31,9 +31,10 @@ var (
 	ErrInvalidPreparationNote = errors.New("invalid preparation note")
 	ErrInvalidQuantity        = errors.New("invalid quantity")
 
-	ErrLineTotalOutOfRange   = errors.New("line total out of range")
-	ErrCheckChargeOutOfRange = errors.New("check charge out of range")
-	ErrInvalidCheckTarget    = errors.New("invalid check target")
+	ErrLineTotalOutOfRange      = errors.New("line total out of range")
+	ErrCheckChargeOutOfRange    = errors.New("check charge out of range")
+	ErrInsufficientCashTendered = errors.New("cash tendered is below the applied amount")
+	ErrInvalidCheckTarget       = errors.New("invalid check target")
 
 	ErrTableSelectionRequired     = errors.New("at least one table is required for a dine-in session")
 	ErrTableSelectionDuplicate    = errors.New("the same table was selected twice")
@@ -75,6 +76,29 @@ var (
 	// business state, so it is deliberately absent from MapHTTPError and
 	// surfaces as a 500 with the Check id logged.
 	ErrChargeInvariantViolated = errors.New("check charge does not match its allocations")
+
+	ErrCheckNotFound          = errors.New("check not found")
+	ErrCheckNotOpen           = errors.New("check is not open")
+	ErrCheckHasPayment        = errors.New("check already carries a payment")
+	ErrChecksDifferentSession = errors.New("checks belong to different service sessions")
+
+	ErrPaymentExceedsBalance   = errors.New("payment exceeds the check balance")
+	ErrManualQRReceiptRequired = errors.New("the bank receipt must be confirmed before recording a manual QR payment")
+
+	ErrInvalidCheckSplit              = errors.New("invalid check split")
+	ErrSplitAllocationNotFound        = errors.New("committed item is not allocated to the source check")
+	ErrSplitQuantityExceedsAllocation = errors.New("split quantity exceeds the allocated quantity")
+	ErrSplitSourceWouldBeEmpty        = errors.New("the split would empty the source check")
+	ErrSplitDestinationWouldBeEmpty   = errors.New("the split would leave the destination check empty")
+	ErrInvalidCheckMerge              = errors.New("invalid check merge")
+
+	// ErrSettlementInvariantViolated reports that a Check's state disagrees
+	// with its balance — SETTLED with money owed, or OPEN with none. That is
+	// a defect, not a business state, so it is deliberately absent from
+	// MapHTTPError and surfaces as a 500 with the Check id logged. It is the
+	// read-path half of the pair guarding settlement; the database constraint
+	// check_settlement_evidence_valid is the other half.
+	ErrSettlementInvariantViolated = errors.New("check state does not match its balance")
 )
 
 // serviceSessionSalesShiftFK is the auto-generated name of the only foreign
@@ -232,6 +256,32 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "COMMIT_MODIFIER_GROUP_INVALID", ErrCommitModifierGroupInvalid)
 	case errors.Is(err, ErrNewOrderDraftNotAvailable):
 		return coded(http.StatusConflict, "NEW_ORDER_DRAFT_NOT_AVAILABLE", ErrNewOrderDraftNotAvailable)
+	case errors.Is(err, ErrCheckNotFound):
+		return coded(http.StatusNotFound, "CHECK_NOT_FOUND", ErrCheckNotFound)
+	case errors.Is(err, ErrCheckNotOpen):
+		return coded(http.StatusConflict, "CHECK_NOT_OPEN", ErrCheckNotOpen)
+	case errors.Is(err, ErrCheckHasPayment):
+		return coded(http.StatusConflict, "CHECK_HAS_PAYMENT", ErrCheckHasPayment)
+	case errors.Is(err, ErrChecksDifferentSession):
+		return coded(http.StatusConflict, "CHECKS_DIFFERENT_SERVICE_SESSION", ErrChecksDifferentSession)
+	case errors.Is(err, ErrPaymentExceedsBalance):
+		return coded(http.StatusConflict, "PAYMENT_EXCEEDS_CHECK_BALANCE", ErrPaymentExceedsBalance)
+	case errors.Is(err, ErrInsufficientCashTendered):
+		return coded(http.StatusConflict, "INSUFFICIENT_CASH_TENDERED", ErrInsufficientCashTendered)
+	case errors.Is(err, ErrManualQRReceiptRequired):
+		return coded(http.StatusConflict, "MANUAL_QR_RECEIPT_CONFIRMATION_REQUIRED", ErrManualQRReceiptRequired)
+	case errors.Is(err, ErrInvalidCheckSplit):
+		return coded(http.StatusConflict, "INVALID_CHECK_SPLIT", ErrInvalidCheckSplit)
+	case errors.Is(err, ErrSplitAllocationNotFound):
+		return coded(http.StatusConflict, "SPLIT_ALLOCATION_NOT_FOUND", ErrSplitAllocationNotFound)
+	case errors.Is(err, ErrSplitQuantityExceedsAllocation):
+		return coded(http.StatusConflict, "SPLIT_QUANTITY_EXCEEDS_ALLOCATION", ErrSplitQuantityExceedsAllocation)
+	case errors.Is(err, ErrSplitSourceWouldBeEmpty):
+		return coded(http.StatusConflict, "SPLIT_SOURCE_WOULD_BE_EMPTY", ErrSplitSourceWouldBeEmpty)
+	case errors.Is(err, ErrSplitDestinationWouldBeEmpty):
+		return coded(http.StatusConflict, "SPLIT_DESTINATION_WOULD_BE_EMPTY", ErrSplitDestinationWouldBeEmpty)
+	case errors.Is(err, ErrInvalidCheckMerge):
+		return coded(http.StatusConflict, "INVALID_CHECK_MERGE", ErrInvalidCheckMerge)
 	case errors.Is(err, ErrLineTotalOutOfRange):
 		return coded(http.StatusUnprocessableEntity, "LINE_TOTAL_OUT_OF_RANGE", ErrLineTotalOutOfRange)
 	case errors.Is(err, ErrCheckChargeOutOfRange):

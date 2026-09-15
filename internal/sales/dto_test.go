@@ -95,7 +95,7 @@ func TestCheckResponseSerialization(t *testing.T) {
 		ChargeVND:       85_000,
 		TotalAppliedVND: 0,
 		BalanceVND:      85_000,
-		Payments:        make([]struct{}, 0),
+		Payments:        make([]PaymentResponse, 0),
 		Allocations:     make([]ChargeAllocationResponse, 0),
 	}
 	b, err := json.Marshal(check)
@@ -131,6 +131,63 @@ func TestOrderDraftCarriesCheckTarget(t *testing.T) {
 	b, err := json.Marshal(draft)
 	require.NoError(t, err)
 	require.Contains(t, string(b), `"check_target":"CURRENT_UNPAID"`)
+}
+
+func TestPaymentResponseSerialization(t *testing.T) {
+	t.Run("a cash payment carries tendered and change", func(t *testing.T) {
+		tendered, change := int64(100_000), int64(15_000)
+		b, err := json.Marshal(PaymentResponse{
+			ID:               uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+			Method:           PaymentMethodCash,
+			AppliedAmountVND: 85_000,
+			CashTenderedVND:  &tendered,
+			ChangeDueVND:     &change,
+			SalesShiftID:     uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+		})
+		require.NoError(t, err)
+		require.Contains(t, string(b), `"cash_tendered_vnd":100000`)
+		require.Contains(t, string(b), `"change_due_vnd":15000`)
+		require.NotContains(t, string(b), "transaction_reference")
+	})
+
+	t.Run("a manual QR payment carries no cash fields", func(t *testing.T) {
+		ref := "FT24012345"
+		b, err := json.Marshal(PaymentResponse{
+			Method:               PaymentMethodManualQR,
+			AppliedAmountVND:     85_000,
+			TransactionReference: &ref,
+		})
+		require.NoError(t, err)
+		require.Contains(t, string(b), `"transaction_reference":"FT24012345"`)
+		require.NotContains(t, string(b), "cash_tendered_vnd")
+		require.NotContains(t, string(b), "change_due_vnd")
+	})
+}
+
+func TestCheckResponseSerialization5C(t *testing.T) {
+	t.Run("an open check omits merged_into_check_id", func(t *testing.T) {
+		b, err := json.Marshal(CheckResponse{
+			State:      CheckStateOpen,
+			ChargeVND:  85_000,
+			BalanceVND: 85_000,
+			Payments:   []PaymentResponse{},
+		})
+		require.NoError(t, err)
+		require.NotContains(t, string(b), "merged_into_check_id")
+		require.Contains(t, string(b), `"payments":[]`)
+		require.NotContains(t, string(b), "pending_refund_vnd")
+	})
+
+	t.Run("a merged check carries merged_into_check_id", func(t *testing.T) {
+		into := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+		b, err := json.Marshal(CheckResponse{
+			State:             CheckStateMerged,
+			MergedIntoCheckID: &into,
+			Payments:          []PaymentResponse{},
+		})
+		require.NoError(t, err)
+		require.Contains(t, string(b), `"merged_into_check_id":"33333333-3333-3333-3333-333333333333"`)
+	})
 }
 
 func TestServiceSessionSerializesNullDraftAfterCommit(t *testing.T) {

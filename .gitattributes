@@ -1,0 +1,32 @@
+# Auto-detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Go source files
+*.go text eol=lf diff=golang
+
+# Documentation and configs
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.env* text eol=lf
+
+# Modules and build
+*.mod text eol=lf
+*.sum text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+Makefile text eol=lf
+Dockerfile text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.tar.gz binary
+*.zip binary

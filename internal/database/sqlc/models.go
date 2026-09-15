@@ -61,11 +61,16 @@ type ChargeAllocation struct {
 
 // Owned by internal/sales. 5B writes only OPEN; 5C adds settlement.
 type Check struct {
-	ID               uuid.UUID `json:"id"`
-	ServiceSessionID uuid.UUID `json:"service_session_id"`
-	State            string    `json:"state"`
-	ChargeVnd        int64     `json:"charge_vnd"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID                          uuid.UUID     `json:"id"`
+	ServiceSessionID            uuid.UUID     `json:"service_session_id"`
+	State                       string        `json:"state"`
+	ChargeVnd                   int64         `json:"charge_vnd"`
+	CreatedAt                   time.Time     `json:"created_at"`
+	MergedIntoCheckID           uuid.NullUUID `json:"merged_into_check_id"`
+	SettledAt                   sql.NullTime  `json:"settled_at"`
+	SettledByStaffIdentityID    uuid.NullUUID `json:"settled_by_staff_identity_id"`
+	SettledDuringSalesShiftID   uuid.NullUUID `json:"settled_during_sales_shift_id"`
+	SettledStaffAccessSessionID uuid.NullUUID `json:"settled_staff_access_session_id"`
 }
 
 // Owned by internal/sales. Immutable after insert: no phase updates a row.
@@ -214,6 +219,21 @@ type OrderDraftItem struct {
 type OrderDraftItemModifierOption struct {
 	OrderDraftItemID uuid.UUID `json:"order_draft_item_id"`
 	ModifierOptionID uuid.UUID `json:"modifier_option_id"`
+}
+
+// Owned by internal/sales. Immutable after insert: no phase updates a row. Read by internal/shift for Expected Cash.
+type Payment struct {
+	ID                   uuid.UUID      `json:"id"`
+	CheckID              uuid.UUID      `json:"check_id"`
+	SalesShiftID         uuid.UUID      `json:"sales_shift_id"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	AppliedAmountVnd     int64          `json:"applied_amount_vnd"`
+	Method               string         `json:"method"`
+	CashTenderedVnd      sql.NullInt64  `json:"cash_tendered_vnd"`
+	ChangeDueVnd         sql.NullInt64  `json:"change_due_vnd"`
+	TransactionReference sql.NullString `json:"transaction_reference"`
+	ReceivedAt           time.Time      `json:"received_at"`
 }
 
 // Owned by internal/shift (Phase 4). At most one row may be in OPEN state. Phase 4 ships no close operation; see the Non-Goals in the Phase 4 design spec.

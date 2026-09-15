@@ -80,7 +80,12 @@ func (h *CurrentShiftHandler) Handle(ctx context.Context, actor Actor) (*Current
 				})
 			}
 
-			expected, err := ComputeExpectedCash(row.OpeningFloatVnd, payInVND, payOutVND)
+			cashPaymentVND, err := q.SumCashPaymentsForShift(ctx, row.ID)
+			if err != nil {
+				return nil, fmt.Errorf("sum cash payments for shift: %w", err)
+			}
+
+			expected, err := ComputeExpectedCash(row.OpeningFloatVnd, cashPaymentVND, payInVND, payOutVND)
 			if err != nil {
 				return nil, err
 			}

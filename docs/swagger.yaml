@@ -802,10 +802,11 @@ definitions:
         type: string
       id:
         type: string
+      merged_into_check_id:
+        type: string
       payments:
-        description: Filled by 5C.
         items:
-          type: object
+          $ref: '#/definitions/sales.PaymentResponse'
         type: array
       state:
         type: string
@@ -855,6 +856,15 @@ definitions:
       size_name:
         type: string
     type: object
+  sales.MergeChecksCommand:
+    properties:
+      absorbed_check_id:
+        type: string
+      request_id:
+        type: string
+      surviving_check_id:
+        type: string
+    type: object
   sales.OrderDraftResponse:
     properties:
       check_target:
@@ -866,6 +876,45 @@ definitions:
           $ref: '#/definitions/sales.DraftItemResponse'
         type: array
       state:
+        type: string
+    type: object
+  sales.PayCashCommand:
+    properties:
+      applied_amount_vnd:
+        type: integer
+      cash_tendered_vnd:
+        type: integer
+      request_id:
+        type: string
+    type: object
+  sales.PayManualQRCommand:
+    properties:
+      applied_amount_vnd:
+        type: integer
+      receipt_observed_in_bank_app:
+        type: boolean
+      request_id:
+        type: string
+      transaction_reference:
+        type: string
+    type: object
+  sales.PaymentResponse:
+    properties:
+      applied_amount_vnd:
+        type: integer
+      cash_tendered_vnd:
+        type: integer
+      change_due_vnd:
+        type: integer
+      id:
+        type: string
+      method:
+        type: string
+      received_at:
+        type: string
+      sales_shift_id:
+        type: string
+      transaction_reference:
         type: string
     type: object
   sales.RemoveDraftItemCommand:
@@ -976,6 +1025,31 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  sales.SplitCheckCommand:
+    properties:
+      destination:
+        $ref: '#/definitions/sales.SplitDestination'
+      items:
+        items:
+          $ref: '#/definitions/sales.SplitItem'
+        type: array
+      request_id:
+        type: string
+    type: object
+  sales.SplitDestination:
+    properties:
+      check_id:
+        type: string
+      type:
+        type: string
+    type: object
+  sales.SplitItem:
+    properties:
+      committed_item_id:
+        type: string
+      quantity:
+        type: integer
     type: object
   sales.StartDineInSessionCommand:
     properties:
@@ -3043,6 +3117,232 @@ paths:
       summary: Ngừng kinh doanh kích thước món
       tags:
       - Catalog
+  /sales/checks/{check_id}/payments/cash:
+    post:
+      consumes:
+      - application/json
+      description: Applies cash to an open Check. The applied amount may not exceed
+        the Check's balance, and the cash tendered may not be below the applied amount.
+        When the Payment brings the balance to zero the Check settles in the same
+        transaction. A replayed response reproduces the original outcome, so it may
+        show a balance that a later Payment has since reduced.
+      parameters:
+      - description: Check ID
+        in: path
+        name: check_id
+        required: true
+        type: string
+      - description: Cash payment request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.PayCashCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Record a Cash Payment
+      tags:
+      - sales
+  /sales/checks/{check_id}/payments/manual-qr:
+    post:
+      consumes:
+      - application/json
+      description: Applies a bank transfer staff have confirmed as received to an
+        open Check. receipt_observed_in_bank_app must be true, because a Manual QR
+        Payment carries no automatic bank or gateway confirmation. The applied amount
+        may not exceed the Check's balance. When the Payment brings the balance to
+        zero the Check settles in the same transaction.
+      parameters:
+      - description: Check ID
+        in: path
+        name: check_id
+        required: true
+        type: string
+      - description: Manual QR payment request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.PayManualQRCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Record a Manual QR Payment
+      tags:
+      - sales
+  /sales/checks/{check_id}/split:
+    post:
+      consumes:
+      - application/json
+      description: Moves a quantity of one or more Committed Items from this Check
+        onto another, either a newly created Check or an existing OPEN Check of the
+        same Service Session. Rejected once either Check carries a Payment, because
+        a paid Check is reconciliation evidence rather than a sorting tool. Neither
+        the source nor the destination may be left with nothing charged.
+      parameters:
+      - description: Source Check ID
+        in: path
+        name: check_id
+        required: true
+        type: string
+      - description: Split request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.SplitCheckCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Split a Check
+      tags:
+      - sales
+  /sales/checks/merge:
+    post:
+      consumes:
+      - application/json
+      description: Absorbs one Check into another. Both must be OPEN, belong to the
+        same Service Session, and carry no Payment. The absorbed Check keeps no charge
+        and records the Check it merged into. The route is flat rather than nested,
+        because merging acts on two peer Checks.
+      parameters:
+      - description: Merge request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.MergeChecksCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Merge two Checks
+      tags:
+      - sales
   /sales/service-sessions:
     get:
       description: Returns every ACTIVE Service Session with its full projection,
@@ -3904,9 +4204,9 @@ paths:
   /shifts/current:
     get:
       description: Returns the open Sales Shift with its Expected Cash and Cash Movements,
-        or null when no Shift is open. expected_cash_vnd covers the Opening Float
-        and Cash Movements only; Cash Payments and Cash Refunds join the figure in
-        Phase 5 (ADR-008).
+        or null when no Shift is open. expected_cash_vnd covers the Opening Float,
+        Cash Payments, and Cash Movements. The Cash Refund term is still outstanding,
+        because Refund is not implemented (ADR-020).
       produces:
       - application/json
       responses:

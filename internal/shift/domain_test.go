@@ -85,24 +85,49 @@ func TestValidateNote(t *testing.T) {
 }
 
 func TestComputeExpectedCash(t *testing.T) {
-	got, err := shift.ComputeExpectedCash(500000, 100000, 150000)
+	got, err := shift.ComputeExpectedCash(500000, 0, 100000, 150000)
 	require.NoError(t, err)
 	assert.Equal(t, int64(450000), got)
 
-	// No movements yet: Expected Cash is the Opening Float.
-	got, err = shift.ComputeExpectedCash(500000, 0, 0)
+	// No movements or payments yet: Expected Cash is the Opening Float.
+	got, err = shift.ComputeExpectedCash(500000, 0, 0, 0)
 	require.NoError(t, err)
 	assert.Equal(t, int64(500000), got)
 
-	// Sustained Pay Outs can legitimately drive the Phase 4 partial figure
-	// negative, so the guard is symmetric rather than one-sided.
-	got, err = shift.ComputeExpectedCash(0, 0, 1000)
+	// Sustained Pay Outs can legitimately drive the figure negative, so the
+	// guard is symmetric rather than one-sided.
+	got, err = shift.ComputeExpectedCash(0, 0, 0, 1000)
 	require.NoError(t, err)
 	assert.Equal(t, int64(-1000), got)
 
-	_, err = shift.ComputeExpectedCash(shift.MaxAmountVND, 1, 0)
+	_, err = shift.ComputeExpectedCash(shift.MaxAmountVND, 0, 1, 0)
 	assert.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
 
-	_, err = shift.ComputeExpectedCash(0, 0, shift.MaxAmountVND+1)
+	_, err = shift.ComputeExpectedCash(0, 0, 0, shift.MaxAmountVND+1)
 	assert.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
+}
+
+func TestComputeExpectedCashIncludesCashPayments(t *testing.T) {
+	t.Run("cash payments raise the figure", func(t *testing.T) {
+		got, err := shift.ComputeExpectedCash(500_000, 850_000, 100_000, 50_000)
+		require.NoError(t, err)
+		require.Equal(t, int64(1_400_000), got)
+	})
+
+	t.Run("with no payments the Phase 4 figure is unchanged", func(t *testing.T) {
+		got, err := shift.ComputeExpectedCash(500_000, 0, 100_000, 50_000)
+		require.NoError(t, err)
+		require.Equal(t, int64(550_000), got)
+	})
+
+	t.Run("sustained pay outs may still drive it negative", func(t *testing.T) {
+		got, err := shift.ComputeExpectedCash(100_000, 0, 0, 500_000)
+		require.NoError(t, err)
+		require.Equal(t, int64(-400_000), got)
+	})
+
+	t.Run("a total outside the bound is rejected", func(t *testing.T) {
+		_, err := shift.ComputeExpectedCash(shift.MaxAmountVND, shift.MaxAmountVND, 0, 0)
+		require.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
+	})
 }
