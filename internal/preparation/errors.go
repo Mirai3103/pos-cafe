@@ -30,7 +30,7 @@ var (
 func ErrorResponse(err error) (int, response.APIResponse) {
 	// The client message is always the stable sentinel text, never the wrapped
 	// PostgreSQL detail, which must stay server-side only.
-	coded := func(status int, code string, sentinel error) response.APIResponse {
+	coded := func(_ int, code string, sentinel error) response.APIResponse {
 		return response.APIResponse{
 			Success: false,
 			Error: &response.APIError{
