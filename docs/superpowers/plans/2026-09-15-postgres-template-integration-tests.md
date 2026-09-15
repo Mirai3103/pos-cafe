@@ -68,7 +68,7 @@
 - Produces: `sanitizeError(err error, rawURL string) error`
 - Consumes: only Go standard-library URL, regexp, crypto/rand, and encoding/hex packages
 
-- [ ] **Step 1: Write failing table-driven config tests**
+- [x] **Step 1: Write failing table-driven config tests**
 
 Create `internal/testdb/config_test.go` with named subtests covering a valid URL, preserved query parameters, missing URL, non-PostgreSQL URL, a missing host, a database not ending in `_test`, unknown package, invalid suffix, and overlong generated names:
 
@@ -142,13 +142,13 @@ func TestSanitizeError(t *testing.T) {
 
 Add `fmt` to the test imports.
 
-- [ ] **Step 2: Run the config tests and confirm the package is missing**
+- [x] **Step 2: Run the config tests and confirm the package is missing**
 
 Run: `go test ./internal/testdb -run 'TestParseConfig|TestIsEphemeralClone|TestSanitizeError' -v`
 
 Expected: FAIL because `parseConfig`, `config`, `isEphemeralClone`, and `sanitizeError` do not exist.
 
-- [ ] **Step 3: Implement deterministic parsing and strict identifier validation**
+- [x] **Step 3: Implement deterministic parsing and strict identifier validation**
 
 Create `internal/testdb/config.go` with these definitions and rules:
 
@@ -303,13 +303,13 @@ func sanitizeError(err error, rawURL string) error {
 
 Add `errors` to the imports. Do not include `rawURL` in validation errors. Use `url.URL.Redacted()` only if a URL must appear in diagnostics.
 
-- [ ] **Step 4: Run the config tests**
+- [x] **Step 4: Run the config tests**
 
 Run: `go test ./internal/testdb -run 'TestParseConfig|TestIsEphemeralClone|TestSanitizeError' -v`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit if explicitly requested**
+- [x] **Step 5: Commit if explicitly requested**
 
 ```bash
 git add internal/testdb/config.go internal/testdb/config_test.go
@@ -328,7 +328,7 @@ git commit -m "test: validate integration database names"
 - Produces: `Cleanup(ctx context.Context, rawURL string) error`
 - Produces internally: `provision(ctx context.Context, rawURL, packageName, suffix string) (*instance, error)` and `(*instance).Close(ctx context.Context) error`
 
-- [ ] **Step 1: Write failing exit-code and cleanup-filter tests**
+- [x] **Step 1: Write failing exit-code and cleanup-filter tests**
 
 Create `internal/testdb/harness_test.go`:
 
@@ -361,13 +361,13 @@ func TestFinalExitCode(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the harness unit test and confirm it fails**
+- [x] **Step 2: Run the harness unit test and confirm it fails**
 
 Run: `go test ./internal/testdb -run TestFinalExitCode -v`
 
 Expected: FAIL because `finalExitCode` does not exist.
 
-- [ ] **Step 3: Implement the lifecycle with one connection-bound advisory lock**
+- [x] **Step 3: Implement the lifecycle with one connection-bound advisory lock**
 
 Create `internal/testdb/harness.go`. Use the following concrete structure:
 
@@ -462,7 +462,7 @@ rows, err := maintenance.QueryContext(ctx, `SELECT datname FROM pg_database`)
 
 Close the maintenance pool on every return and sanitize returned connection/driver errors with `sanitizeError`. Collect independent drop failures with `errors.Join` so one stale clone does not prevent cleanup of later candidates. Do not drop the base or template under any condition.
 
-- [ ] **Step 4: Run unit tests and static checks**
+- [x] **Step 4: Run unit tests and static checks**
 
 Run: `go test ./internal/testdb -v`
 
@@ -472,7 +472,7 @@ Run: `go vet ./internal/testdb`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit if explicitly requested**
+- [x] **Step 5: Commit if explicitly requested**
 
 ```bash
 git add internal/testdb/harness.go internal/testdb/harness_test.go
@@ -488,7 +488,7 @@ git commit -m "test: add PostgreSQL clone lifecycle harness"
 - Consumes: `provision` and `(*instance).Close` from Task 2
 - Produces: executable proof that migrated clones are isolated and removable
 
-- [ ] **Step 1: Write the PostgreSQL-backed isolation test**
+- [x] **Step 1: Write the PostgreSQL-backed isolation test**
 
 Create `internal/testdb/harness_integration_test.go`:
 
@@ -538,19 +538,19 @@ func TestProvisionCreatesMigratedIsolatedClones(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test against PostgreSQL**
+- [x] **Step 2: Run the test against PostgreSQL**
 
 Run: `go test -tags=integration ./internal/testdb -run TestProvisionCreatesMigratedIsolatedClones -v`
 
 Expected: PASS, with both ephemeral databases removed during cleanup. If PostgreSQL is unavailable, start it with `make docker-up`, wait with `make db-wait`, and rerun the exact command.
 
-- [ ] **Step 3: Verify no harness clone remains**
+- [x] **Step 3: Verify no harness clone remains**
 
 Run: `docker compose exec -T postgres psql -U cafe_pos -d postgres -Atc "SELECT datname FROM pg_database WHERE datname ~ '^cafe_pos_test_sales_[0-9a-f]{12}$'"`
 
 Expected: no output.
 
-- [ ] **Step 4: Record the serialized pre-migration baseline**
+- [x] **Step 4: Record the serialized pre-migration baseline**
 
 Before any package is converted to `TestMain`, run this command three times serially and record total wall time plus package times:
 
@@ -560,7 +560,7 @@ go test -count=1 -p 1 -tags=integration ./...
 
 Expected: all three runs PASS. Store the three measurements in the implementation session notes for comparison in Task 11; do not run measurements concurrently.
 
-- [ ] **Step 5: Commit if explicitly requested**
+- [x] **Step 5: Commit if explicitly requested**
 
 ```bash
 git add internal/testdb/harness_integration_test.go
@@ -568,6 +568,14 @@ git commit -m "test: verify PostgreSQL clone isolation"
 ```
 
 ### Task 4: Sales Package Shared Database
+
+> **Amended (2026-09-15):** Task 4 also carries a production fix. Binding the
+> sales package to one shared clone pool made
+> `TestConcurrentPaymentsOnTwoChecksOfOneSession` fail 3/3 with
+> `check state does not match its balance`: under `FOR SHARE` on the Session, a
+> sibling Check's commit can land between the statements of another command's
+> read-model rebuild. ADR-023 restores the canonical `FOR UPDATE` on the Service
+> Session row for the 5C commands; see ADR-023 in `spec/decisions.md`.
 
 **Files:**
 - Modify: `internal/sales/testmain_integration_test.go`
@@ -577,7 +585,7 @@ git commit -m "test: verify PostgreSQL clone isolation"
 - Produces: package variable `salesTestDB *sql.DB`
 - Preserves: `openSalesTestDB(t *testing.T) (*sql.DB, *sqlc.Queries)`
 
-- [ ] **Step 1: Add a failing shared-pool regression test**
+- [x] **Step 1: Add a failing shared-pool regression test**
 
 Append to `internal/sales/testmain_integration_test.go`:
 
@@ -589,13 +597,13 @@ func TestSalesPackageUsesSharedDatabase(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run it against the old helper**
+- [x] **Step 2: Run it against the old helper**
 
 Run: `go test -tags=integration ./internal/sales -run TestSalesPackageUsesSharedDatabase -v`
 
 Expected: FAIL because the old helper opens a different pool each time.
 
-- [ ] **Step 3: Bind one sales pool in TestMain**
+- [x] **Step 3: Bind one sales pool in TestMain**
 
 Replace the opening behavior with:
 
@@ -617,19 +625,19 @@ func openSalesTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 
 Remove the `database.Open` import and per-test `db.Close` registration. Keep all sales truncation and seed helpers unchanged.
 
-- [ ] **Step 4: Run the regression and representative concurrency tests**
+- [x] **Step 4: Run the regression and representative concurrency tests**
 
 Run: `go test -race -tags=integration ./internal/sales -run 'TestSalesPackageUsesSharedDatabase|TestConcurrent|TestSplitRacingPayment' -v`
 
 Expected: PASS.
 
-- [ ] **Step 5: Run the complete sales package**
+- [x] **Step 5: Run the complete sales package**
 
 Run: `go test -race -tags=integration ./internal/sales -v`
 
 Expected: PASS and one sales clone is created and removed.
 
-- [ ] **Step 6: Commit if explicitly requested**
+- [x] **Step 6: Commit if explicitly requested**
 
 ```bash
 git add internal/sales/testmain_integration_test.go
@@ -649,7 +657,7 @@ git commit -m "test: share one sales integration database"
 - Produces: package variable `catalogTestDB *sql.DB`
 - Preserves: `openExecutorTestDB` and `openCatalogTestDB` signatures
 
-- [ ] **Step 1: Write the failing shared-pool test in the new TestMain file**
+- [x] **Step 1: Write the failing shared-pool test in the new TestMain file**
 
 Create the build-tagged `internal/catalog/testmain_integration_test.go` with imports and:
 
@@ -663,13 +671,13 @@ func TestCatalogPackageUsesSharedDatabase(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the regression against the old helpers**
+- [x] **Step 2: Run the regression against the old helpers**
 
 Run: `go test -tags=integration ./internal/catalog -run TestCatalogPackageUsesSharedDatabase -v`
 
 Expected: FAIL because the helpers open separate pools.
 
-- [ ] **Step 3: Add TestMain and convert all catalog open sites**
+- [x] **Step 3: Add TestMain and convert all catalog open sites**
 
 Add:
 
@@ -690,19 +698,19 @@ require.NotNil(b, db)
 
 Remove now-unused `os` and production `database` imports from the three modified files.
 
-- [ ] **Step 4: Run catalog integration tests**
+- [x] **Step 4: Run catalog integration tests**
 
 Run: `go test -race -tags=integration ./internal/catalog -v`
 
 Expected: PASS.
 
-- [ ] **Step 5: Compile and execute one benchmark iteration**
+- [x] **Step 5: Compile and execute one benchmark iteration**
 
 Run: `go test -tags=integration ./internal/catalog -run '^$' -bench BenchmarkCatalogProjections -benchtime=1x`
 
 Expected: PASS; every sub-benchmark reports one iteration without opening a second pool.
 
-- [ ] **Step 6: Commit if explicitly requested**
+- [x] **Step 6: Commit if explicitly requested**
 
 ```bash
 git add internal/catalog/testmain_integration_test.go internal/catalog/executor_integration_test.go internal/catalog/schema_integration_test.go internal/catalog/projections_benchmark_test.go
@@ -723,7 +731,7 @@ git commit -m "test: share one catalog integration database"
 - Produces: `shiftTestDB *sql.DB` and `tablesTestDB *sql.DB`
 - Preserves: `openShiftTestDB`, `openTablesTestDB`, and `openSchemaTestDB` signatures
 
-- [ ] **Step 1: Add failing pointer-identity tests**
+- [x] **Step 1: Add failing pointer-identity tests**
 
 In the new build-tagged TestMain files, declare the package pool variables and tests:
 
@@ -741,13 +749,13 @@ func TestTablesPackageUsesSharedDatabase(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run both regressions against old helpers**
+- [x] **Step 2: Run both regressions against old helpers**
 
 Run: `go test -tags=integration ./internal/shift ./internal/tables -run 'Test(Shift|Tables)PackageUsesSharedDatabase' -v`
 
 Expected: FAIL because each old helper opens a new pool.
 
-- [ ] **Step 3: Add both TestMain functions and replace helpers**
+- [x] **Step 3: Add both TestMain functions and replace helpers**
 
 Use this pattern with the appropriate package name and variable:
 
@@ -763,13 +771,13 @@ func TestMain(m *testing.M) {
 
 Each helper calls `require.NotNil(t, packageTestDB)` and returns the shared pointer; helpers that return queries call `sqlc.New(packageTestDB)`. Remove per-test pool cleanup and unused `context`, `os`, and production `database` imports. Keep `truncateShiftTables` and all table cleanup behavior unchanged.
 
-- [ ] **Step 4: Run shift and tables with race detection**
+- [x] **Step 4: Run shift and tables with race detection**
 
 Run: `go test -race -tags=integration ./internal/shift ./internal/tables -v`
 
 Expected: PASS. Go may run the two package binaries concurrently without fixture interference.
 
-- [ ] **Step 5: Commit if explicitly requested**
+- [x] **Step 5: Commit if explicitly requested**
 
 ```bash
 git add internal/shift/testmain_integration_test.go internal/shift/executor_integration_test.go internal/tables/testmain_integration_test.go internal/tables/executor_integration_test.go internal/tables/schema_integration_test.go
@@ -788,7 +796,7 @@ git commit -m "test: isolate shift and tables integration databases"
 - Produces: `authTestDB *sql.DB`
 - Preserves: `setupTestApp(t) (*echo.Echo, func())` and `openApprovalTestDB(t) (*sql.DB, *sqlc.Queries)`
 
-- [ ] **Step 1: Add a failing shared-pool regression test**
+- [x] **Step 1: Add a failing shared-pool regression test**
 
 Create the build-tagged TestMain file with:
 
@@ -802,13 +810,13 @@ func TestAuthPackageUsesSharedDatabase(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the regression against the old helper**
+- [x] **Step 2: Run the regression against the old helper**
 
 Run: `go test -tags=integration ./internal/auth -run TestAuthPackageUsesSharedDatabase -v`
 
 Expected: FAIL because `openApprovalTestDB` opens a new pool per call.
 
-- [ ] **Step 3: Add TestMain and preserve per-test auth reset without pool ownership**
+- [x] **Step 3: Add TestMain and preserve per-test auth reset without pool ownership**
 
 Add:
 
@@ -830,13 +838,13 @@ ctx := context.Background()
 
 Keep the pre-test and cleanup `TRUNCATE`, but make the cleanup function truncate only; package teardown owns `db.Close`. Change `openApprovalTestDB` to return `authTestDB` and `sqlc.New(authTestDB)` without registering cleanup.
 
-- [ ] **Step 4: Run all auth integration tests**
+- [x] **Step 4: Run all auth integration tests**
 
 Run: `go test -race -tags=integration ./internal/auth -v`
 
 Expected: PASS, including bootstrap/sign-in behavior and manager approval.
 
-- [ ] **Step 5: Commit if explicitly requested**
+- [x] **Step 5: Commit if explicitly requested**
 
 ```bash
 git add internal/auth/testmain_integration_test.go internal/auth/auth_integration_test.go internal/auth/manager_approval_integration_test.go
@@ -854,7 +862,7 @@ git commit -m "test: share one auth integration database"
 - Produces: `databaseTestDB *sql.DB`
 - Preserves: `setupTestDB(t *testing.T) *sql.DB`
 
-- [ ] **Step 1: Add a failing pointer-identity test**
+- [x] **Step 1: Add a failing pointer-identity test**
 
 Create the build-tagged TestMain file with:
 
@@ -868,13 +876,13 @@ func TestDatabasePackageUsesSharedDatabase(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run it against the old helper**
+- [x] **Step 2: Run it against the old helper**
 
 Run: `go test -tags=integration ./internal/database -run TestDatabasePackageUsesSharedDatabase -v`
 
 Expected: FAIL because the old helper opens separate pools.
 
-- [ ] **Step 3: Add TestMain and retain table cleanup**
+- [x] **Step 3: Add TestMain and retain table cleanup**
 
 Bind `databaseTestDB` with `testdb.Run(m, "database", ...)`. Replace URL lookup, skip behavior, string-based safety checks, and `database.Open` in `setupTestDB` with the shared pool. Keep the pre-test `TRUNCATE TABLE menu_categories CASCADE` and cleanup truncation, but remove `db.Close` from `t.Cleanup`.
 
@@ -887,19 +895,19 @@ t.Cleanup(func() {
 })
 ```
 
-- [ ] **Step 4: Run database integration tests**
+- [x] **Step 4: Run database integration tests**
 
 Run: `go test -race -tags=integration ./internal/database -v`
 
 Expected: PASS.
 
-- [ ] **Step 5: Confirm all direct production database opens are gone from test files**
+- [x] **Step 5: Confirm all direct production database opens are gone from test files**
 
 Run: `rg 'database\.Open\(' internal --glob '*_test.go'`
 
 Expected: no matches. Calls inside `internal/testdb/harness.go` are intentional and are not `_test.go` files.
 
-- [ ] **Step 6: Commit if explicitly requested**
+- [x] **Step 6: Commit if explicitly requested**
 
 ```bash
 git add internal/database/testmain_integration_test.go internal/database/tx_integration_test.go
@@ -918,7 +926,7 @@ git commit -m "test: share one database integration clone"
 - Produces: `make test-integration-fast` and `make test-db-clean`
 - Changes: `test-integration` and `coverage` no longer pass `-p 1`
 
-- [ ] **Step 1: Add the cleanup CLI**
+- [x] **Step 1: Add the cleanup CLI**
 
 Create:
 
@@ -944,7 +952,7 @@ func main() {
 }
 ```
 
-- [ ] **Step 2: Update Make targets**
+- [x] **Step 2: Update Make targets**
 
 Add `test-integration-fast` and `test-db-clean` to `.PHONY`. Replace the current integration section with:
 
@@ -961,7 +969,7 @@ test-db-clean: ## Remove inactive ephemeral integration-test clones
 
 Remove `-p 1` from `coverage`. Replace the old comment saying serialization is mandatory with a short explanation that each package provisions its own clone from the migrated template.
 
-- [ ] **Step 3: Update the README testing section**
+- [x] **Step 3: Update the README testing section**
 
 Document these commands:
 
@@ -973,7 +981,7 @@ make test-db-clean         # remove inactive clones left by interrupted runs
 
 Replace the `-p 1` warning with an explanation that `TestMain` creates an ephemeral package clone from `cafe_pos_test_template`, direct package commands remain supported, package test binaries may execute concurrently, and the base URL must still end exactly in `_test`.
 
-- [ ] **Step 4: Verify tooling and docs commands**
+- [x] **Step 4: Verify tooling and docs commands**
 
 Run: `go test ./internal/testdb ./internal/testdb/cmd/cleanup`
 
@@ -983,7 +991,7 @@ Run: `make test-integration-fast`
 
 Expected: PASS without `-race` or `-p 1` in the rendered Go command.
 
-- [ ] **Step 5: Commit if explicitly requested**
+- [x] **Step 5: Commit if explicitly requested**
 
 ```bash
 git add internal/testdb/cmd/cleanup/main.go Makefile README.md
@@ -999,7 +1007,7 @@ git commit -m "build: run integration packages on isolated clones"
 - Consumes: package-isolated harness from Tasks 2 and 4-8
 - Produces: independent `unit` and `integration` jobs; integration retains PostgreSQL, race detection, and coverage
 
-- [ ] **Step 1: Split the current test job**
+- [x] **Step 1: Split the current test job**
 
 Create a `unit` job containing checkout, Go setup/cache, formatting verification, `go mod tidy` verification, vet, unit tests with race/coverage, and build. It must not declare PostgreSQL.
 
@@ -1014,7 +1022,7 @@ Create an `integration` job with its own checkout and Go setup plus the existing
 
 Keep unit and integration Codecov uploads in their owning jobs. Do not add `needs` between the two jobs. Keep the existing lint/vulnerability job independent.
 
-- [ ] **Step 2: Validate workflow syntax and command invariants**
+- [x] **Step 2: Validate workflow syntax and command invariants**
 
 Run: `rg -- '-p 1' Makefile .github/workflows/ci.yml README.md`
 
@@ -1024,7 +1032,7 @@ Run: `rg 'go test -v -race -tags=integration' .github/workflows/ci.yml`
 
 Expected: one match in the integration job.
 
-- [ ] **Step 3: Run local equivalents of both CI test commands**
+- [x] **Step 3: Run local equivalents of both CI test commands**
 
 Run: `go test -race ./...`
 
@@ -1034,7 +1042,7 @@ Run: `make test-integration`
 
 Expected: PASS with package-level database isolation.
 
-- [ ] **Step 4: Commit if explicitly requested**
+- [x] **Step 4: Commit if explicitly requested**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -1050,7 +1058,7 @@ git commit -m "ci: run unit and integration jobs concurrently"
 - Consumes: all prior tasks
 - Produces: final evidence for isolation, cleanup, race safety, coverage, and wall-time change
 
-- [ ] **Step 1: Run formatting and static checks**
+- [x] **Step 1: Run formatting and static checks**
 
 Run:
 
@@ -1064,31 +1072,31 @@ Run: `go vet ./...`
 
 Expected: PASS.
 
-- [ ] **Step 2: Run unit tests**
+- [x] **Step 2: Run unit tests**
 
 Run: `go test -race ./...`
 
 Expected: PASS.
 
-- [ ] **Step 3: Run all integration tests with race detection**
+- [x] **Step 3: Run all integration tests with race detection**
 
 Run: `make test-integration`
 
 Expected: PASS with no fixture-erasure failures and no race reports.
 
-- [ ] **Step 4: Run coverage**
+- [x] **Step 4: Run coverage**
 
 Run: `make coverage`
 
 Expected: PASS and coverage output is produced without `-p 1`.
 
-- [ ] **Step 5: Prove two suite invocations do not collide**
+- [x] **Step 5: Prove two suite invocations do not collide**
 
 Launch two separate terminal processes with the same `TEST_DATABASE_URL`, each running `go test -tags=integration ./internal/sales`. Wait for both processes.
 
 Expected: both PASS; logs/errors show no duplicate-database or cross-run drop failures.
 
-- [ ] **Step 6: Confirm teardown and cleanup safety**
+- [x] **Step 6: Confirm teardown and cleanup safety**
 
 Run: `docker compose exec -T postgres psql -U cafe_pos -d postgres -Atc "SELECT datname FROM pg_database WHERE datname = 'cafe_pos_test_template' OR datname ~ '^cafe_pos_test_(auth|catalog|database|sales|shift|tables)_[0-9a-f]{12}$' ORDER BY datname"`
 
@@ -1098,7 +1106,7 @@ Run: `make test-db-clean`
 
 Expected: PASS without dropping `cafe_pos_test` or `cafe_pos_test_template`.
 
-- [ ] **Step 7: Collect controlled before-and-after timing evidence**
+- [x] **Step 7: Collect controlled before-and-after timing evidence**
 
 Use the pre-change timing recorded before Task 4. Run the post-change command three times serially on the same machine and PostgreSQL instance:
 
@@ -1108,7 +1116,7 @@ go test -count=1 -tags=integration ./...
 
 Record total wall time and package times for each run. Report the median before/after result; do not claim an improvement from one run or from measurements taken concurrently.
 
-- [ ] **Step 8: Inspect the final diff**
+- [x] **Step 8: Inspect the final diff**
 
 Run: `git status --short`
 
@@ -1118,7 +1126,7 @@ Run: `git diff --check`
 
 Expected: no whitespace errors.
 
-- [ ] **Step 9: Final commit if explicitly requested**
+- [x] **Step 9: Final commit if explicitly requested**
 
 ```bash
 git add internal/testdb internal/auth/testmain_integration_test.go internal/auth/auth_integration_test.go internal/auth/manager_approval_integration_test.go internal/catalog/testmain_integration_test.go internal/catalog/executor_integration_test.go internal/catalog/schema_integration_test.go internal/catalog/projections_benchmark_test.go internal/database/testmain_integration_test.go internal/database/tx_integration_test.go internal/sales/testmain_integration_test.go internal/shift/testmain_integration_test.go internal/shift/executor_integration_test.go internal/tables/testmain_integration_test.go internal/tables/executor_integration_test.go internal/tables/schema_integration_test.go Makefile .github/workflows/ci.yml README.md docs/superpowers/specs/2026-09-15-postgres-template-integration-tests-design.md docs/superpowers/plans/2026-09-15-postgres-template-integration-tests.md
