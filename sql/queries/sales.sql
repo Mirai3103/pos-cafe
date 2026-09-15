@@ -699,3 +699,68 @@ ORDER BY pu.queued_at ASC, pu.id ASC;
 SELECT committed_item_id
 FROM order_items
 WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[]);
+
+-- name: LockSubmittableDraft :one
+-- The Service Session and its committed-but-unsubmitted Order Draft.
+--
+-- NOT EXISTS rather than the canonical LEFT JOIN ... IS NULL: PostgreSQL
+-- refuses row locks across a LEFT JOIN's nullable side, which forces the
+-- canonical source to scope FOR UPDATE by hand and explain the workaround in
+-- two places. Written this way the restriction does not arise.
+SELECT ss.id AS service_session_id, ss.service_number, ss.service_mode,
+       od.id AS order_draft_id
+FROM service_sessions ss
+JOIN order_drafts od ON od.service_session_id = ss.id
+WHERE ss.id = $1
+  AND ss.state = 'ACTIVE'
+  AND od.state = 'COMMITTED'
+  AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = od.id)
+FOR UPDATE
+LIMIT 1;
+
+-- name: LockChecksForSubmission :many
+-- Every distinct Check reachable from the draft's Committed Items, locked in
+-- the ascending (created_at, id) order 5C's lock protocol established, so
+-- Submit and a concurrent Payment serialize instead of deadlocking.
+--
+-- The draft linkage lives in an IN subquery rather than a DISTINCT over a
+-- join: PostgreSQL refuses the locking clause alongside DISTINCT, the same
+-- restriction the NOT EXISTS form of LockSubmittableDraft avoids. Selecting
+-- from checks directly makes DISTINCT unnecessary — c.id is the primary key —
+-- and keeps the lock scoped to the checks relation exactly as the join's
+-- FOR UPDATE OF c intended.
+SELECT c.id, c.state, c.created_at
+FROM checks c
+WHERE c.id IN (
+    SELECT ca.check_id
+    FROM committed_items ci
+    JOIN charge_allocations ca ON ca.committed_item_id = ci.id
+    WHERE ci.order_draft_id = $1
+)
+ORDER BY c.created_at ASC, c.id ASC
+FOR UPDATE;
+
+-- name: InsertOrder :one
+INSERT INTO orders (service_session_id, order_draft_id,
+                    submitted_by_staff_identity_id,
+                    submitted_staff_access_session_id, submitted_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (order_draft_id) DO NOTHING
+RETURNING id;
+
+-- name: ListCommittedItemsForSubmission :many
+SELECT id, category_name, item_name, size_name, quantity, preparation_note
+FROM committed_items
+WHERE order_draft_id = $1
+ORDER BY committed_at ASC, id ASC;
+
+-- name: InsertOrderItem :one
+INSERT INTO order_items (order_id, committed_item_id)
+VALUES ($1, $2)
+RETURNING id;
+
+-- name: InsertPreparationUnit :exec
+INSERT INTO preparation_units (order_item_id, unit_number, service_number,
+                               category_name, item_name, size_name,
+                               modifiers, preparation_note, queued_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);

@@ -345,6 +345,107 @@ func (e *salesEnv) commitTakeawayDraft(t *testing.T, n int) sales.ServiceSession
 	return e.Commit(t, session.ID)
 }
 
+// commitDineInDraft mirrors commitTakeawayDraft for a Dine-in Session against
+// the seeded Table: a draft of n DISTINCT Menu Items, the first at quantity 2,
+// every later one at quantity 1, committed.
+func (e *salesEnv) commitDineInDraft(t *testing.T, n int) sales.ServiceSessionResponse {
+	t.Helper()
+	require.GreaterOrEqual(t, n, 1, "the draft must hold at least one item")
+	require.LessOrEqual(t, n, 3, "the seeded catalog offers exactly three items")
+
+	items := []struct {
+		id     uuid.UUID
+		sizeID *uuid.UUID
+	}{
+		{e.CoffeeID, nil},
+		{e.TeaID, nil},
+		{e.SizedItemID, &e.LargeSizeID},
+	}
+
+	session := e.StartDineIn(t, e.TableID)
+	e.AddDraftItem(t, session.ID, items[0].id, items[0].sizeID)
+	// The composition merge folds the second unit into the same draft item,
+	// raising its quantity to 2.
+	e.AddDraftItem(t, session.ID, items[0].id, items[0].sizeID)
+	for i := 1; i < n; i++ {
+		e.AddDraftItem(t, session.ID, items[i].id, items[i].sizeID)
+	}
+	return e.Commit(t, session.ID)
+}
+
+// commitDineInDraftWithQuantity commits a Dine-in Session whose draft holds
+// one Menu Item at the given quantity, so a test can ask for a known number
+// of Preparation Units from a single Committed Item.
+func (e *salesEnv) commitDineInDraftWithQuantity(t *testing.T, quantity int32) sales.ServiceSessionResponse {
+	t.Helper()
+	require.GreaterOrEqual(t, quantity, int32(1), "the draft item needs at least one unit")
+
+	session := e.StartDineIn(t, e.TableID)
+	resp := e.AddDraftItem(t, session.ID, e.CoffeeID, nil)
+	require.NotEmpty(t, resp.Draft.Items, "the added item must be in the draft")
+	_, _, err := sales.NewSetDraftItemQuantityHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.SetDraftItemQuantityCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+			DraftItemID:      resp.Draft.Items[0].ID,
+			Quantity:         &quantity,
+		})
+	require.NoError(t, err)
+	return e.Commit(t, session.ID)
+}
+
+// ---------- Submission ----------
+
+// TrySubmit runs Submit with a fresh request id and returns the projection,
+// HTTP status, and error untouched, so tests can assert on all three.
+func (e *salesEnv) TrySubmit(t *testing.T, sessionID uuid.UUID) (
+	sales.ServiceSessionResponse, int, error,
+) {
+	t.Helper()
+	return e.SubmitWithRequestID(t, uuid.New(), sessionID)
+}
+
+// SubmitWithRequestID runs Submit under a caller-chosen request id, so a test
+// can drive the idempotency replay itself.
+func (e *salesEnv) SubmitWithRequestID(t *testing.T, requestID, sessionID uuid.UUID) (
+	sales.ServiceSessionResponse, int, error,
+) {
+	t.Helper()
+	status, resp, err := sales.NewSubmitOrderHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.SubmitOrderCommand{
+			RequestID:        requestID,
+			ServiceSessionID: sessionID,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+// Submit runs Submit and fails the test when it errors.
+func (e *salesEnv) Submit(t *testing.T, sessionID uuid.UUID) sales.ServiceSessionResponse {
+	t.Helper()
+	got, _, err := e.TrySubmit(t, sessionID)
+	require.NoError(t, err)
+	return got
+}
+
+// SubmitAs runs Submit as another actor, for authorization denial tests.
+func (e *salesEnv) SubmitAs(t *testing.T, actor sales.Actor, sessionID uuid.UUID) (
+	sales.ServiceSessionResponse, int, error,
+) {
+	t.Helper()
+	status, resp, err := sales.NewSubmitOrderHandler(e.Runner).
+		Handle(context.Background(), actor, sales.SubmitOrderCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: sessionID,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
 // ---------- Check fixtures ----------
 
 // soleCheckID returns the Session's only Check's id. A committed Takeaway

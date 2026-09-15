@@ -437,6 +437,11 @@ func loadPreparationUnits(ctx context.Context, q *sqlc.Queries, sessionID uuid.U
 			if err := json.Unmarshal(row.Modifiers, &mods); err != nil {
 				return nil, fmt.Errorf("decode preparation unit modifiers: %w", err)
 			}
+			// A literal JSON null in the column unmarshals to nil; restore the
+			// non-nil empty slice the projection contract promises.
+			if mods == nil {
+				mods = make([]UnitModifierResponse, 0)
+			}
 		}
 		out = append(out, PreparationUnitResponse{
 			ID:              row.ID,

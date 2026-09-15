@@ -150,9 +150,12 @@ type Querier interface {
 	InsertDraftItem(ctx context.Context, arg InsertDraftItemParams) (InsertDraftItemRow, error)
 	InsertDraftItemModifierOption(ctx context.Context, arg InsertDraftItemModifierOptionParams) error
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
+	InsertOrder(ctx context.Context, arg InsertOrderParams) (uuid.UUID, error)
 	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (InsertOrderDraftRow, error)
 	InsertOrderDraftForSession(ctx context.Context, arg InsertOrderDraftForSessionParams) (InsertOrderDraftForSessionRow, error)
+	InsertOrderItem(ctx context.Context, arg InsertOrderItemParams) (uuid.UUID, error)
 	InsertPayment(ctx context.Context, arg InsertPaymentParams) (uuid.UUID, error)
+	InsertPreparationUnit(ctx context.Context, arg InsertPreparationUnitParams) error
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
 	// Batches assignTables' per-Table insert loop into one round trip. Two
 	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
@@ -190,6 +193,7 @@ type Querier interface {
 	// Ordered by (received_at, id), served directly by payment_check_index.
 	ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]ListCheckPaymentsRow, error)
 	ListCommittedItemModifiers(ctx context.Context, committedItemIds []uuid.UUID) ([]ListCommittedItemModifiersRow, error)
+	ListCommittedItemsForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]ListCommittedItemsForSubmissionRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
 	// Declared defaults of the given Groups, filtered to what is currently
@@ -289,6 +293,17 @@ type Querier interface {
 	// As in LockCheckForPayment, the Shift is not joined: the Shift precondition
 	// is about the Shift open now, which LockOpenSalesShiftForShare reads.
 	LockChecksForRestructuring(ctx context.Context, dollar_1 []uuid.UUID) ([]LockChecksForRestructuringRow, error)
+	// Every distinct Check reachable from the draft's Committed Items, locked in
+	// the ascending (created_at, id) order 5C's lock protocol established, so
+	// Submit and a concurrent Payment serialize instead of deadlocking.
+	//
+	// The draft linkage lives in an IN subquery rather than a DISTINCT over a
+	// join: PostgreSQL refuses the locking clause alongside DISTINCT, the same
+	// restriction the NOT EXISTS form of LockSubmittableDraft avoids. Selecting
+	// from checks directly makes DISTINCT unnecessary — c.id is the primary key —
+	// and keeps the lock scoped to the checks relation exactly as the join's
+	// FOR UPDATE OF c intended.
+	LockChecksForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]LockChecksForSubmissionRow, error)
 	// The Session's most recent OPEN Check, for the CURRENT_UNPAID target.
 	LockCurrentOpenCheck(ctx context.Context, serviceSessionID uuid.UUID) (LockCurrentOpenCheckRow, error)
 	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
@@ -339,6 +354,13 @@ type Querier interface {
 	// No row means no Shift is open.
 	LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
+	// The Service Session and its committed-but-unsubmitted Order Draft.
+	//
+	// NOT EXISTS rather than the canonical LEFT JOIN ... IS NULL: PostgreSQL
+	// refuses row locks across a LEFT JOIN's nullable side, which forces the
+	// canonical source to scope FOR UPDATE by hand and explain the workaround in
+	// two places. Written this way the restriction does not arise.
+	LockSubmittableDraft(ctx context.Context, id uuid.UUID) (LockSubmittableDraftRow, error)
 	// Locks the selected Tables in id order so two concurrent assignments over
 	// overlapping sets cannot deadlock against each other. The caller must sort
 	// the ids before calling.

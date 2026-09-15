@@ -8,6 +8,7 @@ package sqlc
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -558,6 +559,36 @@ func (q *Queries) InsertDraftItemModifierOption(ctx context.Context, arg InsertD
 	return err
 }
 
+const insertOrder = `-- name: InsertOrder :one
+INSERT INTO orders (service_session_id, order_draft_id,
+                    submitted_by_staff_identity_id,
+                    submitted_staff_access_session_id, submitted_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (order_draft_id) DO NOTHING
+RETURNING id
+`
+
+type InsertOrderParams struct {
+	ServiceSessionID              uuid.UUID `json:"service_session_id"`
+	OrderDraftID                  uuid.UUID `json:"order_draft_id"`
+	SubmittedByStaffIdentityID    uuid.UUID `json:"submitted_by_staff_identity_id"`
+	SubmittedStaffAccessSessionID uuid.UUID `json:"submitted_staff_access_session_id"`
+	SubmittedAt                   time.Time `json:"submitted_at"`
+}
+
+func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, insertOrder,
+		arg.ServiceSessionID,
+		arg.OrderDraftID,
+		arg.SubmittedByStaffIdentityID,
+		arg.SubmittedStaffAccessSessionID,
+		arg.SubmittedAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertOrderDraft = `-- name: InsertOrderDraft :one
 INSERT INTO order_drafts (service_session_id) VALUES ($1)
 RETURNING id, service_session_id, state, created_at
@@ -606,6 +637,24 @@ func (q *Queries) InsertOrderDraftForSession(ctx context.Context, arg InsertOrde
 	return i, err
 }
 
+const insertOrderItem = `-- name: InsertOrderItem :one
+INSERT INTO order_items (order_id, committed_item_id)
+VALUES ($1, $2)
+RETURNING id
+`
+
+type InsertOrderItemParams struct {
+	OrderID         uuid.UUID `json:"order_id"`
+	CommittedItemID uuid.UUID `json:"committed_item_id"`
+}
+
+func (q *Queries) InsertOrderItem(ctx context.Context, arg InsertOrderItemParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, insertOrderItem, arg.OrderID, arg.CommittedItemID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertPayment = `-- name: InsertPayment :one
 INSERT INTO payments (
     check_id, sales_shift_id, actor_staff_identity_id, staff_access_session_id,
@@ -644,6 +693,40 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (u
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const insertPreparationUnit = `-- name: InsertPreparationUnit :exec
+INSERT INTO preparation_units (order_item_id, unit_number, service_number,
+                               category_name, item_name, size_name,
+                               modifiers, preparation_note, queued_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
+
+type InsertPreparationUnitParams struct {
+	OrderItemID     uuid.UUID       `json:"order_item_id"`
+	UnitNumber      int32           `json:"unit_number"`
+	ServiceNumber   string          `json:"service_number"`
+	CategoryName    string          `json:"category_name"`
+	ItemName        string          `json:"item_name"`
+	SizeName        sql.NullString  `json:"size_name"`
+	Modifiers       json.RawMessage `json:"modifiers"`
+	PreparationNote sql.NullString  `json:"preparation_note"`
+	QueuedAt        time.Time       `json:"queued_at"`
+}
+
+func (q *Queries) InsertPreparationUnit(ctx context.Context, arg InsertPreparationUnitParams) error {
+	_, err := q.db.ExecContext(ctx, insertPreparationUnit,
+		arg.OrderItemID,
+		arg.UnitNumber,
+		arg.ServiceNumber,
+		arg.CategoryName,
+		arg.ItemName,
+		arg.SizeName,
+		arg.Modifiers,
+		arg.PreparationNote,
+		arg.QueuedAt,
+	)
+	return err
 }
 
 const insertServiceSession = `-- name: InsertServiceSession :one
@@ -1044,6 +1127,52 @@ func (q *Queries) ListCommittedItemModifiers(ctx context.Context, committedItemI
 			&i.ModifierOptionID,
 			&i.ModifierOptionName,
 			&i.SurchargeVnd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCommittedItemsForSubmission = `-- name: ListCommittedItemsForSubmission :many
+SELECT id, category_name, item_name, size_name, quantity, preparation_note
+FROM committed_items
+WHERE order_draft_id = $1
+ORDER BY committed_at ASC, id ASC
+`
+
+type ListCommittedItemsForSubmissionRow struct {
+	ID              uuid.UUID      `json:"id"`
+	CategoryName    string         `json:"category_name"`
+	ItemName        string         `json:"item_name"`
+	SizeName        sql.NullString `json:"size_name"`
+	Quantity        int32          `json:"quantity"`
+	PreparationNote sql.NullString `json:"preparation_note"`
+}
+
+func (q *Queries) ListCommittedItemsForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]ListCommittedItemsForSubmissionRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCommittedItemsForSubmission, orderDraftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCommittedItemsForSubmissionRow{}
+	for rows.Next() {
+		var i ListCommittedItemsForSubmissionRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CategoryName,
+			&i.ItemName,
+			&i.SizeName,
+			&i.Quantity,
+			&i.PreparationNote,
 		); err != nil {
 			return nil, err
 		}
@@ -1835,6 +1964,58 @@ func (q *Queries) LockChecksForRestructuring(ctx context.Context, dollar_1 []uui
 	return items, nil
 }
 
+const lockChecksForSubmission = `-- name: LockChecksForSubmission :many
+SELECT c.id, c.state, c.created_at
+FROM checks c
+WHERE c.id IN (
+    SELECT ca.check_id
+    FROM committed_items ci
+    JOIN charge_allocations ca ON ca.committed_item_id = ci.id
+    WHERE ci.order_draft_id = $1
+)
+ORDER BY c.created_at ASC, c.id ASC
+FOR UPDATE
+`
+
+type LockChecksForSubmissionRow struct {
+	ID        uuid.UUID `json:"id"`
+	State     string    `json:"state"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Every distinct Check reachable from the draft's Committed Items, locked in
+// the ascending (created_at, id) order 5C's lock protocol established, so
+// Submit and a concurrent Payment serialize instead of deadlocking.
+//
+// The draft linkage lives in an IN subquery rather than a DISTINCT over a
+// join: PostgreSQL refuses the locking clause alongside DISTINCT, the same
+// restriction the NOT EXISTS form of LockSubmittableDraft avoids. Selecting
+// from checks directly makes DISTINCT unnecessary — c.id is the primary key —
+// and keeps the lock scoped to the checks relation exactly as the join's
+// FOR UPDATE OF c intended.
+func (q *Queries) LockChecksForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]LockChecksForSubmissionRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockChecksForSubmission, orderDraftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockChecksForSubmissionRow{}
+	for rows.Next() {
+		var i LockChecksForSubmissionRow
+		if err := rows.Scan(&i.ID, &i.State, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockCurrentOpenCheck = `-- name: LockCurrentOpenCheck :one
 SELECT id, charge_vnd
 FROM checks
@@ -2201,6 +2382,44 @@ func (q *Queries) LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID)
 		&i.ServiceMode,
 		&i.State,
 		&i.SalesShiftID,
+	)
+	return i, err
+}
+
+const lockSubmittableDraft = `-- name: LockSubmittableDraft :one
+SELECT ss.id AS service_session_id, ss.service_number, ss.service_mode,
+       od.id AS order_draft_id
+FROM service_sessions ss
+JOIN order_drafts od ON od.service_session_id = ss.id
+WHERE ss.id = $1
+  AND ss.state = 'ACTIVE'
+  AND od.state = 'COMMITTED'
+  AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = od.id)
+FOR UPDATE
+LIMIT 1
+`
+
+type LockSubmittableDraftRow struct {
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	ServiceNumber    string    `json:"service_number"`
+	ServiceMode      string    `json:"service_mode"`
+	OrderDraftID     uuid.UUID `json:"order_draft_id"`
+}
+
+// The Service Session and its committed-but-unsubmitted Order Draft.
+//
+// NOT EXISTS rather than the canonical LEFT JOIN ... IS NULL: PostgreSQL
+// refuses row locks across a LEFT JOIN's nullable side, which forces the
+// canonical source to scope FOR UPDATE by hand and explain the workaround in
+// two places. Written this way the restriction does not arise.
+func (q *Queries) LockSubmittableDraft(ctx context.Context, id uuid.UUID) (LockSubmittableDraftRow, error) {
+	row := q.db.QueryRowContext(ctx, lockSubmittableDraft, id)
+	var i LockSubmittableDraftRow
+	err := row.Scan(
+		&i.ServiceSessionID,
+		&i.ServiceNumber,
+		&i.ServiceMode,
+		&i.OrderDraftID,
 	)
 	return i, err
 }

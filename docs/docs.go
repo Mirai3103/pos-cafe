@@ -4502,6 +4502,88 @@ const docTemplate = `{
                 }
             }
         },
+        "/sales/service-sessions/{id}/submit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Turns the Service Session's committed Order Draft into an Order, its Order Items, and one Preparation Unit per unit of ordered quantity, repricing nothing. A takeaway Session requires every Check settled first; a dine-in Session does not, because both Commit -\u003e Submit -\u003e Payment and Commit -\u003e Payment -\u003e Submit are valid service.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Submit the committed round to the bar",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Submit request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.SubmitOrderCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/sales/service-sessions/{id}/tables": {
             "put": {
                 "security": [
@@ -6885,6 +6967,43 @@ const docTemplate = `{
                 }
             }
         },
+        "sales.OrderItemResponse": {
+            "type": "object",
+            "properties": {
+                "committed_item_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.OrderResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.OrderItemResponse"
+                    }
+                },
+                "order_draft_id": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "submitted_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "submitted_staff_access_session_id": {
+                    "type": "string"
+                }
+            }
+        },
         "sales.PayCashCommand": {
             "type": "object",
             "properties": {
@@ -6945,6 +7064,47 @@ const docTemplate = `{
                 }
             }
         },
+        "sales.PreparationUnitResponse": {
+            "type": "object",
+            "properties": {
+                "category_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "item_name": {
+                    "type": "string"
+                },
+                "modifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.UnitModifierResponse"
+                    }
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "preparation_note": {
+                    "type": "string"
+                },
+                "queued_at": {
+                    "type": "string"
+                },
+                "service_number": {
+                    "type": "string"
+                },
+                "size_name": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "unit_number": {
+                    "type": "integer"
+                }
+            }
+        },
         "sales.RemoveDraftItemCommand": {
             "type": "object",
             "properties": {
@@ -6996,17 +7156,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "orders": {
-                    "description": "Filled by 5D.",
+                    "description": "Filled from 5D.",
                     "type": "array",
                     "items": {
-                        "type": "object"
+                        "$ref": "#/definitions/sales.OrderResponse"
                     }
                 },
                 "preparation_units": {
-                    "description": "Filled by 5D.",
+                    "description": "Filled from 5D.",
                     "type": "array",
                     "items": {
-                        "type": "object"
+                        "$ref": "#/definitions/sales.PreparationUnitResponse"
                     }
                 },
                 "sales_shift_id": {
@@ -7177,6 +7337,28 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.SubmitOrderCommand": {
+            "type": "object",
+            "required": [
+                "request_id"
+            ],
+            "properties": {
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.UnitModifierResponse": {
+            "type": "object",
+            "properties": {
+                "group_name": {
+                    "type": "string"
+                },
+                "option_name": {
                     "type": "string"
                 }
             }

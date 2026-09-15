@@ -878,6 +878,30 @@ definitions:
       state:
         type: string
     type: object
+  sales.OrderItemResponse:
+    properties:
+      committed_item_id:
+        type: string
+      id:
+        type: string
+    type: object
+  sales.OrderResponse:
+    properties:
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/sales.OrderItemResponse'
+        type: array
+      order_draft_id:
+        type: string
+      submitted_at:
+        type: string
+      submitted_by_staff_identity_id:
+        type: string
+      submitted_staff_access_session_id:
+        type: string
+    type: object
   sales.PayCashCommand:
     properties:
       applied_amount_vnd:
@@ -917,6 +941,33 @@ definitions:
       transaction_reference:
         type: string
     type: object
+  sales.PreparationUnitResponse:
+    properties:
+      category_name:
+        type: string
+      id:
+        type: string
+      item_name:
+        type: string
+      modifiers:
+        items:
+          $ref: '#/definitions/sales.UnitModifierResponse'
+        type: array
+      order_item_id:
+        type: string
+      preparation_note:
+        type: string
+      queued_at:
+        type: string
+      service_number:
+        type: string
+      size_name:
+        type: string
+      state:
+        type: string
+      unit_number:
+        type: integer
+    type: object
   sales.RemoveDraftItemCommand:
     properties:
       request_id:
@@ -951,14 +1002,14 @@ definitions:
       id:
         type: string
       orders:
-        description: Filled by 5D.
+        description: Filled from 5D.
         items:
-          type: object
+          $ref: '#/definitions/sales.OrderResponse'
         type: array
       preparation_units:
-        description: Filled by 5D.
+        description: Filled from 5D.
         items:
-          type: object
+          $ref: '#/definitions/sales.PreparationUnitResponse'
         type: array
       sales_shift_id:
         type: string
@@ -1068,6 +1119,20 @@ definitions:
   sales.StartTakeawaySessionCommand:
     properties:
       request_id:
+        type: string
+    type: object
+  sales.SubmitOrderCommand:
+    properties:
+      request_id:
+        type: string
+    required:
+    - request_id
+    type: object
+  sales.UnitModifierResponse:
+    properties:
+      group_name:
+        type: string
+      option_name:
         type: string
     type: object
   shift.CashMovementResponse:
@@ -3947,6 +4012,60 @@ paths:
       security:
       - BearerAuth: []
       summary: Set a draft item's Size
+      tags:
+      - sales
+  /sales/service-sessions/{id}/submit:
+    post:
+      consumes:
+      - application/json
+      description: Turns the Service Session's committed Order Draft into an Order,
+        its Order Items, and one Preparation Unit per unit of ordered quantity, repricing
+        nothing. A takeaway Session requires every Check settled first; a dine-in
+        Session does not, because both Commit -> Submit -> Payment and Commit -> Payment
+        -> Submit are valid service.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Submit request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.SubmitOrderCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit the committed round to the bar
       tags:
       - sales
   /sales/service-sessions/{id}/tables:

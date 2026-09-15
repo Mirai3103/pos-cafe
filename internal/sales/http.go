@@ -627,6 +627,47 @@ func (s *Slices) handleSetCheckTarget(c echo.Context) error {
 	return sendResult(c, status, result)
 }
 
+// handleSubmitOrder godoc
+//
+//	@Summary		Submit the committed round to the bar
+//	@Description	Turns the Service Session's committed Order Draft into an Order, its Order Items, and one Preparation Unit per unit of ordered quantity, repricing nothing. A takeaway Session requires every Check settled first; a dine-in Session does not, because both Commit -> Submit -> Payment and Commit -> Payment -> Submit are valid service.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string				true	"Service Session ID"
+//	@Param			body	body		SubmitOrderCommand	true	"Submit request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/submit [post]
+func (s *Slices) handleSubmitOrder(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[SubmitOrderCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.ServiceSessionID = sessionID
+
+	status, result, err := s.SubmitOrder.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
 // handlePayCash godoc
 //
 //	@Summary		Record a Cash Payment
