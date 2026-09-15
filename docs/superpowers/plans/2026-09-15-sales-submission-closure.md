@@ -71,6 +71,7 @@ Every task's requirements implicitly include this section.
 | `internal/sales/env_integration_test.go` | Submit, close, and advance helpers |
 | `sql/queries/sales.sql` | Submit, closure, projection, and read queries; `FindBlockingDraft` relaxed |
 | `cmd/api/main.go` | Mount `preparation.Slices` |
+| `spec/decisions.md` | Append ADR-023 through ADR-029 |
 | `MIGRATE_PLAN.md` | Mark 5D and the Phase 5 tracker row complete |
 
 ---
@@ -3007,7 +3008,7 @@ git commit -m "feat(sales): read a Completed Sale by id and by Service Session"
 
 **Files:**
 - Create: `internal/sales/submission_concurrency_integration_test.go`
-- Modify: `internal/preparation/advance_integration_test.go`, `docs/docs.go` (generated), `MIGRATE_PLAN.md`
+- Modify: `internal/preparation/advance_integration_test.go`, `docs/docs.go` (generated), `spec/decisions.md`, `MIGRATE_PLAN.md`
 
 **Interfaces:**
 - Consumes: everything above.
@@ -3171,7 +3172,11 @@ In `MIGRATE_PLAN.md`, set the 5D row to:
 
 and set the 5C row's status the same way if the 5C branch has landed by then. Update the Phase 5 tracker row to `✅ DONE`, `6 / 6`, with the completion date — the spec's §13 of 5A recorded that the row is marked complete only when 5D lands.
 
-- [ ] **Step 5: Run everything**
+- [ ] **Step 5: Record the decisions**
+
+Append ADR-023 through ADR-029 to `spec/decisions.md`, copying the seven records verbatim from §12 of the spec, formatted to match the existing entries in that file (a `## ADR-0NN: Title` heading followed by `* **Decision Date:**`, `* **Status:**`, `* **Context:**`, `* **Decision:**`, `* **Consequences:**`).
+
+- [ ] **Step 6: Run everything**
 
 Run: `make check`
 Expected: fmt clean, `go vet` silent, linter clean, unit tests pass.
@@ -3179,17 +3184,17 @@ Expected: fmt clean, `go vet` silent, linter clean, unit tests pass.
 Run: `make test-integration`
 Expected: every suite passes, including the pre-existing 5A, 5B, and 5C suites.
 
-- [ ] **Step 6: Verify the package boundary once more**
+- [ ] **Step 7: Verify the package boundary once more**
 
 Run: `go list -deps ./internal/preparation | Select-String "pos-cafe/internal/sales"`
 Expected: no output. `internal/preparation` must not import `internal/sales`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 make fmt
-git add internal/sales/submission_concurrency_integration_test.go internal/preparation/advance_integration_test.go docs MIGRATE_PLAN.md
-git commit -m "test(sales): cover Phase 5D concurrency and complete the roadmap"
+git add internal/sales/submission_concurrency_integration_test.go internal/preparation/advance_integration_test.go docs spec/decisions.md MIGRATE_PLAN.md
+git commit -m "test(sales): cover Phase 5D concurrency, record its decisions, and complete the roadmap"
 ```
 
 ---
@@ -3207,6 +3212,7 @@ Run through this before opening the pull request.
 - [ ] `preparation_units.state` declares all six canonical values (ADR-028).
 - [ ] No `completed_sale_closing_requests` table exists (ADR-026).
 - [ ] `preparation_history` reads from `preparation_unit_transitions`, not from `audit_events` (ADR-027).
+- [ ] `spec/decisions.md` contains ADR-023 through ADR-029.
 - [ ] `ServiceSessionResponse` has the same JSON keys and types it had in 5C, with `orders` and `preparation_units` now populated and `submitted` no longer constant.
 - [ ] Every 5D branch is reachable through the public API. **No suite seeds a fixture row to reach a branch** — grep the new integration tests for direct `INSERT` statements and confirm each is an assertion helper, not a path to an otherwise-unreachable state.
 - [ ] A takeaway Submit is refused while any Check is unsettled; a dine-in Submit succeeds in both Payment orderings.

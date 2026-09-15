@@ -135,7 +135,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 | **5A** — Service Session lifecycle, Table assignments, Order Draft | [spec](docs/superpowers/specs/2026-09-13-sales-session-draft-design.md) / [plan](docs/superpowers/plans/2026-09-13-sales-session-draft.md) | ✅ COMPLETED (2026-09-13) |
 | **5B** — Commit, Committed Items, Checks, Charge Allocations, Order Draft targeting | [spec](docs/superpowers/specs/2026-09-14-sales-commit-checks-design.md) / [plan](docs/superpowers/plans/2026-09-14-sales-commit-checks.md) | ✅ COMPLETED (2026-09-14) |
 | **5C** — Cash and Manual QR Payments, Check splitting and merging, settlement | [spec](docs/superpowers/specs/2026-09-14-sales-payments-settlement-design.md) / [plan](docs/superpowers/plans/2026-09-14-sales-payments-settlement.md) | ✅ COMPLETED (2026-09-14) |
-| **5D** — Submit, Orders, Preparation Units, Service Session closure, Completed Sale | spec pending | ⏳ PENDING |
+| **5D** — Submit, Orders, Preparation Units, Service Session closure, Completed Sale | [spec](docs/superpowers/specs/2026-09-15-sales-submission-closure-design.md) / [plan](docs/superpowers/plans/2026-09-15-sales-submission-closure.md) | ⏳ PENDING |
 
 *Focus: The heart of the POS system. Low-latency order placement, bill splitting, payments.*
 
