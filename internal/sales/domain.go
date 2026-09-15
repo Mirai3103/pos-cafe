@@ -22,20 +22,24 @@ const CapSalesOperate = "sales.operate"
 
 // Idempotency action names, stored in idempotency_keys.action (VARCHAR(50)).
 const (
-	OpStartTakeawaySession     = "sales.start_takeaway_session"
-	OpStartDineInSession       = "sales.start_dine_in_session"
-	OpSetSessionTables         = "sales.set_session_tables"
-	OpAddDraftItem             = "sales.add_draft_item"
-	OpSetDraftItemQuantity     = "sales.set_draft_item_quantity"
-	OpSetDraftItemSize         = "sales.set_draft_item_size"
-	OpSetDraftItemNote         = "sales.set_draft_item_note"
-	OpSetDraftItemModifiers    = "sales.set_draft_item_modifiers"
-	OpRemoveDraftItem          = "sales.remove_draft_item"
-	OpGetServiceSession        = "sales.get_service_session"
-	OpListServiceSessions      = "sales.list_service_sessions"
-	OpCommitOrderDraft         = "sales.commit_order_draft"
-	OpStartNewOrderDraft       = "sales.start_new_order_draft"
-	OpSetOrderDraftCheckTarget = "sales.set_order_draft_check_target"
+	OpStartTakeawaySession      = "sales.start_takeaway_session"
+	OpStartDineInSession        = "sales.start_dine_in_session"
+	OpSetSessionTables          = "sales.set_session_tables"
+	OpAddDraftItem              = "sales.add_draft_item"
+	OpSetDraftItemQuantity      = "sales.set_draft_item_quantity"
+	OpSetDraftItemSize          = "sales.set_draft_item_size"
+	OpSetDraftItemNote          = "sales.set_draft_item_note"
+	OpSetDraftItemModifiers     = "sales.set_draft_item_modifiers"
+	OpRemoveDraftItem           = "sales.remove_draft_item"
+	OpGetServiceSession         = "sales.get_service_session"
+	OpListServiceSessions       = "sales.list_service_sessions"
+	OpCommitOrderDraft          = "sales.commit_order_draft"
+	OpStartNewOrderDraft        = "sales.start_new_order_draft"
+	OpSetOrderDraftCheckTarget  = "sales.set_order_draft_check_target"
+	OpSubmitOrder               = "sales.submit_order"
+	OpCloseServiceSession       = "sales.close_service_session"
+	OpGetCompletedSale          = "sales.get_completed_sale"
+	OpGetCompletedSaleBySession = "sales.get_completed_sale_by_session"
 )
 
 // Audit event types. Business events are UPPER_SNAKE_CASE and the denial event
@@ -63,6 +67,10 @@ const (
 	EventOrderDraftCommitted      = "ORDER_DRAFT_COMMITTED"
 	EventOrderDraftStarted        = "ORDER_DRAFT_STARTED"
 	EventOrderDraftCheckTargetSet = "ORDER_DRAFT_CHECK_TARGET_SET"
+	// EventOrderSubmitted drops the canonical TAKEAWAY_ORDER_ prefix, for the
+	// same reason EventOrderDraftCommitted did: Submit is mode-agnostic.
+	EventOrderSubmitted       = "ORDER_SUBMITTED"
+	EventServiceSessionClosed = "SERVICE_SESSION_CLOSED"
 )
 
 // Service Session states. 5A writes only StateActive; 5D writes StateClosed.
@@ -324,4 +332,41 @@ func ValidateTransactionReference(ref *string) (*string, error) {
 			response.ErrInvalid, len([]rune(trimmed)), MaxTransactionReferenceLength)
 	}
 	return &trimmed, nil
+}
+
+// Preparation Unit states. ADR-028 declares the complete canonical domain
+// although 5D writes only the first four: 5A shipped a guessed partial domain
+// for service_sessions.state and had to correct it, and 5C responded with the
+// complete-domain precedent this follows.
+const (
+	UnitStateQueued        = "QUEUED"
+	UnitStateInPreparation = "IN_PREPARATION"
+	UnitStateReady         = "READY"
+	UnitStateFulfilled     = "FULFILLED"
+	UnitStateCancelled     = "CANCELLED"
+	UnitStateWasted        = "WASTED"
+)
+
+// IsTerminalUnitState reports whether a Preparation Unit has reached a state
+// it cannot leave. Closure requires every unit to be terminal. Cancelled and
+// Wasted are unreachable in Phase 5 but accepted here, so the policy is
+// written once against the complete domain rather than re-edited in Phase 6.
+func IsTerminalUnitState(state string) bool {
+	switch state {
+	case UnitStateFulfilled, UnitStateCancelled, UnitStateWasted:
+		return true
+	default:
+		return false
+	}
+}
+
+// ModeRequiresSettlementBeforeSubmit reports whether a Service Session's mode
+// forbids sending work to the bar while a Check still carries a balance.
+//
+// Takeaway does: nothing is prepared for a customer who has not paid and may
+// walk. Dine-in does not: a seated customer's drinks go to the bar long before
+// the bill is settled, so both Commit -> Submit -> Payment and Commit ->
+// Payment -> Submit are valid service.
+func ModeRequiresSettlementBeforeSubmit(mode string) bool {
+	return mode == ModeTakeaway
 }
