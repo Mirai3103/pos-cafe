@@ -6,13 +6,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/catalog"
-	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -218,11 +216,8 @@ func cleanCategoryTestTablesBenchmark(b *testing.B, db *sql.DB) {
 }
 
 func BenchmarkCatalogProjections(b *testing.B) {
-	url := os.Getenv("TEST_DATABASE_URL")
-	require.Contains(b, url, "_test")
-	db, err := database.Open(context.Background(), url)
-	require.NoError(b, err)
-	defer db.Close()
+	db := catalogTestDB
+	require.NotNil(b, db)
 
 	actor, runner := seedBenchmarkCatalog(b, db)
 	ctx := context.Background()
