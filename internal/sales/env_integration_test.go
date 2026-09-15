@@ -879,6 +879,35 @@ func (e *salesEnv) GetSessionOK(t *testing.T, sessionID uuid.UUID) sales.Service
 	return got
 }
 
+// GetCompletedSale runs the Completed Sale read by id, returning the response,
+// HTTP status, and error untouched, so tests can assert on all three.
+func (e *salesEnv) GetCompletedSale(t *testing.T, saleID uuid.UUID) (
+	sales.CompletedSaleResponse, int, error,
+) {
+	t.Helper()
+	status, resp, err := sales.NewGetCompletedSaleHandler(e.Runner).
+		Handle(context.Background(), e.Actor, saleID)
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+// GetCompletedSaleBySession runs the Completed Sale read by Service Session,
+// returning the response, HTTP status, and error untouched, so tests can
+// assert on all three.
+func (e *salesEnv) GetCompletedSaleBySession(t *testing.T, sessionID uuid.UUID) (
+	sales.CompletedSaleResponse, int, error,
+) {
+	t.Helper()
+	status, resp, err := sales.NewGetCompletedSaleBySessionHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sessionID)
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
 // ---------- Catalog mutations ----------
 
 // SetMenuItemAvailable flips a Menu Item's availability flag.

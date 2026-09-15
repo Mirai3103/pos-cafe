@@ -709,6 +709,64 @@ func (s *Slices) handleCloseSession(c echo.Context) error {
 	return sendResult(c, status, result)
 }
 
+// handleGetCompletedSale returns one Completed Sale by id.
+//
+//	@Summary		Get a Completed Sale
+//	@Description	Returns one immutable Completed Sale with its Checks, Orders, Preparation Units, and the recorded preparation history, by Completed Sale id.
+//	@Tags			sales
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Completed Sale ID"
+//	@Success		200	{object}	response.APIResponse{data=CompletedSaleResponse}
+//	@Failure		401	{object}	response.APIResponse
+//	@Failure		403	{object}	response.APIResponse
+//	@Failure		404	{object}	response.APIResponse
+//	@Router			/sales/completed-sales/{id} [get]
+func (s *Slices) handleGetCompletedSale(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	saleID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	status, result, err := s.GetCompletedSale.Handle(c.Request().Context(), actor, saleID)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleGetCompletedSaleBySession returns the Completed Sale of one Service Session.
+//
+//	@Summary		Get a Service Session's Completed Sale
+//	@Description	Returns the immutable Completed Sale of one Service Session with its Checks, Orders, Preparation Units, and the recorded preparation history. A Session that has not closed has no Completed Sale and answers 404.
+//	@Tags			sales
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Service Session ID"
+//	@Success		200	{object}	response.APIResponse{data=CompletedSaleResponse}
+//	@Failure		401	{object}	response.APIResponse
+//	@Failure		403	{object}	response.APIResponse
+//	@Failure		404	{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/completed-sale [get]
+func (s *Slices) handleGetCompletedSaleBySession(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	status, result, err := s.GetCompletedSaleBySession.Handle(c.Request().Context(), actor, sessionID)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
 // handlePayCash godoc
 //
 //	@Summary		Record a Cash Payment

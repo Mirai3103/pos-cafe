@@ -12,53 +12,57 @@ import (
 type Slices struct {
 	Runner *Runner
 
-	GetServiceSession  *GetServiceSessionHandler
-	ListActiveSessions *ListActiveSessionsHandler
-	StartTakeaway      *StartTakeawaySessionHandler
-	StartDineIn        *StartDineInSessionHandler
-	SetSessionTables   *SetSessionTablesHandler
-	AddDraftItem       *AddDraftItemHandler
-	SetItemQuantity    *SetDraftItemQuantityHandler
-	SetItemSize        *SetDraftItemSizeHandler
-	SetItemNote        *SetDraftItemNoteHandler
-	SetItemModifiers   *SetDraftItemModifiersHandler
-	RemoveDraftItem    *RemoveDraftItemHandler
-	CommitDraft        *CommitOrderDraftHandler
-	StartNewDraft      *StartNewOrderDraftHandler
-	SetCheckTarget     *SetCheckTargetHandler
-	SubmitOrder        *SubmitOrderHandler
-	CloseSession       *CloseServiceSessionHandler
-	PayCash            *PayCashHandler
-	PayManualQR        *PayManualQRHandler
-	SplitCheck         *SplitCheckHandler
-	MergeChecks        *MergeChecksHandler
+	GetServiceSession         *GetServiceSessionHandler
+	ListActiveSessions        *ListActiveSessionsHandler
+	StartTakeaway             *StartTakeawaySessionHandler
+	StartDineIn               *StartDineInSessionHandler
+	SetSessionTables          *SetSessionTablesHandler
+	AddDraftItem              *AddDraftItemHandler
+	SetItemQuantity           *SetDraftItemQuantityHandler
+	SetItemSize               *SetDraftItemSizeHandler
+	SetItemNote               *SetDraftItemNoteHandler
+	SetItemModifiers          *SetDraftItemModifiersHandler
+	RemoveDraftItem           *RemoveDraftItemHandler
+	CommitDraft               *CommitOrderDraftHandler
+	StartNewDraft             *StartNewOrderDraftHandler
+	SetCheckTarget            *SetCheckTargetHandler
+	SubmitOrder               *SubmitOrderHandler
+	CloseSession              *CloseServiceSessionHandler
+	GetCompletedSale          *GetCompletedSaleHandler
+	GetCompletedSaleBySession *GetCompletedSaleBySessionHandler
+	PayCash                   *PayCashHandler
+	PayManualQR               *PayManualQRHandler
+	SplitCheck                *SplitCheckHandler
+	MergeChecks               *MergeChecksHandler
 }
 
 // NewSlices wires every Sales handler onto a shared Runner.
 func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 	runner := NewRunner(db, queries)
 	return &Slices{
-		Runner:             runner,
-		GetServiceSession:  NewGetServiceSessionHandler(runner),
-		ListActiveSessions: NewListActiveSessionsHandler(runner),
-		StartTakeaway:      NewStartTakeawaySessionHandler(runner),
-		StartDineIn:        NewStartDineInSessionHandler(runner),
-		SetSessionTables:   NewSetSessionTablesHandler(runner),
-		AddDraftItem:       NewAddDraftItemHandler(runner),
-		SetItemQuantity:    NewSetDraftItemQuantityHandler(runner),
-		SetItemSize:        NewSetDraftItemSizeHandler(runner),
-		SetItemNote:        NewSetDraftItemNoteHandler(runner),
-		SetItemModifiers:   NewSetDraftItemModifiersHandler(runner),
-		RemoveDraftItem:    NewRemoveDraftItemHandler(runner),
-		CommitDraft:        NewCommitOrderDraftHandler(runner),
-		StartNewDraft:      NewStartNewOrderDraftHandler(runner),
-		SetCheckTarget:     NewSetCheckTargetHandler(runner),
-		SubmitOrder:        NewSubmitOrderHandler(runner),
-		CloseSession:       NewCloseServiceSessionHandler(runner),
-		PayCash:            NewPayCashHandler(runner),
-		PayManualQR:        NewPayManualQRHandler(runner),
-		SplitCheck:         NewSplitCheckHandler(runner),
-		MergeChecks:        NewMergeChecksHandler(runner),
+		Runner:                    runner,
+		GetServiceSession:         NewGetServiceSessionHandler(runner),
+		ListActiveSessions:        NewListActiveSessionsHandler(runner),
+		StartTakeaway:             NewStartTakeawaySessionHandler(runner),
+		StartDineIn:               NewStartDineInSessionHandler(runner),
+		SetSessionTables:          NewSetSessionTablesHandler(runner),
+		AddDraftItem:              NewAddDraftItemHandler(runner),
+		SetItemQuantity:           NewSetDraftItemQuantityHandler(runner),
+		SetItemSize:               NewSetDraftItemSizeHandler(runner),
+		SetItemNote:               NewSetDraftItemNoteHandler(runner),
+		SetItemModifiers:          NewSetDraftItemModifiersHandler(runner),
+		RemoveDraftItem:           NewRemoveDraftItemHandler(runner),
+		CommitDraft:               NewCommitOrderDraftHandler(runner),
+		StartNewDraft:             NewStartNewOrderDraftHandler(runner),
+		SetCheckTarget:            NewSetCheckTargetHandler(runner),
+		SubmitOrder:               NewSubmitOrderHandler(runner),
+		CloseSession:              NewCloseServiceSessionHandler(runner),
+		GetCompletedSale:          NewGetCompletedSaleHandler(runner),
+		GetCompletedSaleBySession: NewGetCompletedSaleBySessionHandler(runner),
+		PayCash:                   NewPayCashHandler(runner),
+		PayManualQR:               NewPayManualQRHandler(runner),
+		SplitCheck:                NewSplitCheckHandler(runner),
+		MergeChecks:               NewMergeChecksHandler(runner),
 	}
 }
 
@@ -101,6 +105,10 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/sales/service-sessions/:id/submit", s.handleSubmitOrder,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/sales/service-sessions/:id/close", s.handleCloseSession,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.GET("/sales/completed-sales/:id", s.handleGetCompletedSale,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.GET("/sales/service-sessions/:id/completed-sale", s.handleGetCompletedSaleBySession,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	// The flat merge route is registered before the /sales/checks/:check_id
 	// routes so a literal segment is never shadowed by the parameter route.
