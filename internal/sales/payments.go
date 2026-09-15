@@ -65,8 +65,16 @@ func lockOpenSalesShift(ctx context.Context, q *sqlc.Queries) (uuid.UUID, error)
 	return id, nil
 }
 
-// lockCheckForMutation takes the Check FOR UPDATE and its Session FOR SHARE,
-// then reports the first failing precondition.
+// lockCheckForMutation takes the Check FOR UPDATE and then its Session
+// FOR UPDATE, then reports the first failing precondition.
+//
+// The Session lock is exclusive rather than FOR SHARE because the command does
+// not stop at reading the Session to evaluate a precondition: inside the same
+// READ COMMITTED transaction it rebuilds the whole Service Session read model
+// through LoadServiceSession, which reads a Check's header and its payments in
+// several statements. A sibling Check's commit landing between them is observed
+// half-applied and trips the settlement invariant, rolling back a valid
+// Payment. See ADR-023.
 //
 // The lock query and the precondition evaluation are deliberately separate.
 // The canonical source folds every condition into one WHERE clause and reports

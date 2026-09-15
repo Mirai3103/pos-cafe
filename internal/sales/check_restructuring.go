@@ -2,6 +2,8 @@ package sales
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -23,20 +25,14 @@ func lockChecks(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (
 	if err != nil {
 		return nil, fmt.Errorf("lock checks for restructuring: %w", err)
 	}
-	shiftID, err := lockOpenSalesShift(ctx, q)
-	if err != nil {
-		return nil, err
-	}
 
 	out := make(map[uuid.UUID]lockedCheck, len(rows))
 	for _, row := range rows {
 		out[row.ID] = lockedCheck{
-			ID:                  row.ID,
-			State:               row.State,
-			ChargeVND:           row.ChargeVnd,
-			ServiceSessionID:    row.ServiceSessionID,
-			ServiceSessionState: row.ServiceSessionState,
-			SalesShiftID:        shiftID,
+			ID:               row.ID,
+			State:            row.State,
+			ChargeVND:        row.ChargeVnd,
+			ServiceSessionID: row.ServiceSessionID,
 		}
 	}
 	for _, id := range ids {
@@ -56,6 +52,32 @@ func lockChecks(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (
 			return nil, fmt.Errorf("%w: %s and %s",
 				ErrChecksDifferentSession, session, row.ServiceSessionID)
 		}
+	}
+
+	// The Session is locked after every Check (ADR-023). Locking it inside the
+	// Check statement would put it between two Check locks and deadlock against
+	// a Payment holding a sibling Check. The state used by checkPreconditions
+	// comes from this lock, not from the Check rows.
+	//
+	// The not-found branch is defensive: a Session row cannot disappear while
+	// its Checks are locked by the same transaction, because there is no
+	// session-delete path.
+	sessionRow, err := q.LockServiceSessionForUpdate(ctx, session)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: session %s", ErrServiceSessionNotFound, session)
+		}
+		return nil, fmt.Errorf("lock service session: %w", err)
+	}
+	shiftID, err := lockOpenSalesShift(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		check := out[id]
+		check.ServiceSessionState = sessionRow.State
+		check.SalesShiftID = shiftID
+		out[id] = check
 	}
 	for _, id := range ids {
 		if err := checkPreconditions(out[id]); err != nil {

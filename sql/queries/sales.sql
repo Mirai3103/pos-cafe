@@ -503,10 +503,16 @@ WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[])
 ORDER BY modifier_group_name ASC, modifier_option_name ASC;
 
 -- name: LockCheckForPayment :one
--- The uniform 5C lock protocol (ADR-016): the Check row FOR UPDATE, its
--- Session FOR SHARE. The Session is only read to evaluate a precondition, so
--- locking it FOR UPDATE would serialize two cashiers paying different Checks
--- of one Session for no correctness gain.
+-- The 5C lock protocol (ADR-016 as amended by ADR-023): the Check row
+-- FOR UPDATE, then its Session FOR UPDATE. The Session is exclusive, not
+-- FOR SHARE, because a Payment does not merely read the Session to evaluate a
+-- precondition -- it rebuilds the whole Service Session read model through
+-- LoadServiceSession inside the same READ COMMITTED transaction, and that
+-- rebuild is several statements. A sibling Check's commit landing between them
+-- is observed half-applied and trips the settlement invariant, which rolls back
+-- a valid Payment.
+--
+-- Lock order is Check then Session, never the reverse: see ADR-023.
 --
 -- The Shift is deliberately absent. A Payment's sales_shift_id is the Shift
 -- open at the moment of the Payment, which is not necessarily the one the
@@ -519,8 +525,7 @@ SELECT c.id, c.state, c.charge_vnd,
 FROM checks c
 JOIN service_sessions s ON s.id = c.service_session_id
 WHERE c.id = $1
-FOR UPDATE OF c
-FOR SHARE OF s;
+FOR UPDATE OF c, s;
 
 -- name: LockOpenSalesShiftForShare :one
 -- The Sales Shift open right now, locked FOR SHARE. Only one Shift can be open
@@ -580,20 +585,24 @@ SET state = 'SETTLED',
 WHERE id = $1;
 
 -- name: LockChecksForRestructuring :many
--- The uniform 5C lock protocol over a set of Checks, ordered by id so two
--- concurrent restructurings take the rows in the same order and cannot
--- deadlock against each other or against a Payment. See ADR-016.
+-- The 5C lock protocol over a set of Checks (ADR-016 as amended by ADR-023),
+-- ordered by id so two concurrent restructurings take the rows in the same
+-- order and cannot deadlock against each other or against a Payment.
+--
+-- The Session is deliberately NOT locked here, and `service_sessions` is not
+-- joined. Locking it inside this statement would place it between two Check
+-- locks (check(A) -> session -> check(B)) and create a cycle against a Payment
+-- that already holds check(B) and is waiting for the Session. The caller locks
+-- every Check first and the Session afterwards, which is the same order
+-- LockCheckForPayment uses. See lockChecks and ADR-023.
 --
 -- As in LockCheckForPayment, the Shift is not joined: the Shift precondition
 -- is about the Shift open now, which LockOpenSalesShiftForShare reads.
-SELECT c.id, c.state, c.charge_vnd, c.service_session_id,
-       s.state AS service_session_state
+SELECT c.id, c.state, c.charge_vnd, c.service_session_id
 FROM checks c
-JOIN service_sessions s ON s.id = c.service_session_id
 WHERE c.id = ANY($1::uuid[])
 ORDER BY c.id
-FOR UPDATE OF c
-FOR SHARE OF s;
+FOR UPDATE;
 
 -- name: CountPaymentsForChecks :one
 SELECT count(*)::BIGINT AS payment_count
