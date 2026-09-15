@@ -231,7 +231,7 @@ CREATE TABLE idempotency_keys (
 ## ADR-016: One Check lock protocol for every 5C command
 
 * **Decision Date:** 2026-09-14
-* **Status:** Accepted; **superseded in part by ADR-023** for the Session-lock clause.
+* **Status:** Accepted; **superseded in part by ADR-030** for the Session-lock clause.
 * **Context:** The canonical source locks `checks`, `service_sessions`, and `sales_shifts` all `FOR UPDATE` in the Payment path, but only `FOR UPDATE OF checks` in the restructuring path, with a source comment noting that locking parent rows there "can create a reverse dependency when Payment already owns one of the affected Check rows" — a deadlock hazard documented rather than removed.
 * **Decision:**
 * All four 5C commands lock `checks` `FOR UPDATE` in ascending id order, and `service_sessions` and `sales_shifts` `FOR SHARE`.
