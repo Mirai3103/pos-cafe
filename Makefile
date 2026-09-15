@@ -1,4 +1,4 @@
-.PHONY: help run build test test-integration test-all coverage fmt vet lint vuln check sqlc swagger tidy clean \
+.PHONY: help run build test test-integration test-integration-fast test-db-clean test-all coverage fmt vet lint vuln check sqlc swagger tidy clean \
 	docker-up docker-down docker-logs db-wait
 
 # Single source of truth for the integration-test database.
@@ -52,16 +52,21 @@ vuln: ## Scan dependencies for known vulnerabilities
 test: ## Run unit tests with the race detector
 	go test -race ./...
 
-# -p 1 is required, not an optimisation: every integration package TRUNCATEs the
-# same tables in the one test database, so running packages in parallel makes
-# them wipe each other's fixtures mid-test.
-test-integration: ## Run integration tests (needs docker-up)
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -race -p 1 -tags=integration ./...
+# Every integration package provisions its own ephemeral clone from the migrated
+# cafe_pos_test_template, so packages run in parallel without sharing state.
+test-integration: ## Run integration tests with race detection (needs docker-up)
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -race -tags=integration ./...
+
+test-integration-fast: ## Run integration tests without race detection
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -tags=integration ./...
+
+test-db-clean: ## Remove inactive ephemeral integration-test clones
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go run ./internal/testdb/cmd/cleanup
 
 test-all: test test-integration ## Run unit + integration tests
 
 coverage: ## Report test coverage across unit + integration tests
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -cover -p 1 -tags=integration ./...
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -cover -tags=integration ./...
 
 check: fmt vet lint test ## Everything CI enforces, before you push
 
