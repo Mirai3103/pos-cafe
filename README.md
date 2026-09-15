@@ -1,6 +1,6 @@
 # POS Cafe Backend - Idiomatic Go Vertical Slice Starter
 
-[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.27+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![Architecture](https://img.shields.io/badge/Architecture-Vertical%20Slice%20%2B%20CQRS-orange?style=flat)](https://jimmybogard.com/vertical-slice-architecture/)
 [![Database](https://img.shields.io/badge/Database-PostgreSQL%20(pgx%2Fv5)-blue?style=flat&logo=postgresql)](https://github.com/jackc/pgx)
 [![Tests](https://img.shields.io/badge/Tests-Passing%20(with%20--race)-brightgreen?style=flat)](https://github.com/stretchr/testify)
@@ -27,7 +27,7 @@ A production-ready, highly maintainable, and **Idiomatic Golang** backend boiler
 
 | Component | Technology | Description |
 | :--- | :--- | :--- |
-| **Language** | Go 1.26+ | Modern Go features |
+| **Language** | Go 1.27+ | Modern Go features |
 | **HTTP Framework** | [Echo v4](https://echo.labstack.com/) | High-performance, minimalist HTTP router |
 | **Database Driver** | [jackc/pgx/v5](https://github.com/jackc/pgx) | High-performance PostgreSQL driver and toolkit |
 | **Data Access** | [sqlc](https://sqlc.dev/) | Compile SQL to type-safe Go code |
@@ -110,7 +110,7 @@ pos-cafe/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- **Go**: Version 1.26 or higher (see the `go` directive in `go.mod`).
+- **Go**: Version 1.27 or higher (see the `go` directive in `go.mod`).
 - **Docker + Docker Compose**: for the local PostgreSQL instance.
 - **sqlc** (optional, only needed when editing SQL queries):
   ```bash
