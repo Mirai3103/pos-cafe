@@ -2636,9 +2636,10 @@ LIMIT 1
 // two places. Written this way the restriction does not arise.
 //
 // Known remaining window, recorded rather than reordered (ADR-031): this
-// query runs after the Session lock and before LockChecksForSubmission, the
-// reverse of Payment's Check-then-Session order, so Submit and a concurrent
-// Payment can abort one side with 40P01 across a one-round-trip window.
+// query runs after the Session lock and before LockChecksForSubmission, so
+// the AB-BA window spans Submit's Session → Draft → Checks lock sequence —
+// the reverse of Payment's Check-then-Session order — and a concurrent
+// Payment can abort one side with 40P01 across it.
 func (q *Queries) LockSubmittableDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRowContext(ctx, lockSubmittableDraft, serviceSessionID)
 	var order_draft_id uuid.UUID
