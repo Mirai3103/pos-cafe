@@ -26,6 +26,10 @@ func TestParseConfig(t *testing.T) {
 		{"unknown package", "postgres://user:secret@localhost/cafe_pos_test", "inventory", "0123456789ab", "unsupported integration package"},
 		{"invalid suffix", "postgres://user:secret@localhost/cafe_pos_test", "sales", "not-random", "invalid clone suffix"},
 		{"name too long", "postgres://user:secret@localhost/" + strings.Repeat("a", 55) + "_test", "sales", "0123456789ab", "exceeds 63 bytes"},
+		{"dbname override", "postgres://user:secret@localhost/cafe_pos_test?dbname=production", "sales", "0123456789ab", "must not override the database via query parameters"},
+		{"database override", "postgres://user:secret@localhost/cafe_pos_test?database=production", "sales", "0123456789ab", "must not override the database via query parameters"},
+		{"service override", "postgres://user:secret@localhost/cafe_pos_test?service=app", "sales", "0123456789ab", "must not override the database via query parameters"},
+		{"override in other case", "postgres://user:secret@localhost/cafe_pos_test?DBNAME=production", "sales", "0123456789ab", "must not override the database via query parameters"},
 	}
 
 	for _, tt := range tests {
@@ -70,10 +74,13 @@ func TestNewSuffix(t *testing.T) {
 }
 
 func TestSanitizeError(t *testing.T) {
-	rawURL := "postgres://user:secret@localhost:5432/cafe_pos_test?sslmode=disable"
-	err := fmt.Errorf("connect %s: password=secret", rawURL)
+	rawURL := "postgres://user:secret@localhost:5432/cafe_pos_test?sslmode=disable&password=querysecret&sslpassword=tlsvault"
+	err := fmt.Errorf("connect %s: password=secret password=querysecret sslpassword=tlsvault", rawURL)
 	got := sanitizeError(err, rawURL)
 	require.Error(t, got)
 	assert.NotContains(t, got.Error(), "secret")
+	assert.NotContains(t, got.Error(), "querysecret")
+	assert.NotContains(t, got.Error(), "tlsvault")
 	assert.Contains(t, got.Error(), "xxxxx")
+	assert.Contains(t, got.Error(), "password=xxxxx")
 }

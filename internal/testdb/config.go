@@ -20,6 +20,23 @@ var (
 	suffixPattern     = regexp.MustCompile(`^[0-9a-f]{12}$`)
 )
 
+// overriddenDatabaseParams are pgx connection parameters that would override
+// the database name parsed from the URL path, defeating the mandatory _test
+// safety check. `service` is rejected too because a service-file entry can
+// override the database and every other parameter.
+var overriddenDatabaseParams = map[string]struct{}{
+	"dbname":   {},
+	"database": {},
+	"service":  {},
+}
+
+// sensitiveQueryParams carry credentials and must be redacted from any URL
+// that reaches a log or error.
+var sensitiveQueryParams = map[string]struct{}{
+	"password":    {},
+	"sslpassword": {},
+}
+
 type config struct {
 	baseConfig
 	cloneName string
@@ -47,6 +64,11 @@ func parseBaseConfig(rawURL string) (baseConfig, error) {
 	}
 	if parsed.Host == "" {
 		return baseConfig{}, errors.New("TEST_DATABASE_URL host is required")
+	}
+	for key := range parsed.Query() {
+		if _, overrides := overriddenDatabaseParams[strings.ToLower(key)]; overrides {
+			return baseConfig{}, errors.New("TEST_DATABASE_URL must not override the database via query parameters")
+		}
 	}
 	escapedName := strings.TrimPrefix(parsed.EscapedPath(), "/")
 	if escapedName == "" || strings.Contains(escapedName, "/") {
@@ -134,13 +156,54 @@ func sanitizeError(err error, rawURL string) error {
 	if parseErr != nil {
 		return errors.New("integration database operation failed")
 	}
-	message = strings.ReplaceAll(message, rawURL, parsed.Redacted())
-	if parsed.User != nil {
-		if password, ok := parsed.User.Password(); ok && password != "" {
-			for _, value := range []string{password, url.QueryEscape(password), url.PathEscape(password)} {
-				message = strings.ReplaceAll(message, value, "xxxxx")
-			}
+	message = strings.ReplaceAll(message, rawURL, redactURL(parsed))
+	secrets := secretValues(parsed)
+	for _, value := range secrets {
+		for _, variant := range []string{value, url.QueryEscape(value), url.PathEscape(value)} {
+			message = strings.ReplaceAll(message, variant, "xxxxx")
 		}
 	}
 	return errors.New(message)
+}
+
+// redactURL renders a URL safe for logs and errors: the userinfo password is
+// masked and every sensitive query parameter is replaced, so credentials
+// passed in either position cannot leak.
+func redactURL(u *url.URL) string {
+	redacted := *u
+	if redacted.User != nil {
+		redacted.User = url.UserPassword(redacted.User.Username(), "xxxxx")
+	}
+	query := redacted.Query()
+	for key, values := range query {
+		if _, sensitive := sensitiveQueryParams[strings.ToLower(key)]; !sensitive {
+			continue
+		}
+		redactedValues := make([]string, len(values))
+		for i := range values {
+			redactedValues[i] = "xxxxx"
+		}
+		query[key] = redactedValues
+	}
+	redacted.RawQuery = query.Encode()
+	return redacted.String()
+}
+
+// secretValues collects every credential embedded in the URL — the userinfo
+// password and each sensitive query parameter value — so error text that
+// embeds them in escaped form is covered too.
+func secretValues(u *url.URL) []string {
+	var secrets []string
+	if u.User != nil {
+		if password, ok := u.User.Password(); ok && password != "" {
+			secrets = append(secrets, password)
+		}
+	}
+	for key, values := range u.Query() {
+		if _, sensitive := sensitiveQueryParams[strings.ToLower(key)]; !sensitive {
+			continue
+		}
+		secrets = append(secrets, values...)
+	}
+	return secrets
 }
