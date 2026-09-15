@@ -1498,6 +1498,36 @@ func (q *Queries) ListModifierOptionsForValidation(ctx context.Context, optionId
 	return items, nil
 }
 
+const listOrderItems = `-- name: ListOrderItems :many
+SELECT id, order_id, committed_item_id
+FROM order_items
+WHERE order_id = ANY($1::uuid[])
+ORDER BY order_id ASC, id ASC
+`
+
+func (q *Queries) ListOrderItems(ctx context.Context, orderIds []uuid.UUID) ([]OrderItem, error) {
+	rows, err := q.db.QueryContext(ctx, listOrderItems, pq.Array(orderIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []OrderItem{}
+	for rows.Next() {
+		var i OrderItem
+		if err := rows.Scan(&i.ID, &i.OrderID, &i.CommittedItemID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServiceSessionTables = `-- name: ListServiceSessionTables :many
 SELECT t.id, t.name, a.sequence
 FROM table_assignments a
@@ -1570,6 +1600,129 @@ func (q *Queries) ListSessionChecks(ctx context.Context, serviceSessionID uuid.U
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSessionOrders = `-- name: ListSessionOrders :many
+SELECT id, order_draft_id, submitted_by_staff_identity_id,
+       submitted_staff_access_session_id, submitted_at
+FROM orders
+WHERE service_session_id = $1
+ORDER BY submitted_at ASC, id ASC
+`
+
+type ListSessionOrdersRow struct {
+	ID                            uuid.UUID `json:"id"`
+	OrderDraftID                  uuid.UUID `json:"order_draft_id"`
+	SubmittedByStaffIdentityID    uuid.UUID `json:"submitted_by_staff_identity_id"`
+	SubmittedStaffAccessSessionID uuid.UUID `json:"submitted_staff_access_session_id"`
+	SubmittedAt                   time.Time `json:"submitted_at"`
+}
+
+func (q *Queries) ListSessionOrders(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionOrdersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionOrders, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSessionOrdersRow{}
+	for rows.Next() {
+		var i ListSessionOrdersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrderDraftID,
+			&i.SubmittedByStaffIdentityID,
+			&i.SubmittedStaffAccessSessionID,
+			&i.SubmittedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSessionPreparationUnits = `-- name: ListSessionPreparationUnits :many
+SELECT pu.id, pu.order_item_id, pu.unit_number, pu.state, pu.service_number,
+       pu.category_name, pu.item_name, pu.size_name, pu.modifiers,
+       pu.preparation_note, pu.queued_at
+FROM preparation_units pu
+JOIN order_items oi ON oi.id = pu.order_item_id
+JOIN orders o ON o.id = oi.order_id
+WHERE o.service_session_id = $1
+ORDER BY pu.queued_at ASC, pu.id ASC
+`
+
+func (q *Queries) ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnit, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionPreparationUnits, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PreparationUnit{}
+	for rows.Next() {
+		var i PreparationUnit
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrderItemID,
+			&i.UnitNumber,
+			&i.State,
+			&i.ServiceNumber,
+			&i.CategoryName,
+			&i.ItemName,
+			&i.SizeName,
+			&i.Modifiers,
+			&i.PreparationNote,
+			&i.QueuedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubmittedCommittedItems = `-- name: ListSubmittedCommittedItems :many
+SELECT committed_item_id
+FROM order_items
+WHERE committed_item_id = ANY($1::uuid[])
+`
+
+// The `submitted` flag on a Charge Allocation is derived, not stored: there is
+// no submitted column anywhere in the schema, and therefore no flag that can
+// fall out of step with the Order that defines it.
+func (q *Queries) ListSubmittedCommittedItems(ctx context.Context, committedItemIds []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listSubmittedCommittedItems, pq.Array(committedItemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var committed_item_id uuid.UUID
+		if err := rows.Scan(&committed_item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, committed_item_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

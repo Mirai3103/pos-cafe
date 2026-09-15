@@ -3,6 +3,7 @@ package sales
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,8 +18,8 @@ func newServiceSessionResponse() ServiceSessionResponse {
 	return ServiceSessionResponse{
 		Tables:           make([]SessionTableResponse, 0),
 		Checks:           make([]CheckResponse, 0),
-		Orders:           make([]struct{}, 0),
-		PreparationUnits: make([]struct{}, 0),
+		Orders:           make([]OrderResponse, 0),
+		PreparationUnits: make([]PreparationUnitResponse, 0),
 	}
 }
 
@@ -71,6 +72,18 @@ func LoadServiceSession(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUI
 		return out, err
 	}
 	out.Checks = checks
+
+	orders, err := loadOrders(ctx, q, sessionID)
+	if err != nil {
+		return out, err
+	}
+	out.Orders = orders
+
+	units, err := loadPreparationUnits(ctx, q, sessionID)
+	if err != nil {
+		return out, err
+	}
+	out.PreparationUnits = units
 
 	draft, err := q.GetEditableDraft(ctx, sessionID)
 	if err != nil {
@@ -291,6 +304,10 @@ func loadCheckAllocations(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 	if err != nil {
 		return nil, 0, err
 	}
+	submitted, err := loadSubmittedItems(ctx, q, itemIDs)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	out := make([]ChargeAllocationResponse, 0, len(rows))
 	var totalVND int64
@@ -308,6 +325,7 @@ func loadCheckAllocations(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 		if mods == nil {
 			mods = make([]CommittedModifierResponse, 0)
 		}
+		_, isSubmitted := submitted[row.CommittedItemID]
 		out = append(out, ChargeAllocationResponse{
 			ID:                row.ID,
 			CommittedItemID:   row.CommittedItemID,
@@ -322,9 +340,7 @@ func loadCheckAllocations(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 			AllocatedQuantity: row.AllocatedQuantity,
 			AmountVND:         amountVND,
 			CreatedAt:         row.CreatedAt,
-			// Filled by 5D, which introduces the orders table this is
-			// derived from.
-			Submitted: false,
+			Submitted:         isSubmitted,
 		})
 	}
 	return out, totalVND, nil
@@ -353,6 +369,107 @@ func loadCommittedModifiers(ctx context.Context, q *sqlc.Queries, itemIDs []uuid
 			OptionName:   row.ModifierOptionName,
 			SurchargeVND: row.SurchargeVnd,
 		})
+	}
+	return out, nil
+}
+
+// loadOrders assembles the Session's Orders with their items.
+func loadOrders(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
+	[]OrderResponse, error,
+) {
+	rows, err := q.ListSessionOrders(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("load session orders: %w", err)
+	}
+	out := make([]OrderResponse, 0, len(rows))
+	if len(rows) == 0 {
+		return out, nil
+	}
+
+	orderIDs := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		orderIDs = append(orderIDs, row.ID)
+	}
+	itemRows, err := q.ListOrderItems(ctx, orderIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load order items: %w", err)
+	}
+	itemsByOrder := make(map[uuid.UUID][]OrderItemResponse, len(rows))
+	for _, item := range itemRows {
+		itemsByOrder[item.OrderID] = append(itemsByOrder[item.OrderID], OrderItemResponse{
+			ID:              item.ID,
+			CommittedItemID: item.CommittedItemID,
+		})
+	}
+
+	for _, row := range rows {
+		items := itemsByOrder[row.ID]
+		if items == nil {
+			items = make([]OrderItemResponse, 0)
+		}
+		out = append(out, OrderResponse{
+			ID:                 row.ID,
+			OrderDraftID:       row.OrderDraftID,
+			SubmittedByStaffID: row.SubmittedByStaffIdentityID,
+			SubmittedSessionID: row.SubmittedStaffAccessSessionID,
+			SubmittedAt:        row.SubmittedAt,
+			Items:              items,
+		})
+	}
+	return out, nil
+}
+
+// loadPreparationUnits assembles the Session's Preparation Units.
+//
+// internal/sales reads unit state here and creates units at Submit; every
+// state transition belongs to internal/preparation (ADR-024).
+func loadPreparationUnits(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
+	[]PreparationUnitResponse, error,
+) {
+	rows, err := q.ListSessionPreparationUnits(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("load preparation units: %w", err)
+	}
+	out := make([]PreparationUnitResponse, 0, len(rows))
+	for _, row := range rows {
+		mods := make([]UnitModifierResponse, 0)
+		if len(row.Modifiers) > 0 {
+			if err := json.Unmarshal(row.Modifiers, &mods); err != nil {
+				return nil, fmt.Errorf("decode preparation unit modifiers: %w", err)
+			}
+		}
+		out = append(out, PreparationUnitResponse{
+			ID:              row.ID,
+			OrderItemID:     row.OrderItemID,
+			UnitNumber:      row.UnitNumber,
+			State:           row.State,
+			ServiceNumber:   row.ServiceNumber,
+			CategoryName:    row.CategoryName,
+			ItemName:        row.ItemName,
+			SizeName:        nullStringPtr(row.SizeName),
+			Modifiers:       mods,
+			PreparationNote: nullStringPtr(row.PreparationNote),
+			QueuedAt:        row.QueuedAt,
+		})
+	}
+	return out, nil
+}
+
+// loadSubmittedItems returns the set of Committed Items that have entered an
+// Order, which is what a Charge Allocation's `submitted` flag reports.
+func loadSubmittedItems(ctx context.Context, q *sqlc.Queries, itemIDs []uuid.UUID) (
+	map[uuid.UUID]struct{}, error,
+) {
+	out := make(map[uuid.UUID]struct{})
+	if len(itemIDs) == 0 {
+		return out, nil
+	}
+	rows, err := q.ListSubmittedCommittedItems(ctx, itemIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load submitted committed items: %w", err)
+	}
+	for _, id := range rows {
+		out[id] = struct{}{}
 	}
 	return out, nil
 }

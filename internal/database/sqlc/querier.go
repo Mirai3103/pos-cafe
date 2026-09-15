@@ -243,9 +243,16 @@ type Querier interface {
 	ListModifierGroups(ctx context.Context) ([]ModifierGroup, error)
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
 	ListModifierOptionsForValidation(ctx context.Context, optionIds []uuid.UUID) ([]ListModifierOptionsForValidationRow, error)
+	ListOrderItems(ctx context.Context, orderIds []uuid.UUID) ([]OrderItem, error)
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
+	ListSessionOrders(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionOrdersRow, error)
+	ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnit, error)
+	// The `submitted` flag on a Charge Allocation is derived, not stored: there is
+	// no submitted column anywhere in the schema, and therefore no flag that can
+	// fall out of step with the Order that defines it.
+	ListSubmittedCommittedItems(ctx context.Context, committedItemIds []uuid.UUID) ([]uuid.UUID, error)
 	ListTables(ctx context.Context) ([]Table, error)
 	// The 5C lock protocol (ADR-016 as amended by ADR-023), first half: the Check
 	// row FOR UPDATE. SQL does not guarantee that one statement's FOR UPDATE OF c, s

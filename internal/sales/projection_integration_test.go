@@ -179,3 +179,18 @@ func TestProjectionReportsPaymentsAndGuardsSettlement(t *testing.T) {
 		require.ErrorIs(t, err, sales.ErrSettlementInvariantViolated)
 	})
 }
+
+func TestProjectionOrdersAndUnitsStartEmpty(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.commitTakeawayDraft(t, 2)
+
+	got := env.GetSessionOK(t, session.ID)
+	require.NotNil(t, got.Orders)
+	require.Empty(t, got.Orders)
+	require.NotNil(t, got.PreparationUnits)
+	require.Empty(t, got.PreparationUnits)
+	require.Len(t, got.Checks, 1)
+	for _, allocation := range got.Checks[0].Allocations {
+		require.False(t, allocation.Submitted, "nothing is submitted before Submit exists")
+	}
+}

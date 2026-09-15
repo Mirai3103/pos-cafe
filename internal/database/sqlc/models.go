@@ -99,6 +99,14 @@ type CommittedItemModifierOption struct {
 	SurchargeVnd       int64     `json:"surcharge_vnd"`
 }
 
+type CompletedSale struct {
+	ID                            uuid.UUID `json:"id"`
+	ServiceSessionID              uuid.UUID `json:"service_session_id"`
+	CompletedByStaffIdentityID    uuid.UUID `json:"completed_by_staff_identity_id"`
+	CompletedStaffAccessSessionID uuid.UUID `json:"completed_staff_access_session_id"`
+	CompletedAt                   time.Time `json:"completed_at"`
+}
+
 type IdempotencyKey struct {
 	Key          uuid.UUID       `json:"key"`
 	ActorID      uuid.UUID       `json:"actor_id"`
@@ -193,6 +201,15 @@ type ModifierOption struct {
 	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
+type Order struct {
+	ID                            uuid.UUID `json:"id"`
+	ServiceSessionID              uuid.UUID `json:"service_session_id"`
+	OrderDraftID                  uuid.UUID `json:"order_draft_id"`
+	SubmittedByStaffIdentityID    uuid.UUID `json:"submitted_by_staff_identity_id"`
+	SubmittedStaffAccessSessionID uuid.UUID `json:"submitted_staff_access_session_id"`
+	SubmittedAt                   time.Time `json:"submitted_at"`
+}
+
 // Owned by internal/sales (Phase 5A). Commit, which writes COMMITTED, lands in 5B.
 type OrderDraft struct {
 	ID               uuid.UUID `json:"id"`
@@ -221,6 +238,12 @@ type OrderDraftItemModifierOption struct {
 	ModifierOptionID uuid.UUID `json:"modifier_option_id"`
 }
 
+type OrderItem struct {
+	ID              uuid.UUID `json:"id"`
+	OrderID         uuid.UUID `json:"order_id"`
+	CommittedItemID uuid.UUID `json:"committed_item_id"`
+}
+
 // Owned by internal/sales. Immutable after insert: no phase updates a row. Read by internal/shift for Expected Cash.
 type Payment struct {
 	ID                   uuid.UUID      `json:"id"`
@@ -234,6 +257,30 @@ type Payment struct {
 	ChangeDueVnd         sql.NullInt64  `json:"change_due_vnd"`
 	TransactionReference sql.NullString `json:"transaction_reference"`
 	ReceivedAt           time.Time      `json:"received_at"`
+}
+
+type PreparationUnit struct {
+	ID              uuid.UUID       `json:"id"`
+	OrderItemID     uuid.UUID       `json:"order_item_id"`
+	UnitNumber      int32           `json:"unit_number"`
+	State           string          `json:"state"`
+	ServiceNumber   string          `json:"service_number"`
+	CategoryName    string          `json:"category_name"`
+	ItemName        string          `json:"item_name"`
+	SizeName        sql.NullString  `json:"size_name"`
+	Modifiers       json.RawMessage `json:"modifiers"`
+	PreparationNote sql.NullString  `json:"preparation_note"`
+	QueuedAt        time.Time       `json:"queued_at"`
+}
+
+type PreparationUnitTransition struct {
+	ID                   uuid.UUID `json:"id"`
+	PreparationUnitID    uuid.UUID `json:"preparation_unit_id"`
+	PriorState           string    `json:"prior_state"`
+	ResultingState       string    `json:"resulting_state"`
+	ActorStaffIdentityID uuid.UUID `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID `json:"staff_access_session_id"`
+	OccurredAt           time.Time `json:"occurred_at"`
 }
 
 // Owned by internal/shift (Phase 4). At most one row may be in OPEN state. Phase 4 ships no close operation; see the Non-Goals in the Phase 4 design spec.

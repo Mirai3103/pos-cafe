@@ -668,3 +668,34 @@ UPDATE checks SET charge_vnd = $2 WHERE id = $1;
 UPDATE checks
 SET state = 'MERGED', charge_vnd = 0, merged_into_check_id = $2
 WHERE id = $1;
+
+-- name: ListSessionOrders :many
+SELECT id, order_draft_id, submitted_by_staff_identity_id,
+       submitted_staff_access_session_id, submitted_at
+FROM orders
+WHERE service_session_id = $1
+ORDER BY submitted_at ASC, id ASC;
+
+-- name: ListOrderItems :many
+SELECT id, order_id, committed_item_id
+FROM order_items
+WHERE order_id = ANY(sqlc.arg(order_ids)::uuid[])
+ORDER BY order_id ASC, id ASC;
+
+-- name: ListSessionPreparationUnits :many
+SELECT pu.id, pu.order_item_id, pu.unit_number, pu.state, pu.service_number,
+       pu.category_name, pu.item_name, pu.size_name, pu.modifiers,
+       pu.preparation_note, pu.queued_at
+FROM preparation_units pu
+JOIN order_items oi ON oi.id = pu.order_item_id
+JOIN orders o ON o.id = oi.order_id
+WHERE o.service_session_id = $1
+ORDER BY pu.queued_at ASC, pu.id ASC;
+
+-- name: ListSubmittedCommittedItems :many
+-- The `submitted` flag on a Charge Allocation is derived, not stored: there is
+-- no submitted column anywhere in the schema, and therefore no flag that can
+-- fall out of step with the Order that defines it.
+SELECT committed_item_id
+FROM order_items
+WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[]);
