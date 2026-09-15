@@ -1,0 +1,31 @@
+name: cafe-pos
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: pos-cafe-db
+    restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c"
+      - "fsync=off"
+      - "-c"
+      - "synchronous_commit=off"
+      - "-c"
+      - "full_page_writes=off"
+    environment:
+      POSTGRES_USER: cafe_pos
+      POSTGRES_PASSWORD: cafe_pos_dev
+      POSTGRES_DB: cafe_pos
+    ports:
+      - "5432:5432"
+    # Dùng tmpfs để ghi trực tiếp trên RAM thay vì đĩa cứng
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./sql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cafe_pos -d cafe_pos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
