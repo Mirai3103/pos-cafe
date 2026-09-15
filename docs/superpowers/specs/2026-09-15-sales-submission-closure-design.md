@@ -28,9 +28,9 @@ As in 5A, 5B, and 5C, the implementation may improve structure, schema, and corr
 
 ### Non-Goals
 
-- **Cancellation, Waste, Comp, Remake, Preparation State Correction, Preparation Alerts, and the Preparation Queue reads.** These are Phase 6. `internal/preparation` ships in 5D with one command and grows into the rest of its surface there (ADR-021).
+- **Cancellation, Waste, Comp, Remake, Preparation State Correction, Preparation Alerts, and the Preparation Queue reads.** These are Phase 6. `internal/preparation` ships in 5D with one command and grows into the rest of its surface there (ADR-023).
 - **Abandoned Checkout.** It is outside Phase 5 entirely. §6.6 records the closure limitation this leaves behind.
-- **Refund, Payment Void, and Post-Shift Payment Correction.** Unchanged from 5C. The canonical closure check for pending Refunds is therefore not migrated (ADR-027).
+- **Refund, Payment Void, and Post-Shift Payment Correction.** Unchanged from 5C. The canonical closure check for pending Refunds is therefore not migrated (ADR-029).
 - **Recent Completed Sales listing.** The canonical module exposes a list of recent Completed Sales alongside the two reads 5D needs. No branch of 5D depends on it and no Phase 5 behavior is unreachable without it.
 - Reporting, exports, receipt or fiscal invoice documents.
 
@@ -38,7 +38,7 @@ As in 5A, 5B, and 5C, the implementation may improve structure, schema, and corr
 
 **A Service Session holding unsubmitted Committed Items cannot be closed.** Closure requires every Charge Allocation to be submitted, and the canonical escape from that state — recording an Abandoned Checkout when the customer leaves without the work being sent — is outside Phase 5. Staff who commit a draft must submit it before the sale can complete. This is a known limitation, recorded here so it is not mistaken for a defect during review, and it is resolved by Abandoned Checkout rather than by weakening closure.
 
-**A Preparation Unit cannot reach `CANCELLED` or `WASTED` in Phase 5.** Both states are declared in the schema (ADR-026) and both are accepted by the closure policy, because the policy is written once against the complete domain rather than re-edited in Phase 6. `FULFILLED` is a complete terminal path on its own, so closure is fully reachable without them.
+**A Preparation Unit cannot reach `CANCELLED` or `WASTED` in Phase 5.** Both states are declared in the schema (ADR-028) and both are accepted by the closure policy, because the policy is written once against the complete domain rather than re-edited in Phase 6. `FULFILLED` is a complete terminal path on its own, so closure is fully reachable without them.
 
 ---
 
@@ -64,7 +64,7 @@ Per ADR-010, Phase 5 ships as four strictly ordered sub-phases. 5A delivered the
 
 5D depends on its predecessors in five specific places: the `service_sessions` table with its `ACTIVE`/`CLOSED` domain and the `CLOSED` value 5A declared but never wrote; the `order_drafts` state machine and the `FindBlockingDraft` seam 5B left explicitly for this sub-phase; the `committed_items` table in its final immutable shape; the `charge_allocations` table and its `submitted` placeholder; and the settled-Check state introduced by 5C, which the takeaway Submit rule and the whole of closure are written against.
 
-It also shifts one boundary outward: ADR-021 moves the Preparation Unit advance command from Phase 6 into 5D.
+It also shifts one boundary outward: ADR-023 moves the Preparation Unit advance command from Phase 6 into 5D.
 
 ---
 
@@ -80,7 +80,7 @@ It also shifts one boundary outward: ADR-021 moves the Preparation Unit advance 
 
 sqlc generates one shared `internal/database/sqlc` package, so this boundary is a discipline the compiler cannot enforce. It is therefore stated here, restated in a header comment in `sql/queries/preparation.sql`, and enforced in review: no query in `sql/queries/sales.sql` writes `preparation_units.state`, and no query in `sql/queries/preparation.sql` writes `orders`, `order_items`, or `completed_sales`.
 
-The boundary is drawn now, while `internal/preparation` holds one command, because it must exist by Phase 6 regardless, and drawing it later means extracting code from an `internal/sales` that would by then also carry the queue reads, Waste, Remake, and State Correction (ADR-022).
+The boundary is drawn now, while `internal/preparation` holds one command, because it must exist by Phase 6 regardless, and drawing it later means extracting code from an `internal/sales` that would by then also carry the queue reads, Waste, Remake, and State Correction (ADR-024).
 
 ### 4.2 Executor
 
@@ -135,7 +135,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS order_item_committed_item_unique
 CREATE INDEX IF NOT EXISTS order_item_order_index ON order_items (order_id);
 ```
 
-The canonical source copies eight commercial columns — `menu_item_id`, `category_name`, `item_name`, `size_name`, `quantity`, `unit_price_vnd`, `total_vnd`, `preparation_note` — from `committed_items` into `order_items`. 5D does not (ADR-023). `committed_items` is immutable by 5B's rule and constrained by 5B's checks; reproducing it across a one-to-one foreign key adds no guarantee and adds a way for the two to disagree. CONTEXT.md says an Order Item *retains* its snapshot, which the foreign key satisfies.
+The canonical source copies eight commercial columns — `menu_item_id`, `category_name`, `item_name`, `size_name`, `quantity`, `unit_price_vnd`, `total_vnd`, `preparation_note` — from `committed_items` into `order_items`. 5D does not (ADR-025). `committed_items` is immutable by 5B's rule and constrained by 5B's checks; reproducing it across a one-to-one foreign key adds no guarantee and adds a way for the two to disagree. CONTEXT.md says an Order Item *retains* its snapshot, which the foreign key satisfies.
 
 `UNIQUE (committed_item_id)` is what the `submitted` flag is derived from (§9.1). There is no `submitted` column anywhere in the schema, and therefore no flag that can fall out of step with the Order that defines it.
 
@@ -168,7 +168,7 @@ CREATE INDEX IF NOT EXISTS preparation_unit_state_queued_index
 
 Here the denormalization is kept, and for a reason `order_items` does not share: the bar display is the hottest read path in the system, refreshed continuously during service, and Phase 6 will read these same columns for FIFO ordering and alerts. Making that view join five tables on every refresh would be the wrong trade. The asymmetry between this table and `order_items` is deliberate and is the difference between a snapshot that serves a read path and a copy that serves nothing.
 
-`state` declares all six canonical values although 5D writes only four. 5A declared a three-value `service_sessions.state` domain it had guessed, and had to correct it; 5C responded by declaring the complete Check domain up front (ADR-014). 5D follows that precedent (ADR-026).
+`state` declares all six canonical values although 5D writes only four. 5A declared a three-value `service_sessions.state` domain it had guessed, and had to correct it; 5C responded by declaring the complete Check domain up front (ADR-014). 5D follows that precedent (ADR-028).
 
 ### 5.4 `preparation_unit_transitions`
 
@@ -195,7 +195,7 @@ CREATE INDEX IF NOT EXISTS preparation_unit_transition_unit_index
     ON preparation_unit_transitions (preparation_unit_id, occurred_at);
 ```
 
-The canonical source has no such table: it reconstructs a Completed Sale's `preparationHistory` by joining `audit_events` on `details ->> 'preparationUnitId' = id::text`, parsing each JSONB payload, and silently discarding any row that fails to parse. 5D writes a real table instead (ADR-025). A Completed Sale is immutable content, not a derived report, and building immutable content out of a loosely-typed audit payload over an uncastable join is the class of defect the earlier sub-phases have consistently corrected rather than migrated.
+The canonical source has no such table: it reconstructs a Completed Sale's `preparationHistory` by joining `audit_events` on `details ->> 'preparationUnitId' = id::text`, parsing each JSONB payload, and silently discarding any row that fails to parse. 5D writes a real table instead (ADR-027). A Completed Sale is immutable content, not a derived report, and building immutable content out of a loosely-typed audit payload over an uncastable join is the class of defect the earlier sub-phases have consistently corrected rather than migrated.
 
 The audit event is still written, exactly as every other command writes one. Audit is the system's trail of who did what; this table is business data that a Completed Sale is made of. They are different concerns that happen to record the same moment.
 
@@ -220,7 +220,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS completed_sale_service_session_unique
 
 ### 5.6 Idempotency Storage
 
-No table is added for closure idempotency. The canonical source maintains a dedicated `completed_sale_closing_requests` table because its `runIdempotentMutation` helper is typed to the Service Session projection and cannot carry a Completed Sale result. The Go executor introduced in 5A is generic over the result type and stores the replayable body as JSON, so closure uses the shared mechanism with `T = CompletedSaleResponse` (ADR-024). One fewer table, one fewer replay path, and closure's audit and idempotency live where every other command's do.
+No table is added for closure idempotency. The canonical source maintains a dedicated `completed_sale_closing_requests` table because its `runIdempotentMutation` helper is typed to the Service Session projection and cannot carry a Completed Sale result. The Go executor introduced in 5A is generic over the result type and stores the replayable body as JSON, so closure uses the shared mechanism with `T = CompletedSaleResponse` (ADR-026). One fewer table, one fewer replay path, and closure's audit and idempotency live where every other command's do.
 
 ---
 
@@ -272,7 +272,7 @@ A Service Session is eligible to close when all four hold:
 
 The function returns the failing detail alongside the verdict — which Checks are unsettled, which Committed Items are unsubmitted, which units are non-terminal — so the API can say what is outstanding rather than only that something is.
 
-The canonical function also reports Checks carrying a pending Refund. 5D omits that branch (ADR-027): Refund is outside Phase 5, `pending_refund_vnd` is absent from the contract by 5C's decision, and a check with no data source behind it is a check that always passes. Phase 6 or a later Refund phase restores it together with the column it reads.
+The canonical function also reports Checks carrying a pending Refund. 5D omits that branch (ADR-029): Refund is outside Phase 5, `pending_refund_vnd` is absent from the contract by 5C's decision, and a check with no data source behind it is a check that always passes. Phase 6 or a later Refund phase restores it together with the column it reads.
 
 ### 6.5 Closure
 
@@ -342,7 +342,7 @@ Mapping from the canonical codes:
 | --- | --- |
 | `CHECK_NOT_SETTLED_FOR_SUBMISSION` (raised for a missing source, an empty allocation set, and an unsettled Check alike) | split: `SERVICE_SESSION_NOT_FOUND` for a missing or already-closed source, `CHECK_NOT_SETTLED_FOR_SUBMISSION` for the settlement rule |
 | `CHECK_NOT_SETTLED_FOR_CLOSURE` | `CHECK_NOT_SETTLED_FOR_CLOSURE` |
-| `PENDING_REFUND_FOR_CLOSURE` | not migrated (ADR-027) |
+| `PENDING_REFUND_FOR_CLOSURE` | not migrated (ADR-029) |
 | `COMPLETED_SALE_CREATION_FAILED` | not migrated — it reports a failed insert that the Go path surfaces as a database error |
 | `INVALID_CLOSURE_STORED_RESULT` | `INVALID_STORED_RESULT` (5A) |
 | `ADVANCE_FAILED` | not migrated — it belongs to the canonical bulk-advance command, which is Phase 6 |
@@ -392,19 +392,19 @@ Route wiring, capability enforcement for all five operations — including a Bar
 
 ### 11.4 Reachability
 
-**Every 5D branch is exercised through the public API, with no seeded fixtures.** 5B needed a fixture for Check targeting and recorded why; 5C removed that need for its own surface; 5D removes it for the whole of Phase 5. The complete path — open a Service Session, order, commit, pay, submit, prepare to fulfillment, close — runs entirely on real command output. This is the direct consequence of ADR-021 and the main reason for it.
+**Every 5D branch is exercised through the public API, with no seeded fixtures.** 5B needed a fixture for Check targeting and recorded why; 5C removed that need for its own surface; 5D removes it for the whole of Phase 5. The complete path — open a Service Session, order, commit, pay, submit, prepare to fulfillment, close — runs entirely on real command output. This is the direct consequence of ADR-023 and the main reason for it.
 
 ---
 
 ## 12. Decision Record Updates
 
-- **ADR-021** — Phase 5D borrows the Preparation Unit advance command from Phase 6. Context: ADR-010 assigned Preparation Units to 5D meaning their creation at Submit, leaving every state transition to Phase 6. But closure requires every unit to be terminal, and a Completed Sale's `preparation_history` is made of those transitions, so without an advance command the closure branch would be unreachable through the API and the history would ship permanently empty. Decision: 5D implements the linear advance chain and nothing else of Phase 6. Consequence: Phase 5 closes as a genuinely deployable whole with no seeded fixtures; the cost is one command implemented one phase early, in the package that will own it anyway.
-- **ADR-022** — `internal/preparation` is created in 5D. Context: the advance command could live in `internal/sales`, which already carries forty-plus files and is gaining four tables in this sub-phase. Decision: create the package now, with the read/write boundary of §4.1. Consequence: Phase 6 grows into an existing package instead of extracting code out of `internal/sales`; the cost is a package holding one command, and a boundary that review must enforce because sqlc's single generated package cannot.
-- **ADR-023** — `order_items` carries no commercial snapshot. Context: the canonical table duplicates eight immutable columns from `committed_items` across a one-to-one foreign key. Decision: store the foreign key alone. Consequence: one source of truth and no possibility of divergence; the cost is a join on the Completed Sale and Order reads, and an intentional asymmetry with `preparation_units`, which snapshots for a read-path reason `order_items` does not have.
-- **ADR-024** — Closure idempotency uses the shared executor. Context: the canonical source maintains `completed_sale_closing_requests` because its idempotency helper is typed to the Service Session projection. Decision: the Go executor is generic over the result type, so closure uses it with `T = CompletedSaleResponse`. Consequence: one fewer table and one fewer replay path; closure's idempotency and audit behave identically to every other command's.
-- **ADR-025** — Preparation history is a table, not a projection over `audit_events`. Context: the canonical source reconstructs it by joining audit rows on a JSONB field cast to text and silently dropping unparseable rows. Decision: write `preparation_unit_transitions` in the same transaction as the advance, and keep the audit event alongside it. Consequence: a Completed Sale's immutable content rests on real foreign keys, real indexes, and a `CHECK`-enforced transition graph; the cost is one table and a deliberate, documented double write of the same moment to two records with different purposes.
-- **ADR-026** — `preparation_units.state` declares all six canonical values in 5D. Context: 5A guessed a partial `service_sessions.state` domain and had to correct it; 5C responded with ADR-014's complete-domain precedent. Decision: declare `QUEUED`, `IN_PREPARATION`, `READY`, `FULFILLED`, `CANCELLED`, `WASTED`, and write only the first four. Consequence: Phase 6 adds commands without a schema migration; the closure policy is written once against the complete domain.
-- **ADR-027** — The pending-Refund closure check is not migrated. Context: the canonical readiness function reports Checks carrying a pending Refund, but Refund is outside Phase 5 and `pending_refund_vnd` is absent from the contract by 5C's decision. Decision: omit the branch rather than stub it against a column that does not exist. Consequence: the closure policy has one fewer condition than canonical; it is restored together with Refund, and §6.4 records that the omission is deliberate.
+- **ADR-023** — Phase 5D borrows the Preparation Unit advance command from Phase 6. Context: ADR-010 assigned Preparation Units to 5D meaning their creation at Submit, leaving every state transition to Phase 6. But closure requires every unit to be terminal, and a Completed Sale's `preparation_history` is made of those transitions, so without an advance command the closure branch would be unreachable through the API and the history would ship permanently empty. Decision: 5D implements the linear advance chain and nothing else of Phase 6. Consequence: Phase 5 closes as a genuinely deployable whole with no seeded fixtures; the cost is one command implemented one phase early, in the package that will own it anyway.
+- **ADR-024** — `internal/preparation` is created in 5D. Context: the advance command could live in `internal/sales`, which already carries forty-plus files and is gaining four tables in this sub-phase. Decision: create the package now, with the read/write boundary of §4.1. Consequence: Phase 6 grows into an existing package instead of extracting code out of `internal/sales`; the cost is a package holding one command, and a boundary that review must enforce because sqlc's single generated package cannot.
+- **ADR-025** — `order_items` carries no commercial snapshot. Context: the canonical table duplicates eight immutable columns from `committed_items` across a one-to-one foreign key. Decision: store the foreign key alone. Consequence: one source of truth and no possibility of divergence; the cost is a join on the Completed Sale and Order reads, and an intentional asymmetry with `preparation_units`, which snapshots for a read-path reason `order_items` does not have.
+- **ADR-026** — Closure idempotency uses the shared executor. Context: the canonical source maintains `completed_sale_closing_requests` because its idempotency helper is typed to the Service Session projection. Decision: the Go executor is generic over the result type, so closure uses it with `T = CompletedSaleResponse`. Consequence: one fewer table and one fewer replay path; closure's idempotency and audit behave identically to every other command's.
+- **ADR-027** — Preparation history is a table, not a projection over `audit_events`. Context: the canonical source reconstructs it by joining audit rows on a JSONB field cast to text and silently dropping unparseable rows. Decision: write `preparation_unit_transitions` in the same transaction as the advance, and keep the audit event alongside it. Consequence: a Completed Sale's immutable content rests on real foreign keys, real indexes, and a `CHECK`-enforced transition graph; the cost is one table and a deliberate, documented double write of the same moment to two records with different purposes.
+- **ADR-028** — `preparation_units.state` declares all six canonical values in 5D. Context: 5A guessed a partial `service_sessions.state` domain and had to correct it; 5C responded with ADR-014's complete-domain precedent. Decision: declare `QUEUED`, `IN_PREPARATION`, `READY`, `FULFILLED`, `CANCELLED`, `WASTED`, and write only the first four. Consequence: Phase 6 adds commands without a schema migration; the closure policy is written once against the complete domain.
+- **ADR-029** — The pending-Refund closure check is not migrated. Context: the canonical readiness function reports Checks carrying a pending Refund, but Refund is outside Phase 5 and `pending_refund_vnd` is absent from the contract by 5C's decision. Decision: omit the branch rather than stub it against a column that does not exist. Consequence: the closure policy has one fewer condition than canonical; it is restored together with Refund, and §6.4 records that the omission is deliberate.
 
 ---
 

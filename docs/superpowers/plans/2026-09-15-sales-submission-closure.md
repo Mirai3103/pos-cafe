@@ -14,13 +14,13 @@
 
 Every task's requirements implicitly include this section.
 
-- **Package boundary (ADR-022).** `internal/sales` imports `internal/auth`, `internal/database/sqlc`, `internal/response`, `internal/httpvalidator`. `internal/preparation` imports the same four and **MUST NOT** import `internal/sales`. Neither imports `internal/catalog`, `internal/tables`, or `internal/shift`. Test files may import anything.
-- **Query-file boundary (ADR-022).** No query in `sql/queries/sales.sql` writes `preparation_units.state` or touches `preparation_unit_transitions`. No query in `sql/queries/preparation.sql` writes `orders`, `order_items`, or `completed_sales`. sqlc generates one shared package, so this is enforced in review, not by the compiler.
+- **Package boundary (ADR-024).** `internal/sales` imports `internal/auth`, `internal/database/sqlc`, `internal/response`, `internal/httpvalidator`. `internal/preparation` imports the same four and **MUST NOT** import `internal/sales`. Neither imports `internal/catalog`, `internal/tables`, or `internal/shift`. Test files may import anything.
+- **Query-file boundary (ADR-024).** No query in `sql/queries/sales.sql` writes `preparation_units.state` or touches `preparation_unit_transitions`. No query in `sql/queries/preparation.sql` writes `orders`, `order_items`, or `completed_sales`. sqlc generates one shared package, so this is enforced in review, not by the compiler.
 - **Capability.** Sales operations require `sales.operate`; the advance command requires `preparation.operate`. Both already exist in `auth.RoleCapabilities`. **Do not modify the capability table.**
 - **Idempotency.** Use the shared `idempotency_keys` table. Action names: `sales.submit_order`, `sales.close_service_session`, `preparation.advance_unit`.
 - **Audit.** Use the shared `audit_events` table. Business events are `UPPER_SNAKE_CASE`.
-- **No snapshot copy (ADR-023).** `order_items` stores `order_id` and `committed_item_id` only. Never add a commercial column to it.
-- **Preparation state domain (ADR-026).** The `CHECK` declares all six states; 5D writes only `QUEUED`, `IN_PREPARATION`, `READY`, `FULFILLED`.
+- **No snapshot copy (ADR-025).** `order_items` stores `order_id` and `committed_item_id` only. Never add a commercial column to it.
+- **Preparation state domain (ADR-028).** The `CHECK` declares all six states; 5D writes only `QUEUED`, `IN_PREPARATION`, `READY`, `FULFILLED`.
 - **Empty collections** serialize as `[]`, never `null`. `sqlc.yaml` already sets `emit_empty_slices: true`.
 - **Integration tests** carry `//go:build integration`, live in package `sales_test` or `preparation_test`, and run with `-p 1`.
 - **Every task ends with a commit.** Run `make fmt` before committing. Run `make sqlc` after editing any `sql/queries/*.sql` file.
@@ -110,7 +110,7 @@ func TestSubmissionSchema(t *testing.T) {
 			SELECT count(*) FROM information_schema.columns
 			WHERE table_name = 'order_items'`).Scan(&n)
 		require.NoError(t, err)
-		require.Equal(t, 3, n, "ADR-023: id, order_id, committed_item_id only")
+		require.Equal(t, 3, n, "ADR-025: id, order_id, committed_item_id only")
 	})
 
 	t.Run("one Order per Order Draft is unrepresentable", func(t *testing.T) {
@@ -166,7 +166,7 @@ Create `internal/database/migrations/000011_create_sales_submission_slice.sql` w
 -- and the Preparation Units the bar works from, without repricing anything.
 -- Closure freezes a Service Session into an immutable Completed Sale.
 --
--- order_items deliberately carries no commercial snapshot (ADR-023):
+-- order_items deliberately carries no commercial snapshot (ADR-025):
 -- committed_items is immutable by 5B's rule, and copying it across a
 -- one-to-one foreign key would only create a way for the two to disagree.
 --
@@ -262,7 +262,7 @@ Expected: FAIL to compile — the constants, functions, and sentinels are undefi
 Append to `internal/sales/domain.go`:
 
 ```go
-// Preparation Unit states. ADR-026 declares the complete canonical domain
+// Preparation Unit states. ADR-028 declares the complete canonical domain
 // although 5D writes only the first four: 5A shipped a guessed partial domain
 // for service_sessions.state and had to correct it, and 5C responded with the
 // complete-domain precedent this follows.
@@ -553,7 +553,7 @@ type ClosureReadiness struct {
 // exposes no readiness endpoint.
 //
 // The canonical function also reports Checks carrying a pending Refund. That
-// branch is not migrated (ADR-027): Refund is outside Phase 5, the column it
+// branch is not migrated (ADR-029): Refund is outside Phase 5, the column it
 // reads is absent from the contract, and a check with no data source behind it
 // is a check that always passes.
 func EvaluateClosureReadiness(session ServiceSessionResponse) ClosureReadiness {
@@ -719,7 +719,7 @@ type OrderResponse struct {
 // OrderItemResponse is a Committed Item after submission.
 //
 // It carries the commercial snapshot by reference rather than by copy
-// (ADR-023): committed_items is immutable by 5B's rule, so the identifier is
+// (ADR-025): committed_items is immutable by 5B's rule, so the identifier is
 // the snapshot. The names and amounts a client needs are already on the
 // Check's Charge Allocations, keyed by the same CommittedItemID.
 type OrderItemResponse struct {
@@ -863,7 +863,7 @@ func loadOrders(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 // loadPreparationUnits assembles the Session's Preparation Units.
 //
 // internal/sales reads unit state here and creates units at Submit; every
-// state transition belongs to internal/preparation (ADR-022).
+// state transition belongs to internal/preparation (ADR-024).
 func loadPreparationUnits(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 	[]PreparationUnitResponse, error,
 ) {
@@ -1789,7 +1789,7 @@ Create `internal/preparation/domain.go`:
 // Remake, State Correction, Preparation Alerts, and the Preparation Queue
 // reads are Phase 6 and grow into this package.
 //
-// The boundary with internal/sales (ADR-022): internal/sales creates
+// The boundary with internal/sales (ADR-024): internal/sales creates
 // Preparation Units at Submit and reads their state during closure; this
 // package owns every state transition. sqlc generates one shared package, so
 // the boundary is enforced in review rather than by the compiler.
@@ -1809,7 +1809,7 @@ const OpAdvanceUnit = "preparation.advance_unit"
 const EventPreparationUnitAdvanced = "PREPARATION_UNIT_ADVANCED"
 
 // Preparation Unit states. 5D writes only the first four; StateCancelled and
-// StateWasted arrive with Phase 6's commands (ADR-026).
+// StateWasted arrive with Phase 6's commands (ADR-028).
 const (
 	StateQueued        = "QUEUED"
 	StateInPreparation = "IN_PREPARATION"
@@ -1924,7 +1924,7 @@ Create `sql/queries/preparation.sql`:
 ```sql
 -- Preparation slice queries.
 --
--- Boundary (ADR-022): nothing here writes orders, order_items, or
+-- Boundary (ADR-024): nothing here writes orders, order_items, or
 -- completed_sales. internal/sales creates Preparation Units at Submit and
 -- reads their state during closure; this package owns every transition.
 
@@ -2232,7 +2232,7 @@ func (h *AdvanceUnitHandler) Handle(ctx context.Context, actor Actor,
 				return 0, zero, AuditRecord{}, fmt.Errorf("set preparation unit state: %w", err)
 			}
 			// The transition row is business data a Completed Sale is made of,
-			// not a derived report (ADR-025). The audit event below records
+			// not a derived report (ADR-027). The audit event below records
 			// the same moment for a different purpose.
 			if err := q.InsertPreparationUnitTransition(ctx,
 				sqlc.InsertPreparationUnitTransitionParams{
@@ -2488,7 +2488,7 @@ type CompletedSaleCheckResponse struct {
 // PreparationTransitionResponse is one recorded move of a Preparation Unit.
 //
 // It reads from preparation_unit_transitions rather than reconstructing the
-// history from audit payloads (ADR-025): a Completed Sale is immutable
+// history from audit payloads (ADR-027): a Completed Sale is immutable
 // content, not a derived report.
 type PreparationTransitionResponse struct {
 	ID              uuid.UUID `json:"id"`
@@ -2739,7 +2739,7 @@ func NewCloseServiceSessionHandler(runner *Runner) *CloseServiceSessionHandler {
 // Handle executes closure.
 //
 // Idempotency runs on the shared executor with T = CompletedSaleResponse
-// (ADR-024). The canonical source maintains a dedicated
+// (ADR-026). The canonical source maintains a dedicated
 // completed_sale_closing_requests table only because its helper is typed to
 // the Service Session projection; the Go executor is generic, so closure's
 // replay and audit behave identically to every other command's.
@@ -3203,10 +3203,10 @@ Run through this before opening the pull request.
 - [ ] `go list -deps ./internal/preparation` shows no `internal/sales`.
 - [ ] No query in `sql/queries/sales.sql` writes `preparation_units.state` or touches `preparation_unit_transitions`.
 - [ ] No query in `sql/queries/preparation.sql` writes `orders`, `order_items`, or `completed_sales`.
-- [ ] `order_items` has exactly three columns (ADR-023).
-- [ ] `preparation_units.state` declares all six canonical values (ADR-026).
-- [ ] No `completed_sale_closing_requests` table exists (ADR-024).
-- [ ] `preparation_history` reads from `preparation_unit_transitions`, not from `audit_events` (ADR-025).
+- [ ] `order_items` has exactly three columns (ADR-025).
+- [ ] `preparation_units.state` declares all six canonical values (ADR-028).
+- [ ] No `completed_sale_closing_requests` table exists (ADR-026).
+- [ ] `preparation_history` reads from `preparation_unit_transitions`, not from `audit_events` (ADR-027).
 - [ ] `ServiceSessionResponse` has the same JSON keys and types it had in 5C, with `orders` and `preparation_units` now populated and `submitted` no longer constant.
 - [ ] Every 5D branch is reachable through the public API. **No suite seeds a fixture row to reach a branch** — grep the new integration tests for direct `INSERT` statements and confirm each is an assertion helper, not a path to an otherwise-unreachable state.
 - [ ] A takeaway Submit is refused while any Check is unsettled; a dine-in Submit succeeds in both Payment orderings.
