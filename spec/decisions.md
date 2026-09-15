@@ -330,6 +330,90 @@ CREATE TABLE idempotency_keys (
 
 ---
 
+## ADR-023: Phase 5D borrows the Preparation Unit advance command from Phase 6
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** ADR-010 assigned Preparation Units to 5D meaning their creation at Submit, leaving every state transition to Phase 6. But closure requires every unit to be terminal, and a Completed Sale's `preparation_history` is made of those transitions, so without an advance command the closure branch would be unreachable through the API and the history would ship permanently empty.
+* **Decision:**
+* 5D implements the linear advance chain and nothing else of Phase 6.
+* **Consequences:**
+* Phase 5 closes as a genuinely deployable whole with no seeded fixtures; the cost is one command implemented one phase early, in the package that will own it anyway.
+
+---
+
+## ADR-024: `internal/preparation` is created in 5D
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the advance command could live in `internal/sales`, which already carries forty-plus files and is gaining four tables in this sub-phase.
+* **Decision:**
+* create the package now, with the read/write boundary of §4.1.
+* **Consequences:**
+* Phase 6 grows into an existing package instead of extracting code out of `internal/sales`; the cost is a package holding one command, and a boundary that review must enforce because sqlc's single generated package cannot.
+
+---
+
+## ADR-025: `order_items` carries no commercial snapshot
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the canonical table duplicates eight immutable columns from `committed_items` across a one-to-one foreign key.
+* **Decision:**
+* store the foreign key alone.
+* **Consequences:**
+* one source of truth and no possibility of divergence; the cost is a join on the Completed Sale and Order reads, and an intentional asymmetry with `preparation_units`, which snapshots for a read-path reason `order_items` does not have.
+
+---
+
+## ADR-026: Closure idempotency uses the shared executor
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the canonical source maintains `completed_sale_closing_requests` because its idempotency helper is typed to the Service Session projection.
+* **Decision:**
+* the Go executor is generic over the result type, so closure uses it with `T = CompletedSaleResponse`.
+* **Consequences:**
+* one fewer table and one fewer replay path; closure's idempotency and audit behave identically to every other command's.
+
+---
+
+## ADR-027: Preparation history is a table, not a projection over `audit_events`
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the canonical source reconstructs it by joining audit rows on a JSONB field cast to text and silently dropping unparseable rows.
+* **Decision:**
+* write `preparation_unit_transitions` in the same transaction as the advance, and keep the audit event alongside it.
+* **Consequences:**
+* a Completed Sale's immutable content rests on real foreign keys, real indexes, and a `CHECK`-enforced transition graph; the cost is one table and a deliberate, documented double write of the same moment to two records with different purposes.
+
+---
+
+## ADR-028: `preparation_units.state` declares all six canonical values in 5D
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** 5A guessed a partial `service_sessions.state` domain and had to correct it; 5C responded with ADR-014's complete-domain precedent.
+* **Decision:**
+* declare `QUEUED`, `IN_PREPARATION`, `READY`, `FULFILLED`, `CANCELLED`, `WASTED`, and write only the first four.
+* **Consequences:**
+* Phase 6 adds commands without a schema migration; the closure policy is written once against the complete domain.
+
+---
+
+## ADR-029: The pending-Refund closure check is not migrated
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the canonical readiness function reports Checks carrying a pending Refund, but Refund is outside Phase 5 and `pending_refund_vnd` is absent from the contract by 5C's decision.
+* **Decision:**
+* omit the branch rather than stub it against a column that does not exist.
+* **Consequences:**
+* the closure policy has one fewer condition than canonical; it is restored together with Refund, and §6.4 records that the omission is deliberate.
+
+---
+
 ## ADR-030: A Check command locks its Service Session `FOR UPDATE`
 
 * **Decision Date:** 2026-09-15

@@ -725,6 +725,50 @@ definitions:
       price_vnd:
         type: integer
     type: object
+  preparation.AdvanceUnitCommand:
+    properties:
+      request_id:
+        type: string
+      target_state:
+        type: string
+    required:
+    - request_id
+    - target_state
+    type: object
+  preparation.UnitModifierResponse:
+    properties:
+      group_name:
+        type: string
+      option_name:
+        type: string
+    type: object
+  preparation.UnitResponse:
+    properties:
+      category_name:
+        type: string
+      id:
+        type: string
+      item_name:
+        type: string
+      modifiers:
+        items:
+          $ref: '#/definitions/preparation.UnitModifierResponse'
+        type: array
+      order_item_id:
+        type: string
+      preparation_note:
+        type: string
+      queued_at:
+        type: string
+      service_number:
+        type: string
+      size_name:
+        type: string
+      state:
+        type: string
+      unit_number:
+        type: integer
+    type: object
   response.APIError:
     properties:
       code:
@@ -813,6 +857,13 @@ definitions:
       total_applied_vnd:
         type: integer
     type: object
+  sales.CloseServiceSessionCommand:
+    properties:
+      request_id:
+        type: string
+    required:
+    - request_id
+    type: object
   sales.CommitOrderDraftCommand:
     properties:
       request_id:
@@ -830,6 +881,68 @@ definitions:
         type: string
       surcharge_vnd:
         type: integer
+    type: object
+  sales.CompletedSaleCheckResponse:
+    properties:
+      allocations:
+        items:
+          $ref: '#/definitions/sales.ChargeAllocationResponse'
+        type: array
+      balance_vnd:
+        type: integer
+      charge_vnd:
+        type: integer
+      id:
+        type: string
+      payments:
+        items:
+          $ref: '#/definitions/sales.PaymentResponse'
+        type: array
+      state:
+        type: string
+      total_applied_vnd:
+        type: integer
+    type: object
+  sales.CompletedSaleResponse:
+    properties:
+      checks:
+        items:
+          $ref: '#/definitions/sales.CompletedSaleCheckResponse'
+        type: array
+      completed_at:
+        type: string
+      completed_by_display_name:
+        type: string
+      completed_by_staff_identity_id:
+        type: string
+      completed_staff_access_session_id:
+        type: string
+      id:
+        type: string
+      orders:
+        items:
+          $ref: '#/definitions/sales.OrderResponse'
+        type: array
+      preparation_history:
+        items:
+          $ref: '#/definitions/sales.PreparationTransitionResponse'
+        type: array
+      preparation_units:
+        items:
+          $ref: '#/definitions/sales.PreparationUnitResponse'
+        type: array
+      service_mode:
+        type: string
+      service_number:
+        type: string
+      service_session_id:
+        type: string
+      service_session_opened_at:
+        type: string
+      service_session_state:
+        type: string
+      state:
+        type: string
     type: object
   sales.DraftItemResponse:
     properties:
@@ -939,6 +1052,23 @@ definitions:
       sales_shift_id:
         type: string
       transaction_reference:
+        type: string
+    type: object
+  sales.PreparationTransitionResponse:
+    properties:
+      actor_staff_identity_id:
+        type: string
+      id:
+        type: string
+      occurred_at:
+        type: string
+      preparation_unit_id:
+        type: string
+      prior_state:
+        type: string
+      resulting_state:
+        type: string
+      staff_access_session_id:
         type: string
     type: object
   sales.PreparationUnitResponse:
@@ -3182,6 +3312,59 @@ paths:
       summary: Ngừng kinh doanh kích thước món
       tags:
       - Catalog
+  /preparation/units/{unit_id}/advance:
+    post:
+      consumes:
+      - application/json
+      description: Moves one unit along the linear chain QUEUED -> IN_PREPARATION
+        -> READY -> FULFILLED. The target state is explicit, so two baristas acting
+        on a stale display get a conflict rather than a silent double advance. Cancellation,
+        Waste, Remake, and State Correction are Phase 6.
+      parameters:
+      - description: Preparation Unit ID
+        in: path
+        name: unit_id
+        required: true
+        type: string
+      - description: Advance request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/preparation.AdvanceUnitCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/preparation.UnitResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Advance a Preparation Unit
+      tags:
+      - preparation
   /sales/checks/{check_id}/payments/cash:
     post:
       consumes:
@@ -3408,6 +3591,45 @@ paths:
       summary: Merge two Checks
       tags:
       - sales
+  /sales/completed-sales/{id}:
+    get:
+      description: Returns one immutable Completed Sale with its Checks, Orders, Preparation
+        Units, and the recorded preparation history, by Completed Sale id.
+      parameters:
+      - description: Completed Sale ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.CompletedSaleResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a Completed Sale
+      tags:
+      - sales
   /sales/service-sessions:
     get:
       description: Returns every ACTIVE Service Session with its full projection,
@@ -3477,6 +3699,101 @@ paths:
       security:
       - BearerAuth: []
       summary: Get a Service Session
+      tags:
+      - sales
+  /sales/service-sessions/{id}/close:
+    post:
+      consumes:
+      - application/json
+      description: 'Freezes an eligible Service Session into an immutable Completed
+        Sale and releases every held Table Assignment. A Session closes only when,
+        in this order of refusal: every Check is settled, every committed item has
+        been submitted to the bar, the Session carries at least one Order, and every
+        Preparation Unit is terminal. Closing an already-closed Session returns its
+        existing Completed Sale rather than an error.'
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Close request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.CloseServiceSessionCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.CompletedSaleResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Close the Service Session
+      tags:
+      - sales
+  /sales/service-sessions/{id}/completed-sale:
+    get:
+      description: Returns the immutable Completed Sale of one Service Session with
+        its Checks, Orders, Preparation Units, and the recorded preparation history.
+        A Session that has not closed has no Completed Sale and answers 404.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.CompletedSaleResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a Service Session's Completed Sale
       tags:
       - sales
   /sales/service-sessions/{id}/draft:

@@ -3,6 +3,7 @@
 package preparation_test
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/preparation"
@@ -106,4 +107,31 @@ func TestAdvanceUnit(t *testing.T) {
 		_, _, err := env.AdvanceAs(t, env.CashierActor(), unit.ID, preparation.StateInPreparation)
 		require.ErrorIs(t, err, preparation.ErrForbidden)
 	})
+}
+
+func TestConcurrentAdvance(t *testing.T) {
+	env := newPrepEnv(t)
+	unit := env.SubmittedUnits(t, 1)[0]
+
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, _, errs[i] = env.Advance(t, unit.ID, preparation.StateInPreparation)
+		}(i)
+	}
+	wg.Wait()
+
+	succeeded := 0
+	for _, err := range errs {
+		if err == nil {
+			succeeded++
+		} else {
+			require.ErrorIs(t, err, preparation.ErrInvalidTransition)
+		}
+	}
+	require.Equal(t, 1, succeeded, "the row lock serializes them")
+	require.Equal(t, 1, env.CountTransitions(t, unit.ID))
 }
