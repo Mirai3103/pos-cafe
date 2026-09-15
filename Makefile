@@ -54,11 +54,12 @@ test: ## Run unit tests with the race detector
 
 # Every integration package provisions its own ephemeral clone from the migrated
 # cafe_pos_test_template, so packages run in parallel without sharing state.
+# -count=1 keeps database-backed targets from reporting cached greens.
 test-integration: ## Run integration tests with race detection (needs docker-up)
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -race -tags=integration ./...
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -count=1 -race -tags=integration ./...
 
 test-integration-fast: ## Run integration tests without race detection
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -tags=integration ./...
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -count=1 -tags=integration ./...
 
 test-db-clean: ## Remove inactive ephemeral integration-test clones
 	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go run ./internal/testdb/cmd/cleanup
@@ -66,7 +67,7 @@ test-db-clean: ## Remove inactive ephemeral integration-test clones
 test-all: test test-integration ## Run unit + integration tests
 
 coverage: ## Report test coverage across unit + integration tests
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -cover -tags=integration ./...
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -count=1 -cover -tags=integration ./...
 
 check: fmt vet lint test ## Everything CI enforces, before you push
 
