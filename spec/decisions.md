@@ -231,7 +231,7 @@ CREATE TABLE idempotency_keys (
 ## ADR-016: One Check lock protocol for every 5C command
 
 * **Decision Date:** 2026-09-14
-* **Status:** Accepted
+* **Status:** Accepted; **superseded in part by ADR-023** for the Session-lock clause.
 * **Context:** The canonical source locks `checks`, `service_sessions`, and `sales_shifts` all `FOR UPDATE` in the Payment path, but only `FOR UPDATE OF checks` in the restructuring path, with a source comment noting that locking parent rows there "can create a reverse dependency when Payment already owns one of the affected Check rows" — a deadlock hazard documented rather than removed.
 * **Decision:**
 * All four 5C commands lock `checks` `FOR UPDATE` in ascending id order, and `service_sessions` and `sales_shifts` `FOR SHARE`.
@@ -327,3 +327,17 @@ CREATE TABLE idempotency_keys (
 * A charge that has drifted fails the command that would have built on it, instead of being propagated into a second Check before the read path notices.
 * Split and Merge each cost one extra aggregate read inside the transaction; that is the price of not trusting a denormalization, and it is bounded.
 * A Check that is `SETTLED` with its Session and Shift also closed now reports `CHECK_NOT_OPEN` from every endpoint, rather than `CHECK_NOT_OPEN` from Split and `SERVICE_SESSION_ALREADY_CLOSED` from Pay Cash.
+
+---
+
+## ADR-023: A Check command locks its Service Session `FOR UPDATE`
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted; supersedes the Session-lock clause of ADR-016
+* **Context:** ADR-016 weakened the canonical `FOR UPDATE` on `service_sessions` to `FOR SHARE` on the premise that the 5C commands "read parent state to evaluate a precondition". That premise is incomplete: every 5C command also rebuilds the whole Service Session read model via `LoadServiceSession` inside the same READ COMMITTED transaction, and `loadChecks` does it in several statements. A sibling Check's commit landing between those statements is observed half-applied and trips the settlement invariant, rolling back a valid Payment. Latent since 5C, and reproducible 3/3 once the integration suite shares one warm pool per package (the per-test connection handshake had been staggering the racing goroutines past the window).
+* **Decision:**
+* `LockCheckForPayment` locks the Check `FOR UPDATE` and its Session `FOR UPDATE` in two separate statements, Check first: SQL does not guarantee that one statement's `FOR UPDATE OF c, s` acquires the two relations' tuple locks in OF-list order, and the no-deadlock argument below depends on that order being explicit.
+* `LockChecksForRestructuring` locks its Checks only and the caller takes the Session lock afterwards, so the lock order stays Check(s) then Session for every command and ADR-016's no-deadlock guarantee survives. Two Payments on one Session no longer proceed in parallel; they serialize.
+* **Consequences:**
+* Sibling-Check parallelism within a Session is given up deliberately. Payments on different Sessions, and every other command, are unaffected.
+* **Known remaining hole, recorded rather than fixed:** the other commands that call `LoadServiceSession` (Commit, draft add/edit/remove) do not take the Session lock at all, so a concurrent Payment can still tear *their* read-model rebuild. No test exercises that pairing, and closing it belongs in its own change.

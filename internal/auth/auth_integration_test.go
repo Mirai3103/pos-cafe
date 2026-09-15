@@ -9,12 +9,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
 	"github.com/Mirai3103/pos-cafe/internal/response"
@@ -29,22 +26,12 @@ const truncateAuthTablesQuery = "TRUNCATE TABLE staff_access_sessions, idempoten
 func setupTestApp(t *testing.T) (*echo.Echo, func()) {
 	t.Helper()
 
-	dbURL := os.Getenv("TEST_DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable"
-	}
-
-	// Strict safety guard: prevent running against non-test databases
-	if !strings.Contains(dbURL, "_test?") && !strings.HasSuffix(dbURL, "_test") {
-		t.Fatalf("SAFETY VIOLATION: TEST_DATABASE_URL must target a database name ending with '_test' to protect development data. Got: %s", dbURL)
-	}
-
+	db := authTestDB
+	require.NotNil(t, db)
 	ctx := context.Background()
-	db, err := database.Open(ctx, dbURL)
-	require.NoError(t, err)
 
 	// Clean tables before test suite
-	_, err = db.ExecContext(ctx, truncateAuthTablesQuery)
+	_, err := db.ExecContext(ctx, truncateAuthTablesQuery)
 	require.NoError(t, err)
 
 	queries := sqlc.New(db)
@@ -59,7 +46,6 @@ func setupTestApp(t *testing.T) (*echo.Echo, func()) {
 	cleanup := func() {
 		_, cleanErr := db.ExecContext(context.Background(), truncateAuthTablesQuery)
 		assert.NoError(t, cleanErr)
-		_ = db.Close()
 	}
 
 	return e, cleanup

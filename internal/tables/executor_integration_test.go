@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/tables"
 	"github.com/google/uuid"
@@ -22,14 +20,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// openTablesTestDB returns the shared package pool and its queries. The pool is
+// owned by TestMain and closed when the package's clone is dropped, so callers
+// must not close it.
 func openTablesTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	require.Contains(t, url, "_test")
-	db, err := database.Open(context.Background(), url)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	return db, sqlc.New(db)
+	require.NotNil(t, tablesTestDB)
+	return tablesTestDB, sqlc.New(tablesTestDB)
 }
 
 type testActor struct {

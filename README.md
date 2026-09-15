@@ -184,17 +184,23 @@ make test
 ```
 
 ### 2. Integration Tests (PostgreSQL Required)
-Tests run against a dedicated test database (isolated with `//go:build integration` tags):
+Tests run against ephemeral per-package database clones (isolated with `//go:build integration` tags):
 ```bash
-make test-integration
-# or: TEST_DATABASE_URL="postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable" go test -v -race -p 1 -tags=integration ./...
+make test-integration-fast # local feedback, no race detector
+make test-integration      # full race-enabled integration gate
+make test-db-clean         # remove inactive clones left by interrupted runs
 ```
 
 > [!NOTE]
-> `-p 1` is mandatory, not a tuning knob. Every integration package shares the
-> single test database and `TRUNCATE`s the same tables in its setup, so letting
-> Go run packages in parallel makes them wipe each other's fixtures mid-test.
-> Keep the flag when you add integration tests to a new slice.
+> Each package's `TestMain` provisions an ephemeral clone of
+> `cafe_pos_test_template` — a schema-migrated copy of the base test database —
+> and runs the whole package against that clone, so package test binaries may
+> execute concurrently without wiping each other's fixtures. Direct package
+> commands remain supported, e.g.:
+>
+> ```bash
+> TEST_DATABASE_URL="postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable" go test -v -race -tags=integration ./internal/catalog/
+> ```
 
 The `cafe_pos_test` database is created automatically by `sql/init/` the first
 time the Postgres volume is initialised. If you have a volume that predates that
@@ -206,7 +212,7 @@ docker compose exec postgres createdb -U cafe_pos cafe_pos_test
 ```
 
 > [!IMPORTANT]
-> **Zero-Risk Test Safety Guard:** The integration test runner strictly requires `TEST_DATABASE_URL` and enforces that the target database name ends with `_test` (e.g. `cafe_pos_test`). It **never** falls back to your development database and will instantly abort if a non-test database is provided.
+> **Zero-Risk Test Safety Guard:** The integration test runner strictly requires `TEST_DATABASE_URL` and enforces that the base database name ends exactly in `_test` (e.g. `cafe_pos_test`) — the template database and its ephemeral clones are derived from that name. It **never** falls back to your development database and will instantly abort if a non-test database is provided.
 
 ### 3. Lint & Vulnerability Scan
 

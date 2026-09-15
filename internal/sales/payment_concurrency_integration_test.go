@@ -53,8 +53,10 @@ func TestConcurrentPaymentsOnOneCheck(t *testing.T) {
 	require.Equal(t, sales.CheckStateSettled, got.Checks[0].State)
 }
 
-// FOR SHARE on the parent rows is what lets these two proceed in parallel.
-// Under the canonical FOR UPDATE they would serialize on the Session row.
+// Two Payments on different Checks of one Session both succeed, and they
+// serialize on the Session row: ADR-023 restored the canonical FOR UPDATE
+// there, because each Payment rebuilds the whole Session read model inside its
+// transaction.
 func TestConcurrentPaymentsOnTwoChecksOfOneSession(t *testing.T) {
 	env := newSalesEnv(t)
 	session := env.commitTakeawayDraft(t, 2)

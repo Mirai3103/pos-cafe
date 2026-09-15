@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,21 +18,19 @@ import (
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/catalog"
-	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// openExecutorTestDB returns the shared package pool and its queries. The pool
+// is owned by TestMain and closed when the package's clone is dropped, so
+// callers must not close it.
 func openExecutorTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	require.Contains(t, url, "_test")
-	db, err := database.Open(context.Background(), url)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	return db, sqlc.New(db)
+	require.NotNil(t, catalogTestDB)
+	return catalogTestDB, sqlc.New(catalogTestDB)
 }
 
 type testIdentity struct {
@@ -813,7 +810,11 @@ func TestExecuteMutation_DenialEventCommitted(t *testing.T) {
 
 func TestExecuteMutation_ConcurrentDuplicate(t *testing.T) {
 	db, q := openExecutorTestDB(t)
+	// The pool is shared across the whole package, so the reduced limit this
+	// test sets must be restored when it finishes.
+	previousMaxOpenConns := db.Stats().MaxOpenConnections
 	db.SetMaxOpenConns(4)
+	t.Cleanup(func() { db.SetMaxOpenConns(previousMaxOpenConns) })
 	runner := catalog.NewRunner(db, q)
 	ctx := context.Background()
 

@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
@@ -19,30 +18,15 @@ import (
 func setupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
-	dbURL := os.Getenv("TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("skipping integration test: TEST_DATABASE_URL is not set")
-	}
-
-	// Same safety guard as the slice integration tests: never touch a database
-	// whose name does not end in _test.
-	if !strings.Contains(dbURL, "_test?") && !strings.HasSuffix(dbURL, "_test") {
-		t.Fatalf("SAFETY VIOLATION: TEST_DATABASE_URL must target a database name ending with '_test'. Got: %s", dbURL)
-	}
-
-	db, err := database.Open(context.Background(), dbURL)
-	require.NoError(t, err)
-
-	_, err = db.ExecContext(context.Background(), "TRUNCATE TABLE menu_categories CASCADE")
+	_, err := databaseTestDB.ExecContext(context.Background(), "TRUNCATE TABLE menu_categories CASCADE")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		_, cleanErr := db.ExecContext(context.Background(), "TRUNCATE TABLE menu_categories CASCADE")
+		_, cleanErr := databaseTestDB.ExecContext(context.Background(), "TRUNCATE TABLE menu_categories CASCADE")
 		assert.NoError(t, cleanErr)
-		assert.NoError(t, db.Close())
 	})
 
-	return db
+	return databaseTestDB
 }
 
 func TestWithTxCommitsOnSuccess(t *testing.T) {
