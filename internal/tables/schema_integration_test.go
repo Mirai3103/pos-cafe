@@ -5,21 +5,18 @@ package tables_test
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 
-	"github.com/Mirai3103/pos-cafe/internal/database"
 	"github.com/stretchr/testify/require"
 )
 
+// openSchemaTestDB returns the shared package pool. The pool is owned by
+// TestMain and closed when the package's clone is dropped, so callers must not
+// close it.
 func openSchemaTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	require.Contains(t, url, "_test")
-	db, err := database.Open(context.Background(), url)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	return db
+	require.NotNil(t, tablesTestDB)
+	return tablesTestDB
 }
 
 // seedClosedSalesShift inserts a Sales Shift in the CLOSED state so Service
