@@ -504,26 +504,61 @@ ORDER BY modifier_group_name ASC, modifier_option_name ASC;
 
 -- name: LockCheckForPayment :one
 -- The uniform 5C lock protocol (ADR-016): the Check row FOR UPDATE, its
--- parents FOR SHARE. The parents are only read to evaluate a precondition, so
--- locking them FOR UPDATE would serialize two cashiers paying different
--- Checks of one Session for no correctness gain.
+-- Session FOR SHARE. The Session is only read to evaluate a precondition, so
+-- locking it FOR UPDATE would serialize two cashiers paying different Checks
+-- of one Session for no correctness gain.
+--
+-- The Shift is deliberately absent. A Payment's sales_shift_id is the Shift
+-- open at the moment of the Payment, which is not necessarily the one the
+-- Session was opened in (ADR-019), so it comes from LockOpenSalesShiftForShare.
 --
 -- No row means the Check id does not exist. The state columns come back
 -- unfiltered so the caller can report which precondition failed.
 SELECT c.id, c.state, c.charge_vnd,
-       s.id AS service_session_id, s.state AS service_session_state,
-       sh.id AS sales_shift_id, sh.state AS sales_shift_state
+       s.id AS service_session_id, s.state AS service_session_state
 FROM checks c
 JOIN service_sessions s ON s.id = c.service_session_id
-JOIN sales_shifts sh ON sh.id = s.sales_shift_id
 WHERE c.id = $1
 FOR UPDATE OF c
-FOR SHARE OF s, sh;
+FOR SHARE OF s;
+
+-- name: LockOpenSalesShiftForShare :one
+-- The Sales Shift open right now, locked FOR SHARE. Only one Shift can be open
+-- at a time, enforced by sales_shift_only_one_open_unique, so no ordering or
+-- disambiguation is needed.
+--
+-- Read from sales_shifts rather than through the Check's Session. The Shift in
+-- which money reached the cashier is an independent fact — a Session opened in
+-- one Shift can be paid in the next — which is why ADR-019 stores it on the
+-- Payment at all.
+--
+-- FOR SHARE, not FOR UPDATE: every command here only reads the Shift to
+-- evaluate a precondition. Shift closure takes FOR UPDATE and stays excluded
+-- for the duration of the transaction. See §6.1.
+--
+-- No row means no Shift is open.
+SELECT id
+FROM sales_shifts
+WHERE state = 'OPEN'
+LIMIT 1
+FOR SHARE;
 
 -- name: SumCheckPayments :one
 SELECT COALESCE(SUM(applied_amount_vnd), 0)::BIGINT AS total_applied_vnd
 FROM payments
 WHERE check_id = $1;
+
+-- name: SumCheckAllocatedCharge :one
+-- The live sum that a Check's stored charge_vnd denormalizes, in one round trip
+-- rather than loading every allocation and its modifiers to add them up.
+--
+-- The caller compares this against the stored value; it is evidence, never
+-- authority. The product cannot overflow BIGINT because charge_allocations
+-- bounds quantity to 1..9999, and PostgreSQL would raise rather than wrap.
+SELECT COALESCE(SUM(ca.quantity::BIGINT * ci.unit_price_vnd), 0)::BIGINT AS allocated_vnd
+FROM charge_allocations ca
+JOIN committed_items ci ON ci.id = ca.committed_item_id
+WHERE ca.check_id = $1;
 
 -- name: InsertPayment :one
 INSERT INTO payments (
@@ -548,16 +583,17 @@ WHERE id = $1;
 -- The uniform 5C lock protocol over a set of Checks, ordered by id so two
 -- concurrent restructurings take the rows in the same order and cannot
 -- deadlock against each other or against a Payment. See ADR-016.
+--
+-- As in LockCheckForPayment, the Shift is not joined: the Shift precondition
+-- is about the Shift open now, which LockOpenSalesShiftForShare reads.
 SELECT c.id, c.state, c.charge_vnd, c.service_session_id,
-       s.state AS service_session_state,
-       s.sales_shift_id, sh.state AS sales_shift_state
+       s.state AS service_session_state
 FROM checks c
 JOIN service_sessions s ON s.id = c.service_session_id
-JOIN sales_shifts sh ON sh.id = s.sales_shift_id
 WHERE c.id = ANY($1::uuid[])
 ORDER BY c.id
 FOR UPDATE OF c
-FOR SHARE OF s, sh;
+FOR SHARE OF s;
 
 -- name: CountPaymentsForChecks :one
 SELECT count(*)::BIGINT AS payment_count
@@ -583,14 +619,35 @@ FROM charge_allocations
 WHERE check_id = $1
 ORDER BY committed_item_id;
 
--- name: SetAllocationQuantity :exec
-UPDATE charge_allocations SET quantity = $2 WHERE id = $1;
+-- name: SetAllocationQuantities :exec
+-- A whole set of quantity rewrites in one statement. Split and Merge compute
+-- the new quantities in Go and hand the batch over, so the work done while the
+-- Checks are locked is a fixed number of round trips rather than one per
+-- allocation touched.
+UPDATE charge_allocations ca
+SET quantity = q.quantity
+FROM unnest(sqlc.arg(ids)::uuid[]) WITH ORDINALITY AS d(id, ord)
+JOIN unnest(sqlc.arg(quantities)::int[]) WITH ORDINALITY AS q(quantity, ord) ON q.ord = d.ord
+WHERE ca.id = d.id;
 
--- name: DeleteAllocation :exec
-DELETE FROM charge_allocations WHERE id = $1;
+-- name: DeleteAllocations :exec
+DELETE FROM charge_allocations
+WHERE id = ANY(sqlc.arg(ids)::uuid[]);
 
--- name: MoveAllocationToCheck :exec
-UPDATE charge_allocations SET check_id = $2 WHERE id = $1;
+-- name: MoveAllocationsToCheck :exec
+UPDATE charge_allocations
+SET check_id = sqlc.arg(check_id)
+WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- name: InsertChargeAllocations :exec
+-- The batched counterpart of InsertChargeAllocation, for a Split's destination
+-- side. charge_allocation_item_check_unique allows at most one allocation per
+-- (Committed Item, Check), so the caller lists only the items that do not have
+-- one yet.
+INSERT INTO charge_allocations (committed_item_id, check_id, quantity, created_at)
+SELECT i.committed_item_id, sqlc.arg(check_id)::uuid, q.quantity, sqlc.arg(created_at)::timestamptz
+FROM unnest(sqlc.arg(committed_item_ids)::uuid[]) WITH ORDINALITY AS i(committed_item_id, ord)
+JOIN unnest(sqlc.arg(quantities)::int[]) WITH ORDINALITY AS q(quantity, ord) ON q.ord = i.ord;
 
 -- name: SetCheckCharge :exec
 UPDATE checks SET charge_vnd = $2 WHERE id = $1;

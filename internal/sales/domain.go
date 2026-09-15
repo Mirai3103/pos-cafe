@@ -66,16 +66,13 @@ const (
 )
 
 // Service Session states. 5A writes only StateActive; 5D writes StateClosed.
+//
+// There is no separate literal for the Shift's open state: whether a Shift is
+// open is answered by reading sales_shifts, not by comparing a string, so no
+// command needs the value.
 const (
 	StateActive = "ACTIVE"
 	StateClosed = "CLOSED"
-)
-
-// Cross-slice state literals Sales compares against. They are declared here
-// rather than imported, because internal/sales imports no slice but auth.
-const (
-	SessionStateActive = "ACTIVE"
-	ShiftStateOpen     = "OPEN"
 )
 
 // Order Draft states. 5A writes only DraftStateEditable; 5B writes

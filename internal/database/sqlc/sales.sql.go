@@ -27,12 +27,13 @@ func (q *Queries) CountPaymentsForChecks(ctx context.Context, dollar_1 []uuid.UU
 	return payment_count, err
 }
 
-const deleteAllocation = `-- name: DeleteAllocation :exec
-DELETE FROM charge_allocations WHERE id = $1
+const deleteAllocations = `-- name: DeleteAllocations :exec
+DELETE FROM charge_allocations
+WHERE id = ANY($1::uuid[])
 `
 
-func (q *Queries) DeleteAllocation(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, deleteAllocation, id)
+func (q *Queries) DeleteAllocations(ctx context.Context, ids []uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteAllocations, pq.Array(ids))
 	return err
 }
 
@@ -383,6 +384,34 @@ func (q *Queries) InsertChargeAllocation(ctx context.Context, arg InsertChargeAl
 		arg.CheckID,
 		arg.Quantity,
 		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertChargeAllocations = `-- name: InsertChargeAllocations :exec
+INSERT INTO charge_allocations (committed_item_id, check_id, quantity, created_at)
+SELECT i.committed_item_id, $1::uuid, q.quantity, $2::timestamptz
+FROM unnest($3::uuid[]) WITH ORDINALITY AS i(committed_item_id, ord)
+JOIN unnest($4::int[]) WITH ORDINALITY AS q(quantity, ord) ON q.ord = i.ord
+`
+
+type InsertChargeAllocationsParams struct {
+	CheckID          uuid.UUID   `json:"check_id"`
+	CreatedAt        time.Time   `json:"created_at"`
+	CommittedItemIds []uuid.UUID `json:"committed_item_ids"`
+	Quantities       []int32     `json:"quantities"`
+}
+
+// The batched counterpart of InsertChargeAllocation, for a Split's destination
+// side. charge_allocation_item_check_unique allows at most one allocation per
+// (Committed Item, Check), so the caller lists only the items that do not have
+// one yet.
+func (q *Queries) InsertChargeAllocations(ctx context.Context, arg InsertChargeAllocationsParams) error {
+	_, err := q.db.ExecContext(ctx, insertChargeAllocations,
+		arg.CheckID,
+		arg.CreatedAt,
+		pq.Array(arg.CommittedItemIds),
+		pq.Array(arg.Quantities),
 	)
 	return err
 }
@@ -1553,14 +1582,12 @@ func (q *Queries) ListSessionChecks(ctx context.Context, serviceSessionID uuid.U
 
 const lockCheckForPayment = `-- name: LockCheckForPayment :one
 SELECT c.id, c.state, c.charge_vnd,
-       s.id AS service_session_id, s.state AS service_session_state,
-       sh.id AS sales_shift_id, sh.state AS sales_shift_state
+       s.id AS service_session_id, s.state AS service_session_state
 FROM checks c
 JOIN service_sessions s ON s.id = c.service_session_id
-JOIN sales_shifts sh ON sh.id = s.sales_shift_id
 WHERE c.id = $1
 FOR UPDATE OF c
-FOR SHARE OF s, sh
+FOR SHARE OF s
 `
 
 type LockCheckForPaymentRow struct {
@@ -1569,14 +1596,16 @@ type LockCheckForPaymentRow struct {
 	ChargeVnd           int64     `json:"charge_vnd"`
 	ServiceSessionID    uuid.UUID `json:"service_session_id"`
 	ServiceSessionState string    `json:"service_session_state"`
-	SalesShiftID        uuid.UUID `json:"sales_shift_id"`
-	SalesShiftState     string    `json:"sales_shift_state"`
 }
 
 // The uniform 5C lock protocol (ADR-016): the Check row FOR UPDATE, its
-// parents FOR SHARE. The parents are only read to evaluate a precondition, so
-// locking them FOR UPDATE would serialize two cashiers paying different
-// Checks of one Session for no correctness gain.
+// Session FOR SHARE. The Session is only read to evaluate a precondition, so
+// locking it FOR UPDATE would serialize two cashiers paying different Checks
+// of one Session for no correctness gain.
+//
+// The Shift is deliberately absent. A Payment's sales_shift_id is the Shift
+// open at the moment of the Payment, which is not necessarily the one the
+// Session was opened in (ADR-019), so it comes from LockOpenSalesShiftForShare.
 //
 // No row means the Check id does not exist. The state columns come back
 // unfiltered so the caller can report which precondition failed.
@@ -1589,23 +1618,19 @@ func (q *Queries) LockCheckForPayment(ctx context.Context, id uuid.UUID) (LockCh
 		&i.ChargeVnd,
 		&i.ServiceSessionID,
 		&i.ServiceSessionState,
-		&i.SalesShiftID,
-		&i.SalesShiftState,
 	)
 	return i, err
 }
 
 const lockChecksForRestructuring = `-- name: LockChecksForRestructuring :many
 SELECT c.id, c.state, c.charge_vnd, c.service_session_id,
-       s.state AS service_session_state,
-       s.sales_shift_id, sh.state AS sales_shift_state
+       s.state AS service_session_state
 FROM checks c
 JOIN service_sessions s ON s.id = c.service_session_id
-JOIN sales_shifts sh ON sh.id = s.sales_shift_id
 WHERE c.id = ANY($1::uuid[])
 ORDER BY c.id
 FOR UPDATE OF c
-FOR SHARE OF s, sh
+FOR SHARE OF s
 `
 
 type LockChecksForRestructuringRow struct {
@@ -1614,13 +1639,14 @@ type LockChecksForRestructuringRow struct {
 	ChargeVnd           int64     `json:"charge_vnd"`
 	ServiceSessionID    uuid.UUID `json:"service_session_id"`
 	ServiceSessionState string    `json:"service_session_state"`
-	SalesShiftID        uuid.UUID `json:"sales_shift_id"`
-	SalesShiftState     string    `json:"sales_shift_state"`
 }
 
 // The uniform 5C lock protocol over a set of Checks, ordered by id so two
 // concurrent restructurings take the rows in the same order and cannot
 // deadlock against each other or against a Payment. See ADR-016.
+//
+// As in LockCheckForPayment, the Shift is not joined: the Shift precondition
+// is about the Shift open now, which LockOpenSalesShiftForShare reads.
 func (q *Queries) LockChecksForRestructuring(ctx context.Context, dollar_1 []uuid.UUID) ([]LockChecksForRestructuringRow, error) {
 	rows, err := q.db.QueryContext(ctx, lockChecksForRestructuring, pq.Array(dollar_1))
 	if err != nil {
@@ -1636,8 +1662,6 @@ func (q *Queries) LockChecksForRestructuring(ctx context.Context, dollar_1 []uui
 			&i.ChargeVnd,
 			&i.ServiceSessionID,
 			&i.ServiceSessionState,
-			&i.SalesShiftID,
-			&i.SalesShiftState,
 		); err != nil {
 			return nil, err
 		}
@@ -1967,6 +1991,35 @@ func (q *Queries) LockMenuItemSizesForCommit(ctx context.Context, sizeIds []uuid
 	return items, nil
 }
 
+const lockOpenSalesShiftForShare = `-- name: LockOpenSalesShiftForShare :one
+SELECT id
+FROM sales_shifts
+WHERE state = 'OPEN'
+LIMIT 1
+FOR SHARE
+`
+
+// The Sales Shift open right now, locked FOR SHARE. Only one Shift can be open
+// at a time, enforced by sales_shift_only_one_open_unique, so no ordering or
+// disambiguation is needed.
+//
+// Read from sales_shifts rather than through the Check's Session. The Shift in
+// which money reached the cashier is an independent fact — a Session opened in
+// one Shift can be paid in the next — which is why ADR-019 stores it on the
+// Payment at all.
+//
+// FOR SHARE, not FOR UPDATE: every command here only reads the Shift to
+// evaluate a precondition. Shift closure takes FOR UPDATE and stays excluded
+// for the duration of the transaction. See §6.1.
+//
+// No row means no Shift is open.
+func (q *Queries) LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, lockOpenSalesShiftForShare)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const lockServiceSessionForUpdate = `-- name: LockServiceSessionForUpdate :one
 SELECT id, service_mode, state, sales_shift_id
 FROM service_sessions
@@ -2060,17 +2113,19 @@ func (q *Queries) MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) err
 	return err
 }
 
-const moveAllocationToCheck = `-- name: MoveAllocationToCheck :exec
-UPDATE charge_allocations SET check_id = $2 WHERE id = $1
+const moveAllocationsToCheck = `-- name: MoveAllocationsToCheck :exec
+UPDATE charge_allocations
+SET check_id = $1
+WHERE id = ANY($2::uuid[])
 `
 
-type MoveAllocationToCheckParams struct {
-	ID      uuid.UUID `json:"id"`
-	CheckID uuid.UUID `json:"check_id"`
+type MoveAllocationsToCheckParams struct {
+	CheckID uuid.UUID   `json:"check_id"`
+	Ids     []uuid.UUID `json:"ids"`
 }
 
-func (q *Queries) MoveAllocationToCheck(ctx context.Context, arg MoveAllocationToCheckParams) error {
-	_, err := q.db.ExecContext(ctx, moveAllocationToCheck, arg.ID, arg.CheckID)
+func (q *Queries) MoveAllocationsToCheck(ctx context.Context, arg MoveAllocationsToCheckParams) error {
+	_, err := q.db.ExecContext(ctx, moveAllocationsToCheck, arg.CheckID, pq.Array(arg.Ids))
 	return err
 }
 
@@ -2116,17 +2171,25 @@ func (q *Queries) SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int6
 	return err
 }
 
-const setAllocationQuantity = `-- name: SetAllocationQuantity :exec
-UPDATE charge_allocations SET quantity = $2 WHERE id = $1
+const setAllocationQuantities = `-- name: SetAllocationQuantities :exec
+UPDATE charge_allocations ca
+SET quantity = q.quantity
+FROM unnest($1::uuid[]) WITH ORDINALITY AS d(id, ord)
+JOIN unnest($2::int[]) WITH ORDINALITY AS q(quantity, ord) ON q.ord = d.ord
+WHERE ca.id = d.id
 `
 
-type SetAllocationQuantityParams struct {
-	ID       uuid.UUID `json:"id"`
-	Quantity int32     `json:"quantity"`
+type SetAllocationQuantitiesParams struct {
+	Ids        []uuid.UUID `json:"ids"`
+	Quantities []int32     `json:"quantities"`
 }
 
-func (q *Queries) SetAllocationQuantity(ctx context.Context, arg SetAllocationQuantityParams) error {
-	_, err := q.db.ExecContext(ctx, setAllocationQuantity, arg.ID, arg.Quantity)
+// A whole set of quantity rewrites in one statement. Split and Merge compute
+// the new quantities in Go and hand the batch over, so the work done while the
+// Checks are locked is a fixed number of round trips rather than one per
+// allocation touched.
+func (q *Queries) SetAllocationQuantities(ctx context.Context, arg SetAllocationQuantitiesParams) error {
+	_, err := q.db.ExecContext(ctx, setAllocationQuantities, pq.Array(arg.Ids), pq.Array(arg.Quantities))
 	return err
 }
 
@@ -2211,6 +2274,26 @@ func (q *Queries) SettleCheck(ctx context.Context, arg SettleCheckParams) error 
 		arg.SettledStaffAccessSessionID,
 	)
 	return err
+}
+
+const sumCheckAllocatedCharge = `-- name: SumCheckAllocatedCharge :one
+SELECT COALESCE(SUM(ca.quantity::BIGINT * ci.unit_price_vnd), 0)::BIGINT AS allocated_vnd
+FROM charge_allocations ca
+JOIN committed_items ci ON ci.id = ca.committed_item_id
+WHERE ca.check_id = $1
+`
+
+// The live sum that a Check's stored charge_vnd denormalizes, in one round trip
+// rather than loading every allocation and its modifiers to add them up.
+//
+// The caller compares this against the stored value; it is evidence, never
+// authority. The product cannot overflow BIGINT because charge_allocations
+// bounds quantity to 1..9999, and PostgreSQL would raise rather than wrap.
+func (q *Queries) SumCheckAllocatedCharge(ctx context.Context, checkID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumCheckAllocatedCharge, checkID)
+	var allocated_vnd int64
+	err := row.Scan(&allocated_vnd)
+	return allocated_vnd, err
 }
 
 const sumCheckPayments = `-- name: SumCheckPayments :one

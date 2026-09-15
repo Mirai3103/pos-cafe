@@ -5,6 +5,7 @@ package shift
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"unicode/utf8"
 )
@@ -146,10 +147,46 @@ func ValidateNote(note *string, reason string) error {
 // figure negative. A total outside the bound indicates corrupt data, not a
 // legitimate drawer balance.
 func ComputeExpectedCash(openingFloatVND, cashPaymentVND, payInVND, payOutVND int64) (int64, error) {
-	total := openingFloatVND + cashPaymentVND + payInVND - payOutVND
+	total, err := addAmount(openingFloatVND, cashPaymentVND)
+	if err != nil {
+		return 0, err
+	}
+	if total, err = addAmount(total, payInVND); err != nil {
+		return 0, err
+	}
+	if total, err = subtractAmount(total, payOutVND); err != nil {
+		return 0, err
+	}
 	if total > MaxAmountVND || total < -MaxAmountVND {
 		return 0, fmt.Errorf("%w: expected cash %d is outside [%d, %d]",
 			ErrExpectedCashOutOfRange, total, -MaxAmountVND, MaxAmountVND)
 	}
 	return total, nil
+}
+
+// addAmount and subtractAmount are the guarded arithmetic this formula runs
+// through.
+//
+// The bound check below is only meaningful on a total that has not already
+// wrapped, and Go's integer arithmetic wraps silently. The Cash Payment term is
+// a SUM over a Shift's Payments, which has no upper bound of its own, so an
+// unguarded sum would defeat the very check it feeds.
+func addAmount(a, b int64) (int64, error) {
+	if b > 0 && a > math.MaxInt64-b {
+		return 0, fmt.Errorf("%w: %d + %d overflows", ErrExpectedCashOutOfRange, a, b)
+	}
+	if b < 0 && a < math.MinInt64-b {
+		return 0, fmt.Errorf("%w: %d + %d underflows", ErrExpectedCashOutOfRange, a, b)
+	}
+	return a + b, nil
+}
+
+func subtractAmount(a, b int64) (int64, error) {
+	if b > 0 && a < math.MinInt64+b {
+		return 0, fmt.Errorf("%w: %d - %d underflows", ErrExpectedCashOutOfRange, a, b)
+	}
+	if b < 0 && a > math.MaxInt64+b {
+		return 0, fmt.Errorf("%w: %d - %d overflows", ErrExpectedCashOutOfRange, a, b)
+	}
+	return a - b, nil
 }

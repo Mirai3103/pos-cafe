@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
@@ -16,14 +17,55 @@ import (
 // lockedCheck is a Check acquired under the uniform 5C lock protocol, with
 // the parent state its caller needs to evaluate preconditions.
 type lockedCheck struct {
-	ID               uuid.UUID
-	State            string
-	ChargeVND        int64
-	ServiceSessionID uuid.UUID
-	SalesShiftID     uuid.UUID
+	ID                  uuid.UUID
+	State               string
+	ChargeVND           int64
+	ServiceSessionID    uuid.UUID
+	ServiceSessionState string
+	// SalesShiftID is the Shift open at the moment of the lock, which is not
+	// necessarily the one the Check's Session was opened in. See ADR-019.
+	SalesShiftID uuid.UUID
 }
 
-// lockCheckForMutation takes the Check FOR UPDATE and its parents FOR SHARE,
+// checkPreconditions reports the first failing precondition shared by every
+// command that operates on a Check, in the precedence §6.2 documents: the
+// Check's own state, then its Session, then the Shift.
+//
+// Existence is the caller's concern, because a Check id that locks nothing
+// means a different failure to each command. Evaluating the rest in one place
+// is what keeps two commands from reporting different codes for one state.
+func checkPreconditions(c lockedCheck) error {
+	if c.State != CheckStateOpen {
+		return fmt.Errorf("%w: check %s is %s", ErrCheckNotOpen, c.ID, c.State)
+	}
+	if c.ServiceSessionState != StateActive {
+		return fmt.Errorf("%w: session %s", ErrServiceSessionClosed, c.ServiceSessionID)
+	}
+	if c.SalesShiftID == uuid.Nil {
+		return fmt.Errorf("%w: check %s", ErrOpenShiftRequired, c.ID)
+	}
+	return nil
+}
+
+// lockOpenSalesShift takes the open Sales Shift FOR SHARE and returns its id,
+// or uuid.Nil when no Shift is open.
+//
+// The Shift is read directly rather than through the Check's Session: the Shift
+// in which money reached the cashier is an independent fact, and a Session
+// opened in one Shift can be paid in the next. Deriving it from the Session
+// would answer the reconciliation question wrongly. See ADR-019.
+func lockOpenSalesShift(ctx context.Context, q *sqlc.Queries) (uuid.UUID, error) {
+	id, err := q.LockOpenSalesShiftForShare(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return uuid.Nil, nil
+		}
+		return uuid.Nil, fmt.Errorf("lock open sales shift: %w", err)
+	}
+	return id, nil
+}
+
+// lockCheckForMutation takes the Check FOR UPDATE and its Session FOR SHARE,
 // then reports the first failing precondition.
 //
 // The lock query and the precondition evaluation are deliberately separate.
@@ -41,40 +83,71 @@ func lockCheckForMutation(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 		}
 		return zero, fmt.Errorf("lock check for mutation: %w", err)
 	}
-	if row.ServiceSessionState != SessionStateActive {
-		return zero, fmt.Errorf("%w: session %s", ErrServiceSessionClosed, row.ServiceSessionID)
+	shiftID, err := lockOpenSalesShift(ctx, q)
+	if err != nil {
+		return zero, err
 	}
-	if row.SalesShiftState != ShiftStateOpen {
-		return zero, fmt.Errorf("%w: check %s", ErrOpenShiftRequired, checkID)
+	check := lockedCheck{
+		ID:                  row.ID,
+		State:               row.State,
+		ChargeVND:           row.ChargeVnd,
+		ServiceSessionID:    row.ServiceSessionID,
+		ServiceSessionState: row.ServiceSessionState,
+		SalesShiftID:        shiftID,
 	}
-	if row.State != CheckStateOpen {
-		return zero, fmt.Errorf("%w: check %s is %s", ErrCheckNotOpen, checkID, row.State)
+	if err := checkPreconditions(check); err != nil {
+		return zero, err
 	}
-	return lockedCheck{
-		ID:               row.ID,
-		State:            row.State,
-		ChargeVND:        row.ChargeVnd,
-		ServiceSessionID: row.ServiceSessionID,
-		SalesShiftID:     row.SalesShiftID,
-	}, nil
+	return check, nil
+}
+
+// assertChargeMatchesAllocations verifies a Check's stored charge against the
+// live sum of its allocations.
+//
+// The comparison is 5B's invariant: stored charge_vnd is a denormalization, and
+// a disagreement is a defect rather than a business state, so it fails the
+// request with a logged 500. Every command that rewrites a charge runs this
+// first — a value that has drifted must not be built on, or the drift is
+// propagated into a second Check before the read path ever sees it.
+func assertChargeMatchesAllocations(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
+	storedChargeVND int64,
+) error {
+	allocatedVND, err := q.SumCheckAllocatedCharge(ctx, checkID)
+	if err != nil {
+		return fmt.Errorf("sum check allocated charge: %w", err)
+	}
+	if allocatedVND != storedChargeVND {
+		slog.Error("check charge does not match its allocations",
+			"check_id", checkID,
+			"stored_charge_vnd", storedChargeVND,
+			"allocated_vnd", allocatedVND)
+		return fmt.Errorf("%w: check %s stored %d, allocated %d",
+			ErrChargeInvariantViolated, checkID, storedChargeVND, allocatedVND)
+	}
+	return nil
+}
+
+// assertChargesMatchAllocations runs the charge invariant over a set of locked
+// Checks, in the order the caller listed them so the reported failure is
+// reproducible.
+func assertChargesMatchAllocations(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID,
+	locked map[uuid.UUID]lockedCheck,
+) error {
+	for _, id := range ids {
+		if err := assertChargeMatchesAllocations(ctx, q, id, locked[id].ChargeVND); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkBalance verifies the stored charge against the live allocation sum and
 // returns what is still owed.
-//
-// The charge comparison is 5B's invariant: stored charge_vnd is a
-// denormalization, and a disagreement is a defect rather than a business
-// state, so it fails the request with a logged 500.
 func checkBalance(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
 	storedChargeVND int64,
 ) (int64, error) {
-	_, allocatedVND, err := loadCheckAllocations(ctx, q, checkID)
-	if err != nil {
+	if err := assertChargeMatchesAllocations(ctx, q, checkID, storedChargeVND); err != nil {
 		return 0, err
-	}
-	if allocatedVND != storedChargeVND {
-		return 0, fmt.Errorf("%w: check %s stored %d, allocated %d",
-			ErrChargeInvariantViolated, checkID, storedChargeVND, allocatedVND)
 	}
 	appliedVND, err := q.SumCheckPayments(ctx, checkID)
 	if err != nil {

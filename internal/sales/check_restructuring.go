@@ -23,14 +23,20 @@ func lockChecks(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (
 	if err != nil {
 		return nil, fmt.Errorf("lock checks for restructuring: %w", err)
 	}
+	shiftID, err := lockOpenSalesShift(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make(map[uuid.UUID]lockedCheck, len(rows))
 	for _, row := range rows {
 		out[row.ID] = lockedCheck{
-			ID:               row.ID,
-			State:            row.State,
-			ChargeVND:        row.ChargeVnd,
-			ServiceSessionID: row.ServiceSessionID,
-			SalesShiftID:     row.SalesShiftID,
+			ID:                  row.ID,
+			State:               row.State,
+			ChargeVND:           row.ChargeVnd,
+			ServiceSessionID:    row.ServiceSessionID,
+			ServiceSessionState: row.ServiceSessionState,
+			SalesShiftID:        shiftID,
 		}
 	}
 	for _, id := range ids {
@@ -39,6 +45,9 @@ func lockChecks(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (
 		}
 	}
 
+	// Belonging to one Service Session is a property of the set rather than of
+	// any one Check, so it is decided before the per-Check preconditions. §6.4
+	// lists it alongside them.
 	var session uuid.UUID
 	for _, row := range rows {
 		if session == uuid.Nil {
@@ -47,14 +56,10 @@ func lockChecks(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (
 			return nil, fmt.Errorf("%w: %s and %s",
 				ErrChecksDifferentSession, session, row.ServiceSessionID)
 		}
-		if row.State != CheckStateOpen {
-			return nil, fmt.Errorf("%w: check %s is %s", ErrCheckNotOpen, row.ID, row.State)
-		}
-		if row.ServiceSessionState != SessionStateActive {
-			return nil, fmt.Errorf("%w: session %s", ErrServiceSessionClosed, row.ServiceSessionID)
-		}
-		if row.SalesShiftState != ShiftStateOpen {
-			return nil, fmt.Errorf("%w: check %s", ErrOpenShiftRequired, row.ID)
+	}
+	for _, id := range ids {
+		if err := checkPreconditions(out[id]); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil
@@ -90,9 +95,16 @@ func ValidateSplitItems(items []SplitItem) error {
 				ErrInvalidCheckSplit, item.CommittedItemID)
 		}
 		seen[item.CommittedItemID] = struct{}{}
-		if item.Quantity < MinQuantity || item.Quantity > MaxQuantity {
-			return fmt.Errorf("%w: quantity %d is outside [%d, %d]",
-				ErrInvalidCheckSplit, item.Quantity, MinQuantity, MaxQuantity)
+		// §6.4 names a non-positive quantity as a split the client cannot have
+		// meant. The upper bound is a different kind of rule — a data-entry
+		// guard on the field's shape — so it is request validation (ADR-018).
+		if item.Quantity < MinQuantity {
+			return fmt.Errorf("%w: quantity %d must be at least %d",
+				ErrInvalidCheckSplit, item.Quantity, MinQuantity)
+		}
+		if item.Quantity > MaxQuantity {
+			return fmt.Errorf("%w: quantity %d exceeds the maximum of %d",
+				response.ErrInvalid, item.Quantity, MaxQuantity)
 		}
 	}
 	return nil
@@ -188,6 +200,9 @@ func (h *SplitCheckHandler) Handle(ctx context.Context, actor Actor, cmd SplitCh
 			if err := assertNoPayments(ctx, q, ids); err != nil {
 				return 0, zero, AuditRecord{}, err
 			}
+			if err := assertChargesMatchAllocations(ctx, q, ids, locked); err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
 			source := locked[cmd.SourceCheckID]
 
 			itemIDs := make([]uuid.UUID, 0, len(items))
@@ -278,35 +293,54 @@ func (h *SplitCheckHandler) Handle(ctx context.Context, actor Actor, cmd SplitCh
 				destByItem[row.CommittedItemID] = row
 			}
 
+			// The whole redistribution is planned in Go first, so applying it is
+			// a fixed number of statements rather than one per moved item. Both
+			// Checks are locked FOR UPDATE throughout, and the window other
+			// Payments and restructurings wait on should not grow with the size
+			// of this split.
+			var setIDs []uuid.UUID
+			var setQuantities []int32
+			var deleteIDs []uuid.UUID
+			var insertItemIDs []uuid.UUID
+			var insertQuantities []int32
 			for _, item := range items {
 				allocation := sourceByItem[item.CommittedItemID]
 				if item.Quantity == allocation.Quantity {
-					if err := q.DeleteAllocation(ctx, allocation.ID); err != nil {
-						return 0, zero, AuditRecord{}, fmt.Errorf("delete source allocation: %w", err)
-					}
+					deleteIDs = append(deleteIDs, allocation.ID)
 				} else {
-					if err := q.SetAllocationQuantity(ctx, sqlc.SetAllocationQuantityParams{
-						ID: allocation.ID, Quantity: allocation.Quantity - item.Quantity,
-					}); err != nil {
-						return 0, zero, AuditRecord{}, fmt.Errorf("reduce source allocation: %w", err)
-					}
+					setIDs = append(setIDs, allocation.ID)
+					setQuantities = append(setQuantities, allocation.Quantity-item.Quantity)
 				}
 
 				if existing, ok := destByItem[item.CommittedItemID]; ok {
-					if err := q.SetAllocationQuantity(ctx, sqlc.SetAllocationQuantityParams{
-						ID: existing.ID, Quantity: existing.Quantity + item.Quantity,
-					}); err != nil {
-						return 0, zero, AuditRecord{}, fmt.Errorf("raise destination allocation: %w", err)
-					}
+					setIDs = append(setIDs, existing.ID)
+					setQuantities = append(setQuantities, existing.Quantity+item.Quantity)
 					continue
 				}
-				if err := q.InsertChargeAllocation(ctx, sqlc.InsertChargeAllocationParams{
-					CommittedItemID: item.CommittedItemID,
-					CheckID:         destinationID,
-					Quantity:        item.Quantity,
-					CreatedAt:       occurredAt,
+				insertItemIDs = append(insertItemIDs, item.CommittedItemID)
+				insertQuantities = append(insertQuantities, item.Quantity)
+			}
+
+			if len(setIDs) > 0 {
+				if err := q.SetAllocationQuantities(ctx, sqlc.SetAllocationQuantitiesParams{
+					Ids: setIDs, Quantities: setQuantities,
 				}); err != nil {
-					return 0, zero, AuditRecord{}, fmt.Errorf("insert destination allocation: %w", err)
+					return 0, zero, AuditRecord{}, fmt.Errorf("rewrite allocation quantities: %w", err)
+				}
+			}
+			if len(deleteIDs) > 0 {
+				if err := q.DeleteAllocations(ctx, deleteIDs); err != nil {
+					return 0, zero, AuditRecord{}, fmt.Errorf("delete source allocations: %w", err)
+				}
+			}
+			if len(insertItemIDs) > 0 {
+				if err := q.InsertChargeAllocations(ctx, sqlc.InsertChargeAllocationsParams{
+					CheckID:          destinationID,
+					CreatedAt:        occurredAt,
+					CommittedItemIds: insertItemIDs,
+					Quantities:       insertQuantities,
+				}); err != nil {
+					return 0, zero, AuditRecord{}, fmt.Errorf("insert destination allocations: %w", err)
 				}
 			}
 
@@ -389,6 +423,9 @@ func (h *MergeChecksHandler) Handle(ctx context.Context, actor Actor, cmd MergeC
 			if err := assertNoPayments(ctx, q, ids); err != nil {
 				return 0, zero, AuditRecord{}, err
 			}
+			if err := assertChargesMatchAllocations(ctx, q, ids, locked); err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
 			surviving := locked[cmd.SurvivingCheckID]
 			absorbed := locked[cmd.AbsorbedCheckID]
 
@@ -406,24 +443,42 @@ func (h *MergeChecksHandler) Handle(ctx context.Context, actor Actor, cmd MergeC
 				survivingByItem[row.CommittedItemID] = row
 			}
 
+			// Planned in Go first, like Split: three statements regardless of how
+			// many allocations the absorbed Check carried, while both Checks are
+			// locked FOR UPDATE.
+			var setIDs []uuid.UUID
+			var setQuantities []int32
+			var moveIDs []uuid.UUID
+			var absorbedIDs []uuid.UUID
 			for _, allocation := range absorbedAllocations {
 				existing, ok := survivingByItem[allocation.CommittedItemID]
 				if !ok {
 					// Nothing to combine with: the row simply changes Check.
-					if err := q.MoveAllocationToCheck(ctx, sqlc.MoveAllocationToCheckParams{
-						ID: allocation.ID, CheckID: surviving.ID,
-					}); err != nil {
-						return 0, zero, AuditRecord{}, fmt.Errorf("move allocation: %w", err)
-					}
+					moveIDs = append(moveIDs, allocation.ID)
 					continue
 				}
-				if err := q.SetAllocationQuantity(ctx, sqlc.SetAllocationQuantityParams{
-					ID: existing.ID, Quantity: existing.Quantity + allocation.Quantity,
+				setIDs = append(setIDs, existing.ID)
+				setQuantities = append(setQuantities, existing.Quantity+allocation.Quantity)
+				absorbedIDs = append(absorbedIDs, allocation.ID)
+			}
+
+			if len(setIDs) > 0 {
+				if err := q.SetAllocationQuantities(ctx, sqlc.SetAllocationQuantitiesParams{
+					Ids: setIDs, Quantities: setQuantities,
 				}); err != nil {
-					return 0, zero, AuditRecord{}, fmt.Errorf("combine allocation: %w", err)
+					return 0, zero, AuditRecord{}, fmt.Errorf("combine allocations: %w", err)
 				}
-				if err := q.DeleteAllocation(ctx, allocation.ID); err != nil {
-					return 0, zero, AuditRecord{}, fmt.Errorf("delete absorbed allocation: %w", err)
+			}
+			if len(moveIDs) > 0 {
+				if err := q.MoveAllocationsToCheck(ctx, sqlc.MoveAllocationsToCheckParams{
+					CheckID: surviving.ID, Ids: moveIDs,
+				}); err != nil {
+					return 0, zero, AuditRecord{}, fmt.Errorf("move allocations: %w", err)
+				}
+			}
+			if len(absorbedIDs) > 0 {
+				if err := q.DeleteAllocations(ctx, absorbedIDs); err != nil {
+					return 0, zero, AuditRecord{}, fmt.Errorf("delete absorbed allocations: %w", err)
 				}
 			}
 

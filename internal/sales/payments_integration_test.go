@@ -285,6 +285,100 @@ func TestPaymentPreconditionsReportDistinctCodes(t *testing.T) {
 	})
 }
 
+// TestPaymentIsAttributedToTheShiftItWasReceivedIn pins ADR-019.
+//
+// A Payment stores its own sales_shift_id because the Shift in which the money
+// reached the cashier is an independent fact from the Shift the Session was
+// opened in: a Session opened near the end of one Shift can be paid during the
+// next. Deriving the Payment's Shift through service_sessions would attribute
+// the cash to the wrong drawer and answer the reconciliation question wrongly.
+func TestPaymentIsAttributedToTheShiftItWasReceivedIn(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.commitTakeawayDraft(t, 1)
+	checkID := env.soleCheckID(t, session.ID)
+
+	openedIn := env.ShiftID
+
+	// The Session outlives its Shift. Phase 4 ships no close command, so the
+	// seeded Shift is closed by direct SQL, the same way the fixture seeds
+	// every other unreachable state.
+	env.CloseShift(t)
+	paidIn := seedOpenShift(t, env.Queries, env.Actor.StaffID)
+	require.NotEqual(t, openedIn, paidIn, "the fixture must open a second Shift")
+
+	got, _, err := env.payCash(t, checkID, 1_000, 1_000)
+	require.NoError(t, err)
+
+	payments := env.findCheck(t, got, checkID).Payments
+	require.Len(t, payments, 1)
+	require.Equal(t, paidIn, payments[0].SalesShiftID,
+		"the Payment belongs to the Shift that received it, not the one its Session opened in")
+}
+
+// TestPaymentPreconditionPrecedence pins the order in which the three Check
+// preconditions are evaluated, which is the order every Check command shares
+// (spec §6.2: Check state, then Session, then Shift). A client in several bad
+// states at once must be told about the same one whichever command it calls,
+// so the order is observable behaviour rather than an implementation detail.
+func TestPaymentPreconditionPrecedence(t *testing.T) {
+	// closeSession and closeShift drive the Session and Shift into the states
+	// no 5C operation produces, the same way TestPaymentPreconditions-
+	// ReportDistinctCodes does.
+	closeSession := func(t *testing.T, env *salesEnv, sessionID uuid.UUID) {
+		t.Helper()
+		_, err := env.DB.Exec(
+			`UPDATE service_sessions SET state = 'CLOSED' WHERE id = $1`, sessionID)
+		require.NoError(t, err)
+	}
+
+	t.Run("the session is reported before the shift", func(t *testing.T) {
+		env := newSalesEnv(t)
+		session := env.commitTakeawayDraft(t, 1)
+		checkID := env.soleCheckID(t, session.ID)
+
+		closeSession(t, env, session.ID)
+		env.CloseShift(t)
+
+		_, status, err := env.payCash(t, checkID, 1_000, 1_000)
+		require.ErrorIs(t, err, sales.ErrServiceSessionClosed)
+		require.Equal(t, http.StatusConflict, status)
+		require.Equal(t, "SERVICE_SESSION_ALREADY_CLOSED", paymentErrorCode(t, err))
+		require.Equal(t, 0, env.countPayments(t, checkID))
+	})
+
+	t.Run("the check is reported before the session and the shift", func(t *testing.T) {
+		env := newSalesEnv(t)
+		session := env.commitTakeawayDraft(t, 2)
+		sourceID := env.soleCheckID(t, session.ID)
+		allocations := env.checkAllocations(t, session.ID, sourceID)
+
+		// Splitting creates the second Check, and merging the two leaves that
+		// second Check MERGED. Merging is the only 5C operation that produces
+		// a non-OPEN Check, so the state is reached through the real path
+		// rather than seeded.
+		split, _, err := env.splitToNewCheck(t, sourceID, []sales.SplitItem{
+			{CommittedItemID: allocations[0].CommittedItemID, Quantity: 1},
+		})
+		require.NoError(t, err)
+		mergedID := env.otherCheckID(t, split, sourceID)
+
+		_, _, err = env.mergeChecks(t, sourceID, mergedID)
+		require.NoError(t, err)
+
+		closeSession(t, env, session.ID)
+		env.CloseShift(t)
+
+		// The absorbed Check is MERGED, its Session is CLOSED, and no Shift is
+		// open: all three preconditions fail, and the Check's own state is the
+		// one that must surface.
+		_, status, err := env.payCash(t, mergedID, 1_000, 1_000)
+		require.ErrorIs(t, err, sales.ErrCheckNotOpen)
+		require.Equal(t, http.StatusConflict, status)
+		require.Equal(t, "CHECK_NOT_OPEN", paymentErrorCode(t, err))
+		require.Equal(t, 0, env.countPayments(t, mergedID))
+	})
+}
+
 // paymentErrorCode maps an error the way the HTTP layer would and returns its
 // stable code string.
 func paymentErrorCode(t *testing.T, err error) string {

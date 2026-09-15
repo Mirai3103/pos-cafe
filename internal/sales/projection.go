@@ -205,16 +205,13 @@ func loadChecks(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 		// The read-path half of the settlement guard. The database constraint
 		// guarantees that a SETTLED Check carries complete evidence; this
 		// guarantees that its state matches the money. A MERGED Check is
-		// exempt: its charge and allocations moved to the survivor.
+		// exempt: its charge and allocations moved to the survivor, and
+		// check_settlement_evidence_valid already requires it to point at one.
 		if row.State != CheckStateMerged &&
 			(row.State == CheckStateSettled) != SettlesCheck(balanceVND) {
 			slog.Error("check state does not match its balance",
 				"check_id", row.ID, "state", row.State, "balance_vnd", balanceVND)
 			return nil, fmt.Errorf("%w: check %s", ErrSettlementInvariantViolated, row.ID)
-		}
-		if row.State == CheckStateMerged && !row.MergedIntoCheckID.Valid {
-			slog.Error("merged check has no surviving check", "check_id", row.ID)
-			return nil, fmt.Errorf("%w: merged check %s", ErrSettlementInvariantViolated, row.ID)
 		}
 
 		check := CheckResponse{

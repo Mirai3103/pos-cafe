@@ -3,6 +3,7 @@ package sales_test
 import (
 	"testing"
 
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -36,10 +37,15 @@ func TestValidateSplitItems(t *testing.T) {
 		}), sales.ErrInvalidCheckSplit)
 	})
 
-	t.Run("a quantity above the bound is rejected", func(t *testing.T) {
-		require.ErrorIs(t, sales.ValidateSplitItems([]sales.SplitItem{
+	t.Run("a quantity above the bound is request validation", func(t *testing.T) {
+		// The upper bound guards the field's shape rather than describing a
+		// split the client cannot have meant, so it lands on INVALID_INPUT
+		// alongside the other quantity bounds (ADR-018).
+		err := sales.ValidateSplitItems([]sales.SplitItem{
 			{CommittedItemID: a, Quantity: 10_000},
-		}), sales.ErrInvalidCheckSplit)
+		})
+		require.ErrorIs(t, err, response.ErrInvalid)
+		require.NotErrorIs(t, err, sales.ErrInvalidCheckSplit)
 	})
 }
 

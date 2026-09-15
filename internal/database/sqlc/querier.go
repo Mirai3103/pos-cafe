@@ -42,7 +42,7 @@ type Querier interface {
 	CreateStaffSession(ctx context.Context, arg CreateStaffSessionParams) (CreateStaffSessionRow, error)
 	// -- Tables --
 	CreateTable(ctx context.Context, arg CreateTableParams) (Table, error)
-	DeleteAllocation(ctx context.Context, id uuid.UUID) error
+	DeleteAllocations(ctx context.Context, ids []uuid.UUID) error
 	DeleteDraftItem(ctx context.Context, id uuid.UUID) error
 	DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
@@ -139,6 +139,11 @@ type Querier interface {
 	// -- Cash Movements --
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
 	InsertChargeAllocation(ctx context.Context, arg InsertChargeAllocationParams) error
+	// The batched counterpart of InsertChargeAllocation, for a Split's destination
+	// side. charge_allocation_item_check_unique allows at most one allocation per
+	// (Committed Item, Check), so the caller lists only the items that do not have
+	// one yet.
+	InsertChargeAllocations(ctx context.Context, arg InsertChargeAllocationsParams) error
 	InsertCheck(ctx context.Context, arg InsertCheckParams) (InsertCheckRow, error)
 	InsertCommittedItem(ctx context.Context, arg InsertCommittedItemParams) (uuid.UUID, error)
 	InsertCommittedItemModifierOption(ctx context.Context, arg InsertCommittedItemModifierOptionParams) error
@@ -243,9 +248,13 @@ type Querier interface {
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
 	// The uniform 5C lock protocol (ADR-016): the Check row FOR UPDATE, its
-	// parents FOR SHARE. The parents are only read to evaluate a precondition, so
-	// locking them FOR UPDATE would serialize two cashiers paying different
-	// Checks of one Session for no correctness gain.
+	// Session FOR SHARE. The Session is only read to evaluate a precondition, so
+	// locking it FOR UPDATE would serialize two cashiers paying different Checks
+	// of one Session for no correctness gain.
+	//
+	// The Shift is deliberately absent. A Payment's sales_shift_id is the Shift
+	// open at the moment of the Payment, which is not necessarily the one the
+	// Session was opened in (ADR-019), so it comes from LockOpenSalesShiftForShare.
 	//
 	// No row means the Check id does not exist. The state columns come back
 	// unfiltered so the caller can report which precondition failed.
@@ -253,6 +262,9 @@ type Querier interface {
 	// The uniform 5C lock protocol over a set of Checks, ordered by id so two
 	// concurrent restructurings take the rows in the same order and cannot
 	// deadlock against each other or against a Payment. See ADR-016.
+	//
+	// As in LockCheckForPayment, the Shift is not joined: the Shift precondition
+	// is about the Shift open now, which LockOpenSalesShiftForShare reads.
 	LockChecksForRestructuring(ctx context.Context, dollar_1 []uuid.UUID) ([]LockChecksForRestructuringRow, error)
 	// The Session's most recent OPEN Check, for the CURRENT_UNPAID target.
 	LockCurrentOpenCheck(ctx context.Context, serviceSessionID uuid.UUID) (LockCurrentOpenCheckRow, error)
@@ -288,6 +300,21 @@ type Querier interface {
 	// busiest path in the system, for no correctness gain. internal/catalog's
 	// mutations take FOR UPDATE and are still excluded. See ADR-015.
 	LockMenuItemSizesForCommit(ctx context.Context, sizeIds []uuid.UUID) ([]LockMenuItemSizesForCommitRow, error)
+	// The Sales Shift open right now, locked FOR SHARE. Only one Shift can be open
+	// at a time, enforced by sales_shift_only_one_open_unique, so no ordering or
+	// disambiguation is needed.
+	//
+	// Read from sales_shifts rather than through the Check's Session. The Shift in
+	// which money reached the cashier is an independent fact — a Session opened in
+	// one Shift can be paid in the next — which is why ADR-019 stores it on the
+	// Payment at all.
+	//
+	// FOR SHARE, not FOR UPDATE: every command here only reads the Shift to
+	// evaluate a precondition. Shift closure takes FOR UPDATE and stays excluded
+	// for the duration of the transaction. See §6.1.
+	//
+	// No row means no Shift is open.
+	LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
 	// Locks the selected Tables in id order so two concurrent assignments over
 	// overlapping sets cannot deadlock against each other. The caller must sort
@@ -297,7 +324,7 @@ type Querier interface {
 	// what the MERGED branch of check_settlement_evidence_valid requires.
 	MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error
 	MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error
-	MoveAllocationToCheck(ctx context.Context, arg MoveAllocationToCheckParams) error
+	MoveAllocationsToCheck(ctx context.Context, arg MoveAllocationsToCheckParams) error
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
 	RaiseCheckCharge(ctx context.Context, arg RaiseCheckChargeParams) error
@@ -322,7 +349,11 @@ type Querier interface {
 	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
 	SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
-	SetAllocationQuantity(ctx context.Context, arg SetAllocationQuantityParams) error
+	// A whole set of quantity rewrites in one statement. Split and Merge compute
+	// the new quantities in Go and hand the batch over, so the work done while the
+	// Checks are locked is a fixed number of round trips rather than one per
+	// allocation touched.
+	SetAllocationQuantities(ctx context.Context, arg SetAllocationQuantitiesParams) error
 	SetCheckCharge(ctx context.Context, arg SetCheckChargeParams) error
 	SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuantityParams) (SetDraftItemQuantityRow, error)
 	SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAvailabilityParams) (MenuItem, error)
@@ -346,6 +377,13 @@ type Querier interface {
 	// internal/shift reads the payments table through its own query rather than
 	// importing internal/sales, following ADR-012.
 	SumCashPaymentsForShift(ctx context.Context, salesShiftID uuid.UUID) (int64, error)
+	// The live sum that a Check's stored charge_vnd denormalizes, in one round trip
+	// rather than loading every allocation and its modifiers to add them up.
+	//
+	// The caller compares this against the stored value; it is evidence, never
+	// authority. The product cannot overflow BIGINT because charge_allocations
+	// bounds quantity to 1..9999, and PostgreSQL would raise rather than wrap.
+	SumCheckAllocatedCharge(ctx context.Context, checkID uuid.UUID) (int64, error)
 	SumCheckPayments(ctx context.Context, checkID uuid.UUID) (int64, error)
 	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	// size_key and note_key are generated columns, so they follow the write.

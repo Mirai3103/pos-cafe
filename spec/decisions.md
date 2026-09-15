@@ -293,3 +293,37 @@ CREATE TABLE idempotency_keys (
 * `internal/shift` reads the `payments` table through its own query and does not import `internal/sales`, following ADR-012.
 * **Consequences:**
 * Expected Cash becomes a usable reconciliation figure for every cafe that does not issue cash refunds, which is the current operating reality; the remaining gap is named precisely instead of being attributed to a phase that will close without filling it.
+
+---
+
+## ADR-021: A Check command locks the Shift that is open, not the one its Session was opened in
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** ADR-019 stores a Payment's `sales_shift_id` because the Shift in which money reached the cashier is an independent fact, and a Session opened in one Shift can be paid in the next. The 5C implementation nonetheless read both that attribution and the "Shift must be open" precondition by joining `checks → service_sessions → sales_shifts`, recovering exactly the derived value ADR-019 exists to avoid. The two disagree as soon as a Session outlives its Shift.
+* **Decision:**
+* `LockCheckForPayment` and `LockChecksForRestructuring` no longer join `sales_shifts`. They lock the Check `FOR UPDATE` and its Session `FOR SHARE`, as ADR-016 requires.
+* A separate query, `LockOpenSalesShiftForShare`, takes the Shift whose state is `OPEN` `FOR SHARE` and returns its id. `sales_shift_only_one_open_unique` makes "the open Shift" unambiguous, so the query needs no ordering.
+* The Shift a Payment is attributed to, the Shift its settlement records, and the Shift precondition every Check command evaluates are all that row.
+* The lock order is unchanged: `checks`, then `service_sessions`, then `sales_shifts`. The Shift lock is a second statement rather than part of the join, but no transaction takes these in a different order, so ADR-016's no-deadlock-cycle guarantee holds.
+* **Consequences:**
+* A Session that outlives its Shift stays payable, and its Payments are attributed to the Shift that was open when the money arrived — which is what reconciliation reads and what ADR-019 promised.
+* The precondition is now "a Shift is open" rather than "the Session's Shift is open", matching §6.4's wording and removing a rejection that no cashier could act on.
+* `internal/sales` no longer carries a `ShiftStateOpen` literal: whether a Shift is open is answered by reading `sales_shifts`, not by comparing a string.
+
+---
+
+## ADR-022: Split and Merge run the same charge invariant and preconditions as Payment
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** 5B established that a Check's stored `charge_vnd` is a denormalization of the sum over its allocations, and that a disagreement is a defect surfacing as a logged 500 rather than a business state. Payment implemented that check. Split and Merge, which also rewrite a charge, trusted the stored value instead. The three commands also evaluated the same three preconditions in two different orders, so identical bad state produced different error codes depending on which endpoint was called.
+* **Decision:**
+* One assertion, `assertChargeMatchesAllocations`, recomputes a Check's charge and fails on disagreement. Every command that rewrites a charge runs it before computing anything from the stored value.
+* One function, `checkPreconditions`, evaluates Check state, then Session state, then Shift state, in the precedence §6.2 documents. Every command calls it, so a given state yields one code across the whole surface.
+* The invariant reads one aggregate query rather than the full allocation projection, so Payment no longer loads every allocation and its modifiers to compute a single sum.
+* Split and Merge plan their whole allocation redistribution in Go and apply it in a fixed number of batched statements, so the work done while both Checks are locked does not grow with the number of items moved.
+* **Consequences:**
+* A charge that has drifted fails the command that would have built on it, instead of being propagated into a second Check before the read path notices.
+* Split and Merge each cost one extra aggregate read inside the transaction; that is the price of not trusting a denormalization, and it is bounded.
+* A Check that is `SETTLED` with its Session and Shift also closed now reports `CHECK_NOT_OPEN` from every endpoint, rather than `CHECK_NOT_OPEN` from Split and `SERVICE_SESSION_ALREADY_CLOSED` from Pay Cash.
