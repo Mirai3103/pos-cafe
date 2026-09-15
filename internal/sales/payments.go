@@ -68,6 +68,13 @@ func lockOpenSalesShift(ctx context.Context, q *sqlc.Queries) (uuid.UUID, error)
 // lockCheckForMutation takes the Check FOR UPDATE and then its Session
 // FOR UPDATE, then reports the first failing precondition.
 //
+// The two locks are separate statements, in that order: SQL does not guarantee
+// that one statement's FOR UPDATE OF c, s acquires the two relations' tuple
+// locks in OF-list order, and the protocol's no-deadlock argument (ADR-023)
+// depends on every command taking Check before Session. This is the same order
+// lockChecks uses for restructurings; the Shift lock follows the Session lock
+// in both.
+//
 // The Session lock is exclusive rather than FOR SHARE because the command does
 // not stop at reading the Session to evaluate a precondition: inside the same
 // READ COMMITTED transaction it rebuilds the whole Service Session read model
@@ -91,6 +98,16 @@ func lockCheckForMutation(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 		}
 		return zero, fmt.Errorf("lock check for mutation: %w", err)
 	}
+	// The not-found branch is defensive: a Session row cannot disappear while
+	// its Check is locked by the same transaction, because there is no
+	// session-delete path.
+	sessionRow, err := q.LockServiceSessionForUpdate(ctx, row.ServiceSessionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return zero, fmt.Errorf("%w: session %s", ErrServiceSessionNotFound, row.ServiceSessionID)
+		}
+		return zero, fmt.Errorf("lock service session: %w", err)
+	}
 	shiftID, err := lockOpenSalesShift(ctx, q)
 	if err != nil {
 		return zero, err
@@ -100,7 +117,7 @@ func lockCheckForMutation(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 		State:               row.State,
 		ChargeVND:           row.ChargeVnd,
 		ServiceSessionID:    row.ServiceSessionID,
-		ServiceSessionState: row.ServiceSessionState,
+		ServiceSessionState: sessionRow.State,
 		SalesShiftID:        shiftID,
 	}
 	if err := checkPreconditions(check); err != nil {

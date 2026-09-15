@@ -247,16 +247,19 @@ type Querier interface {
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
 	ListTables(ctx context.Context) ([]Table, error)
-	// The 5C lock protocol (ADR-016 as amended by ADR-023): the Check row
-	// FOR UPDATE, then its Session FOR UPDATE. The Session is exclusive, not
-	// FOR SHARE, because a Payment does not merely read the Session to evaluate a
-	// precondition -- it rebuilds the whole Service Session read model through
-	// LoadServiceSession inside the same READ COMMITTED transaction, and that
-	// rebuild is several statements. A sibling Check's commit landing between them
-	// is observed half-applied and trips the settlement invariant, which rolls back
-	// a valid Payment.
+	// The 5C lock protocol (ADR-016 as amended by ADR-023), first half: the Check
+	// row FOR UPDATE. SQL does not guarantee that one statement's FOR UPDATE OF c, s
+	// acquires the two relations' tuple locks in OF-list order, so the Session lock
+	// is a separate statement: the caller locks the Check here and its Session
+	// through LockServiceSessionForUpdate immediately afterwards, which is the same
+	// Check-then-Session order lockChecks uses for restructurings. See ADR-023.
 	//
-	// Lock order is Check then Session, never the reverse: see ADR-023.
+	// The Session is exclusive (FOR UPDATE, not FOR SHARE), because a Payment does
+	// not merely read the Session to evaluate a precondition -- it rebuilds the
+	// whole Service Session read model through LoadServiceSession inside the same
+	// READ COMMITTED transaction, and that rebuild is several statements. A sibling
+	// Check's commit landing between them is observed half-applied and trips the
+	// settlement invariant, which rolls back a valid Payment.
 	//
 	// The Shift is deliberately absent. A Payment's sales_shift_id is the Shift
 	// open at the moment of the Payment, which is not necessarily the one the

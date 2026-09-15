@@ -336,7 +336,7 @@ CREATE TABLE idempotency_keys (
 * **Status:** Accepted; supersedes the Session-lock clause of ADR-016
 * **Context:** ADR-016 weakened the canonical `FOR UPDATE` on `service_sessions` to `FOR SHARE` on the premise that the 5C commands "read parent state to evaluate a precondition". That premise is incomplete: every 5C command also rebuilds the whole Service Session read model via `LoadServiceSession` inside the same READ COMMITTED transaction, and `loadChecks` does it in several statements. A sibling Check's commit landing between those statements is observed half-applied and trips the settlement invariant, rolling back a valid Payment. Latent since 5C, and reproducible 3/3 once the integration suite shares one warm pool per package (the per-test connection handshake had been staggering the racing goroutines past the window).
 * **Decision:**
-* `LockCheckForPayment` locks its Session `FOR UPDATE`.
+* `LockCheckForPayment` locks the Check `FOR UPDATE` and its Session `FOR UPDATE` in two separate statements, Check first: SQL does not guarantee that one statement's `FOR UPDATE OF c, s` acquires the two relations' tuple locks in OF-list order, and the no-deadlock argument below depends on that order being explicit.
 * `LockChecksForRestructuring` locks its Checks only and the caller takes the Session lock afterwards, so the lock order stays Check(s) then Session for every command and ADR-016's no-deadlock guarantee survives. Two Payments on one Session no longer proceed in parallel; they serialize.
 * **Consequences:**
 * Sibling-Check parallelism within a Session is given up deliberately. Payments on different Sessions, and every other command, are unaffected.
