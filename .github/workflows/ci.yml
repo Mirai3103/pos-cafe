@@ -7,24 +7,9 @@ on:
     branches: [ master, main ]
 
 jobs:
-  test:
-    name: Build & Test
+  unit:
+    name: Unit Tests & Build
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: cafe_pos
-          POSTGRES_PASSWORD: cafe_pos_dev
-          POSTGRES_DB: cafe_pos_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U cafe_pos -d cafe_pos_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - name: Checkout Code
@@ -60,13 +45,6 @@ jobs:
       - name: Run Unit Tests (-race)
         run: go test -v -race -coverprofile=coverage-unit.out -covermode=atomic ./...
 
-      # -p 1: integration packages share one database and TRUNCATE the same
-      # tables, so they must not run in parallel with each other.
-      - name: Run Integration Tests (-tags=integration)
-        env:
-          TEST_DATABASE_URL: postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
-        run: go test -v -race -p 1 -tags=integration -coverprofile=coverage-int.out -covermode=atomic ./...
-
       - name: Upload Unit Test Coverage to Codecov
         if: hashFiles('coverage-unit.out') != ''
         uses: codecov/codecov-action@v5
@@ -76,6 +54,44 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+      - name: Verify Build
+        run: go build -v ./cmd/api
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: cafe_pos
+          POSTGRES_PASSWORD: cafe_pos_dev
+          POSTGRES_DB: cafe_pos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cafe_pos -d cafe_pos_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.x'
+          check-latest: true
+          cache: true
+
+      - name: Run Integration Tests (-tags=integration)
+        env:
+          TEST_DATABASE_URL: postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
+        run: go test -v -race -tags=integration -coverprofile=coverage-int.out -covermode=atomic ./...
+
       - name: Upload Integration Test Coverage to Codecov
         if: hashFiles('coverage-int.out') != ''
         uses: codecov/codecov-action@v5
@@ -84,9 +100,6 @@ jobs:
           flags: integration
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Verify Build
-        run: go build -v ./cmd/api
 
   lint:
     name: Lint & Vulnerability Scan
