@@ -15,6 +15,15 @@ import (
 	"github.com/lib/pq"
 )
 
+const closeServiceSession = `-- name: CloseServiceSession :exec
+UPDATE service_sessions SET state = 'CLOSED' WHERE id = $1
+`
+
+func (q *Queries) CloseServiceSession(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, closeServiceSession, id)
+	return err
+}
+
 const countPaymentsForChecks = `-- name: CountPaymentsForChecks :one
 SELECT count(*)::BIGINT AS payment_count
 FROM payments
@@ -83,6 +92,17 @@ LIMIT 1
 // column of the same name and calls the bare reference ambiguous.)
 func (q *Queries) FindBlockingDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRowContext(ctx, findBlockingDraft, serviceSessionID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findCompletedSaleByServiceSession = `-- name: FindCompletedSaleByServiceSession :one
+SELECT id FROM completed_sales WHERE service_session_id = $1
+`
+
+func (q *Queries) FindCompletedSaleByServiceSession(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, findCompletedSaleByServiceSession, serviceSessionID)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -163,6 +183,49 @@ func (q *Queries) FindDraftItemByCompositionExcluding(ctx context.Context, arg F
 	)
 	var i FindDraftItemByCompositionExcludingRow
 	err := row.Scan(&i.ID, &i.Quantity)
+	return i, err
+}
+
+const getCompletedSale = `-- name: GetCompletedSale :one
+SELECT cs.id, cs.service_session_id, cs.completed_by_staff_identity_id,
+       cs.completed_staff_access_session_id, cs.completed_at,
+       ss.service_number, ss.service_mode, ss.state AS service_session_state,
+       ss.created_at AS service_session_created_at,
+       si.display_name AS completed_by_display_name
+FROM completed_sales cs
+JOIN service_sessions ss ON ss.id = cs.service_session_id
+JOIN staff_identities si ON si.id = cs.completed_by_staff_identity_id
+WHERE cs.id = $1
+`
+
+type GetCompletedSaleRow struct {
+	ID                            uuid.UUID `json:"id"`
+	ServiceSessionID              uuid.UUID `json:"service_session_id"`
+	CompletedByStaffIdentityID    uuid.UUID `json:"completed_by_staff_identity_id"`
+	CompletedStaffAccessSessionID uuid.UUID `json:"completed_staff_access_session_id"`
+	CompletedAt                   time.Time `json:"completed_at"`
+	ServiceNumber                 string    `json:"service_number"`
+	ServiceMode                   string    `json:"service_mode"`
+	ServiceSessionState           string    `json:"service_session_state"`
+	ServiceSessionCreatedAt       time.Time `json:"service_session_created_at"`
+	CompletedByDisplayName        string    `json:"completed_by_display_name"`
+}
+
+func (q *Queries) GetCompletedSale(ctx context.Context, id uuid.UUID) (GetCompletedSaleRow, error) {
+	row := q.db.QueryRowContext(ctx, getCompletedSale, id)
+	var i GetCompletedSaleRow
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceSessionID,
+		&i.CompletedByStaffIdentityID,
+		&i.CompletedStaffAccessSessionID,
+		&i.CompletedAt,
+		&i.ServiceNumber,
+		&i.ServiceMode,
+		&i.ServiceSessionState,
+		&i.ServiceSessionCreatedAt,
+		&i.CompletedByDisplayName,
+	)
 	return i, err
 }
 
@@ -514,6 +577,32 @@ func (q *Queries) InsertCommittedItemModifierOption(ctx context.Context, arg Ins
 		arg.SurchargeVnd,
 	)
 	return err
+}
+
+const insertCompletedSale = `-- name: InsertCompletedSale :one
+INSERT INTO completed_sales (service_session_id, completed_by_staff_identity_id,
+                             completed_staff_access_session_id, completed_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id
+`
+
+type InsertCompletedSaleParams struct {
+	ServiceSessionID              uuid.UUID `json:"service_session_id"`
+	CompletedByStaffIdentityID    uuid.UUID `json:"completed_by_staff_identity_id"`
+	CompletedStaffAccessSessionID uuid.UUID `json:"completed_staff_access_session_id"`
+	CompletedAt                   time.Time `json:"completed_at"`
+}
+
+func (q *Queries) InsertCompletedSale(ctx context.Context, arg InsertCompletedSaleParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, insertCompletedSale,
+		arg.ServiceSessionID,
+		arg.CompletedByStaffIdentityID,
+		arg.CompletedStaffAccessSessionID,
+		arg.CompletedAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertDraftItem = `-- name: InsertDraftItem :one
@@ -1587,6 +1676,41 @@ func (q *Queries) ListEffectiveModifierGroupsForCommit(ctx context.Context, menu
 	return items, nil
 }
 
+const listHeldTableAssignments = `-- name: ListHeldTableAssignments :many
+SELECT id, table_id
+FROM table_assignments
+WHERE service_session_id = $1 AND released_at IS NULL
+FOR UPDATE
+`
+
+type ListHeldTableAssignmentsRow struct {
+	ID      uuid.UUID `json:"id"`
+	TableID uuid.UUID `json:"table_id"`
+}
+
+func (q *Queries) ListHeldTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]ListHeldTableAssignmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listHeldTableAssignments, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHeldTableAssignmentsRow{}
+	for rows.Next() {
+		var i ListHeldTableAssignmentsRow
+		if err := rows.Scan(&i.ID, &i.TableID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listModifierOptionsForValidation = `-- name: ListModifierOptionsForValidation :many
 SELECT o.id, o.modifier_group_id, o.available,
        (o.retired_at IS NOT NULL) AS option_retired,
@@ -1776,6 +1900,48 @@ func (q *Queries) ListSessionOrders(ctx context.Context, serviceSessionID uuid.U
 			&i.SubmittedByStaffIdentityID,
 			&i.SubmittedStaffAccessSessionID,
 			&i.SubmittedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSessionPreparationTransitions = `-- name: ListSessionPreparationTransitions :many
+SELECT put.id, put.preparation_unit_id, put.prior_state, put.resulting_state,
+       put.actor_staff_identity_id, put.staff_access_session_id, put.occurred_at
+FROM preparation_unit_transitions put
+JOIN preparation_units pu ON pu.id = put.preparation_unit_id
+JOIN order_items oi ON oi.id = pu.order_item_id
+JOIN orders o ON o.id = oi.order_id
+WHERE o.service_session_id = $1
+ORDER BY put.occurred_at ASC, put.id ASC
+`
+
+func (q *Queries) ListSessionPreparationTransitions(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnitTransition, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionPreparationTransitions, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PreparationUnitTransition{}
+	for rows.Next() {
+		var i PreparationUnitTransition
+		if err := rows.Scan(
+			&i.ID,
+			&i.PreparationUnitID,
+			&i.PriorState,
+			&i.ResultingState,
+			&i.ActorStaffIdentityID,
+			&i.StaffAccessSessionID,
+			&i.OccurredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2364,6 +2530,34 @@ func (q *Queries) LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, er
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const lockServiceSessionForClosure = `-- name: LockServiceSessionForClosure :one
+SELECT id, state, service_number, service_mode, created_at
+FROM service_sessions
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockServiceSessionForClosureRow struct {
+	ID            uuid.UUID `json:"id"`
+	State         string    `json:"state"`
+	ServiceNumber string    `json:"service_number"`
+	ServiceMode   string    `json:"service_mode"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+func (q *Queries) LockServiceSessionForClosure(ctx context.Context, id uuid.UUID) (LockServiceSessionForClosureRow, error) {
+	row := q.db.QueryRowContext(ctx, lockServiceSessionForClosure, id)
+	var i LockServiceSessionForClosureRow
+	err := row.Scan(
+		&i.ID,
+		&i.State,
+		&i.ServiceNumber,
+		&i.ServiceMode,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const lockServiceSessionForUpdate = `-- name: LockServiceSessionForUpdate :one

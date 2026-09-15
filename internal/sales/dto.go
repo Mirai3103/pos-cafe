@@ -370,3 +370,54 @@ type CloseServiceSessionCommand struct {
 	RequestID        uuid.UUID `json:"request_id" validate:"required"`
 	ServiceSessionID uuid.UUID `json:"-"`
 }
+
+// CompletedSaleCheckResponse is one Check as it stood at closure: settled,
+// with a zero balance, carrying its Payments and Charge Allocations.
+type CompletedSaleCheckResponse struct {
+	ID              uuid.UUID                  `json:"id"`
+	State           string                     `json:"state"`
+	ChargeVND       int64                      `json:"charge_vnd"`
+	TotalAppliedVND int64                      `json:"total_applied_vnd"`
+	BalanceVND      int64                      `json:"balance_vnd"`
+	Payments        []PaymentResponse          `json:"payments"`
+	Allocations     []ChargeAllocationResponse `json:"allocations"`
+}
+
+// PreparationTransitionResponse is one recorded move of a Preparation Unit.
+//
+// It reads from preparation_unit_transitions rather than reconstructing the
+// history from audit payloads (ADR-027): a Completed Sale is immutable
+// content, not a derived report.
+type PreparationTransitionResponse struct {
+	ID             uuid.UUID `json:"id"`
+	UnitID         uuid.UUID `json:"preparation_unit_id"`
+	PriorState     string    `json:"prior_state"`
+	ResultingState string    `json:"resulting_state"`
+	ActorStaffID   uuid.UUID `json:"actor_staff_identity_id"`
+	StaffSessionID uuid.UUID `json:"staff_access_session_id"`
+	OccurredAt     time.Time `json:"occurred_at"`
+}
+
+// CompletedSaleResponse is the immutable outcome of a closed Service Session.
+type CompletedSaleResponse struct {
+	ID                     uuid.UUID                       `json:"id"`
+	State                  string                          `json:"state"`
+	ServiceSessionID       uuid.UUID                       `json:"service_session_id"`
+	ServiceNumber          string                          `json:"service_number"`
+	ServiceMode            string                          `json:"service_mode"`
+	ServiceSessionState    string                          `json:"service_session_state"`
+	ServiceSessionOpenedAt time.Time                       `json:"service_session_opened_at"`
+	CompletedByStaffID     uuid.UUID                       `json:"completed_by_staff_identity_id"`
+	CompletedBySessionID   uuid.UUID                       `json:"completed_staff_access_session_id"`
+	CompletedByName        string                          `json:"completed_by_display_name"`
+	CompletedAt            time.Time                       `json:"completed_at"`
+	Checks                 []CompletedSaleCheckResponse    `json:"checks"`
+	Orders                 []OrderResponse                 `json:"orders"`
+	PreparationUnits       []PreparationUnitResponse       `json:"preparation_units"`
+	PreparationHistory     []PreparationTransitionResponse `json:"preparation_history"`
+}
+
+// CompletedSaleStateCompleted is the only state a Completed Sale has. It is a
+// literal in the contract so a client can branch on it exactly as it branches
+// on a Check's or a Session's state.
+const CompletedSaleStateCompleted = "COMPLETED"

@@ -770,3 +770,48 @@ INSERT INTO preparation_units (order_item_id, unit_number, service_number,
                                category_name, item_name, size_name,
                                modifiers, preparation_note, queued_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
+-- name: LockServiceSessionForClosure :one
+SELECT id, state, service_number, service_mode, created_at
+FROM service_sessions
+WHERE id = $1
+FOR UPDATE;
+
+-- name: FindCompletedSaleByServiceSession :one
+SELECT id FROM completed_sales WHERE service_session_id = $1;
+
+-- name: InsertCompletedSale :one
+INSERT INTO completed_sales (service_session_id, completed_by_staff_identity_id,
+                             completed_staff_access_session_id, completed_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id;
+
+-- name: ListHeldTableAssignments :many
+SELECT id, table_id
+FROM table_assignments
+WHERE service_session_id = $1 AND released_at IS NULL
+FOR UPDATE;
+
+-- name: CloseServiceSession :exec
+UPDATE service_sessions SET state = 'CLOSED' WHERE id = $1;
+
+-- name: GetCompletedSale :one
+SELECT cs.id, cs.service_session_id, cs.completed_by_staff_identity_id,
+       cs.completed_staff_access_session_id, cs.completed_at,
+       ss.service_number, ss.service_mode, ss.state AS service_session_state,
+       ss.created_at AS service_session_created_at,
+       si.display_name AS completed_by_display_name
+FROM completed_sales cs
+JOIN service_sessions ss ON ss.id = cs.service_session_id
+JOIN staff_identities si ON si.id = cs.completed_by_staff_identity_id
+WHERE cs.id = $1;
+
+-- name: ListSessionPreparationTransitions :many
+SELECT put.id, put.preparation_unit_id, put.prior_state, put.resulting_state,
+       put.actor_staff_identity_id, put.staff_access_session_id, put.occurred_at
+FROM preparation_unit_transitions put
+JOIN preparation_units pu ON pu.id = put.preparation_unit_id
+JOIN order_items oi ON oi.id = pu.order_item_id
+JOIN orders o ON o.id = oi.order_id
+WHERE o.service_session_id = $1
+ORDER BY put.occurred_at ASC, put.id ASC;

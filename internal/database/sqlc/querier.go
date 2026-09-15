@@ -17,6 +17,7 @@ type Querier interface {
 	ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogRequestParams) (CatalogMutationRequest, error)
 	ClaimIdempotencyRecord(ctx context.Context, arg ClaimIdempotencyRecordParams) (IdempotencyKey, error)
 	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
+	CloseServiceSession(ctx context.Context, id uuid.UUID) error
 	CountActiveManagers(ctx context.Context) (int64, error)
 	CountManagers(ctx context.Context) (int64, error)
 	CountPaymentsForChecks(ctx context.Context, dollar_1 []uuid.UUID) (int64, error)
@@ -61,6 +62,7 @@ type Querier interface {
 	// because sqlc's analyzer, unlike PostgreSQL, sees the subquery's orders
 	// column of the same name and calls the bare reference ambiguous.)
 	FindBlockingDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error)
+	FindCompletedSaleByServiceSession(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error)
 	FindDraftItemByComposition(ctx context.Context, arg FindDraftItemByCompositionParams) (FindDraftItemByCompositionRow, error)
 	// findDraftItemByComposition plus an id <> $n clause, so the row being edited
 	// never matches itself. A separate query rather than a nullable exclusion
@@ -72,6 +74,7 @@ type Querier interface {
 	GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error)
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
+	GetCompletedSale(ctx context.Context, id uuid.UUID) (GetCompletedSaleRow, error)
 	GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (GetEditableDraftRow, error)
 	// Includes released assignments, so a released sequence number is never
 	// reused and the audit trail stays unambiguous.
@@ -151,6 +154,7 @@ type Querier interface {
 	InsertCheck(ctx context.Context, arg InsertCheckParams) (InsertCheckRow, error)
 	InsertCommittedItem(ctx context.Context, arg InsertCommittedItemParams) (uuid.UUID, error)
 	InsertCommittedItemModifierOption(ctx context.Context, arg InsertCommittedItemModifierOptionParams) error
+	InsertCompletedSale(ctx context.Context, arg InsertCompletedSaleParams) (uuid.UUID, error)
 	InsertDraftItem(ctx context.Context, arg InsertDraftItemParams) (InsertDraftItemRow, error)
 	InsertDraftItemModifierOption(ctx context.Context, arg InsertDraftItemModifierOptionParams) error
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
@@ -241,6 +245,7 @@ type Querier interface {
 	// single-item query is left alone: the draft path does not need min/max and
 	// should not pay for them. See ADR-012.
 	ListEffectiveModifierGroupsForCommit(ctx context.Context, menuItemIds []uuid.UUID) ([]ListEffectiveModifierGroupsForCommitRow, error)
+	ListHeldTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]ListHeldTableAssignmentsRow, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -257,6 +262,7 @@ type Querier interface {
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
 	ListSessionOrders(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionOrdersRow, error)
+	ListSessionPreparationTransitions(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnitTransition, error)
 	ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnit, error)
 	// The `submitted` flag on a Charge Allocation is derived, not stored: there is
 	// no submitted column anywhere in the schema, and therefore no flag that can
@@ -364,6 +370,7 @@ type Querier interface {
 	// completed_sales. internal/sales creates Preparation Units at Submit and
 	// reads their state during closure; this package owns every transition.
 	LockPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
+	LockServiceSessionForClosure(ctx context.Context, id uuid.UUID) (LockServiceSessionForClosureRow, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
 	// The Service Session and its committed-but-unsubmitted Order Draft.
 	//

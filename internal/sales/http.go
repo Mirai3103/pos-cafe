@@ -668,6 +668,47 @@ func (s *Slices) handleSubmitOrder(c echo.Context) error {
 	return sendResult(c, status, result)
 }
 
+// handleCloseSession godoc
+//
+//	@Summary		Close the Service Session
+//	@Description	Freezes an eligible Service Session into an immutable Completed Sale and releases every held Table Assignment. A Session closes only when, in this order of refusal: every Check is settled, every committed item has been submitted to the bar, the Session carries at least one Order, and every Preparation Unit is terminal. Closing an already-closed Session returns its existing Completed Sale rather than an error.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string						true	"Service Session ID"
+//	@Param			body	body		CloseServiceSessionCommand	true	"Close request"
+//	@Success		201		{object}	response.APIResponse{data=CompletedSaleResponse}
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/close [post]
+func (s *Slices) handleCloseSession(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[CloseServiceSessionCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.ServiceSessionID = sessionID
+
+	status, result, err := s.CloseSession.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
 // handlePayCash godoc
 //
 //	@Summary		Record a Cash Payment
