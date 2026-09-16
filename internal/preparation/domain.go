@@ -28,6 +28,16 @@ const OpReadActiveQueue = "preparation.read_active_queue"
 // EventPreparationUnitAdvanced is the audit event type.
 const EventPreparationUnitAdvanced = "PREPARATION_UNIT_ADVANCED"
 
+const (
+	OpBulkAdvance = "preparation.bulk_advance"
+
+	BulkStatusAdvanced = "ADVANCED"
+	BulkStatusFailed   = "FAILED"
+
+	BulkCodeUnitNotFound      = "UNIT_NOT_FOUND"
+	BulkCodeInvalidTransition = "INVALID_TRANSITION"
+)
+
 // Preparation Unit states. 5D writes only the first four; StateCancelled and
 // StateWasted arrive with Phase 6's commands (ADR-028).
 const (

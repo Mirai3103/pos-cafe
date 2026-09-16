@@ -76,3 +76,21 @@ type AdvanceUnitCommand struct {
 	TargetState string    `json:"target_state" validate:"required"`
 	UnitID      uuid.UUID `json:"-"`
 }
+
+type BulkAdvanceCommand struct {
+	RequestID          uuid.UUID   `json:"request_id"`
+	PreparationUnitIDs []uuid.UUID `json:"preparation_unit_ids"`
+	TargetState        string      `json:"target_state"`
+}
+
+type BulkAdvanceOutcome struct {
+	PreparationUnitID uuid.UUID     `json:"preparation_unit_id"`
+	Status            string        `json:"status"`
+	Unit              *UnitResponse `json:"unit,omitempty"`
+	Code              string        `json:"code,omitempty"`
+}
+
+type BulkAdvanceResponse struct {
+	TargetState string               `json:"target_state"`
+	Outcomes    []BulkAdvanceOutcome `json:"outcomes"`
+}
