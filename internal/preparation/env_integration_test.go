@@ -32,6 +32,26 @@ func testLoginCode(prefix string) string {
 	return prefix + strings.ReplaceAll(uuid.NewString(), "-", "")[:room]
 }
 
+// knownActorPINs records the plaintext PIN of every seeded actor, keyed by the
+// identity id. The plaintext stays out of the production preparation.Actor on
+// purpose: Actor is what the executor and handlers see, and no production path
+// may carry a PIN. The executor's Manager self-PIN gate consumes the plaintext
+// only through these test fixtures.
+var knownActorPINs sync.Map // staff_identity_id -> plaintext test PIN
+
+// seedKnownPIN registers a seeded actor's plaintext test PIN.
+func seedKnownPIN(staffID uuid.UUID, pin string) {
+	knownActorPINs.Store(staffID, pin)
+}
+
+// knownPIN returns the plaintext test PIN registered for a seeded actor, or ""
+// when the actor was not seeded by this package.
+func knownPIN(actor preparation.Actor) string {
+	pin, _ := knownActorPINs.Load(actor.StaffID)
+	pinText, _ := pin.(string)
+	return pinText
+}
+
 // prepTestDB is the single pool every Preparation integration test shares,
 // bound by TestMain before any test runs.
 var prepTestDB *sql.DB
@@ -45,10 +65,13 @@ var (
 
 // TestMain provisions this package's isolated clone of the migrated test
 // template and binds one shared pool for the whole package. The clone is
-// already migrated, so tests never run migrations themselves.
+// already migrated, so tests never run migrations themselves. The same pool is
+// handed to the package's in-process (internal) integration tests, which
+// cannot reach this file's unexported fixtures.
 func TestMain(m *testing.M) {
 	os.Exit(testdb.Run(m, "preparation", func(db *sql.DB) {
 		prepTestDB = db
+		preparation.SetInternalTestDB(db)
 	}))
 }
 
@@ -82,7 +105,10 @@ func truncatePrepTables(t *testing.T, db *sql.DB) {
 }
 
 // seedActor creates an enabled identity with the given roles and an active
-// access session, returning the Actor the Preparation executor expects.
+// access session, returning the Actor the Preparation executor expects. The
+// identity's plaintext test PIN ("1234") is registered in knownActorPINs so
+// the Manager self-PIN gate tests can supply it; it never travels on the
+// returned Actor.
 func seedActor(t *testing.T, q *sqlc.Queries, roles []string) preparation.Actor {
 	t.Helper()
 	ctx := context.Background()
@@ -102,6 +128,7 @@ func seedActor(t *testing.T, q *sqlc.Queries, roles []string) preparation.Actor 
 		Enabled:     true,
 	})
 	require.NoError(t, err)
+	seedKnownPIN(identity.ID, "1234")
 
 	for _, role := range roles {
 		require.NoError(t, q.AddStaffRole(ctx, sqlc.AddStaffRoleParams{
@@ -500,6 +527,51 @@ func (e *prepEnv) CashierActor() preparation.Actor { return e.cashier }
 // BaristaActor returns the seeded BARISTA actor, who holds preparation.operate.
 func (e *prepEnv) BaristaActor() preparation.Actor { return e.barista }
 
+// ManagerActor returns the seeded MANAGER actor, who holds preparation.operate
+// plus every other Manager capability and is the subject of the executor's
+// self-PIN gate tests.
+func (e *prepEnv) ManagerActor() preparation.Actor { return e.manager }
+
+// PINOf returns the plaintext test PIN registered for a seeded actor.
+func (e *prepEnv) PINOf(actor preparation.Actor) string {
+	return knownPIN(actor)
+}
+
+// RotatePIN rotates a seeded actor's PIN to the new plaintext through the
+// generated UpdateStaffPin query and refreshes the known-plaintext registry,
+// so a later PINOf still reports the truth. Only digit PINs of a valid shape
+// (4-8 digits) are accepted, mirroring auth.ValidatePinFormat.
+func (e *prepEnv) RotatePIN(t *testing.T, actor preparation.Actor, newPIN string) {
+	t.Helper()
+	require.Regexp(t, `^\d{4,8}$`, newPIN, "test PINs must keep auth's PIN shape")
+	hash, err := auth.HashPin(newPIN)
+	require.NoError(t, err)
+	require.NoError(t, e.Queries.UpdateStaffPin(context.Background(),
+		sqlc.UpdateStaffPinParams{ID: actor.StaffID, PinHash: hash}))
+	seedKnownPIN(actor.StaffID, newPIN)
+}
+
+// ReplaceRoles swaps a seeded actor's operational roles for exactly the given
+// set, through the generated ClearStaffRoles and AddStaffRole queries.
+func (e *prepEnv) ReplaceRoles(t *testing.T, actor preparation.Actor, roles []string) {
+	t.Helper()
+	require.NoError(t, e.Queries.ClearStaffRoles(context.Background(), actor.StaffID))
+	for _, role := range roles {
+		require.NoError(t, e.Queries.AddStaffRole(context.Background(), sqlc.AddStaffRoleParams{
+			StaffIdentityID: actor.StaffID,
+			Role:            role,
+		}))
+	}
+}
+
+// SetIdentityEnabled enables or disables a seeded actor's identity row.
+func (e *prepEnv) SetIdentityEnabled(t *testing.T, actor preparation.Actor, enabled bool) {
+	t.Helper()
+	_, err := e.Queries.SetStaffEnabled(context.Background(),
+		sqlc.SetStaffEnabledParams{ID: actor.StaffID, Enabled: enabled})
+	require.NoError(t, err)
+}
+
 // CountAuditEvents counts the audit events of the given type. Used to assert
 // exactly one denial evidence row per denied call.
 func (e *prepEnv) CountAuditEvents(t *testing.T, eventType string) int {
@@ -524,13 +596,50 @@ func (e *prepEnv) BulkAdvance(t *testing.T, cmd preparation.BulkAdvanceCommand) 
 // Preparation Unit, so a test can prove a unit moved exactly once.
 func (e *prepEnv) UnitAuditCount(t *testing.T, unitID uuid.UUID) int {
 	t.Helper()
+	return e.CountAuditEventsByTypeAndUnit(t, preparation.EventPreparationUnitAdvanced, unitID)
+}
+
+// CountAuditEventsByTypeAndUnit counts the audit events of one type whose
+// details name one Preparation Unit. The generic form lets suites pin the
+// audit trail of any unit-scoped Preparation event.
+func (e *prepEnv) CountAuditEventsByTypeAndUnit(t *testing.T, eventType string, unitID uuid.UUID) int {
+	t.Helper()
 	var n int
 	require.NoError(t, e.DB.QueryRow(`
 		SELECT count(*)
 		FROM audit_events
 		WHERE event_type = $1
 		  AND details->>'preparation_unit_id' = $2`,
-		preparation.EventPreparationUnitAdvanced, unitID.String(),
+		eventType, unitID.String(),
 	).Scan(&n))
 	return n
+}
+
+// idempotencyClaim is the stored idempotency claim of one mutation request.
+type idempotencyClaim struct {
+	Action       string
+	RequestHash  string
+	ResponseCode int32
+	ResponseBody []byte
+}
+
+// IdempotencyClaim reads the idempotency claim an actor stored for a request
+// id. The second result reports whether a claim exists, so tests can prove a
+// denial left nothing claimed and a success stored its result.
+func (e *prepEnv) IdempotencyClaim(t *testing.T, actor preparation.Actor,
+	requestID uuid.UUID,
+) (idempotencyClaim, bool) {
+	t.Helper()
+	var claim idempotencyClaim
+	err := e.DB.QueryRow(`
+		SELECT action, request_hash, response_code, response_body
+		FROM idempotency_keys
+		WHERE actor_id = $1 AND key = $2`,
+		actor.StaffID, requestID,
+	).Scan(&claim.Action, &claim.RequestHash, &claim.ResponseCode, &claim.ResponseBody)
+	if err == sql.ErrNoRows {
+		return idempotencyClaim{}, false
+	}
+	require.NoError(t, err)
+	return claim, true
 }
