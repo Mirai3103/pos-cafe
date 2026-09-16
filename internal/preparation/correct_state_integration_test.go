@@ -367,9 +367,10 @@ func TestCorrectStateBatchAtomicity(t *testing.T) {
 		}
 		before := transitionsBefore(t, env, states, preparation.StateQueued)
 		requestID := uuid.New()
-		_, status, err := env.CorrectState(t,
-			correctCmd([]uuid.UUID{first, uuid.New(), second}, preparation.StateQueued,
-				preparation.ReasonStateRecordedInError, nil))
+		cmd := correctCmd([]uuid.UUID{first, uuid.New(), second}, preparation.StateQueued,
+			preparation.ReasonStateRecordedInError, nil)
+		cmd.RequestID = requestID
+		_, status, err := env.CorrectState(t, cmd)
 		require.ErrorIs(t, err, preparation.ErrUnitNotFound)
 		require.Equal(t, http.StatusNotFound, status)
 		expectNoWrites(t, env, requestID, states, preparation.StateQueued, before)
@@ -384,9 +385,10 @@ func TestCorrectStateBatchAtomicity(t *testing.T) {
 		}
 		before := transitionsBefore(t, env, states, preparation.StateQueued)
 		requestID := uuid.New()
-		_, status, err := env.CorrectState(t,
-			correctCmd([]uuid.UUID{first, second}, preparation.StateQueued,
-				preparation.ReasonStateRecordedInError, nil))
+		cmd := correctCmd([]uuid.UUID{first, second}, preparation.StateQueued,
+			preparation.ReasonStateRecordedInError, nil)
+		cmd.RequestID = requestID
+		_, status, err := env.CorrectState(t, cmd)
 		require.ErrorIs(t, err, preparation.ErrInvalidTransition,
 			"a correction to QUEUED requires IN_PREPARATION, and the whole batch answers for it")
 		require.Equal(t, http.StatusConflict, status)
@@ -403,9 +405,10 @@ func TestCorrectStateBatchAtomicity(t *testing.T) {
 		}
 		before := transitionsBefore(t, env, states, preparation.StateQueued)
 		requestID := uuid.New()
-		_, status, err := env.CorrectState(t,
-			correctCmd([]uuid.UUID{first, second}, preparation.StateQueued,
-				preparation.ReasonStateRecordedInError, nil))
+		cmd := correctCmd([]uuid.UUID{first, second}, preparation.StateQueued,
+			preparation.ReasonStateRecordedInError, nil)
+		cmd.RequestID = requestID
+		_, status, err := env.CorrectState(t, cmd)
 		require.ErrorIs(t, err, preparation.ErrInvalidTransition)
 		require.Equal(t, http.StatusConflict, status)
 		expectNoWrites(t, env, requestID, states, preparation.StateQueued, before)
@@ -421,9 +424,10 @@ func TestCorrectStateBatchAtomicity(t *testing.T) {
 		}
 		before := transitionsBefore(t, env, states, preparation.StateInPreparation)
 		requestID := uuid.New()
-		_, status, err := env.CorrectState(t,
-			correctCmd([]uuid.UUID{first, second}, preparation.StateInPreparation,
-				preparation.ReasonStateRecordedInError, nil))
+		cmd := correctCmd([]uuid.UUID{first, second}, preparation.StateInPreparation,
+			preparation.ReasonStateRecordedInError, nil)
+		cmd.RequestID = requestID
+		_, status, err := env.CorrectState(t, cmd)
 		require.ErrorIs(t, err, preparation.ErrInvalidTransition,
 			"correcting FULFILLED to IN_PREPARATION would skip READY, so the batch is refused")
 		require.Equal(t, http.StatusConflict, status)
@@ -453,9 +457,10 @@ func TestCorrectStateBatchAtomicity(t *testing.T) {
 		}
 		before := transitionsBefore(t, env, states, preparation.StateQueued)
 		requestID := uuid.New()
-		_, status, err := env.CorrectState(t,
-			correctCmd([]uuid.UUID{closed.ID, open.ID}, preparation.StateQueued,
-				preparation.ReasonStateRecordedInError, nil))
+		cmd := correctCmd([]uuid.UUID{closed.ID, open.ID}, preparation.StateQueued,
+			preparation.ReasonStateRecordedInError, nil)
+		cmd.RequestID = requestID
+		_, status, err := env.CorrectState(t, cmd)
 		require.ErrorIs(t, err, preparation.ErrServiceSessionClosed,
 			"one closed Session rejects the whole batch, before any unit is touched")
 		require.Equal(t, http.StatusConflict, status)
@@ -475,9 +480,10 @@ func TestCorrectStateBatchAtomicity(t *testing.T) {
 		states := map[uuid.UUID]string{unit.ID: preparation.StateWasted}
 		before := transitionsBefore(t, env, states, preparation.StateQueued)
 		requestID := uuid.New()
-		_, status, err := env.CorrectState(t,
-			correctCmd([]uuid.UUID{unit.ID}, preparation.StateQueued,
-				preparation.ReasonStateRecordedInError, nil))
+		cmd := correctCmd([]uuid.UUID{unit.ID}, preparation.StateQueued,
+			preparation.ReasonStateRecordedInError, nil)
+		cmd.RequestID = requestID
+		_, status, err := env.CorrectState(t, cmd)
 		require.ErrorIs(t, err, preparation.ErrServiceSessionClosed)
 		require.Equal(t, http.StatusConflict, status)
 		expectNoWrites(t, env, requestID, states, preparation.StateQueued, before)
@@ -731,9 +737,10 @@ func TestCorrectStateRollbacksAreAtomic(t *testing.T) {
 		})
 
 		requestID := uuid.New()
-		_, _, err = env.CorrectState(t,
-			correctCmd(ids, preparation.StateQueued,
-				preparation.ReasonStateRecordedInError, nil))
+		cmd := correctCmd(ids, preparation.StateQueued,
+			preparation.ReasonStateRecordedInError, nil)
+		cmd.RequestID = requestID
+		_, _, err = env.CorrectState(t, cmd)
 		require.Error(t, err, "the forced audit failure must abort the whole command")
 
 		for _, id := range ids {
@@ -784,9 +791,10 @@ func TestCorrectStateRollbacksAreAtomic(t *testing.T) {
 		})
 
 		requestID := uuid.New()
-		_, _, err = env.CorrectState(t,
-			correctCmd(ids, preparation.StateQueued,
-				preparation.ReasonStateRecordedInError, nil))
+		cmd := correctCmd(ids, preparation.StateQueued,
+			preparation.ReasonStateRecordedInError, nil)
+		cmd.RequestID = requestID
+		_, _, err = env.CorrectState(t, cmd)
 		require.Error(t, err, "the forced store failure must abort the whole command")
 
 		for _, id := range ids {
