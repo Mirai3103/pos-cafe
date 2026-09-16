@@ -692,9 +692,13 @@ WHERE order_id = ANY(sqlc.arg(order_ids)::uuid[])
 ORDER BY order_id ASC, id ASC;
 
 -- name: ListSessionPreparationUnits :many
+-- One read feeding both the live Service Session and Completed Sale unit
+-- projections. priority and remake_of_preparation_unit_id carry the Phase 6B
+-- Remake metadata; original units are STANDARD with a null link.
 SELECT pu.id, pu.order_item_id, pu.unit_number, pu.state, pu.service_number,
        pu.category_name, pu.item_name, pu.size_name, pu.modifiers,
-       pu.preparation_note, pu.queued_at
+       pu.preparation_note, pu.queued_at, pu.priority,
+       pu.remake_of_preparation_unit_id
 FROM preparation_units pu
 JOIN order_items oi ON oi.id = pu.order_item_id
 JOIN orders o ON o.id = oi.order_id

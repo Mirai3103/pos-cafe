@@ -259,19 +259,58 @@ type Payment struct {
 	ReceivedAt           time.Time      `json:"received_at"`
 }
 
+type PreparationAlert struct {
+	ID                               uuid.UUID      `json:"id"`
+	PreparationUnitID                uuid.UUID      `json:"preparation_unit_id"`
+	Kind                             string         `json:"kind"`
+	Reason                           string         `json:"reason"`
+	Note                             sql.NullString `json:"note"`
+	CreatedByStaffIdentityID         uuid.UUID      `json:"created_by_staff_identity_id"`
+	CreatedStaffAccessSessionID      uuid.UUID      `json:"created_staff_access_session_id"`
+	CreatedAt                        time.Time      `json:"created_at"`
+	AcknowledgedByStaffIdentityID    uuid.NullUUID  `json:"acknowledged_by_staff_identity_id"`
+	AcknowledgedStaffAccessSessionID uuid.NullUUID  `json:"acknowledged_staff_access_session_id"`
+	AcknowledgedAt                   sql.NullTime   `json:"acknowledged_at"`
+}
+
+type PreparationRemake struct {
+	ID                   uuid.UUID      `json:"id"`
+	WasteID              uuid.UUID      `json:"waste_id"`
+	PreparationUnitID    uuid.UUID      `json:"preparation_unit_id"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	CreatedAt            time.Time      `json:"created_at"`
+}
+
+type PreparationStateCorrection struct {
+	ID                   uuid.UUID      `json:"id"`
+	PreparationUnitID    uuid.UUID      `json:"preparation_unit_id"`
+	PriorState           string         `json:"prior_state"`
+	ResultingState       string         `json:"resulting_state"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	OccurredAt           time.Time      `json:"occurred_at"`
+}
+
 type PreparationUnit struct {
-	ID              uuid.UUID       `json:"id"`
-	OrderItemID     uuid.UUID       `json:"order_item_id"`
-	UnitNumber      int32           `json:"unit_number"`
-	State           string          `json:"state"`
-	ServiceNumber   string          `json:"service_number"`
-	CategoryName    string          `json:"category_name"`
-	ItemName        string          `json:"item_name"`
-	SizeName        sql.NullString  `json:"size_name"`
-	Modifiers       json.RawMessage `json:"modifiers"`
-	PreparationNote sql.NullString  `json:"preparation_note"`
-	QueuedAt        time.Time       `json:"queued_at"`
-	InPreparationAt sql.NullTime    `json:"in_preparation_at"`
+	ID                        uuid.UUID       `json:"id"`
+	OrderItemID               uuid.UUID       `json:"order_item_id"`
+	UnitNumber                int32           `json:"unit_number"`
+	State                     string          `json:"state"`
+	ServiceNumber             string          `json:"service_number"`
+	CategoryName              string          `json:"category_name"`
+	ItemName                  string          `json:"item_name"`
+	SizeName                  sql.NullString  `json:"size_name"`
+	Modifiers                 json.RawMessage `json:"modifiers"`
+	PreparationNote           sql.NullString  `json:"preparation_note"`
+	QueuedAt                  time.Time       `json:"queued_at"`
+	InPreparationAt           sql.NullTime    `json:"in_preparation_at"`
+	Priority                  string          `json:"priority"`
+	RemakeOfPreparationUnitID uuid.NullUUID   `json:"remake_of_preparation_unit_id"`
 }
 
 type PreparationUnitTransition struct {
@@ -282,6 +321,17 @@ type PreparationUnitTransition struct {
 	ActorStaffIdentityID uuid.UUID `json:"actor_staff_identity_id"`
 	StaffAccessSessionID uuid.UUID `json:"staff_access_session_id"`
 	OccurredAt           time.Time `json:"occurred_at"`
+}
+
+type PreparationWaste struct {
+	ID                   uuid.UUID      `json:"id"`
+	PreparationUnitID    uuid.UUID      `json:"preparation_unit_id"`
+	PriorState           string         `json:"prior_state"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	OccurredAt           time.Time      `json:"occurred_at"`
 }
 
 // Owned by internal/shift (Phase 4). At most one row may be in OPEN state. Phase 4 ships no close operation; see the Non-Goals in the Phase 4 design spec.

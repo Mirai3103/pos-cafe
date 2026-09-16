@@ -1970,7 +1970,8 @@ func (q *Queries) ListSessionPreparationTransitions(ctx context.Context, service
 const listSessionPreparationUnits = `-- name: ListSessionPreparationUnits :many
 SELECT pu.id, pu.order_item_id, pu.unit_number, pu.state, pu.service_number,
        pu.category_name, pu.item_name, pu.size_name, pu.modifiers,
-       pu.preparation_note, pu.queued_at
+       pu.preparation_note, pu.queued_at, pu.priority,
+       pu.remake_of_preparation_unit_id
 FROM preparation_units pu
 JOIN order_items oi ON oi.id = pu.order_item_id
 JOIN orders o ON o.id = oi.order_id
@@ -1979,19 +1980,24 @@ ORDER BY pu.queued_at ASC, pu.id ASC
 `
 
 type ListSessionPreparationUnitsRow struct {
-	ID              uuid.UUID       `json:"id"`
-	OrderItemID     uuid.UUID       `json:"order_item_id"`
-	UnitNumber      int32           `json:"unit_number"`
-	State           string          `json:"state"`
-	ServiceNumber   string          `json:"service_number"`
-	CategoryName    string          `json:"category_name"`
-	ItemName        string          `json:"item_name"`
-	SizeName        sql.NullString  `json:"size_name"`
-	Modifiers       json.RawMessage `json:"modifiers"`
-	PreparationNote sql.NullString  `json:"preparation_note"`
-	QueuedAt        time.Time       `json:"queued_at"`
+	ID                        uuid.UUID       `json:"id"`
+	OrderItemID               uuid.UUID       `json:"order_item_id"`
+	UnitNumber                int32           `json:"unit_number"`
+	State                     string          `json:"state"`
+	ServiceNumber             string          `json:"service_number"`
+	CategoryName              string          `json:"category_name"`
+	ItemName                  string          `json:"item_name"`
+	SizeName                  sql.NullString  `json:"size_name"`
+	Modifiers                 json.RawMessage `json:"modifiers"`
+	PreparationNote           sql.NullString  `json:"preparation_note"`
+	QueuedAt                  time.Time       `json:"queued_at"`
+	Priority                  string          `json:"priority"`
+	RemakeOfPreparationUnitID uuid.NullUUID   `json:"remake_of_preparation_unit_id"`
 }
 
+// One read feeding both the live Service Session and Completed Sale unit
+// projections. priority and remake_of_preparation_unit_id carry the Phase 6B
+// Remake metadata; original units are STANDARD with a null link.
 func (q *Queries) ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionPreparationUnitsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSessionPreparationUnits, serviceSessionID)
 	if err != nil {
@@ -2013,6 +2019,8 @@ func (q *Queries) ListSessionPreparationUnits(ctx context.Context, serviceSessio
 			&i.Modifiers,
 			&i.PreparationNote,
 			&i.QueuedAt,
+			&i.Priority,
+			&i.RemakeOfPreparationUnitID,
 		); err != nil {
 			return nil, err
 		}
