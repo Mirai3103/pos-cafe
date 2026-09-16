@@ -26,6 +26,7 @@ type UnitResponse struct {
 	Modifiers       []UnitModifierResponse `json:"modifiers"`
 	PreparationNote *string                `json:"preparation_note"`
 	QueuedAt        time.Time              `json:"queued_at"`
+	InPreparationAt *time.Time             `json:"in_preparation_at"`
 }
 
 // AdvanceUnitCommand moves a Preparation Unit one step along its chain.
