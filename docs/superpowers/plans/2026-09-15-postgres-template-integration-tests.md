@@ -574,8 +574,8 @@ git commit -m "test: verify PostgreSQL clone isolation"
 > `TestConcurrentPaymentsOnTwoChecksOfOneSession` fail 3/3 with
 > `check state does not match its balance`: under `FOR SHARE` on the Session, a
 > sibling Check's commit can land between the statements of another command's
-> read-model rebuild. ADR-023 restores the canonical `FOR UPDATE` on the Service
-> Session row for the 5C commands; see ADR-023 in `spec/decisions.md`.
+> read-model rebuild. ADR-030 restores the canonical `FOR UPDATE` on the Service
+> Session row for the 5C commands; see ADR-030 in `spec/decisions.md`.
 
 **Files:**
 - Modify: `internal/sales/testmain_integration_test.go`

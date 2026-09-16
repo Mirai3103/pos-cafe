@@ -3071,6 +3071,88 @@ const docTemplate = `{
                 }
             }
         },
+        "/preparation/units/{unit_id}/advance": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Moves one unit along the linear chain QUEUED -\u003e IN_PREPARATION -\u003e READY -\u003e FULFILLED. The target state is explicit, so two baristas acting on a stale display get a conflict rather than a silent double advance. Cancellation, Waste, Remake, and State Correction are Phase 6.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preparation"
+                ],
+                "summary": "Advance a Preparation Unit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Preparation Unit ID",
+                        "name": "unit_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Advance request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/preparation.AdvanceUnitCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/preparation.UnitResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/sales/checks/merge": {
             "post": {
                 "security": [
@@ -3416,6 +3498,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/sales/completed-sales/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns one immutable Completed Sale with its Checks, Orders, Preparation Units, and the recorded preparation history, by Completed Sale id.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Get a Completed Sale",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Completed Sale ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.CompletedSaleResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/sales/service-sessions": {
             "get": {
                 "security": [
@@ -3661,6 +3807,152 @@ const docTemplate = `{
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/service-sessions/{id}/close": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Freezes an eligible Service Session into an immutable Completed Sale and releases every held Table Assignment. A Session closes only when, in this order of refusal: every Check is settled, every committed item has been submitted to the bar, the Session carries at least one Order, and every Preparation Unit is terminal. Closing an already-closed Session returns its existing Completed Sale rather than an error.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Close the Service Session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Close request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.CloseServiceSessionCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.CompletedSaleResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/service-sessions/{id}/completed-sale": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the immutable Completed Sale of one Service Session with its Checks, Orders, Preparation Units, and the recorded preparation history. A Session that has not closed has no Completed Sale and answers 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Get a Service Session's Completed Sale",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.CompletedSaleResponse"
                                         }
                                     }
                                 }
@@ -4473,6 +4765,88 @@ const docTemplate = `{
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/service-sessions/{id}/submit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Turns the Service Session's committed Order Draft into an Order, its Order Items, and one Preparation Unit per unit of ordered quantity, repricing nothing. A takeaway Session requires every Check settled first; a dine-in Session does not, because both Commit -\u003e Submit -\u003e Payment and Commit -\u003e Payment -\u003e Submit are valid service.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Submit the committed round to the bar",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Submit request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.SubmitOrderCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -6651,6 +7025,73 @@ const docTemplate = `{
                 }
             }
         },
+        "preparation.AdvanceUnitCommand": {
+            "type": "object",
+            "required": [
+                "request_id",
+                "target_state"
+            ],
+            "properties": {
+                "request_id": {
+                    "type": "string"
+                },
+                "target_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.UnitModifierResponse": {
+            "type": "object",
+            "properties": {
+                "group_name": {
+                    "type": "string"
+                },
+                "option_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.UnitResponse": {
+            "type": "object",
+            "properties": {
+                "category_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "item_name": {
+                    "type": "string"
+                },
+                "modifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.UnitModifierResponse"
+                    }
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "preparation_note": {
+                    "type": "string"
+                },
+                "queued_at": {
+                    "type": "string"
+                },
+                "service_number": {
+                    "type": "string"
+                },
+                "size_name": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "unit_number": {
+                    "type": "integer"
+                }
+            }
+        },
         "response.APIError": {
             "type": "object",
             "properties": {
@@ -6785,6 +7226,17 @@ const docTemplate = `{
                 }
             }
         },
+        "sales.CloseServiceSessionCommand": {
+            "type": "object",
+            "required": [
+                "request_id"
+            ],
+            "properties": {
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
         "sales.CommitOrderDraftCommand": {
             "type": "object",
             "properties": {
@@ -6810,6 +7262,100 @@ const docTemplate = `{
                 },
                 "surcharge_vnd": {
                     "type": "integer"
+                }
+            }
+        },
+        "sales.CompletedSaleCheckResponse": {
+            "type": "object",
+            "properties": {
+                "allocations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.ChargeAllocationResponse"
+                    }
+                },
+                "balance_vnd": {
+                    "type": "integer"
+                },
+                "charge_vnd": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "payments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.PaymentResponse"
+                    }
+                },
+                "state": {
+                    "type": "string"
+                },
+                "total_applied_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sales.CompletedSaleResponse": {
+            "type": "object",
+            "properties": {
+                "checks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.CompletedSaleCheckResponse"
+                    }
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "completed_by_display_name": {
+                    "type": "string"
+                },
+                "completed_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "completed_staff_access_session_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "orders": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.OrderResponse"
+                    }
+                },
+                "preparation_history": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.PreparationTransitionResponse"
+                    }
+                },
+                "preparation_units": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.PreparationUnitResponse"
+                    }
+                },
+                "service_mode": {
+                    "type": "string"
+                },
+                "service_number": {
+                    "type": "string"
+                },
+                "service_session_id": {
+                    "type": "string"
+                },
+                "service_session_opened_at": {
+                    "type": "string"
+                },
+                "service_session_state": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
                 }
             }
         },
@@ -6885,6 +7431,43 @@ const docTemplate = `{
                 }
             }
         },
+        "sales.OrderItemResponse": {
+            "type": "object",
+            "properties": {
+                "committed_item_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.OrderResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.OrderItemResponse"
+                    }
+                },
+                "order_draft_id": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "submitted_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "submitted_staff_access_session_id": {
+                    "type": "string"
+                }
+            }
+        },
         "sales.PayCashCommand": {
             "type": "object",
             "properties": {
@@ -6945,6 +7528,73 @@ const docTemplate = `{
                 }
             }
         },
+        "sales.PreparationTransitionResponse": {
+            "type": "object",
+            "properties": {
+                "actor_staff_identity_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "prior_state": {
+                    "type": "string"
+                },
+                "resulting_state": {
+                    "type": "string"
+                },
+                "staff_access_session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.PreparationUnitResponse": {
+            "type": "object",
+            "properties": {
+                "category_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "item_name": {
+                    "type": "string"
+                },
+                "modifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.UnitModifierResponse"
+                    }
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "preparation_note": {
+                    "type": "string"
+                },
+                "queued_at": {
+                    "type": "string"
+                },
+                "service_number": {
+                    "type": "string"
+                },
+                "size_name": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "unit_number": {
+                    "type": "integer"
+                }
+            }
+        },
         "sales.RemoveDraftItemCommand": {
             "type": "object",
             "properties": {
@@ -6996,17 +7646,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "orders": {
-                    "description": "Filled by 5D.",
+                    "description": "Filled from 5D.",
                     "type": "array",
                     "items": {
-                        "type": "object"
+                        "$ref": "#/definitions/sales.OrderResponse"
                     }
                 },
                 "preparation_units": {
-                    "description": "Filled by 5D.",
+                    "description": "Filled from 5D.",
                     "type": "array",
                     "items": {
-                        "type": "object"
+                        "$ref": "#/definitions/sales.PreparationUnitResponse"
                     }
                 },
                 "sales_shift_id": {
@@ -7177,6 +7827,28 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.SubmitOrderCommand": {
+            "type": "object",
+            "required": [
+                "request_id"
+            ],
+            "properties": {
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.UnitModifierResponse": {
+            "type": "object",
+            "properties": {
+                "group_name": {
+                    "type": "string"
+                },
+                "option_name": {
                     "type": "string"
                 }
             }

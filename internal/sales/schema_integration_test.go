@@ -232,3 +232,62 @@ func TestSettlementEvidenceConstraintRejectsPartialEvidence(t *testing.T) {
 		`UPDATE checks SET state = 'MERGED', merged_into_check_id = $1 WHERE id = $1`, checkID)
 	require.Error(t, err, "MERGED with a non-zero charge must be rejected")
 }
+
+func TestSubmissionSchema(t *testing.T) {
+	db, _ := openSalesTestDB(t)
+	ctx := context.Background()
+
+	t.Run("all five tables exist", func(t *testing.T) {
+		var n int
+		err := db.QueryRowContext(ctx, `
+			SELECT count(*) FROM information_schema.tables
+			WHERE table_name IN ('orders', 'order_items', 'preparation_units',
+			                     'preparation_unit_transitions', 'completed_sales')`).Scan(&n)
+		require.NoError(t, err)
+		require.Equal(t, 5, n)
+	})
+
+	t.Run("order_items carries no commercial snapshot", func(t *testing.T) {
+		var n int
+		err := db.QueryRowContext(ctx, `
+			SELECT count(*) FROM information_schema.columns
+			WHERE table_name = 'order_items'`).Scan(&n)
+		require.NoError(t, err)
+		require.Equal(t, 3, n, "ADR-025: id, order_id, committed_item_id only")
+	})
+
+	t.Run("one Order per Order Draft is unrepresentable", func(t *testing.T) {
+		var n int
+		err := db.QueryRowContext(ctx, `
+			SELECT count(*) FROM pg_indexes
+			WHERE indexname IN ('order_draft_unique', 'order_item_committed_item_unique',
+			                    'preparation_unit_item_number_unique',
+			                    'completed_sale_service_session_unique')`).Scan(&n)
+		require.NoError(t, err)
+		require.Equal(t, 4, n)
+	})
+
+	t.Run("preparation unit state declares all six canonical values", func(t *testing.T) {
+		var clause string
+		err := db.QueryRowContext(ctx, `
+			SELECT pg_get_constraintdef(oid) FROM pg_constraint
+			WHERE conname = 'preparation_unit_state_valid'`).Scan(&clause)
+		require.NoError(t, err)
+		for _, state := range []string{"QUEUED", "IN_PREPARATION", "READY", "FULFILLED", "CANCELLED", "WASTED"} {
+			require.Contains(t, clause, state)
+		}
+	})
+
+	t.Run("the transition graph is enforced in the database", func(t *testing.T) {
+		var clause string
+		err := db.QueryRowContext(ctx, `
+			SELECT pg_get_constraintdef(oid) FROM pg_constraint
+			WHERE conname = 'preparation_unit_transition_states_valid'`).Scan(&clause)
+		require.NoError(t, err)
+		require.Contains(t, clause, "QUEUED")
+		require.Contains(t, clause, "IN_PREPARATION")
+		require.Contains(t, clause, "READY")
+		require.Contains(t, clause, "FULFILLED")
+		require.NotContains(t, clause, "CANCELLED", "Phase 6 adds the Cancellation pairs")
+	})
+}

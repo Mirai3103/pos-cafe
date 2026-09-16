@@ -3,6 +3,7 @@ package sales
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -194,12 +195,50 @@ func TestServiceSessionSerializesNullDraftAfterCommit(t *testing.T) {
 	session := ServiceSessionResponse{
 		Tables:           make([]SessionTableResponse, 0),
 		Checks:           make([]CheckResponse, 0),
-		Orders:           make([]struct{}, 0),
-		PreparationUnits: make([]struct{}, 0),
+		Orders:           make([]OrderResponse, 0),
+		PreparationUnits: make([]PreparationUnitResponse, 0),
 		Draft:            nil,
 	}
 	b, err := json.Marshal(session)
 	require.NoError(t, err)
 	require.Contains(t, string(b), `"draft":null`)
 	require.Contains(t, string(b), `"checks":[]`)
+}
+
+func TestServiceSessionResponseOrdersAndUnitsSerialize(t *testing.T) {
+	// The arrays were []struct{} placeholders through 5A, 5B and 5C. Filling
+	// them must not change the shape of the contract: same keys, same types
+	// for everything that already existed.
+	s := ServiceSessionResponse{
+		Orders: []OrderResponse{{
+			ID:          uuid.New(),
+			SubmittedAt: time.Unix(0, 0).UTC(),
+			Items:       []OrderItemResponse{{ID: uuid.New()}},
+		}},
+		PreparationUnits: []PreparationUnitResponse{{
+			ID:         uuid.New(),
+			UnitNumber: 1,
+			State:      UnitStateQueued,
+			Modifiers:  []UnitModifierResponse{},
+		}},
+	}
+	b, err := json.Marshal(s)
+	require.NoError(t, err)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Contains(t, got, "orders")
+	require.Contains(t, got, "preparation_units")
+	require.Len(t, got["orders"], 1)
+	require.Len(t, got["preparation_units"], 1)
+}
+
+func TestEmptyOrdersAndUnitsSerializeAsArrays(t *testing.T) {
+	b, err := json.Marshal(ServiceSessionResponse{
+		Orders:           []OrderResponse{},
+		PreparationUnits: []PreparationUnitResponse{},
+	})
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"orders":[]`)
+	require.Contains(t, string(b), `"preparation_units":[]`)
 }

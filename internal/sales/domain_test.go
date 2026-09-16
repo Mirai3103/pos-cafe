@@ -264,3 +264,21 @@ func TestValidateTransactionReference(t *testing.T) {
 		require.ErrorIs(t, err, response.ErrInvalid)
 	})
 }
+
+func TestIsTerminalUnitState(t *testing.T) {
+	terminal := []string{sales.UnitStateFulfilled, sales.UnitStateCancelled, sales.UnitStateWasted}
+	for _, s := range terminal {
+		require.True(t, sales.IsTerminalUnitState(s), s)
+	}
+	for _, s := range []string{sales.UnitStateQueued, sales.UnitStateInPreparation, sales.UnitStateReady} {
+		require.False(t, sales.IsTerminalUnitState(s), s)
+	}
+}
+
+func TestModeRequiresSettlementBeforeSubmit(t *testing.T) {
+	// Takeaway keeps settlement-before-Submit: nothing is prepared for a
+	// customer who has not paid and may walk. Dine-in supports both orderings,
+	// because a seated customer's drinks go to the bar long before the bill.
+	require.True(t, sales.ModeRequiresSettlementBeforeSubmit(sales.ModeTakeaway))
+	require.False(t, sales.ModeRequiresSettlementBeforeSubmit(sales.ModeDineIn))
+}

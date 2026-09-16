@@ -54,7 +54,7 @@ func lockChecks(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (
 		}
 	}
 
-	// The Session is locked after every Check (ADR-023). Locking it inside the
+	// The Session is locked after every Check (ADR-030). Locking it inside the
 	// Check statement would put it between two Check locks and deadlock against
 	// a Payment holding a sibling Check. The state used by checkPreconditions
 	// comes from this lock, not from the Check rows.

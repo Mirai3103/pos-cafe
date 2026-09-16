@@ -135,7 +135,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 | **5A** — Service Session lifecycle, Table assignments, Order Draft | [spec](docs/superpowers/specs/2026-09-13-sales-session-draft-design.md) / [plan](docs/superpowers/plans/2026-09-13-sales-session-draft.md) | ✅ COMPLETED (2026-09-13) |
 | **5B** — Commit, Committed Items, Checks, Charge Allocations, Order Draft targeting | [spec](docs/superpowers/specs/2026-09-14-sales-commit-checks-design.md) / [plan](docs/superpowers/plans/2026-09-14-sales-commit-checks.md) | ✅ COMPLETED (2026-09-14) |
 | **5C** — Cash and Manual QR Payments, Check splitting and merging, settlement | [spec](docs/superpowers/specs/2026-09-14-sales-payments-settlement-design.md) / [plan](docs/superpowers/plans/2026-09-14-sales-payments-settlement.md) | ✅ COMPLETED (2026-09-14) |
-| **5D** — Submit, Orders, Preparation Units, Service Session closure, Completed Sale | spec pending | ⏳ PENDING |
+| **5D** — Submit, Orders, Preparation Units, Service Session closure, Completed Sale | [spec](docs/superpowers/specs/2026-09-15-sales-submission-closure-design.md) / [plan](docs/superpowers/plans/2026-09-15-sales-submission-closure.md) | ✅ COMPLETED (2026-09-15) |
 
 *Focus: The heart of the POS system. Low-latency order placement, bill splitting, payments.*
 
@@ -204,7 +204,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 | **2. Catalog & Menu** | ✅ DONE | 5 | 5 / 5 | Phase 2 |
 | **3. Tables & Layout** | ✅ DONE | 4 | 4 / 4 | 2026-09-12 |
 | **4. Sales Shift & Cash** | ✅ DONE | 3 | 3 / 3 | 2026-09-13 |
-| **5. Sales, Orders & Pay** | ⏳ PENDING | 6 | 0 / 6 | Phase 5 |
+| **5. Sales, Orders & Pay** | ✅ DONE | 6 | 6 / 6 | 2026-09-15 |
 | **6. Preparation (Barista)** | ⏳ PENDING | 3 | 0 / 3 | Phase 6 |
 | **7. Frontend Single-Binary**| ⏳ PENDING | 2 | 0 / 2 | Phase 7 |
 

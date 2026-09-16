@@ -214,8 +214,9 @@ type OrderDraftResponse struct {
 // ServiceSessionResponse is the one projection every Sales operation returns.
 //
 // It ships in its final shape from 5A. Checks, Orders, and PreparationUnits
-// are always present and empty until 5B, 5C, and 5D fill them, so the contract
-// never breaks. Preparation alerts and corrections are Phase 6 concerns and are
+// are always present, so the contract never breaks: a Session starts with all
+// three empty, and they fill as Checks are committed and Orders are submitted.
+// Preparation alerts and corrections are Phase 6 concerns and are
 // omitted entirely rather than stubbed.
 //
 // CustomerIdentityID is a constant null: every opening-day Service Session is
@@ -238,10 +239,10 @@ type ServiceSessionResponse struct {
 
 	// Filled from 5B; payments within each Check are filled by 5C.
 	Checks []CheckResponse `json:"checks"`
-	// Filled by 5D.
-	Orders []struct{} `json:"orders"`
-	// Filled by 5D.
-	PreparationUnits []struct{} `json:"preparation_units"`
+	// Filled from 5D.
+	Orders []OrderResponse `json:"orders"`
+	// Filled from 5D.
+	PreparationUnits []PreparationUnitResponse `json:"preparation_units"`
 }
 
 // CommittedModifierResponse is one frozen Modifier Option on a Committed Item.
@@ -257,8 +258,9 @@ type CommittedModifierResponse struct {
 
 // ChargeAllocationResponse is one Committed Item's charge against one Check.
 //
-// Submitted is a constant false in 5B and is filled by 5D, which introduces
-// the orders table this flag is derived from.
+// Submitted reports whether the Committed Item has entered an Order. It is
+// derived from the existence of an Order Item rather than stored, so it can
+// never fall out of step with the Order that defines it.
 type ChargeAllocationResponse struct {
 	ID                uuid.UUID                   `json:"id"`
 	CommittedItemID   uuid.UUID                   `json:"committed_item_id"`
@@ -311,3 +313,111 @@ type CheckResponse struct {
 	Payments    []PaymentResponse          `json:"payments"`
 	Allocations []ChargeAllocationResponse `json:"allocations"`
 }
+
+// OrderResponse is one submitted Order: the preparation boundary crossed once
+// for one Order Draft.
+type OrderResponse struct {
+	ID                 uuid.UUID           `json:"id"`
+	OrderDraftID       uuid.UUID           `json:"order_draft_id"`
+	SubmittedByStaffID uuid.UUID           `json:"submitted_by_staff_identity_id"`
+	SubmittedSessionID uuid.UUID           `json:"submitted_staff_access_session_id"`
+	SubmittedAt        time.Time           `json:"submitted_at"`
+	Items              []OrderItemResponse `json:"items"`
+}
+
+// OrderItemResponse is a Committed Item after submission.
+//
+// It carries the commercial snapshot by reference rather than by copy
+// (ADR-025): committed_items is immutable by 5B's rule, so the identifier is
+// the snapshot. The names and amounts a client needs are already on the
+// Check's Charge Allocations, keyed by the same CommittedItemID.
+type OrderItemResponse struct {
+	ID              uuid.UUID `json:"id"`
+	CommittedItemID uuid.UUID `json:"committed_item_id"`
+}
+
+// UnitModifierResponse is one frozen Modifier Option on a Preparation Unit.
+// It carries no price: the bar needs to know what to make, not what it cost.
+type UnitModifierResponse struct {
+	GroupName  string `json:"group_name"`
+	OptionName string `json:"option_name"`
+}
+
+// PreparationUnitResponse is one individually prepared unit of an ordered
+// item. A Committed Item of quantity three becomes three of these.
+type PreparationUnitResponse struct {
+	ID              uuid.UUID              `json:"id"`
+	OrderItemID     uuid.UUID              `json:"order_item_id"`
+	UnitNumber      int32                  `json:"unit_number"`
+	State           string                 `json:"state"`
+	ServiceNumber   string                 `json:"service_number"`
+	CategoryName    string                 `json:"category_name"`
+	ItemName        string                 `json:"item_name"`
+	SizeName        *string                `json:"size_name"`
+	Modifiers       []UnitModifierResponse `json:"modifiers"`
+	PreparationNote *string                `json:"preparation_note"`
+	QueuedAt        time.Time              `json:"queued_at"`
+}
+
+// SubmitOrderCommand sends a Service Session's committed round to the bar.
+type SubmitOrderCommand struct {
+	RequestID        uuid.UUID `json:"request_id" validate:"required"`
+	ServiceSessionID uuid.UUID `json:"-"`
+}
+
+// CloseServiceSessionCommand completes a Service Session into a Completed Sale.
+type CloseServiceSessionCommand struct {
+	RequestID        uuid.UUID `json:"request_id" validate:"required"`
+	ServiceSessionID uuid.UUID `json:"-"`
+}
+
+// CompletedSaleCheckResponse is one Check as it stood at closure: settled,
+// with a zero balance, carrying its Payments and Charge Allocations.
+type CompletedSaleCheckResponse struct {
+	ID              uuid.UUID                  `json:"id"`
+	State           string                     `json:"state"`
+	ChargeVND       int64                      `json:"charge_vnd"`
+	TotalAppliedVND int64                      `json:"total_applied_vnd"`
+	BalanceVND      int64                      `json:"balance_vnd"`
+	Payments        []PaymentResponse          `json:"payments"`
+	Allocations     []ChargeAllocationResponse `json:"allocations"`
+}
+
+// PreparationTransitionResponse is one recorded move of a Preparation Unit.
+//
+// It reads from preparation_unit_transitions rather than reconstructing the
+// history from audit payloads (ADR-027): a Completed Sale is immutable
+// content, not a derived report.
+type PreparationTransitionResponse struct {
+	ID             uuid.UUID `json:"id"`
+	UnitID         uuid.UUID `json:"preparation_unit_id"`
+	PriorState     string    `json:"prior_state"`
+	ResultingState string    `json:"resulting_state"`
+	ActorStaffID   uuid.UUID `json:"actor_staff_identity_id"`
+	StaffSessionID uuid.UUID `json:"staff_access_session_id"`
+	OccurredAt     time.Time `json:"occurred_at"`
+}
+
+// CompletedSaleResponse is the immutable outcome of a closed Service Session.
+type CompletedSaleResponse struct {
+	ID                     uuid.UUID                       `json:"id"`
+	State                  string                          `json:"state"`
+	ServiceSessionID       uuid.UUID                       `json:"service_session_id"`
+	ServiceNumber          string                          `json:"service_number"`
+	ServiceMode            string                          `json:"service_mode"`
+	ServiceSessionState    string                          `json:"service_session_state"`
+	ServiceSessionOpenedAt time.Time                       `json:"service_session_opened_at"`
+	CompletedByStaffID     uuid.UUID                       `json:"completed_by_staff_identity_id"`
+	CompletedBySessionID   uuid.UUID                       `json:"completed_staff_access_session_id"`
+	CompletedByName        string                          `json:"completed_by_display_name"`
+	CompletedAt            time.Time                       `json:"completed_at"`
+	Checks                 []CompletedSaleCheckResponse    `json:"checks"`
+	Orders                 []OrderResponse                 `json:"orders"`
+	PreparationUnits       []PreparationUnitResponse       `json:"preparation_units"`
+	PreparationHistory     []PreparationTransitionResponse `json:"preparation_history"`
+}
+
+// CompletedSaleStateCompleted is the only state a Completed Sale has. It is a
+// literal in the contract so a client can branch on it exactly as it branches
+// on a Check's or a Session's state.
+const CompletedSaleStateCompleted = "COMPLETED"

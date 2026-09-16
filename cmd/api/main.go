@@ -19,6 +19,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/eventbus"
 	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
+	"github.com/Mirai3103/pos-cafe/internal/preparation"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/Mirai3103/pos-cafe/internal/shift"
 	"github.com/Mirai3103/pos-cafe/internal/tables"
@@ -176,6 +177,9 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 	salesSlices := sales.NewSlices(db, queries)
 	salesSlices.RegisterRoutes(v1, authSlices.Middleware)
+
+	preparationSlices := preparation.NewSlices(db, queries)
+	preparationSlices.RegisterRoutes(v1, authSlices.Middleware)
 
 	// 7. Start Server with Graceful Shutdown error propagation
 	serverErrChan := make(chan error, 1)

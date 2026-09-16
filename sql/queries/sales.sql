@@ -451,19 +451,25 @@ SELECT check_target FROM order_drafts WHERE id = $1;
 -- A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
 -- corresponding Order.
 --
--- 5B has no orders table, so the second clause matches every COMMITTED draft
--- and a Session that has committed once cannot open another draft. That dead
--- end is deliberate and disappears when 5D adds the orders join here: the
--- rule exists to stop staff stacking rounds ahead of the kitchen, and
--- relaxing it now would ship a rule no phase wants. See the spec's accepted
--- consequences.
+-- 5D added the orders table and completed the second clause as 5B's comment
+-- promised. The rule stops staff stacking rounds ahead of the kitchen; it does
+-- not limit a Service Session to one round.
+--
+-- NOT EXISTS rather than a LEFT JOIN, for the reason LockSubmittableDraft
+-- gives: PostgreSQL refuses row locks across a LEFT JOIN's nullable side.
+-- (The outer service_session_id is spelled order_drafts.service_session_id
+-- because sqlc's analyzer, unlike PostgreSQL, sees the subquery's orders
+-- column of the same name and calls the bare reference ambiguous.)
 SELECT id
 FROM order_drafts
-WHERE service_session_id = $1
-  AND state IN ('EDITABLE', 'COMMITTED')
-ORDER BY created_at ASC, id ASC
-LIMIT 1
-FOR UPDATE;
+WHERE order_drafts.service_session_id = $1
+  AND (
+        state = 'EDITABLE'
+     OR (state = 'COMMITTED'
+         AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = order_drafts.id))
+  )
+FOR UPDATE
+LIMIT 1;
 
 -- name: InsertOrderDraftForSession :one
 INSERT INTO order_drafts (service_session_id, created_at)
@@ -503,12 +509,12 @@ WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[])
 ORDER BY modifier_group_name ASC, modifier_option_name ASC;
 
 -- name: LockCheckForPayment :one
--- The 5C lock protocol (ADR-016 as amended by ADR-023), first half: the Check
+-- The 5C lock protocol (ADR-016 as amended by ADR-030), first half: the Check
 -- row FOR UPDATE. SQL does not guarantee that one statement's FOR UPDATE OF c, s
 -- acquires the two relations' tuple locks in OF-list order, so the Session lock
 -- is a separate statement: the caller locks the Check here and its Session
 -- through LockServiceSessionForUpdate immediately afterwards, which is the same
--- Check-then-Session order lockChecks uses for restructurings. See ADR-023.
+-- Check-then-Session order lockChecks uses for restructurings. See ADR-030.
 --
 -- The Session is exclusive (FOR UPDATE, not FOR SHARE), because a Payment does
 -- not merely read the Session to evaluate a precondition -- it rebuilds the
@@ -586,7 +592,7 @@ SET state = 'SETTLED',
 WHERE id = $1;
 
 -- name: LockChecksForRestructuring :many
--- The 5C lock protocol over a set of Checks (ADR-016 as amended by ADR-023),
+-- The 5C lock protocol over a set of Checks (ADR-016 as amended by ADR-030),
 -- ordered by id so two concurrent restructurings take the rows in the same
 -- order and cannot deadlock against each other or against a Payment.
 --
@@ -595,7 +601,7 @@ WHERE id = $1;
 -- locks (check(A) -> session -> check(B)) and create a cycle against a Payment
 -- that already holds check(B) and is waiting for the Session. The caller locks
 -- every Check first and the Session afterwards, which is the same order
--- LockCheckForPayment uses. See lockChecks and ADR-023.
+-- LockCheckForPayment uses. See lockChecks and ADR-030.
 --
 -- As in LockCheckForPayment, the Shift is not joined: the Shift precondition
 -- is about the Shift open now, which LockOpenSalesShiftForShare reads.
@@ -668,3 +674,159 @@ UPDATE checks SET charge_vnd = $2 WHERE id = $1;
 UPDATE checks
 SET state = 'MERGED', charge_vnd = 0, merged_into_check_id = $2
 WHERE id = $1;
+
+-- name: ListSessionOrders :many
+SELECT id, order_draft_id, submitted_by_staff_identity_id,
+       submitted_staff_access_session_id, submitted_at
+FROM orders
+WHERE service_session_id = $1
+ORDER BY submitted_at ASC, id ASC;
+
+-- name: ListOrderItems :many
+SELECT id, order_id, committed_item_id
+FROM order_items
+WHERE order_id = ANY(sqlc.arg(order_ids)::uuid[])
+ORDER BY order_id ASC, id ASC;
+
+-- name: ListSessionPreparationUnits :many
+SELECT pu.id, pu.order_item_id, pu.unit_number, pu.state, pu.service_number,
+       pu.category_name, pu.item_name, pu.size_name, pu.modifiers,
+       pu.preparation_note, pu.queued_at
+FROM preparation_units pu
+JOIN order_items oi ON oi.id = pu.order_item_id
+JOIN orders o ON o.id = oi.order_id
+WHERE o.service_session_id = $1
+ORDER BY pu.queued_at ASC, pu.id ASC;
+
+-- name: ListSubmittedCommittedItems :many
+-- The `submitted` flag on a Charge Allocation is derived, not stored: there is
+-- no submitted column anywhere in the schema, and therefore no flag that can
+-- fall out of step with the Order that defines it.
+SELECT committed_item_id
+FROM order_items
+WHERE committed_item_id = ANY(sqlc.arg(committed_item_ids)::uuid[]);
+
+-- name: LockServiceSessionForSubmission :one
+-- The Submit source's Service Session, locked first. The state is returned
+-- rather than filtered so an unknown Session and a closed one map to their own
+-- errors instead of collapsing into ErrNothingToSubmit, per spec §9.3.
+SELECT id, service_number, service_mode, state
+FROM service_sessions
+WHERE id = $1
+FOR UPDATE;
+
+-- name: LockSubmittableDraft :one
+-- The committed-but-unsubmitted Order Draft of the Session the caller has
+-- already locked with LockServiceSessionForSubmission. Only the draft is
+-- locked here: the Session lock is its own query so a missing or closed
+-- Session can be told apart from "nothing to submit".
+--
+-- NOT EXISTS rather than the canonical LEFT JOIN ... IS NULL: PostgreSQL
+-- refuses row locks across a LEFT JOIN's nullable side, which forces the
+-- canonical source to scope FOR UPDATE by hand and explain the workaround in
+-- two places. Written this way the restriction does not arise.
+--
+-- Known remaining window, recorded rather than reordered (ADR-031): this
+-- query runs after the Session lock and before LockChecksForSubmission, so
+-- the AB-BA window spans Submit's Session → Draft → Checks lock sequence —
+-- the reverse of Payment's Check-then-Session order — and a concurrent
+-- Payment can abort one side with 40P01 across it.
+SELECT od.id AS order_draft_id
+FROM order_drafts od
+WHERE od.service_session_id = $1
+  AND od.state = 'COMMITTED'
+  AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = od.id)
+FOR UPDATE
+LIMIT 1;
+
+-- name: LockChecksForSubmission :many
+-- Every distinct Check reachable from the draft's Committed Items, locked in
+-- the ascending (created_at, id) order 5C's lock protocol established, so
+-- Submit and a concurrent Payment serialize instead of deadlocking.
+--
+-- The draft linkage lives in an IN subquery rather than a DISTINCT over a
+-- join: PostgreSQL refuses the locking clause alongside DISTINCT, the same
+-- restriction the NOT EXISTS form of LockSubmittableDraft avoids. Selecting
+-- from checks directly makes DISTINCT unnecessary — c.id is the primary key —
+-- and keeps the lock scoped to the checks relation exactly as the join's
+-- FOR UPDATE OF c intended.
+SELECT c.id, c.state, c.created_at
+FROM checks c
+WHERE c.id IN (
+    SELECT ca.check_id
+    FROM committed_items ci
+    JOIN charge_allocations ca ON ca.committed_item_id = ci.id
+    WHERE ci.order_draft_id = $1
+)
+ORDER BY c.created_at ASC, c.id ASC
+FOR UPDATE;
+
+-- name: InsertOrder :one
+INSERT INTO orders (service_session_id, order_draft_id,
+                    submitted_by_staff_identity_id,
+                    submitted_staff_access_session_id, submitted_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (order_draft_id) DO NOTHING
+RETURNING id;
+
+-- name: ListCommittedItemsForSubmission :many
+SELECT id, category_name, item_name, size_name, quantity, preparation_note
+FROM committed_items
+WHERE order_draft_id = $1
+ORDER BY committed_at ASC, id ASC;
+
+-- name: InsertOrderItem :one
+INSERT INTO order_items (order_id, committed_item_id)
+VALUES ($1, $2)
+RETURNING id;
+
+-- name: InsertPreparationUnit :exec
+INSERT INTO preparation_units (order_item_id, unit_number, service_number,
+                               category_name, item_name, size_name,
+                               modifiers, preparation_note, queued_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
+-- name: LockServiceSessionForClosure :one
+SELECT id, state, service_number, service_mode, created_at
+FROM service_sessions
+WHERE id = $1
+FOR UPDATE;
+
+-- name: FindCompletedSaleByServiceSession :one
+SELECT id FROM completed_sales WHERE service_session_id = $1;
+
+-- name: InsertCompletedSale :one
+INSERT INTO completed_sales (service_session_id, completed_by_staff_identity_id,
+                             completed_staff_access_session_id, completed_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id;
+
+-- name: ListHeldTableAssignments :many
+SELECT id, table_id
+FROM table_assignments
+WHERE service_session_id = $1 AND released_at IS NULL
+FOR UPDATE;
+
+-- name: CloseServiceSession :exec
+UPDATE service_sessions SET state = 'CLOSED' WHERE id = $1;
+
+-- name: GetCompletedSale :one
+SELECT cs.id, cs.service_session_id, cs.completed_by_staff_identity_id,
+       cs.completed_staff_access_session_id, cs.completed_at,
+       ss.service_number, ss.service_mode, ss.state AS service_session_state,
+       ss.created_at AS service_session_created_at,
+       si.display_name AS completed_by_display_name
+FROM completed_sales cs
+JOIN service_sessions ss ON ss.id = cs.service_session_id
+JOIN staff_identities si ON si.id = cs.completed_by_staff_identity_id
+WHERE cs.id = $1;
+
+-- name: ListSessionPreparationTransitions :many
+SELECT put.id, put.preparation_unit_id, put.prior_state, put.resulting_state,
+       put.actor_staff_identity_id, put.staff_access_session_id, put.occurred_at
+FROM preparation_unit_transitions put
+JOIN preparation_units pu ON pu.id = put.preparation_unit_id
+JOIN order_items oi ON oi.id = pu.order_item_id
+JOIN orders o ON o.id = oi.order_id
+WHERE o.service_session_id = $1
+ORDER BY put.occurred_at ASC, put.id ASC;

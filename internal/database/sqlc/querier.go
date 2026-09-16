@@ -17,6 +17,7 @@ type Querier interface {
 	ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogRequestParams) (CatalogMutationRequest, error)
 	ClaimIdempotencyRecord(ctx context.Context, arg ClaimIdempotencyRecordParams) (IdempotencyKey, error)
 	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
+	CloseServiceSession(ctx context.Context, id uuid.UUID) error
 	CountActiveManagers(ctx context.Context) (int64, error)
 	CountManagers(ctx context.Context) (int64, error)
 	CountPaymentsForChecks(ctx context.Context, dollar_1 []uuid.UUID) (int64, error)
@@ -51,13 +52,17 @@ type Querier interface {
 	// A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
 	// corresponding Order.
 	//
-	// 5B has no orders table, so the second clause matches every COMMITTED draft
-	// and a Session that has committed once cannot open another draft. That dead
-	// end is deliberate and disappears when 5D adds the orders join here: the
-	// rule exists to stop staff stacking rounds ahead of the kitchen, and
-	// relaxing it now would ship a rule no phase wants. See the spec's accepted
-	// consequences.
+	// 5D added the orders table and completed the second clause as 5B's comment
+	// promised. The rule stops staff stacking rounds ahead of the kitchen; it does
+	// not limit a Service Session to one round.
+	//
+	// NOT EXISTS rather than a LEFT JOIN, for the reason LockSubmittableDraft
+	// gives: PostgreSQL refuses row locks across a LEFT JOIN's nullable side.
+	// (The outer service_session_id is spelled order_drafts.service_session_id
+	// because sqlc's analyzer, unlike PostgreSQL, sees the subquery's orders
+	// column of the same name and calls the bare reference ambiguous.)
 	FindBlockingDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error)
+	FindCompletedSaleByServiceSession(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error)
 	FindDraftItemByComposition(ctx context.Context, arg FindDraftItemByCompositionParams) (FindDraftItemByCompositionRow, error)
 	// findDraftItemByComposition plus an id <> $n clause, so the row being edited
 	// never matches itself. A separate query rather than a nullable exclusion
@@ -69,6 +74,7 @@ type Querier interface {
 	GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error)
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
+	GetCompletedSale(ctx context.Context, id uuid.UUID) (GetCompletedSaleRow, error)
 	GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (GetEditableDraftRow, error)
 	// Includes released assignments, so a released sequence number is never
 	// reused and the audit trail stays unambiguous.
@@ -98,6 +104,7 @@ type Querier interface {
 	// importing internal/shift, per ADR-006's precedent.
 	GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error)
 	GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (string, error)
+	GetPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
 	// Queries for internal/sales (Phase 5A).
 	//
 	// Authority, role, and advisory-lock queries are slice-local by ADR-007: the
@@ -147,12 +154,17 @@ type Querier interface {
 	InsertCheck(ctx context.Context, arg InsertCheckParams) (InsertCheckRow, error)
 	InsertCommittedItem(ctx context.Context, arg InsertCommittedItemParams) (uuid.UUID, error)
 	InsertCommittedItemModifierOption(ctx context.Context, arg InsertCommittedItemModifierOptionParams) error
+	InsertCompletedSale(ctx context.Context, arg InsertCompletedSaleParams) (uuid.UUID, error)
 	InsertDraftItem(ctx context.Context, arg InsertDraftItemParams) (InsertDraftItemRow, error)
 	InsertDraftItemModifierOption(ctx context.Context, arg InsertDraftItemModifierOptionParams) error
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) error
+	InsertOrder(ctx context.Context, arg InsertOrderParams) (uuid.UUID, error)
 	InsertOrderDraft(ctx context.Context, serviceSessionID uuid.UUID) (InsertOrderDraftRow, error)
 	InsertOrderDraftForSession(ctx context.Context, arg InsertOrderDraftForSessionParams) (InsertOrderDraftForSessionRow, error)
+	InsertOrderItem(ctx context.Context, arg InsertOrderItemParams) (uuid.UUID, error)
 	InsertPayment(ctx context.Context, arg InsertPaymentParams) (uuid.UUID, error)
+	InsertPreparationUnit(ctx context.Context, arg InsertPreparationUnitParams) error
+	InsertPreparationUnitTransition(ctx context.Context, arg InsertPreparationUnitTransitionParams) error
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
 	// Batches assignTables' per-Table insert loop into one round trip. Two
 	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
@@ -190,6 +202,7 @@ type Querier interface {
 	// Ordered by (received_at, id), served directly by payment_check_index.
 	ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]ListCheckPaymentsRow, error)
 	ListCommittedItemModifiers(ctx context.Context, committedItemIds []uuid.UUID) ([]ListCommittedItemModifiersRow, error)
+	ListCommittedItemsForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]ListCommittedItemsForSubmissionRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
 	// Declared defaults of the given Groups, filtered to what is currently
@@ -232,6 +245,7 @@ type Querier interface {
 	// single-item query is left alone: the draft path does not need min/max and
 	// should not pay for them. See ADR-012.
 	ListEffectiveModifierGroupsForCommit(ctx context.Context, menuItemIds []uuid.UUID) ([]ListEffectiveModifierGroupsForCommitRow, error)
+	ListHeldTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]ListHeldTableAssignmentsRow, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -243,16 +257,24 @@ type Querier interface {
 	ListModifierGroups(ctx context.Context) ([]ModifierGroup, error)
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
 	ListModifierOptionsForValidation(ctx context.Context, optionIds []uuid.UUID) ([]ListModifierOptionsForValidationRow, error)
+	ListOrderItems(ctx context.Context, orderIds []uuid.UUID) ([]OrderItem, error)
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
+	ListSessionOrders(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionOrdersRow, error)
+	ListSessionPreparationTransitions(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnitTransition, error)
+	ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnit, error)
+	// The `submitted` flag on a Charge Allocation is derived, not stored: there is
+	// no submitted column anywhere in the schema, and therefore no flag that can
+	// fall out of step with the Order that defines it.
+	ListSubmittedCommittedItems(ctx context.Context, committedItemIds []uuid.UUID) ([]uuid.UUID, error)
 	ListTables(ctx context.Context) ([]Table, error)
-	// The 5C lock protocol (ADR-016 as amended by ADR-023), first half: the Check
+	// The 5C lock protocol (ADR-016 as amended by ADR-030), first half: the Check
 	// row FOR UPDATE. SQL does not guarantee that one statement's FOR UPDATE OF c, s
 	// acquires the two relations' tuple locks in OF-list order, so the Session lock
 	// is a separate statement: the caller locks the Check here and its Session
 	// through LockServiceSessionForUpdate immediately afterwards, which is the same
-	// Check-then-Session order lockChecks uses for restructurings. See ADR-023.
+	// Check-then-Session order lockChecks uses for restructurings. See ADR-030.
 	//
 	// The Session is exclusive (FOR UPDATE, not FOR SHARE), because a Payment does
 	// not merely read the Session to evaluate a precondition -- it rebuilds the
@@ -268,7 +290,7 @@ type Querier interface {
 	// No row means the Check id does not exist. The state columns come back
 	// unfiltered so the caller can report which precondition failed.
 	LockCheckForPayment(ctx context.Context, id uuid.UUID) (LockCheckForPaymentRow, error)
-	// The 5C lock protocol over a set of Checks (ADR-016 as amended by ADR-023),
+	// The 5C lock protocol over a set of Checks (ADR-016 as amended by ADR-030),
 	// ordered by id so two concurrent restructurings take the rows in the same
 	// order and cannot deadlock against each other or against a Payment.
 	//
@@ -277,11 +299,22 @@ type Querier interface {
 	// locks (check(A) -> session -> check(B)) and create a cycle against a Payment
 	// that already holds check(B) and is waiting for the Session. The caller locks
 	// every Check first and the Session afterwards, which is the same order
-	// LockCheckForPayment uses. See lockChecks and ADR-023.
+	// LockCheckForPayment uses. See lockChecks and ADR-030.
 	//
 	// As in LockCheckForPayment, the Shift is not joined: the Shift precondition
 	// is about the Shift open now, which LockOpenSalesShiftForShare reads.
 	LockChecksForRestructuring(ctx context.Context, dollar_1 []uuid.UUID) ([]LockChecksForRestructuringRow, error)
+	// Every distinct Check reachable from the draft's Committed Items, locked in
+	// the ascending (created_at, id) order 5C's lock protocol established, so
+	// Submit and a concurrent Payment serialize instead of deadlocking.
+	//
+	// The draft linkage lives in an IN subquery rather than a DISTINCT over a
+	// join: PostgreSQL refuses the locking clause alongside DISTINCT, the same
+	// restriction the NOT EXISTS form of LockSubmittableDraft avoids. Selecting
+	// from checks directly makes DISTINCT unnecessary — c.id is the primary key —
+	// and keeps the lock scoped to the checks relation exactly as the join's
+	// FOR UPDATE OF c intended.
+	LockChecksForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]LockChecksForSubmissionRow, error)
 	// The Session's most recent OPEN Check, for the CURRENT_UNPAID target.
 	LockCurrentOpenCheck(ctx context.Context, serviceSessionID uuid.UUID) (LockCurrentOpenCheckRow, error)
 	LockCurrentTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]LockCurrentTableAssignmentsRow, error)
@@ -331,7 +364,34 @@ type Querier interface {
 	//
 	// No row means no Shift is open.
 	LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, error)
+	// Preparation slice queries.
+	//
+	// Boundary (ADR-024): nothing here writes orders, order_items, or
+	// completed_sales. internal/sales creates Preparation Units at Submit and
+	// reads their state during closure; this package owns every transition.
+	LockPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
+	LockServiceSessionForClosure(ctx context.Context, id uuid.UUID) (LockServiceSessionForClosureRow, error)
+	// The Submit source's Service Session, locked first. The state is returned
+	// rather than filtered so an unknown Session and a closed one map to their own
+	// errors instead of collapsing into ErrNothingToSubmit, per spec §9.3.
+	LockServiceSessionForSubmission(ctx context.Context, id uuid.UUID) (LockServiceSessionForSubmissionRow, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
+	// The committed-but-unsubmitted Order Draft of the Session the caller has
+	// already locked with LockServiceSessionForSubmission. Only the draft is
+	// locked here: the Session lock is its own query so a missing or closed
+	// Session can be told apart from "nothing to submit".
+	//
+	// NOT EXISTS rather than the canonical LEFT JOIN ... IS NULL: PostgreSQL
+	// refuses row locks across a LEFT JOIN's nullable side, which forces the
+	// canonical source to scope FOR UPDATE by hand and explain the workaround in
+	// two places. Written this way the restriction does not arise.
+	//
+	// Known remaining window, recorded rather than reordered (ADR-031): this
+	// query runs after the Session lock and before LockChecksForSubmission, so
+	// the AB-BA window spans Submit's Session → Draft → Checks lock sequence —
+	// the reverse of Payment's Check-then-Session order — and a concurrent
+	// Payment can abort one side with 40P01 across it.
+	LockSubmittableDraft(ctx context.Context, serviceSessionID uuid.UUID) (uuid.UUID, error)
 	// Locks the selected Tables in id order so two concurrent assignments over
 	// overlapping sets cannot deadlock against each other. The caller must sort
 	// the ids before calling.
@@ -376,6 +436,7 @@ type Querier interface {
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error
+	SetPreparationUnitState(ctx context.Context, arg SetPreparationUnitStateParams) error
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	SetTableAvailability(ctx context.Context, arg SetTableAvailabilityParams) (Table, error)
 	// Writes all four evidence columns together, because the composite constraint

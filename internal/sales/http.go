@@ -627,6 +627,146 @@ func (s *Slices) handleSetCheckTarget(c echo.Context) error {
 	return sendResult(c, status, result)
 }
 
+// handleSubmitOrder godoc
+//
+//	@Summary		Submit the committed round to the bar
+//	@Description	Turns the Service Session's committed Order Draft into an Order, its Order Items, and one Preparation Unit per unit of ordered quantity, repricing nothing. A takeaway Session requires every Check settled first; a dine-in Session does not, because both Commit -> Submit -> Payment and Commit -> Payment -> Submit are valid service.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string				true	"Service Session ID"
+//	@Param			body	body		SubmitOrderCommand	true	"Submit request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/submit [post]
+func (s *Slices) handleSubmitOrder(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[SubmitOrderCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.ServiceSessionID = sessionID
+
+	status, result, err := s.SubmitOrder.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleCloseSession godoc
+//
+//	@Summary		Close the Service Session
+//	@Description	Freezes an eligible Service Session into an immutable Completed Sale and releases every held Table Assignment. A Session closes only when, in this order of refusal: every Check is settled, every committed item has been submitted to the bar, the Session carries at least one Order, and every Preparation Unit is terminal. Closing an already-closed Session returns its existing Completed Sale rather than an error.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string						true	"Service Session ID"
+//	@Param			body	body		CloseServiceSessionCommand	true	"Close request"
+//	@Success		201		{object}	response.APIResponse{data=CompletedSaleResponse}
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/close [post]
+func (s *Slices) handleCloseSession(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[CloseServiceSessionCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.ServiceSessionID = sessionID
+
+	status, result, err := s.CloseSession.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleGetCompletedSale returns one Completed Sale by id.
+//
+//	@Summary		Get a Completed Sale
+//	@Description	Returns one immutable Completed Sale with its Checks, Orders, Preparation Units, and the recorded preparation history, by Completed Sale id.
+//	@Tags			sales
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Completed Sale ID"
+//	@Success		200	{object}	response.APIResponse{data=CompletedSaleResponse}
+//	@Failure		401	{object}	response.APIResponse
+//	@Failure		403	{object}	response.APIResponse
+//	@Failure		404	{object}	response.APIResponse
+//	@Router			/sales/completed-sales/{id} [get]
+func (s *Slices) handleGetCompletedSale(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	saleID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	status, result, err := s.GetCompletedSale.Handle(c.Request().Context(), actor, saleID)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleGetCompletedSaleBySession returns the Completed Sale of one Service Session.
+//
+//	@Summary		Get a Service Session's Completed Sale
+//	@Description	Returns the immutable Completed Sale of one Service Session with its Checks, Orders, Preparation Units, and the recorded preparation history. A Session that has not closed has no Completed Sale and answers 404.
+//	@Tags			sales
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Service Session ID"
+//	@Success		200	{object}	response.APIResponse{data=CompletedSaleResponse}
+//	@Failure		401	{object}	response.APIResponse
+//	@Failure		403	{object}	response.APIResponse
+//	@Failure		404	{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/completed-sale [get]
+func (s *Slices) handleGetCompletedSaleBySession(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	status, result, err := s.GetCompletedSaleBySession.Handle(c.Request().Context(), actor, sessionID)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
 // handlePayCash godoc
 //
 //	@Summary		Record a Cash Payment

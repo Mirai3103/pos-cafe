@@ -99,6 +99,14 @@ var (
 	// read-path half of the pair guarding settlement; the database constraint
 	// check_settlement_evidence_valid is the other half.
 	ErrSettlementInvariantViolated = errors.New("check state does not match its balance")
+
+	ErrNothingToSubmit                  = errors.New("no committed order draft awaits submission")
+	ErrCheckNotSettledForSubmission     = errors.New("every check must be settled before a takeaway order is submitted")
+	ErrCheckNotSettledForClosure        = errors.New("every check must be settled before the service session closes")
+	ErrUnsubmittedWorkForClosure        = errors.New("every committed item must be submitted before the service session closes")
+	ErrOrderRequiredForClosure          = errors.New("a service session with no order cannot close")
+	ErrUnfulfilledPreparationForClosure = errors.New("every preparation unit must be terminal before the service session closes")
+	ErrCompletedSaleNotFound            = errors.New("completed sale not found")
 )
 
 // serviceSessionSalesShiftFK is the auto-generated name of the only foreign
@@ -288,6 +296,20 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusUnprocessableEntity, "CHECK_CHARGE_OUT_OF_RANGE", ErrCheckChargeOutOfRange)
 	case errors.Is(err, ErrInvalidCheckTarget):
 		return coded(http.StatusUnprocessableEntity, "INVALID_CHECK_TARGET", ErrInvalidCheckTarget)
+	case errors.Is(err, ErrNothingToSubmit):
+		return coded(http.StatusConflict, "NOTHING_TO_SUBMIT", ErrNothingToSubmit)
+	case errors.Is(err, ErrCheckNotSettledForSubmission):
+		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_SUBMISSION", ErrCheckNotSettledForSubmission)
+	case errors.Is(err, ErrCheckNotSettledForClosure):
+		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_CLOSURE", ErrCheckNotSettledForClosure)
+	case errors.Is(err, ErrUnsubmittedWorkForClosure):
+		return coded(http.StatusConflict, "UNSUBMITTED_WORK_FOR_CLOSURE", ErrUnsubmittedWorkForClosure)
+	case errors.Is(err, ErrOrderRequiredForClosure):
+		return coded(http.StatusConflict, "ORDER_REQUIRED_FOR_CLOSURE", ErrOrderRequiredForClosure)
+	case errors.Is(err, ErrUnfulfilledPreparationForClosure):
+		return coded(http.StatusConflict, "UNFULFILLED_PREPARATION_FOR_CLOSURE", ErrUnfulfilledPreparationForClosure)
+	case errors.Is(err, ErrCompletedSaleNotFound):
+		return coded(http.StatusNotFound, "COMPLETED_SALE_NOT_FOUND", ErrCompletedSaleNotFound)
 	default:
 		return err
 	}

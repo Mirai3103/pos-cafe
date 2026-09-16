@@ -194,3 +194,26 @@ func TestSettlementInvariantIsNotMapped(t *testing.T) {
 	require.False(t, errors.As(err, &coded),
 		"a settlement invariant violation must not become a client-visible code")
 }
+
+func TestPhase5DErrorMapping(t *testing.T) {
+	cases := []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{ErrCheckNotSettledForSubmission, http.StatusConflict, "CHECK_NOT_SETTLED_FOR_SUBMISSION"},
+		{ErrCheckNotSettledForClosure, http.StatusConflict, "CHECK_NOT_SETTLED_FOR_CLOSURE"},
+		{ErrUnsubmittedWorkForClosure, http.StatusConflict, "UNSUBMITTED_WORK_FOR_CLOSURE"},
+		{ErrOrderRequiredForClosure, http.StatusConflict, "ORDER_REQUIRED_FOR_CLOSURE"},
+		{ErrUnfulfilledPreparationForClosure, http.StatusConflict, "UNFULFILLED_PREPARATION_FOR_CLOSURE"},
+		{ErrCompletedSaleNotFound, http.StatusNotFound, "COMPLETED_SALE_NOT_FOUND"},
+		{ErrNothingToSubmit, http.StatusConflict, "NOTHING_TO_SUBMIT"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			coded := codedFrom(t, tc.err)
+			require.Equal(t, tc.status, coded.Status)
+			require.Equal(t, tc.code, coded.Code)
+		})
+	}
+}

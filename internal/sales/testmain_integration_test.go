@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,7 +34,12 @@ func testLoginCode(prefix string) string {
 
 // salesTestDB is the single pool every Sales integration test shares, bound by
 // TestMain before any test runs.
-var salesTestDB *sql.DB
+var (
+	salesTestDB *sql.DB
+
+	sharedActorHashOnce sync.Once
+	sharedActorHash     string
+)
 
 // TestMain provisions this package's isolated clone of the migrated test
 // template and binds one shared pool for the whole package. The clone is
@@ -152,8 +158,12 @@ func seedActor(t *testing.T, q *sqlc.Queries, roles []string) sales.Actor {
 	ctx := context.Background()
 
 	code := testLoginCode("A")
-	hash, err := auth.HashPin("1234")
-	require.NoError(t, err)
+	sharedActorHashOnce.Do(func() {
+		var err error
+		sharedActorHash, err = auth.HashPin("1234")
+		require.NoError(t, err)
+	})
+	hash := sharedActorHash
 
 	identity, err := q.CreateStaffIdentity(ctx, sqlc.CreateStaffIdentityParams{
 		DisplayName: "Actor " + code,

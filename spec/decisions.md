@@ -231,7 +231,7 @@ CREATE TABLE idempotency_keys (
 ## ADR-016: One Check lock protocol for every 5C command
 
 * **Decision Date:** 2026-09-14
-* **Status:** Accepted; **superseded in part by ADR-023** for the Session-lock clause.
+* **Status:** Accepted; **superseded in part by ADR-030** for the Session-lock clause.
 * **Context:** The canonical source locks `checks`, `service_sessions`, and `sales_shifts` all `FOR UPDATE` in the Payment path, but only `FOR UPDATE OF checks` in the restructuring path, with a source comment noting that locking parent rows there "can create a reverse dependency when Payment already owns one of the affected Check rows" — a deadlock hazard documented rather than removed.
 * **Decision:**
 * All four 5C commands lock `checks` `FOR UPDATE` in ascending id order, and `service_sessions` and `sales_shifts` `FOR SHARE`.
@@ -299,7 +299,7 @@ CREATE TABLE idempotency_keys (
 ## ADR-021: A Check command locks the Shift that is open, not the one its Session was opened in
 
 * **Decision Date:** 2026-09-15
-* **Status:** Accepted
+* **Status:** Accepted; **superseded in part by ADR-030** for the Session-lock clause.
 * **Context:** ADR-019 stores a Payment's `sales_shift_id` because the Shift in which money reached the cashier is an independent fact, and a Session opened in one Shift can be paid in the next. The 5C implementation nonetheless read both that attribution and the "Shift must be open" precondition by joining `checks → service_sessions → sales_shifts`, recovering exactly the derived value ADR-019 exists to avoid. The two disagree as soon as a Session outlives its Shift.
 * **Decision:**
 * `LockCheckForPayment` and `LockChecksForRestructuring` no longer join `sales_shifts`. They lock the Check `FOR UPDATE` and its Session `FOR SHARE`, as ADR-016 requires.
@@ -330,7 +330,91 @@ CREATE TABLE idempotency_keys (
 
 ---
 
-## ADR-023: A Check command locks its Service Session `FOR UPDATE`
+## ADR-023: Phase 5D borrows the Preparation Unit advance command from Phase 6
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** ADR-010 assigned Preparation Units to 5D meaning their creation at Submit, leaving every state transition to Phase 6. But closure requires every unit to be terminal, and a Completed Sale's `preparation_history` is made of those transitions, so without an advance command the closure branch would be unreachable through the API and the history would ship permanently empty.
+* **Decision:**
+* 5D implements the linear advance chain and nothing else of Phase 6.
+* **Consequences:**
+* Phase 5 closes as a genuinely deployable whole with no seeded fixtures; the cost is one command implemented one phase early, in the package that will own it anyway.
+
+---
+
+## ADR-024: `internal/preparation` is created in 5D
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the advance command could live in `internal/sales`, which already carries forty-plus files and is gaining four tables in this sub-phase.
+* **Decision:**
+* create the package now, with the read/write boundary of §4.1.
+* **Consequences:**
+* Phase 6 grows into an existing package instead of extracting code out of `internal/sales`; the cost is a package holding one command, and a boundary that review must enforce because sqlc's single generated package cannot.
+
+---
+
+## ADR-025: `order_items` carries no commercial snapshot
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the canonical table duplicates eight immutable columns from `committed_items` across a one-to-one foreign key.
+* **Decision:**
+* store the foreign key alone.
+* **Consequences:**
+* one source of truth and no possibility of divergence; the cost is a join on the Completed Sale and Order reads, and an intentional asymmetry with `preparation_units`, which snapshots for a read-path reason `order_items` does not have.
+
+---
+
+## ADR-026: Closure idempotency uses the shared executor
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the canonical source maintains `completed_sale_closing_requests` because its idempotency helper is typed to the Service Session projection.
+* **Decision:**
+* the Go executor is generic over the result type, so closure uses it with `T = CompletedSaleResponse`.
+* **Consequences:**
+* one fewer table and one fewer replay path; closure's idempotency and audit behave identically to every other command's.
+
+---
+
+## ADR-027: Preparation history is a table, not a projection over `audit_events`
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the canonical source reconstructs it by joining audit rows on a JSONB field cast to text and silently dropping unparseable rows.
+* **Decision:**
+* write `preparation_unit_transitions` in the same transaction as the advance, and keep the audit event alongside it.
+* **Consequences:**
+* a Completed Sale's immutable content rests on real foreign keys, real indexes, and a `CHECK`-enforced transition graph; the cost is one table and a deliberate, documented double write of the same moment to two records with different purposes.
+
+---
+
+## ADR-028: `preparation_units.state` declares all six canonical values in 5D
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** 5A guessed a partial `service_sessions.state` domain and had to correct it; 5C responded with ADR-014's complete-domain precedent.
+* **Decision:**
+* declare `QUEUED`, `IN_PREPARATION`, `READY`, `FULFILLED`, `CANCELLED`, `WASTED`, and write only the first four.
+* **Consequences:**
+* Phase 6 adds commands without a schema migration; the closure policy is written once against the complete domain.
+
+---
+
+## ADR-029: The pending-Refund closure check is not migrated
+
+* **Decision Date:** 2026-09-15
+* **Status:** Accepted
+* **Context:** the canonical readiness function reports Checks carrying a pending Refund, but Refund is outside Phase 5 and `pending_refund_vnd` is absent from the contract by 5C's decision.
+* **Decision:**
+* omit the branch rather than stub it against a column that does not exist.
+* **Consequences:**
+* the closure policy has one fewer condition than canonical; it is restored together with Refund, and §6.4 records that the omission is deliberate.
+
+---
+
+## ADR-030: A Check command locks its Service Session `FOR UPDATE`
 
 * **Decision Date:** 2026-09-15
 * **Status:** Accepted; supersedes the Session-lock clause of ADR-016
@@ -341,3 +425,18 @@ CREATE TABLE idempotency_keys (
 * **Consequences:**
 * Sibling-Check parallelism within a Session is given up deliberately. Payments on different Sessions, and every other command, are unaffected.
 * **Known remaining hole, recorded rather than fixed:** the other commands that call `LoadServiceSession` (Commit, draft add/edit/remove) do not take the Session lock at all, so a concurrent Payment can still tear *their* read-model rebuild. No test exercises that pairing, and closing it belongs in its own change.
+
+---
+
+## ADR-031: Submit keeps its Session-then-Checks lock order, recording the Submit-Payment AB-BA window
+
+* **Decision Date:** 2026-09-16
+* **Status:** Accepted
+* **Context:** Submit locks its source in the order the 5D plan mandates — the Service Session and its committed draft first, the Checks second — while ADR-030 has every 5C command lock the Check first and the Session second. A Submit racing a Payment on the same Session is therefore an AB-BA: Submit holds the Session and waits on the Check while Payment holds the Check and waits on the Session. §10's "serialize rather than deadlock" claim holds for the Check locks, which both sides take in ascending (created_at, id) order, but not for the Session lock. Before the final-fix split the window was one query round-trip wide and Task 11's `TestSubmitAgainstConcurrentPayment` ran clean over 30+ `-race` runs; splitting the Session lock from the draft lock widened it to the span of Submit's Session → Draft → Checks lock sequence — two intervening round trips — and the abort then fired twice in that test's first `-race` runs, with every later run stable (20/20 under the contract-aligned test). The exposure is real but narrow — and when PostgreSQL does abort one side with 40P01, the abort rolls the transaction back including its idempotency claim, so a client retry runs clean.
+* **Decision:**
+* Keep Submit's Session+Draft → Checks order. §6.1's step order and the idempotency/audit machinery all treat the locked source as the fact the mutation committed against; the window is accepted and recorded rather than reordered, and no lock retry is added.
+* `TestSubmitAgainstConcurrentPayment` asserts this contract — either interleaving, any failure must be the 40P01 abort, no corruption — rather than asserting the absence of deadlock.
+* The caveat lives where the window does, in the comment on `LockSubmittableDraft` in `sql/queries/sales.sql`.
+* **Consequences:**
+* A concurrent Payment racing a Submit on one Session can surface a single 500 (40P01) and succeed on retry; the rollback leaves no partial state and no stored result, so the retry is a first attempt, not a replay.
+* The exposure stays bounded by the two-round-trip width of Submit's lock span and the empirical record — observed twice in the split's first runs, then 20/20 stable `-race` runs. If the window ever observably hurts, reordering Submit to Checks-then-Session remains open for Phase 6 as its own measured change.
