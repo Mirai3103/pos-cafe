@@ -615,6 +615,218 @@ func (e *prepEnv) CountAuditEventsByTypeAndUnit(t *testing.T, eventType string, 
 	return n
 }
 
+// --- Phase 6B: Waste fixtures ---
+
+// waste runs the waste command under a caller-chosen request id as the given
+// actor, deriving the status the HTTP layer would have answered with on error
+// the way the advance helpers do.
+func (e *prepEnv) waste(t *testing.T, requestID uuid.UUID, actor preparation.Actor,
+	unitID uuid.UUID, reason string, note *string,
+) (preparation.WasteResponse, int, error) {
+	t.Helper()
+	status, resp, err := preparation.NewWasteUnitHandler(e.PreparationRunner).
+		Handle(context.Background(), actor, preparation.WasteUnitCommand{
+			RequestID: requestID,
+			UnitID:    unitID,
+			Reason:    reason,
+			Note:      note,
+		})
+	if err != nil {
+		status, _ = preparation.ErrorResponse(err)
+	}
+	return resp, status, err
+}
+
+// Waste runs the waste command as the Barista, who holds preparation.operate.
+func (e *prepEnv) Waste(t *testing.T, unitID uuid.UUID, reason string, note *string) (
+	preparation.WasteResponse, int, error,
+) {
+	t.Helper()
+	return e.waste(t, uuid.New(), e.barista, unitID, reason, note)
+}
+
+// WasteAs runs the waste command as an arbitrary actor, for capability tests.
+func (e *prepEnv) WasteAs(t *testing.T, actor preparation.Actor, unitID uuid.UUID,
+	reason string, note *string,
+) (preparation.WasteResponse, int, error) {
+	t.Helper()
+	return e.waste(t, uuid.New(), actor, unitID, reason, note)
+}
+
+// WasteWithRequestID replays a specific request id, as the Barista.
+func (e *prepEnv) WasteWithRequestID(t *testing.T, requestID, unitID uuid.UUID,
+	reason string, note *string,
+) (preparation.WasteResponse, int, error) {
+	t.Helper()
+	return e.waste(t, requestID, e.barista, unitID, reason, note)
+}
+
+// CountWastes counts the Waste facts recorded for one unit.
+func (e *prepEnv) CountWastes(t *testing.T, unitID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_wastes WHERE preparation_unit_id = $1`,
+		unitID).Scan(&n))
+	return n
+}
+
+// CountAlerts counts the alerts created for one unit.
+func (e *prepEnv) CountAlerts(t *testing.T, unitID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_alerts WHERE preparation_unit_id = $1`,
+		unitID).Scan(&n))
+	return n
+}
+
+// wasteFactRow is one stored Waste fact row as the fixtures read it back.
+type wasteFactRow struct {
+	ID         uuid.UUID
+	PriorState string
+	Reason     string
+	Note       *string
+	OccurredAt time.Time
+	ActorID    uuid.UUID
+	SessionID  uuid.UUID
+}
+
+// UnitWaste reads the single Waste fact of one unit; the suite requires
+// exactly one row to exist before calling.
+func (e *prepEnv) UnitWaste(t *testing.T, unitID uuid.UUID) wasteFactRow {
+	t.Helper()
+	var row wasteFactRow
+	var note sql.NullString
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, prior_state, reason, note, occurred_at,
+		       actor_staff_identity_id, staff_access_session_id
+		FROM preparation_wastes
+		WHERE preparation_unit_id = $1`, unitID).
+		Scan(&row.ID, &row.PriorState, &row.Reason, &note, &row.OccurredAt,
+			&row.ActorID, &row.SessionID))
+	if note.Valid {
+		row.Note = &note.String
+	}
+	return row
+}
+
+// alertFactRow is one stored alert row as the fixtures read it back.
+type alertFactRow struct {
+	ID             uuid.UUID
+	Kind           string
+	Reason         string
+	Note           *string
+	CreatedAt      time.Time
+	AcknowledgedAt *time.Time
+}
+
+// UnitAlert reads the single alert of one unit; the suite requires exactly one
+// row to exist before calling.
+func (e *prepEnv) UnitAlert(t *testing.T, unitID uuid.UUID) alertFactRow {
+	t.Helper()
+	var row alertFactRow
+	var note sql.NullString
+	var acknowledgedAt sql.NullTime
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, kind, reason, note, created_at, acknowledged_at
+		FROM preparation_alerts
+		WHERE preparation_unit_id = $1`, unitID).
+		Scan(&row.ID, &row.Kind, &row.Reason, &note, &row.CreatedAt, &acknowledgedAt))
+	if note.Valid {
+		row.Note = &note.String
+	}
+	if acknowledgedAt.Valid {
+		row.AcknowledgedAt = &acknowledgedAt.Time
+	}
+	return row
+}
+
+// transitionFactRow is one stored unit transition row as the fixtures read it
+// back.
+type transitionFactRow struct {
+	PriorState     string
+	ResultingState string
+	OccurredAt     time.Time
+}
+
+// UnitTransitionTo reads the single transition of one unit into the given
+// resulting state; the suite requires exactly one row to exist before calling.
+func (e *prepEnv) UnitTransitionTo(t *testing.T, unitID uuid.UUID,
+	resulting string,
+) transitionFactRow {
+	t.Helper()
+	var row transitionFactRow
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT prior_state, resulting_state, occurred_at
+		FROM preparation_unit_transitions
+		WHERE preparation_unit_id = $1 AND resulting_state = $2`,
+		unitID, resulting).
+		Scan(&row.PriorState, &row.ResultingState, &row.OccurredAt))
+	return row
+}
+
+// CountTransitionsTo counts the transitions of one unit into one resulting
+// state.
+func (e *prepEnv) CountTransitionsTo(t *testing.T, unitID uuid.UUID,
+	resulting string,
+) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT count(*) FROM preparation_unit_transitions
+		WHERE preparation_unit_id = $1 AND resulting_state = $2`,
+		unitID, resulting).Scan(&n))
+	return n
+}
+
+// UnitInPreparationAt reads a unit's in_preparation_at straight from the
+// database, nil when the unit never entered preparation.
+func (e *prepEnv) UnitInPreparationAt(t *testing.T, unitID uuid.UUID) *time.Time {
+	t.Helper()
+	var value sql.NullTime
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT in_preparation_at FROM preparation_units WHERE id = $1`, unitID).
+		Scan(&value))
+	if !value.Valid {
+		return nil
+	}
+	return &value.Time
+}
+
+// auditEventRow is one stored audit event naming a unit, as the fixtures read
+// it back.
+type auditEventRow struct {
+	EventType  string
+	OccurredAt time.Time
+}
+
+// UnitAuditEvents reads the audit events of the given types whose details name
+// one unit, ordered deterministically, so a suite can pin the event types and
+// their shared occurrence time.
+func (e *prepEnv) UnitAuditEvents(t *testing.T, unitID uuid.UUID,
+	eventTypes ...string,
+) []auditEventRow {
+	t.Helper()
+	rows, err := e.DB.Query(`
+		SELECT event_type, occurred_at
+		FROM audit_events
+		WHERE event_type = ANY($1)
+		  AND details->>'preparation_unit_id' = $2
+		ORDER BY event_type ASC, occurred_at ASC, id ASC`,
+		eventTypes, unitID.String())
+	require.NoError(t, err)
+	defer rows.Close()
+	events := []auditEventRow{}
+	for rows.Next() {
+		var event auditEventRow
+		require.NoError(t, rows.Scan(&event.EventType, &event.OccurredAt))
+		events = append(events, event)
+	}
+	require.NoError(t, rows.Err())
+	return events
+}
+
 // idempotencyClaim is the stored idempotency claim of one mutation request.
 type idempotencyClaim struct {
 	Action       string

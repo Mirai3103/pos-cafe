@@ -108,8 +108,6 @@ type AuditRecord struct {
 // row-wise and pad a shorter array with nulls, so drift fails the target
 // columns' NOT NULL constraints — validating in Go keeps that failure out of
 // the database.
-//
-//nolint:unused // produced by this task for the Waste/Correction handlers (Tasks 4-7); exercised by TestWritePreparationAuditsIsAtomic until then
 func writePreparationAudits(ctx context.Context, q *sqlc.Queries, actor Actor,
 	occurredAt time.Time, audits []AuditRecord,
 ) error {
