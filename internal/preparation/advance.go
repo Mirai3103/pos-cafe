@@ -63,8 +63,9 @@ func (h *AdvanceUnitHandler) Handle(ctx context.Context, actor Actor,
 
 			occurredAt := time.Now()
 			if err := q.SetPreparationUnitState(ctx, sqlc.SetPreparationUnitStateParams{
-				ID:    unit.ID,
-				State: cmd.TargetState,
+				ID:         unit.ID,
+				State:      cmd.TargetState,
+				OccurredAt: occurredAt,
 			}); err != nil {
 				return 0, zero, AuditRecord{}, fmt.Errorf("set preparation unit state: %w", err)
 			}

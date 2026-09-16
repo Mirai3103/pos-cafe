@@ -1967,15 +1967,29 @@ WHERE o.service_session_id = $1
 ORDER BY pu.queued_at ASC, pu.id ASC
 `
 
-func (q *Queries) ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnit, error) {
+type ListSessionPreparationUnitsRow struct {
+	ID              uuid.UUID       `json:"id"`
+	OrderItemID     uuid.UUID       `json:"order_item_id"`
+	UnitNumber      int32           `json:"unit_number"`
+	State           string          `json:"state"`
+	ServiceNumber   string          `json:"service_number"`
+	CategoryName    string          `json:"category_name"`
+	ItemName        string          `json:"item_name"`
+	SizeName        sql.NullString  `json:"size_name"`
+	Modifiers       json.RawMessage `json:"modifiers"`
+	PreparationNote sql.NullString  `json:"preparation_note"`
+	QueuedAt        time.Time       `json:"queued_at"`
+}
+
+func (q *Queries) ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionPreparationUnitsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSessionPreparationUnits, serviceSessionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []PreparationUnit{}
+	items := []ListSessionPreparationUnitsRow{}
 	for rows.Next() {
-		var i PreparationUnit
+		var i ListSessionPreparationUnitsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OrderItemID,

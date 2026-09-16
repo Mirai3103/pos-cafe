@@ -6,6 +6,7 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -104,6 +105,7 @@ type Querier interface {
 	// importing internal/shift, per ADR-006's precedent.
 	GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error)
 	GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (string, error)
+	GetPreparationObservedAt(ctx context.Context) (time.Time, error)
 	GetPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
 	// Queries for internal/sales (Phase 5A).
 	//
@@ -173,6 +175,7 @@ type Querier interface {
 	// in that order.
 	InsertTableAssignmentsBatch(ctx context.Context, arg InsertTableAssignmentsBatchParams) ([]InsertTableAssignmentsBatchRow, error)
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
+	ListActivePreparationUnits(ctx context.Context) ([]ListActivePreparationUnitsRow, error)
 	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
 	ListAllItemModifierGroupExclusions(ctx context.Context) ([]ListAllItemModifierGroupExclusionsRow, error)
@@ -203,6 +206,7 @@ type Querier interface {
 	ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]ListCheckPaymentsRow, error)
 	ListCommittedItemModifiers(ctx context.Context, committedItemIds []uuid.UUID) ([]ListCommittedItemModifiersRow, error)
 	ListCommittedItemsForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]ListCommittedItemsForSubmissionRow, error)
+	ListCurrentPreparationTables(ctx context.Context, serviceSessionIds []uuid.UUID) ([]ListCurrentPreparationTablesRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
 	// Declared defaults of the given Groups, filtered to what is currently
@@ -263,7 +267,7 @@ type Querier interface {
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
 	ListSessionOrders(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionOrdersRow, error)
 	ListSessionPreparationTransitions(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnitTransition, error)
-	ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnit, error)
+	ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionPreparationUnitsRow, error)
 	// The `submitted` flag on a Charge Allocation is derived, not stored: there is
 	// no submitted column anywhere in the schema, and therefore no flag that can
 	// fall out of step with the Order that defines it.

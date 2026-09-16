@@ -7,14 +7,29 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
+
+const getPreparationObservedAt = `-- name: GetPreparationObservedAt :one
+SELECT now()::timestamptz AS observed_at
+`
+
+func (q *Queries) GetPreparationObservedAt(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, getPreparationObservedAt)
+	var observed_at time.Time
+	err := row.Scan(&observed_at)
+	return observed_at, err
+}
 
 const getPreparationUnit = `-- name: GetPreparationUnit :one
 SELECT id, order_item_id, unit_number, state, service_number, category_name,
-       item_name, size_name, modifiers, preparation_note, queued_at
+       item_name, size_name, modifiers, preparation_note, queued_at,
+       in_preparation_at
 FROM preparation_units
 WHERE id = $1
 `
@@ -34,6 +49,7 @@ func (q *Queries) GetPreparationUnit(ctx context.Context, id uuid.UUID) (Prepara
 		&i.Modifiers,
 		&i.PreparationNote,
 		&i.QueuedAt,
+		&i.InPreparationAt,
 	)
 	return i, err
 }
@@ -67,10 +83,131 @@ func (q *Queries) InsertPreparationUnitTransition(ctx context.Context, arg Inser
 	return err
 }
 
+const listActivePreparationUnits = `-- name: ListActivePreparationUnits :many
+WITH unit_counts AS (
+    SELECT order_item_id, count(*)::integer AS unit_count
+    FROM preparation_units
+    GROUP BY order_item_id
+)
+SELECT pu.id,
+       pu.order_item_id,
+       pu.unit_number,
+       pu.state,
+       pu.service_number,
+       pu.category_name,
+       pu.item_name,
+       pu.size_name,
+       pu.modifiers,
+       pu.preparation_note,
+       pu.queued_at,
+       pu.in_preparation_at,
+       o.service_session_id,
+       uc.unit_count AS order_item_unit_count
+FROM preparation_units AS pu
+JOIN order_items AS oi ON oi.id = pu.order_item_id
+JOIN orders AS o ON o.id = oi.order_id
+JOIN unit_counts AS uc ON uc.order_item_id = pu.order_item_id
+WHERE pu.state IN ('QUEUED', 'IN_PREPARATION', 'READY')
+ORDER BY pu.queued_at, pu.id
+`
+
+type ListActivePreparationUnitsRow struct {
+	ID                 uuid.UUID       `json:"id"`
+	OrderItemID        uuid.UUID       `json:"order_item_id"`
+	UnitNumber         int32           `json:"unit_number"`
+	State              string          `json:"state"`
+	ServiceNumber      string          `json:"service_number"`
+	CategoryName       string          `json:"category_name"`
+	ItemName           string          `json:"item_name"`
+	SizeName           sql.NullString  `json:"size_name"`
+	Modifiers          json.RawMessage `json:"modifiers"`
+	PreparationNote    sql.NullString  `json:"preparation_note"`
+	QueuedAt           time.Time       `json:"queued_at"`
+	InPreparationAt    sql.NullTime    `json:"in_preparation_at"`
+	ServiceSessionID   uuid.UUID       `json:"service_session_id"`
+	OrderItemUnitCount int32           `json:"order_item_unit_count"`
+}
+
+func (q *Queries) ListActivePreparationUnits(ctx context.Context) ([]ListActivePreparationUnitsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listActivePreparationUnits)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActivePreparationUnitsRow{}
+	for rows.Next() {
+		var i ListActivePreparationUnitsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrderItemID,
+			&i.UnitNumber,
+			&i.State,
+			&i.ServiceNumber,
+			&i.CategoryName,
+			&i.ItemName,
+			&i.SizeName,
+			&i.Modifiers,
+			&i.PreparationNote,
+			&i.QueuedAt,
+			&i.InPreparationAt,
+			&i.ServiceSessionID,
+			&i.OrderItemUnitCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCurrentPreparationTables = `-- name: ListCurrentPreparationTables :many
+SELECT ta.service_session_id, t.name
+FROM table_assignments AS ta
+JOIN tables AS t ON t.id = ta.table_id
+WHERE ta.service_session_id = ANY($1::uuid[])
+  AND ta.released_at IS NULL
+ORDER BY ta.service_session_id, ta.sequence, ta.id
+`
+
+type ListCurrentPreparationTablesRow struct {
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+	Name             string    `json:"name"`
+}
+
+func (q *Queries) ListCurrentPreparationTables(ctx context.Context, serviceSessionIds []uuid.UUID) ([]ListCurrentPreparationTablesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCurrentPreparationTables, pq.Array(serviceSessionIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCurrentPreparationTablesRow{}
+	for rows.Next() {
+		var i ListCurrentPreparationTablesRow
+		if err := rows.Scan(&i.ServiceSessionID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockPreparationUnit = `-- name: LockPreparationUnit :one
 
 SELECT id, order_item_id, unit_number, state, service_number, category_name,
-       item_name, size_name, modifiers, preparation_note, queued_at
+       item_name, size_name, modifiers, preparation_note, queued_at,
+       in_preparation_at
 FROM preparation_units
 WHERE id = $1
 FOR UPDATE
@@ -96,20 +233,29 @@ func (q *Queries) LockPreparationUnit(ctx context.Context, id uuid.UUID) (Prepar
 		&i.Modifiers,
 		&i.PreparationNote,
 		&i.QueuedAt,
+		&i.InPreparationAt,
 	)
 	return i, err
 }
 
 const setPreparationUnitState = `-- name: SetPreparationUnitState :exec
-UPDATE preparation_units SET state = $2 WHERE id = $1
+UPDATE preparation_units
+SET state = $1,
+    in_preparation_at = CASE
+        WHEN $1::text = 'IN_PREPARATION'
+            THEN $2::timestamptz
+        ELSE in_preparation_at
+    END
+WHERE id = $3
 `
 
 type SetPreparationUnitStateParams struct {
-	ID    uuid.UUID `json:"id"`
-	State string    `json:"state"`
+	State      string    `json:"state"`
+	OccurredAt time.Time `json:"occurred_at"`
+	ID         uuid.UUID `json:"id"`
 }
 
 func (q *Queries) SetPreparationUnitState(ctx context.Context, arg SetPreparationUnitStateParams) error {
-	_, err := q.db.ExecContext(ctx, setPreparationUnitState, arg.ID, arg.State)
+	_, err := q.db.ExecContext(ctx, setPreparationUnitState, arg.State, arg.OccurredAt, arg.ID)
 	return err
 }
