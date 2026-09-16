@@ -42,6 +42,34 @@ type MutationSpec struct {
 // MutationContext carries per-execution facts the mutation body needs.
 type MutationContext struct {
 	Queries *sqlc.Queries
+	tx      *sql.Tx
+}
+
+// withUnitSavepoint runs fn inside a fixed, package-private savepoint so one
+// unit's failure can be undone without aborting the surrounding bulk
+// transaction: fn's error rolls the savepoint back and is returned for the
+// caller to convert (or not) into a per-unit outcome, while a savepoint
+// statement's own failure aborts the mutation outright. The name is a
+// constant and carries no request data.
+func (mc MutationContext) withUnitSavepoint(ctx context.Context,
+	fn func(*sqlc.Queries) error,
+) error {
+	if _, err := mc.tx.ExecContext(ctx, "SAVEPOINT preparation_unit"); err != nil {
+		return fmt.Errorf("create preparation unit savepoint: %w", err)
+	}
+	if err := fn(mc.Queries); err != nil {
+		if _, rollbackErr := mc.tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT preparation_unit"); rollbackErr != nil {
+			return fmt.Errorf("rollback preparation unit savepoint after callback failure: %w", rollbackErr)
+		}
+		if _, releaseErr := mc.tx.ExecContext(ctx, "RELEASE SAVEPOINT preparation_unit"); releaseErr != nil {
+			return fmt.Errorf("release rolled-back preparation unit savepoint: %w", releaseErr)
+		}
+		return err
+	}
+	if _, err := mc.tx.ExecContext(ctx, "RELEASE SAVEPOINT preparation_unit"); err != nil {
+		return fmt.Errorf("release preparation unit savepoint: %w", err)
+	}
+	return nil
 }
 
 // AuditRecord describes the audit event to insert after a successful mutation.
@@ -293,7 +321,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 	}
 
 	// 7. Run the mutation.
-	resultCode, result, audit, err := fn(MutationContext{Queries: q})
+	resultCode, result, audit, err := fn(MutationContext{Queries: q, tx: tx})
 	if err != nil {
 		return 0, zero, err
 	}

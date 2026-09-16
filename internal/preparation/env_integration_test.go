@@ -510,3 +510,27 @@ func (e *prepEnv) CountAuditEvents(t *testing.T, eventType string) int {
 	).Scan(&n))
 	return n
 }
+
+// BulkAdvance runs the bulk advance command as the Barista, who holds
+// preparation.operate, returning the status the HTTP layer would have answered
+// with and the error untouched, like the other advance helpers.
+func (e *prepEnv) BulkAdvance(t *testing.T, cmd preparation.BulkAdvanceCommand) (int, preparation.BulkAdvanceResponse, error) {
+	t.Helper()
+	return preparation.NewBulkAdvanceHandler(e.PreparationRunner).
+		Handle(context.Background(), e.BaristaActor(), cmd)
+}
+
+// UnitAuditCount counts the PREPARATION_UNIT_ADVANCED audit events naming one
+// Preparation Unit, so a test can prove a unit moved exactly once.
+func (e *prepEnv) UnitAuditCount(t *testing.T, unitID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT count(*)
+		FROM audit_events
+		WHERE event_type = $1
+		  AND details->>'preparation_unit_id' = $2`,
+		preparation.EventPreparationUnitAdvanced, unitID.String(),
+	).Scan(&n))
+	return n
+}
