@@ -4,7 +4,6 @@
 package preparation
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -281,45 +280,6 @@ func TestValidateCorrectState(t *testing.T) {
 			require.ErrorIs(t, err, response.ErrInvalid, pin)
 		}
 	})
-}
-
-func TestCorrectStateFingerprintExcludesCredentials(t *testing.T) {
-	note := NormalizeCorrectionNote(notePtr("  chốt nhầm trạng thái  "))
-	fingerprint := correctStateFingerprint{
-		PreparationUnitIDs: []uuid.UUID{correctionUnitID(1), correctionUnitID(2)},
-		TargetState:        StateReady,
-		Reason:             ReasonStateRecordedInError,
-		Note:               note,
-	}
-	raw, err := json.Marshal(fingerprint)
-	require.NoError(t, err)
-
-	// The fingerprint carries exactly the normalized business input.
-	var fields map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(raw, &fields))
-	keys := make([]string, 0, len(fields))
-	for key := range fields {
-		keys = append(keys, key)
-	}
-	require.ElementsMatch(t,
-		[]string{"preparation_unit_ids", "target_state", "reason", "note"}, keys)
-	require.NotContains(t, string(raw), "manager_pin")
-
-	// The PIN value exists only on the request command; the marshaled
-	// fingerprint never contains it.
-	const samplePin = "43219876"
-	cmd := CorrectStateCommand{
-		RequestID:          correctionUnitID(999),
-		PreparationUnitIDs: []uuid.UUID{correctionUnitID(1), correctionUnitID(2)},
-		TargetState:        StateReady,
-		Reason:             ReasonStateRecordedInError,
-		Note:               note,
-		ManagerPIN:         samplePin,
-	}
-	cmdRaw, err := json.Marshal(cmd)
-	require.NoError(t, err)
-	require.Contains(t, string(cmdRaw), fmt.Sprintf(`"manager_pin":%q`, samplePin))
-	require.NotContains(t, string(raw), samplePin)
 }
 
 // notePtr returns a pointer to s; a test helper for optional notes.

@@ -206,18 +206,6 @@ type CorrectStateResponse struct {
 	Outcomes []CorrectStateOutcome `json:"outcomes"`
 }
 
-// correctStateFingerprint is the normalized, credential-free business input a
-// State Correction stands for. ManagerPIN is deliberately absent — a PIN must
-// never enter a fingerprint, so replays stay comparable without ever hashing
-// a secret (spec §7.5). The correction command builds it from the normalized
-// command, preserving request order.
-type correctStateFingerprint struct {
-	PreparationUnitIDs []uuid.UUID `json:"preparation_unit_ids"`
-	TargetState        string      `json:"target_state"`
-	Reason             string      `json:"reason"`
-	Note               *string     `json:"note"`
-}
-
 // QueueAlertResponse is one active alert on the queue read (spec §6.3): unit
 // identity projected from the unit at the read's snapshot, and WasteID
 // resolved through the Waste fact for WASTE alerts only — the reserved

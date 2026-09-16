@@ -1182,6 +1182,110 @@ func (e *prepEnv) WasteRemake(t *testing.T, wasteID uuid.UUID) remakeFactRow {
 	return row
 }
 
+// --- Phase 6B: State Correction fixtures ---
+
+// CorrectStateAs runs the correction command as the given actor, deriving the
+// status the HTTP layer would have answered with on error the way the remake
+// helpers do. The actor's own registered PIN fills the command when it carries
+// none, and a fresh request id fills it when it carries none — the wrong-PIN
+// and replay cases set those fields explicitly instead.
+func (e *prepEnv) CorrectStateAs(t *testing.T, actor preparation.Actor,
+	cmd preparation.CorrectStateCommand,
+) (preparation.CorrectStateResponse, int, error) {
+	t.Helper()
+	if cmd.ManagerPIN == "" {
+		cmd.ManagerPIN = e.PINOf(actor)
+	}
+	if cmd.RequestID == uuid.Nil {
+		cmd.RequestID = uuid.New()
+	}
+	status, resp, err := preparation.NewCorrectStateHandler(e.PreparationRunner).
+		Handle(context.Background(), actor, cmd)
+	if err != nil {
+		status, _ = preparation.ErrorResponse(err)
+	}
+	return resp, status, err
+}
+
+// CorrectState runs the correction command as the seeded MANAGER with their
+// own registered PIN, which every success path exercises.
+func (e *prepEnv) CorrectState(t *testing.T, cmd preparation.CorrectStateCommand) (
+	preparation.CorrectStateResponse, int, error,
+) {
+	t.Helper()
+	return e.CorrectStateAs(t, e.ManagerActor(), cmd)
+}
+
+// CorrectStateWithRequestIDAs runs the correction with an explicit request id
+// and actor, for the replay and race suites.
+func (e *prepEnv) CorrectStateWithRequestIDAs(t *testing.T, requestID uuid.UUID,
+	actor preparation.Actor, cmd preparation.CorrectStateCommand,
+) (preparation.CorrectStateResponse, int, error) {
+	t.Helper()
+	cmd.RequestID = requestID
+	return e.CorrectStateAs(t, actor, cmd)
+}
+
+// CorrectStateWithRequestID replays a specific request id as the Manager.
+func (e *prepEnv) CorrectStateWithRequestID(t *testing.T, requestID uuid.UUID,
+	cmd preparation.CorrectStateCommand,
+) (preparation.CorrectStateResponse, int, error) {
+	t.Helper()
+	return e.CorrectStateWithRequestIDAs(t, requestID, e.ManagerActor(), cmd)
+}
+
+// CountCorrections counts the State Correction facts recorded for one unit.
+func (e *prepEnv) CountCorrections(t *testing.T, unitID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_state_corrections WHERE preparation_unit_id = $1`,
+		unitID).Scan(&n))
+	return n
+}
+
+// CountAllCorrections counts every State Correction fact in the database, so a
+// suite can prove a rejected batch wrote none.
+func (e *prepEnv) CountAllCorrections(t *testing.T) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_state_corrections`).Scan(&n))
+	return n
+}
+
+// correctionFactRow is one stored State Correction fact row as the fixtures
+// read it back.
+type correctionFactRow struct {
+	ID             uuid.UUID
+	PriorState     string
+	ResultingState string
+	Reason         string
+	Note           *string
+	OccurredAt     time.Time
+	ActorID        uuid.UUID
+	SessionID      uuid.UUID
+}
+
+// UnitCorrection reads the single State Correction fact of one unit; the suite
+// requires exactly one row to exist before calling.
+func (e *prepEnv) UnitCorrection(t *testing.T, unitID uuid.UUID) correctionFactRow {
+	t.Helper()
+	var row correctionFactRow
+	var note sql.NullString
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, prior_state, resulting_state, reason, note, occurred_at,
+		       actor_staff_identity_id, staff_access_session_id
+		FROM preparation_state_corrections
+		WHERE preparation_unit_id = $1`, unitID).
+		Scan(&row.ID, &row.PriorState, &row.ResultingState, &row.Reason, &note,
+			&row.OccurredAt, &row.ActorID, &row.SessionID))
+	if note.Valid {
+		row.Note = &note.String
+	}
+	return row
+}
+
 // OrderItemCount counts the Order Items of one Service Session, so a suite can
 // prove a Remake added none.
 func (e *prepEnv) OrderItemCount(t *testing.T, sessionID uuid.UUID) int {
