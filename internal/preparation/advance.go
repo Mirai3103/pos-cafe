@@ -3,7 +3,6 @@ package preparation
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -124,11 +123,9 @@ func loadUnit(ctx context.Context, q *sqlc.Queries, unitID uuid.UUID) (UnitRespo
 		}
 		return UnitResponse{}, fmt.Errorf("load preparation unit: %w", err)
 	}
-	mods := make([]UnitModifierResponse, 0)
-	if len(row.Modifiers) > 0 {
-		if err := json.Unmarshal(row.Modifiers, &mods); err != nil {
-			return UnitResponse{}, fmt.Errorf("decode preparation unit modifiers: %w", err)
-		}
+	mods, err := decodeModifiers(row.Modifiers)
+	if err != nil {
+		return UnitResponse{}, err
 	}
 	var sizeName, note *string
 	if row.SizeName.Valid {

@@ -330,6 +330,105 @@ func (e *prepEnv) SubmittedUnits(t *testing.T, quantity int32) []sales.Preparati
 	return submitted.PreparationUnits
 }
 
+// SubmittedTakeawayUnits returns the Preparation Units of a freshly submitted
+// Takeaway round of the given quantity, driven through the same exported
+// internal/sales handlers as SubmittedUnits.
+//
+// Takeaway settles before it submits: ModeRequiresSettlementBeforeSubmit makes
+// an unpaid Check block Submit, so the round's Check is paid in cash between
+// Commit and Submit, charged at the Check's own stored total.
+func (e *prepEnv) SubmittedTakeawayUnits(t *testing.T, quantity int32) []sales.PreparationUnitResponse {
+	t.Helper()
+	require.GreaterOrEqual(t, quantity, int32(1), "the round needs at least one unit")
+
+	ctx := context.Background()
+	actor := e.salesActor(e.manager)
+
+	_, session, err := sales.NewStartTakeawaySessionHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.StartTakeawaySessionCommand{RequestID: uuid.New()})
+	require.NoError(t, err)
+
+	_, resp, err := sales.NewAddDraftItemHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.AddDraftItemCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+			MenuItemID:       e.CoffeeID,
+		})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Draft.Items, "the added item must be in the draft")
+
+	_, _, err = sales.NewSetDraftItemQuantityHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.SetDraftItemQuantityCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+			DraftItemID:      resp.Draft.Items[0].ID,
+			Quantity:         &quantity,
+		})
+	require.NoError(t, err)
+
+	_, committed, err := sales.NewCommitOrderDraftHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.CommitOrderDraftCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+		})
+	require.NoError(t, err)
+	require.Len(t, committed.Checks, 1, "a committed takeaway round has one check")
+	check := committed.Checks[0]
+
+	_, _, err = sales.NewPayCashHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.PayCashCommand{
+			RequestID:        uuid.New(),
+			CheckID:          check.ID,
+			AppliedAmountVND: check.ChargeVND,
+			CashTenderedVND:  check.ChargeVND,
+		})
+	require.NoError(t, err)
+
+	_, submitted, err := sales.NewSubmitOrderHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.SubmitOrderCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+		})
+	require.NoError(t, err)
+
+	require.Len(t, submitted.PreparationUnits, int(quantity),
+		"one Preparation Unit per unit of ordered quantity")
+	return submitted.PreparationUnits
+}
+
+// SessionIDForUnit reads the Service Session a Preparation Unit belongs to,
+// through the Order Item and Order the unit was made of.
+func (e *prepEnv) SessionIDForUnit(t *testing.T, unitID uuid.UUID) uuid.UUID {
+	t.Helper()
+	var sessionID uuid.UUID
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT o.service_session_id
+		FROM preparation_units pu
+		JOIN order_items oi ON oi.id = pu.order_item_id
+		JOIN orders o ON o.id = oi.order_id
+		WHERE pu.id = $1`, unitID).Scan(&sessionID))
+	return sessionID
+}
+
+// SeedTable creates a Table in the env's database and returns its id.
+func (e *prepEnv) SeedTable(t *testing.T, name string) uuid.UUID {
+	t.Helper()
+	return seedTable(t, e.DB, name)
+}
+
+// SetTables replaces a Dine-in Session's Table set through the real Sales
+// handler, so the queue's table projection is tested against the same writes
+// production makes.
+func (e *prepEnv) SetTables(t *testing.T, sessionID uuid.UUID, tableIDs ...uuid.UUID) {
+	t.Helper()
+	_, _, err := sales.NewSetSessionTablesHandler(e.SalesRunner).Handle(
+		context.Background(), e.salesActor(e.manager), sales.SetSessionTablesCommand{
+			RequestID: uuid.New(), ServiceSessionID: sessionID, TableIDs: tableIDs,
+		},
+	)
+	require.NoError(t, err)
+}
+
 // advance runs the advance command under a caller-chosen request id as the
 // given actor, deriving the status the HTTP layer would have answered with on
 // error the way the Sales suites' mapErrorStatus does.
