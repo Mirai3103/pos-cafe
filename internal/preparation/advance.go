@@ -77,7 +77,10 @@ func applyAdvance(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return zero, fmt.Errorf("%w: %s cannot advance to %s", ErrInvalidTransition, unit.State, target)
 	}
 
-	occurredAt := time.Now()
+	occurredAt, err := q.GetPreparationCurrentTime(ctx)
+	if err != nil {
+		return zero, fmt.Errorf("read preparation occurrence time: %w", err)
+	}
 	if err := q.SetPreparationUnitState(ctx, sqlc.SetPreparationUnitStateParams{
 		ID: unit.ID, State: target, OccurredAt: occurredAt,
 	}); err != nil {

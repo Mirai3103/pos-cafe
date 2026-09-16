@@ -105,8 +105,9 @@ type Querier interface {
 	// importing internal/shift, per ADR-006's precedent.
 	GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error)
 	GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (string, error)
-	GetPreparationObservedAt(ctx context.Context) (time.Time, error)
+	GetPreparationCurrentTime(ctx context.Context) (time.Time, error)
 	GetPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
+	GetSalesOccurredAt(ctx context.Context) (time.Time, error)
 	// Queries for internal/sales (Phase 5A).
 	//
 	// Authority, role, and advisory-lock queries are slice-local by ADR-007: the

@@ -71,7 +71,7 @@
 
 **Interfaces:**
 - Produces: nullable `preparation_units.in_preparation_at`
-- Produces: `GetPreparationObservedAt(ctx) (time.Time, error)`
+- Produces: `GetPreparationCurrentTime(ctx) (time.Time, error)`
 - Produces: `ListActivePreparationUnits(ctx) ([]sqlc.ListActivePreparationUnitsRow, error)`
 - Produces: `ListCurrentPreparationTables(ctx, []uuid.UUID) ([]sqlc.ListCurrentPreparationTablesRow, error)`
 - Changes: `SetPreparationUnitStateParams` gains `OccurredAt time.Time`
@@ -227,8 +227,8 @@ WHERE id = sqlc.arg(id);
 Append these reads:
 
 ```sql
--- name: GetPreparationObservedAt :one
-SELECT now()::timestamptz AS observed_at;
+-- name: GetPreparationCurrentTime :one
+SELECT clock_timestamp()::timestamptz AS current_time;
 
 -- name: ListActivePreparationUnits :many
 WITH unit_counts AS (
@@ -271,7 +271,10 @@ ORDER BY ta.service_session_id, ta.sequence, ta.id;
 Before extracting the helper in Task 2, keep the existing handler correct against the new query signature by changing its update to:
 
 ```go
-occurredAt := time.Now()
+occurredAt, err := q.GetPreparationCurrentTime(ctx)
+if err != nil {
+	return 0, zero, AuditRecord{}, fmt.Errorf("read preparation occurrence time: %w", err)
+}
 if err := q.SetPreparationUnitState(ctx, sqlc.SetPreparationUnitStateParams{
 	ID: unit.ID,
 	State: cmd.TargetState,
@@ -412,7 +415,10 @@ func applyAdvance(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return zero, fmt.Errorf("%w: %s cannot advance to %s", ErrInvalidTransition, unit.State, target)
 	}
 
-	occurredAt := time.Now()
+	occurredAt, err := q.GetPreparationCurrentTime(ctx)
+	if err != nil {
+		return zero, fmt.Errorf("read preparation occurrence time: %w", err)
+	}
 	if err := q.SetPreparationUnitState(ctx, sqlc.SetPreparationUnitStateParams{
 		ID: unit.ID, State: target, OccurredAt: occurredAt,
 	}); err != nil {
@@ -630,7 +636,7 @@ func TestExecuteReadKeepsOneRepeatableSnapshot(t *testing.T) {
 		context.Background(), env.PreparationRunner, env.BaristaActor(),
 		preparation.OpReadActiveQueue, preparation.CapPreparationOperate,
 		func(q *sqlc.Queries) (string, error) {
-			if _, err := q.GetPreparationObservedAt(context.Background()); err != nil {
+			if _, err := q.GetPreparationCurrentTime(context.Background()); err != nil {
 				return "", err
 			}
 			close(startUpdate)
@@ -993,7 +999,7 @@ func NewActiveQueueHandler(runner *Runner) *ActiveQueueHandler {
 func (h *ActiveQueueHandler) Handle(ctx context.Context, actor Actor) (QueueResponse, error) {
 	return ExecuteRead(ctx, h.runner, actor, OpReadActiveQueue, CapPreparationOperate,
 		func(q *sqlc.Queries) (QueueResponse, error) {
-			observedAt, err := q.GetPreparationObservedAt(ctx)
+			observedAt, err := q.GetPreparationCurrentTime(ctx)
 			if err != nil {
 				return QueueResponse{}, fmt.Errorf("read preparation observed time: %w", err)
 			}
@@ -1005,6 +1011,12 @@ func (h *ActiveQueueHandler) Handle(ctx context.Context, actor Actor) (QueueResp
 			sessionIDs := make([]uuid.UUID, 0, len(rows))
 			seenSessions := make(map[uuid.UUID]struct{}, len(rows))
 			for _, row := range rows {
+				if row.QueuedAt.After(observedAt) {
+					observedAt = row.QueuedAt
+				}
+				if row.InPreparationAt.Valid && row.InPreparationAt.Time.After(observedAt) {
+					observedAt = row.InPreparationAt.Time
+				}
 				if _, ok := seenSessions[row.ServiceSessionID]; !ok {
 					seenSessions[row.ServiceSessionID] = struct{}{}
 					sessionIDs = append(sessionIDs, row.ServiceSessionID)

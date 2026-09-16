@@ -21,6 +21,9 @@ func decodeModifiers(raw json.RawMessage) ([]UnitModifierResponse, error) {
 	if err := json.Unmarshal(raw, &modifiers); err != nil {
 		return nil, fmt.Errorf("decode preparation unit modifiers: %w", err)
 	}
+	if modifiers == nil {
+		modifiers = make([]UnitModifierResponse, 0)
+	}
 	return modifiers, nil
 }
 
@@ -43,7 +46,7 @@ func NewActiveQueueHandler(runner *Runner) *ActiveQueueHandler {
 func (h *ActiveQueueHandler) Handle(ctx context.Context, actor Actor) (QueueResponse, error) {
 	return ExecuteRead(ctx, h.runner, actor, OpReadActiveQueue, CapPreparationOperate,
 		func(q *sqlc.Queries) (QueueResponse, error) {
-			observedAt, err := q.GetPreparationObservedAt(ctx)
+			observedAt, err := q.GetPreparationCurrentTime(ctx)
 			if err != nil {
 				return QueueResponse{}, fmt.Errorf("read preparation observed time: %w", err)
 			}
@@ -58,6 +61,14 @@ func (h *ActiveQueueHandler) Handle(ctx context.Context, actor Actor) (QueueResp
 			sessionIDs := make([]uuid.UUID, 0, len(rows))
 			seenSessions := make(map[uuid.UUID]struct{}, len(rows))
 			for _, row := range rows {
+				// Phase 5D rows used the application clock. Keep their client-side
+				// ages non-negative while new writes use the database clock.
+				if row.QueuedAt.After(observedAt) {
+					observedAt = row.QueuedAt
+				}
+				if row.InPreparationAt.Valid && row.InPreparationAt.Time.After(observedAt) {
+					observedAt = row.InPreparationAt.Time
+				}
 				if _, ok := seenSessions[row.ServiceSessionID]; !ok {
 					seenSessions[row.ServiceSessionID] = struct{}{}
 					sessionIDs = append(sessionIDs, row.ServiceSessionID)

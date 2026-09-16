@@ -135,11 +135,12 @@ The existing `(state, queued_at)` queue index remains sufficient. Queries add `i
 
 1. Reload current session and identity authority.
 2. Require `preparation.operate`.
-3. Read `now()` from PostgreSQL as `observed_at`.
+3. Read `clock_timestamp()` from PostgreSQL as `observed_at`.
 4. Read active units in `queued_at, id` order.
-5. Read total unit counts for the selected Order Item ids, including terminal siblings.
-6. Resolve each Order Item to its Service Session and read current, unreleased Table assignments in assignment-sequence order.
-7. Assemble and return the snapshot, then commit the read transaction.
+5. Raise `observed_at` to any later visible unit timestamp so Phase 5D rows stamped by a skewed application clock cannot produce a negative age.
+6. Read total unit counts for the selected Order Item ids, including terminal siblings.
+7. Resolve each Order Item to its Service Session and read current, unreleased Table assignments in assignment-sequence order.
+8. Assemble and return the snapshot, then commit the read transaction.
 
 All projection queries observe one database snapshot. They are set based; the handler does not issue one query per unit.
 

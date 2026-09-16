@@ -311,6 +311,17 @@ func (q *Queries) GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (s
 	return check_target, err
 }
 
+const getSalesOccurredAt = `-- name: GetSalesOccurredAt :one
+SELECT clock_timestamp()::timestamptz AS occurred_at
+`
+
+func (q *Queries) GetSalesOccurredAt(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, getSalesOccurredAt)
+	var occurred_at time.Time
+	err := row.Scan(&occurred_at)
+	return occurred_at, err
+}
+
 const getSalesSessionAuthority = `-- name: GetSalesSessionAuthority :one
 
 SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,

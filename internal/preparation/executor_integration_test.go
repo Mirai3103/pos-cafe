@@ -117,7 +117,7 @@ func TestExecuteReadKeepsOneRepeatableSnapshot(t *testing.T) {
 		context.Background(), env.PreparationRunner, env.BaristaActor(),
 		preparation.OpReadActiveQueue, preparation.CapPreparationOperate,
 		func(q *sqlc.Queries) (string, error) {
-			if _, err := q.GetPreparationObservedAt(context.Background()); err != nil {
+			if _, err := q.GetPreparationCurrentTime(context.Background()); err != nil {
 				return "", err
 			}
 			close(startUpdate)

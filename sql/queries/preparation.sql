@@ -36,8 +36,8 @@ INSERT INTO preparation_unit_transitions (preparation_unit_id, prior_state,
                                           staff_access_session_id, occurred_at)
 VALUES ($1, $2, $3, $4, $5, $6);
 
--- name: GetPreparationObservedAt :one
-SELECT now()::timestamptz AS observed_at;
+-- name: GetPreparationCurrentTime :one
+SELECT clock_timestamp()::timestamptz AS current_time;
 
 -- name: ListActivePreparationUnits :many
 WITH unit_counts AS (

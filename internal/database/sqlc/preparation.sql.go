@@ -15,15 +15,15 @@ import (
 	"github.com/lib/pq"
 )
 
-const getPreparationObservedAt = `-- name: GetPreparationObservedAt :one
-SELECT now()::timestamptz AS observed_at
+const getPreparationCurrentTime = `-- name: GetPreparationCurrentTime :one
+SELECT clock_timestamp()::timestamptz AS current_time
 `
 
-func (q *Queries) GetPreparationObservedAt(ctx context.Context) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getPreparationObservedAt)
-	var observed_at time.Time
-	err := row.Scan(&observed_at)
-	return observed_at, err
+func (q *Queries) GetPreparationCurrentTime(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, getPreparationCurrentTime)
+	var current_time time.Time
+	err := row.Scan(&current_time)
+	return current_time, err
 }
 
 const getPreparationUnit = `-- name: GetPreparationUnit :one

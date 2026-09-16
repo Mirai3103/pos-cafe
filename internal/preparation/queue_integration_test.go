@@ -32,6 +32,40 @@ func TestActiveQueueReturnsEmptySliceAndDatabaseTime(t *testing.T) {
 	require.False(t, got.ObservedAt.After(after))
 }
 
+func TestPreparationObservedAtUsesCurrentDatabaseTime(t *testing.T) {
+	db, q := openPrepTestDB(t)
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, tx.Rollback()) })
+
+	_, err = db.Exec(`SELECT pg_sleep(0.05)`)
+	require.NoError(t, err)
+	var afterDelay time.Time
+	require.NoError(t, db.QueryRow(`SELECT clock_timestamp()`).Scan(&afterDelay))
+
+	observedAt, err := q.WithTx(tx).GetPreparationCurrentTime(t.Context())
+	require.NoError(t, err)
+	require.False(t, observedAt.Before(afterDelay))
+}
+
+func TestActiveQueueObservedAtDoesNotPrecedeVisibleUnitTimestamps(t *testing.T) {
+	env := newPrepEnv(t)
+	unit := env.SubmittedUnits(t, 1)[0]
+
+	var queuedAt time.Time
+	require.NoError(t, env.DB.QueryRow(`
+		UPDATE preparation_units
+		SET queued_at = clock_timestamp() + interval '1 hour'
+		WHERE id = $1
+		RETURNING queued_at`, unit.ID).Scan(&queuedAt))
+
+	got, err := preparation.NewActiveQueueHandler(env.PreparationRunner).
+		Handle(t.Context(), env.BaristaActor())
+	require.NoError(t, err)
+	require.Len(t, got.Units, 1)
+	require.False(t, got.ObservedAt.Before(queuedAt))
+}
+
 func TestActiveQueueOrdersFIFOAndExcludesTerminalUnits(t *testing.T) {
 	env := newPrepEnv(t)
 	units := env.SubmittedUnits(t, 3)
