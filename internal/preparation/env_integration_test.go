@@ -255,6 +255,10 @@ type prepEnv struct {
 	// CoffeeID is a directly priced Menu Item (25,000 VND) whose Category
 	// carries the Topping group.
 	CoffeeID uuid.UUID
+	// ToppingOptionID is the Topping group's surcharged (5,000 VND) Modifier
+	// Option, so a round can be submitted with a non-trivial frozen modifier
+	// snapshot.
+	ToppingOptionID uuid.UUID
 	// TableID is one available dine-in Table.
 	TableID uuid.UUID
 }
@@ -288,6 +292,7 @@ func newPrepEnv(t *testing.T) *prepEnv {
 		toppingOptionID)
 	require.NoError(t, err)
 	env.CoffeeID = seedMenuItemInCategory(t, db, coffeeCategoryID, "Cà phê sữa", 25000)
+	env.ToppingOptionID = toppingOptionID
 	env.TableID = seedTable(t, db, "Bàn 1")
 
 	return env
@@ -1029,4 +1034,185 @@ func (e *prepEnv) IdempotencyClaim(t *testing.T, actor preparation.Actor,
 	}
 	require.NoError(t, err)
 	return claim, true
+}
+
+// --- Phase 6B: Remake fixtures ---
+
+// SubmittedDressedUnits returns the Preparation Units of a freshly submitted
+// dine-in round of the given quantity whose item carries a preparation note
+// and a surcharged Topping modifier Option, so a suite can verify a Remake
+// copies a non-trivial preparation snapshot. Driven through the same exported
+// internal/sales handlers as SubmittedUnits; the Manager drives the Sales path.
+func (e *prepEnv) SubmittedDressedUnits(t *testing.T, quantity int32) []sales.PreparationUnitResponse {
+	t.Helper()
+	require.GreaterOrEqual(t, quantity, int32(1), "the round needs at least one unit")
+
+	ctx := context.Background()
+	actor := e.salesActor(e.manager)
+
+	_, session, err := sales.NewStartDineInSessionHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.StartDineInSessionCommand{
+			RequestID: uuid.New(),
+			TableIDs:  []uuid.UUID{e.TableID},
+		})
+	require.NoError(t, err)
+
+	note := "Ít đá, đem đi"
+	optionIDs := []uuid.UUID{e.ToppingOptionID}
+	_, resp, err := sales.NewAddDraftItemHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.AddDraftItemCommand{
+			RequestID:         uuid.New(),
+			ServiceSessionID:  session.ID,
+			MenuItemID:        e.CoffeeID,
+			PreparationNote:   &note,
+			ModifierOptionIDs: &optionIDs,
+		})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Draft.Items, "the added item must be in the draft")
+
+	_, _, err = sales.NewSetDraftItemQuantityHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.SetDraftItemQuantityCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+			DraftItemID:      resp.Draft.Items[0].ID,
+			Quantity:         &quantity,
+		})
+	require.NoError(t, err)
+
+	_, _, err = sales.NewCommitOrderDraftHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.CommitOrderDraftCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+		})
+	require.NoError(t, err)
+
+	_, submitted, err := sales.NewSubmitOrderHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.SubmitOrderCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+		})
+	require.NoError(t, err)
+
+	require.Len(t, submitted.PreparationUnits, int(quantity),
+		"one Preparation Unit per unit of ordered quantity")
+	return submitted.PreparationUnits
+}
+
+// remake runs the remake command under a caller-chosen request id as the given
+// actor, deriving the status the HTTP layer would have answered with on error
+// the way the waste helpers do.
+func (e *prepEnv) remake(t *testing.T, requestID uuid.UUID, actor preparation.Actor,
+	wasteID uuid.UUID, reason string, note *string,
+) (preparation.RemakeResponse, int, error) {
+	t.Helper()
+	status, resp, err := preparation.NewRemakeUnitHandler(e.PreparationRunner).
+		Handle(context.Background(), actor, preparation.RemakeUnitCommand{
+			RequestID: requestID,
+			WasteID:   wasteID,
+			Reason:    reason,
+			Note:      note,
+		})
+	if err != nil {
+		status, _ = preparation.ErrorResponse(err)
+	}
+	return resp, status, err
+}
+
+// Remake runs the remake command as the Barista, who holds preparation.operate.
+func (e *prepEnv) Remake(t *testing.T, wasteID uuid.UUID, reason string, note *string) (
+	preparation.RemakeResponse, int, error,
+) {
+	t.Helper()
+	return e.remake(t, uuid.New(), e.barista, wasteID, reason, note)
+}
+
+// RemakeAs runs the remake command as an arbitrary actor, for capability tests.
+func (e *prepEnv) RemakeAs(t *testing.T, actor preparation.Actor, wasteID uuid.UUID,
+	reason string, note *string,
+) (preparation.RemakeResponse, int, error) {
+	t.Helper()
+	return e.remake(t, uuid.New(), actor, wasteID, reason, note)
+}
+
+// RemakeWithRequestID replays a specific request id, as the Barista.
+func (e *prepEnv) RemakeWithRequestID(t *testing.T, requestID, wasteID uuid.UUID,
+	reason string, note *string,
+) (preparation.RemakeResponse, int, error) {
+	t.Helper()
+	return e.remake(t, requestID, e.barista, wasteID, reason, note)
+}
+
+// CountRemakes counts the Remake facts recorded for one Waste.
+func (e *prepEnv) CountRemakes(t *testing.T, wasteID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_remakes WHERE waste_id = $1`, wasteID).Scan(&n))
+	return n
+}
+
+// remakeFactRow is one stored Remake fact row as the fixtures read it back.
+type remakeFactRow struct {
+	ID                uuid.UUID
+	WasteID           uuid.UUID
+	ReplacementUnitID uuid.UUID
+	Reason            string
+	Note              *string
+	CreatedAt         time.Time
+	ActorID           uuid.UUID
+	SessionID         uuid.UUID
+}
+
+// WasteRemake reads the single Remake fact of one Waste; the suite requires
+// exactly one row to exist before calling.
+func (e *prepEnv) WasteRemake(t *testing.T, wasteID uuid.UUID) remakeFactRow {
+	t.Helper()
+	var row remakeFactRow
+	var note sql.NullString
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, waste_id, preparation_unit_id, reason, note, created_at,
+		       actor_staff_identity_id, staff_access_session_id
+		FROM preparation_remakes
+		WHERE waste_id = $1`, wasteID).
+		Scan(&row.ID, &row.WasteID, &row.ReplacementUnitID, &row.Reason, &note,
+			&row.CreatedAt, &row.ActorID, &row.SessionID))
+	if note.Valid {
+		row.Note = &note.String
+	}
+	return row
+}
+
+// OrderItemCount counts the Order Items of one Service Session, so a suite can
+// prove a Remake added none.
+func (e *prepEnv) OrderItemCount(t *testing.T, sessionID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT count(*)
+		FROM order_items oi
+		JOIN orders o ON o.id = oi.order_id
+		WHERE o.service_session_id = $1`, sessionID).Scan(&n))
+	return n
+}
+
+// OrderItemUnitNumbers returns every unit number of the Order Item that owns
+// the given unit, ordered by number, so a suite can pin unit-number
+// allocation and its serialization across concurrent Remakes.
+func (e *prepEnv) OrderItemUnitNumbers(t *testing.T, unitID uuid.UUID) []int32 {
+	t.Helper()
+	rows, err := e.DB.Query(`
+		SELECT pu.unit_number
+		FROM preparation_units pu
+		WHERE pu.order_item_id = (SELECT order_item_id FROM preparation_units WHERE id = $1)
+		ORDER BY pu.unit_number ASC`, unitID)
+	require.NoError(t, err)
+	defer rows.Close()
+	numbers := []int32{}
+	for rows.Next() {
+		var n int32
+		require.NoError(t, rows.Scan(&n))
+		numbers = append(numbers, n)
+	}
+	require.NoError(t, rows.Err())
+	return numbers
 }
