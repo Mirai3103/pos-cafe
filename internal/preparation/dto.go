@@ -66,12 +66,19 @@ type QueueUnitResponse struct {
 
 // QueueResponse is the whole active queue as the bar display reads it.
 //
-// ObservedAt is the database clock at the read, and Units holds every unit in
-// the active states QUEUED, IN_PREPARATION, and READY, ordered by queued_at
-// then id. Reading mutates nothing.
+// ObservedAt is the database clock at the read. Units holds every unit in the
+// active states QUEUED, IN_PREPARATION, and READY plus a CANCELLED or WASTED
+// unit while it still has an unacknowledged alert (spec §6.2). Alerts holds
+// the active alerts oldest first with the unit identity projected at read
+// time (spec §6.3), and Corrections the Waste and Remake history of active
+// Sessions, newest first, capped at 50 (spec §6.4). All three collections are
+// allocated by the handler, so an empty one serializes as [] not null.
+// Reading mutates nothing.
 type QueueResponse struct {
-	ObservedAt time.Time           `json:"observed_at"`
-	Units      []QueueUnitResponse `json:"units"`
+	ObservedAt  time.Time                 `json:"observed_at"`
+	Units       []QueueUnitResponse       `json:"units"`
+	Alerts      []QueueAlertResponse      `json:"alerts"`
+	Corrections []QueueCorrectionResponse `json:"corrections"`
 }
 
 // AdvanceUnitCommand moves a Preparation Unit one step along its chain.

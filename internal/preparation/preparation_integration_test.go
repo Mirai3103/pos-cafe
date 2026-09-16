@@ -275,9 +275,11 @@ func TestPreparationHTTPQueueUsesEmptyArrays(t *testing.T) {
 
 	rec := doPreparationRequest(t, e, http.MethodGet, "/api/v1/preparation/queue", token, nil)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Contains(t, rec.Body.String(), `"units":[]`,
-		"an empty queue must serialize as [] so sparse displays never see null")
-	assert.NotContains(t, rec.Body.String(), `"units":null`)
+	for _, collection := range []string{"units", "alerts", "corrections"} {
+		assert.Contains(t, rec.Body.String(), `"`+collection+`":[]`,
+			"an empty queue collection must serialize as [] so sparse displays never see null")
+		assert.NotContains(t, rec.Body.String(), `"`+collection+`":null`)
+	}
 }
 
 func TestPreparationHTTPQueuePrivacyContract(t *testing.T) {
@@ -285,7 +287,16 @@ func TestPreparationHTTPQueuePrivacyContract(t *testing.T) {
 	e := mountPreparationTestServer(env.DB, env.Queries)
 	token := signInPreparation(t, e, env.Queries, []string{"BARISTA"})
 
-	env.SubmittedUnits(t, 1)
+	// Arrange every queue collection: an active standard unit, a wasted unit
+	// retained by its alert, the remake that replaces it, and both history
+	// facts.
+	units := env.SubmittedUnits(t, 2)
+	_, _, err := env.Advance(t, units[0].ID, preparation.StateInPreparation)
+	require.NoError(t, err)
+	waste, _, err := env.Waste(t, units[0].ID, preparation.ReasonQualityFailure, nil)
+	require.NoError(t, err)
+	_, _, err = env.Remake(t, waste.ID, preparation.ReasonPreparationError, nil)
+	require.NoError(t, err)
 
 	rec := doPreparationRequest(t, e, http.MethodGet, "/api/v1/preparation/queue", token, nil)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -293,22 +304,36 @@ func TestPreparationHTTPQueuePrivacyContract(t *testing.T) {
 	envl := decodeEnvelope(t, rec)
 	require.True(t, envl.Success)
 	var queue struct {
-		Units []map[string]json.RawMessage `json:"units"`
+		Units       []map[string]json.RawMessage `json:"units"`
+		Alerts      []map[string]json.RawMessage `json:"alerts"`
+		Corrections []map[string]json.RawMessage `json:"corrections"`
 	}
 	require.NoError(t, json.Unmarshal(envl.Data, &queue))
-	require.Len(t, queue.Units, 1, "the submitted round's unit is on the queue")
+	require.Len(t, queue.Units, 3, "standard, remake, and alert-retained source are all on the queue")
+	require.Len(t, queue.Alerts, 1, "the waste alert is on the queue")
+	require.Len(t, queue.Corrections, 2, "the Waste and Remake facts are on the queue")
 
-	keys := make([]string, 0, len(queue.Units[0]))
-	for key := range queue.Units[0] {
-		keys = append(keys, key)
-	}
 	assert.ElementsMatch(t, []string{
 		"id", "order_item_id", "order_item_unit_count", "unit_number",
 		"state", "service_number", "table_names", "category_name", "item_name",
 		"size_name", "modifiers", "preparation_note", "queued_at", "in_preparation_at",
 		// Phase 6B (spec §6.1): unit responses gain Remake priority metadata.
 		"priority", "remake_of_preparation_unit_id",
-	}, keys, "the queue unit must expose exactly the bar projection keys")
+	}, keysOf(queue.Units[0]), "the queue unit must expose exactly the bar projection keys")
+
+	assert.ElementsMatch(t, []string{
+		// Phase 6B (spec §6.3): the active alert projection.
+		"id", "kind", "preparation_unit_id", "service_number", "item_name",
+		"unit_number", "reason", "note", "waste_id", "created_at",
+		"acknowledged_by_staff_identity_id", "acknowledged_at",
+	}, keysOf(queue.Alerts[0]), "the queue alert must expose exactly the alert projection keys")
+
+	assert.ElementsMatch(t, []string{
+		// Phase 6B (spec §6.4): the Waste and Remake history entry.
+		"entry_kind", "id", "preparation_unit_id", "waste_id",
+		"source_preparation_unit_id", "source_unit_number", "service_number",
+		"item_name", "unit_number", "reason", "note", "occurred_at",
+	}, keysOf(queue.Corrections[0]), "the correction history entry must expose exactly its keys")
 
 	// The whole raw response, decoded, must not carry any financial or
 	// credential fragment in any object key or string value at any depth.
@@ -316,11 +341,20 @@ func TestPreparationHTTPQueuePrivacyContract(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
 	for _, fragment := range []string{
 		"price", "allocation", "check", "payment", "balance",
-		"sales_shift", "pin_hash", "token_hash",
+		"sales_shift", "pin", "pin_hash", "token_hash",
 	} {
 		assert.False(t, jsonContainsFragment(raw, fragment),
 			"queue response must not contain %q anywhere: %s", fragment, rec.Body.String())
 	}
+}
+
+// keysOf collects the JSON object's key set.
+func keysOf(object map[string]json.RawMessage) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 // jsonContainsFragment reports whether the decoded JSON value contains the
