@@ -176,3 +176,27 @@ func TestSubmitWritesAuditEvent(t *testing.T) {
 
 	require.Equal(t, before+1, env.countAuditEvents(t, sales.EventOrderSubmitted))
 }
+
+// Submit creates original Preparation Units only (ADR-024): every unit the
+// creator's own response projects is STANDARD with a null remake link. Remakes
+// are born from preparation's commands and can never enter the projection
+// through Submit.
+func TestSubmitProjectsOriginalUnitsStandard(t *testing.T) {
+	env := newSalesEnv(t)
+
+	submitted := env.commitDineInDraftWithQuantity(t, 3)
+	got := env.Submit(t, submitted.ID)
+
+	require.Len(t, got.PreparationUnits, 3)
+	numbers := map[int32]bool{}
+	for _, unit := range got.PreparationUnits {
+		numbers[unit.UnitNumber] = true
+		require.Equal(t, "STANDARD", unit.Priority,
+			"every unit Submit creates is STANDARD (spec §5.1)")
+		require.Nil(t, unit.RemakeOfPreparationUnitID,
+			"a unit created at Submit carries no remake link")
+		require.NotNil(t, unit.Modifiers,
+			"the projection's modifiers stay non-nil")
+	}
+	require.Equal(t, map[int32]bool{1: true, 2: true, 3: true}, numbers)
+}

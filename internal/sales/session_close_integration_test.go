@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Mirai3103/pos-cafe/internal/preparation"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -157,5 +158,56 @@ func TestCloseServiceSessionRejections(t *testing.T) {
 
 		got := env.GetSessionOK(t, session.ID)
 		require.Equal(t, sales.StateActive, got.State)
+	})
+}
+
+// TestCloseServiceSessionWithRemake proves the closure policy already handles
+// the Phase 6B Remake without a code change: a Remake is a real Preparation
+// Unit in the same Session, so its state decides readiness exactly like any
+// original unit's, and a WASTED source is already terminal.
+func TestCloseServiceSessionWithRemake(t *testing.T) {
+	env := newSalesEnv(t)
+	prep := newPrepHandlers(env)
+
+	t.Run("a wasted source plus a fulfilled remake allows closure", func(t *testing.T) {
+		submitted := env.committedDineInUnits(t, 1)
+		source := submitted.PreparationUnits[0]
+
+		prep.advancePrepUnit(t, source.ID, preparation.StateInPreparation)
+		wasteID := prep.wastePrepUnit(t, source.ID)
+		remake := prep.remakePrepUnit(t, wasteID)
+		prep.fulfillPrepUnit(t, remake.Unit.ID)
+
+		readiness := sales.EvaluateClosureReadiness(env.GetSessionOK(t, submitted.ID))
+		require.True(t, readiness.Eligible,
+			"a WASTED source is terminal and a fulfilled remake is done: %v", readiness)
+		require.Empty(t, readiness.NonterminalUnitIDs)
+
+		sale, status, err := env.TryClose(t, submitted.ID)
+		require.NoError(t, err)
+		require.Equal(t, 201, status)
+		require.Len(t, sale.PreparationUnits, 2,
+			"the Completed Sale carries the wasted source and its remake")
+	})
+
+	t.Run("an active remake blocks closure", func(t *testing.T) {
+		submitted := env.committedDineInUnits(t, 1)
+		source := submitted.PreparationUnits[0]
+
+		prep.advancePrepUnit(t, source.ID, preparation.StateInPreparation)
+		wasteID := prep.wastePrepUnit(t, source.ID)
+		remake := prep.remakePrepUnit(t, wasteID)
+
+		readiness := sales.EvaluateClosureReadiness(env.GetSessionOK(t, submitted.ID))
+		require.False(t, readiness.Eligible,
+			"an unfulfilled remake is real preparation work")
+		require.Equal(t, []uuid.UUID{remake.Unit.ID}, readiness.NonterminalUnitIDs,
+			"the remake alone holds the Session open, not its wasted source")
+
+		_, _, err := env.TryClose(t, submitted.ID)
+		require.ErrorIs(t, err, sales.ErrUnfulfilledPreparationForClosure)
+
+		got := env.GetSessionOK(t, submitted.ID)
+		require.Equal(t, sales.StateActive, got.State, "the refusal records nothing")
 	})
 }
