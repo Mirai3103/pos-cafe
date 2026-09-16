@@ -742,6 +742,181 @@ func (e *prepEnv) UnitAlert(t *testing.T, unitID uuid.UUID) alertFactRow {
 	return row
 }
 
+// --- Phase 6B: Alert acknowledgment fixtures ---
+
+// acknowledge runs the acknowledgment command under a caller-chosen request id
+// as the given actor, deriving the status the HTTP layer would have answered
+// with on error the way the waste helpers do.
+func (e *prepEnv) acknowledge(t *testing.T, requestID uuid.UUID, actor preparation.Actor,
+	alertID uuid.UUID,
+) (preparation.AlertResponse, int, error) {
+	t.Helper()
+	status, resp, err := preparation.NewAcknowledgeAlertHandler(e.PreparationRunner).
+		Handle(context.Background(), actor, preparation.AcknowledgeAlertCommand{
+			RequestID: requestID,
+			AlertID:   alertID,
+		})
+	if err != nil {
+		status, _ = preparation.ErrorResponse(err)
+	}
+	return resp, status, err
+}
+
+// Acknowledge runs the acknowledgment command as the Barista, who holds
+// preparation.operate.
+func (e *prepEnv) Acknowledge(t *testing.T, alertID uuid.UUID) (
+	preparation.AlertResponse, int, error,
+) {
+	t.Helper()
+	return e.acknowledge(t, uuid.New(), e.barista, alertID)
+}
+
+// AcknowledgeAs runs the acknowledgment command as an arbitrary actor, for the
+// Manager/Barista equivalence tests.
+func (e *prepEnv) AcknowledgeAs(t *testing.T, actor preparation.Actor, alertID uuid.UUID) (
+	preparation.AlertResponse, int, error,
+) {
+	t.Helper()
+	return e.acknowledge(t, uuid.New(), actor, alertID)
+}
+
+// AcknowledgeWithRequestID replays a specific request id, as the Barista.
+func (e *prepEnv) AcknowledgeWithRequestID(t *testing.T, requestID, alertID uuid.UUID) (
+	preparation.AlertResponse, int, error,
+) {
+	t.Helper()
+	return e.acknowledge(t, requestID, e.barista, alertID)
+}
+
+// AcknowledgeWithRequestIDAs runs the acknowledgment command with full control
+// over the request id and the actor.
+func (e *prepEnv) AcknowledgeWithRequestIDAs(t *testing.T, requestID uuid.UUID,
+	actor preparation.Actor, alertID uuid.UUID,
+) (preparation.AlertResponse, int, error) {
+	t.Helper()
+	return e.acknowledge(t, requestID, actor, alertID)
+}
+
+// alertAcknowledgmentRow is the acknowledgment evidence of one stored alert,
+// straight from the database. All three fields are nil while the alert is
+// active; the acknowledgment tuple constraint means they fill together or not
+// at all.
+type alertAcknowledgmentRow struct {
+	AcknowledgedBy        *uuid.UUID
+	AcknowledgedSessionID *uuid.UUID
+	AcknowledgedAt        *time.Time
+}
+
+// AlertAcknowledgment reads one alert's acknowledgment tuple from the
+// database.
+func (e *prepEnv) AlertAcknowledgment(t *testing.T, alertID uuid.UUID) alertAcknowledgmentRow {
+	t.Helper()
+	var row alertAcknowledgmentRow
+	var by, session uuid.NullUUID
+	var at sql.NullTime
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT acknowledged_by_staff_identity_id,
+		       acknowledged_staff_access_session_id,
+		       acknowledged_at
+		FROM preparation_alerts
+		WHERE id = $1`, alertID).
+		Scan(&by, &session, &at))
+	if by.Valid {
+		row.AcknowledgedBy = &by.UUID
+	}
+	if session.Valid {
+		row.AcknowledgedSessionID = &session.UUID
+	}
+	if at.Valid {
+		row.AcknowledgedAt = &at.Time
+	}
+	return row
+}
+
+// checkFinancials is the slice of one Check's stored meaning a Preparation
+// command must never touch: its state, charge, applied amounts, and the
+// counts of its Payments and Charge Allocations.
+type checkFinancials struct {
+	ID              uuid.UUID
+	State           string
+	ChargeVND       int64
+	TotalAppliedVND int64
+	BalanceVND      int64
+	PaymentCount    int
+	AllocationCount int
+}
+
+// sessionFinancials is the financial-and-closure slice of one Service
+// Session's projection: every Check's charge meaning plus the closure
+// readiness verdict, read through the real Sales loader and evaluator so a
+// Preparation suite can prove its command changed no financial meaning.
+type sessionFinancials struct {
+	State              string
+	Checks             []checkFinancials
+	ClosureEligible    bool
+	UnsettledCheckIDs  []uuid.UUID
+	UnsubmittedItemIDs []uuid.UUID
+	NonterminalUnitIDs []uuid.UUID
+}
+
+// SessionFinancials reads the financial-and-closure slice of one Service
+// Session through the exported Sales projection and closure policy.
+func (e *prepEnv) SessionFinancials(t *testing.T, sessionID uuid.UUID) sessionFinancials {
+	t.Helper()
+	projection, err := sales.LoadServiceSession(context.Background(), e.Queries, sessionID)
+	require.NoError(t, err)
+	readiness := sales.EvaluateClosureReadiness(projection)
+	out := sessionFinancials{
+		State:              projection.State,
+		Checks:             make([]checkFinancials, 0, len(projection.Checks)),
+		ClosureEligible:    readiness.Eligible,
+		UnsettledCheckIDs:  readiness.UnsettledCheckIDs,
+		UnsubmittedItemIDs: readiness.UnsubmittedCommittedItemIDs,
+		NonterminalUnitIDs: readiness.NonterminalUnitIDs,
+	}
+	for _, check := range projection.Checks {
+		out.Checks = append(out.Checks, checkFinancials{
+			ID:              check.ID,
+			State:           check.State,
+			ChargeVND:       check.ChargeVND,
+			TotalAppliedVND: check.TotalAppliedVND,
+			BalanceVND:      check.BalanceVND,
+			PaymentCount:    len(check.Payments),
+			AllocationCount: len(check.Allocations),
+		})
+	}
+	return out
+}
+
+// SettleAndCloseSession pays every surviving Check of one Service Session in
+// cash and closes the Session, both through the real Sales handlers, so a
+// suite can arrange a closed Session without reproducing Sales SQL. The
+// Manager drives the Sales path.
+func (e *prepEnv) SettleAndCloseSession(t *testing.T, sessionID uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	actor := e.salesActor(e.manager)
+
+	projection, err := sales.LoadServiceSession(ctx, e.Queries, sessionID)
+	require.NoError(t, err)
+	for _, check := range projection.Checks {
+		if check.State == sales.CheckStateSettled || check.State == sales.CheckStateMerged {
+			continue
+		}
+		_, _, err := sales.NewPayCashHandler(e.SalesRunner).Handle(ctx, actor, sales.PayCashCommand{
+			RequestID:        uuid.New(),
+			CheckID:          check.ID,
+			AppliedAmountVND: check.ChargeVND,
+			CashTenderedVND:  check.ChargeVND,
+		})
+		require.NoError(t, err)
+	}
+
+	_, _, err = sales.NewCloseServiceSessionHandler(e.SalesRunner).Handle(ctx, actor,
+		sales.CloseServiceSessionCommand{RequestID: uuid.New(), ServiceSessionID: sessionID})
+	require.NoError(t, err)
+}
+
 // transitionFactRow is one stored unit transition row as the fixtures read it
 // back.
 type transitionFactRow struct {
