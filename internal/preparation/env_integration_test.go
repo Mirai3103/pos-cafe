@@ -397,3 +397,17 @@ func (e *prepEnv) CountTransitions(t *testing.T, unitID uuid.UUID) int {
 // CashierActor returns the seeded CASHIER actor, who holds sales.operate but
 // not preparation.operate.
 func (e *prepEnv) CashierActor() preparation.Actor { return e.cashier }
+
+// BaristaActor returns the seeded BARISTA actor, who holds preparation.operate.
+func (e *prepEnv) BaristaActor() preparation.Actor { return e.barista }
+
+// CountAuditEvents counts the audit events of the given type. Used to assert
+// exactly one denial evidence row per denied call.
+func (e *prepEnv) CountAuditEvents(t *testing.T, eventType string) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM audit_events WHERE event_type = $1`, eventType,
+	).Scan(&n))
+	return n
+}

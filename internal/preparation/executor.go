@@ -334,3 +334,73 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 	}
 	return resultCode, result, nil
 }
+
+// auditReadDenial records a read's authorization denial in a separate short
+// write transaction. A denied read runs inside a read-only transaction that
+// cannot hold its own audit write, and the denial must reach the client even
+// when the evidence write fails, so this is best-effort by construction: any
+// failure is logged and the original denial is returned untouched.
+func (r *Runner) auditReadDenial(ctx context.Context, actor Actor,
+	authority sqlc.GetSalesSessionAuthorityRow, operation string, denialErr error,
+) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		slog.Error("begin read-denial audit", "operation", operation, "error", err)
+		return
+	}
+	defer tx.Rollback() //nolint:errcheck
+	outcome := recordDenial(ctx, r.queries.WithTx(tx), actor, authority, operation, denialErr)
+	if !outcome.committed {
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		slog.Error("commit read-denial audit", "operation", operation, "error", err)
+	}
+}
+
+// ExecuteRead runs a read-only REPEATABLE READ transaction with the same
+// in-transaction authority reload and capability verification as
+// ExecuteMutation, so a revoked session or a stripped role is denied before
+// the body runs. Because the transaction is read-only, a denial's audit event
+// is written by auditReadDenial in a separate write transaction, best-effort.
+//
+// The isolation level gives the body one repeatable snapshot for its whole
+// run, which is what makes the queue projection internally consistent.
+func ExecuteRead[T any](ctx context.Context, r *Runner, actor Actor,
+	operation, requiredCapability string,
+	fn func(*sqlc.Queries) (T, error),
+) (T, error) {
+	var zero T
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{
+		ReadOnly:  true,
+		Isolation: sql.LevelRepeatableRead,
+	})
+	if err != nil {
+		return zero, fmt.Errorf("begin read transaction: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	q := r.queries.WithTx(tx)
+	authority, caps, err := reloadAuthority(ctx, q, actor)
+	if err != nil {
+		if isSecurityDenial(err) {
+			_ = tx.Rollback()
+			r.auditReadDenial(ctx, actor, authority, operation, err)
+		}
+		return zero, err
+	}
+	if err := verifyCapabilities([]string{requiredCapability}, caps); err != nil {
+		_ = tx.Rollback()
+		r.auditReadDenial(ctx, actor, authority, operation, err)
+		return zero, err
+	}
+
+	result, err := fn(q)
+	if err != nil {
+		return zero, err
+	}
+	if err := tx.Commit(); err != nil {
+		return zero, fmt.Errorf("commit read transaction: %w", err)
+	}
+	return result, nil
+}

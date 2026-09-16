@@ -21,6 +21,10 @@ const CapPreparationOperate = "preparation.operate"
 // idempotency_keys.action (VARCHAR(50)).
 const OpAdvanceUnit = "preparation.advance_unit"
 
+// OpReadActiveQueue names the active-queue read for denial-audit evidence.
+// Reads are not idempotency-keyed, so the name appears only in audit details.
+const OpReadActiveQueue = "preparation.read_active_queue"
+
 // EventPreparationUnitAdvanced is the audit event type.
 const EventPreparationUnitAdvanced = "PREPARATION_UNIT_ADVANCED"
 
