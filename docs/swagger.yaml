@@ -735,6 +735,81 @@ definitions:
     - request_id
     - target_state
     type: object
+  preparation.BulkAdvanceCommand:
+    properties:
+      preparation_unit_ids:
+        items:
+          type: string
+        type: array
+      request_id:
+        type: string
+      target_state:
+        type: string
+    type: object
+  preparation.BulkAdvanceOutcome:
+    properties:
+      code:
+        type: string
+      preparation_unit_id:
+        type: string
+      status:
+        type: string
+      unit:
+        $ref: '#/definitions/preparation.UnitResponse'
+    type: object
+  preparation.BulkAdvanceResponse:
+    properties:
+      outcomes:
+        items:
+          $ref: '#/definitions/preparation.BulkAdvanceOutcome'
+        type: array
+      target_state:
+        type: string
+    type: object
+  preparation.QueueResponse:
+    properties:
+      observed_at:
+        type: string
+      units:
+        items:
+          $ref: '#/definitions/preparation.QueueUnitResponse'
+        type: array
+    type: object
+  preparation.QueueUnitResponse:
+    properties:
+      category_name:
+        type: string
+      id:
+        type: string
+      in_preparation_at:
+        type: string
+      item_name:
+        type: string
+      modifiers:
+        items:
+          $ref: '#/definitions/preparation.UnitModifierResponse'
+        type: array
+      order_item_id:
+        type: string
+      order_item_unit_count:
+        type: integer
+      preparation_note:
+        type: string
+      queued_at:
+        type: string
+      service_number:
+        type: string
+      size_name:
+        type: string
+      state:
+        type: string
+      table_names:
+        items:
+          type: string
+        type: array
+      unit_number:
+        type: integer
+    type: object
   preparation.UnitModifierResponse:
     properties:
       group_name:
@@ -747,6 +822,8 @@ definitions:
       category_name:
         type: string
       id:
+        type: string
+      in_preparation_at:
         type: string
       item_name:
         type: string
@@ -3312,6 +3389,39 @@ paths:
       summary: Ngừng kinh doanh kích thước món
       tags:
       - Catalog
+  /preparation/queue:
+    get:
+      description: Returns active units in FIFO order with PostgreSQL observed time
+        and current Table names. The projection contains no financial data.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/preparation.QueueResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Read the active Preparation Queue
+      tags:
+      - preparation
   /preparation/units/{unit_id}/advance:
     post:
       consumes:
@@ -3319,7 +3429,7 @@ paths:
       description: Moves one unit along the linear chain QUEUED -> IN_PREPARATION
         -> READY -> FULFILLED. The target state is explicit, so two baristas acting
         on a stale display get a conflict rather than a silent double advance. Cancellation,
-        Waste, Remake, and State Correction are Phase 6.
+        Waste, Remake, and State Correction are Phase 6B/6C.
       parameters:
       - description: Preparation Unit ID
         in: path
@@ -3344,6 +3454,10 @@ paths:
                 data:
                   $ref: '#/definitions/preparation.UnitResponse'
               type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
         "401":
           description: Unauthorized
           schema:
@@ -3360,9 +3474,63 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
       security:
       - BearerAuth: []
       summary: Advance a Preparation Unit
+      tags:
+      - preparation
+  /preparation/units/advance-many:
+    post:
+      consumes:
+      - application/json
+      description: Advances 1 through 50 selected units. Missing or stale units are
+        per-unit failures; unexpected failures roll back the request.
+      parameters:
+      - description: Bulk advance request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/preparation.BulkAdvanceCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/preparation.BulkAdvanceResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Advance selected Preparation Units
       tags:
       - preparation
   /sales/checks/{check_id}/payments/cash:

@@ -16,11 +16,16 @@ import (
 
 func TestActiveQueueReturnsEmptySliceAndDatabaseTime(t *testing.T) {
 	env := newPrepEnv(t)
-	before := time.Now()
+	// observed_at is read from PostgreSQL, so its bounds must come from the
+	// same clock. Bounding it with the host time.Now() fails whenever the
+	// Docker VM clock lags the host under suite load; SELECT now() through
+	// env.DB makes the comparison deterministic.
+	var before, after time.Time
+	require.NoError(t, env.DB.QueryRow(`SELECT now()`).Scan(&before))
 	got, err := preparation.NewActiveQueueHandler(env.PreparationRunner).
 		Handle(context.Background(), env.BaristaActor())
-	after := time.Now()
 	require.NoError(t, err)
+	require.NoError(t, env.DB.QueryRow(`SELECT now()`).Scan(&after))
 	require.NotNil(t, got.Units)
 	require.Empty(t, got.Units)
 	require.False(t, got.ObservedAt.Before(before))
