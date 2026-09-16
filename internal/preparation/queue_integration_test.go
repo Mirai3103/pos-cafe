@@ -537,7 +537,10 @@ func TestActiveQueueCorrectionEntriesMapWasteAndRemakeFacts(t *testing.T) {
 	require.Nil(t, wasteEntry.SourcePreparationUnitID,
 		"a WASTE entry carries no remake linkage")
 	require.Nil(t, wasteEntry.SourceUnitNumber)
-	require.Equal(t, int32(1), wasteEntry.UnitNumber)
+	// The unit number comes from the wasted unit itself: same-instant
+	// originals tie on queued_at and fall to the id tie-break, so the
+	// submitted order (and thus units[0]'s number) is random across runs.
+	require.Equal(t, units[0].UnitNumber, wasteEntry.UnitNumber)
 	require.Equal(t, unitServiceNumber(t, env, units[0].ID), wasteEntry.ServiceNumber)
 	require.Equal(t, "Cà phê sữa", wasteEntry.ItemName)
 	require.Equal(t, preparation.ReasonQualityFailure, wasteEntry.Reason)
