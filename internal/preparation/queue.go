@@ -125,6 +125,11 @@ func queueUnitFromRow(row sqlc.ListActivePreparationUnitsRow,
 		value := row.InPreparationAt.Time
 		inPreparationAt = &value
 	}
+	var remakeOf *uuid.UUID
+	if row.RemakeOfPreparationUnitID.Valid {
+		value := row.RemakeOfPreparationUnitID.UUID
+		remakeOf = &value
+	}
 	return QueueUnitResponse{
 		ID:                 row.ID,
 		OrderItemID:        row.OrderItemID,
@@ -140,5 +145,9 @@ func queueUnitFromRow(row sqlc.ListActivePreparationUnitsRow,
 		PreparationNote:    preparationNote,
 		QueuedAt:           row.QueuedAt,
 		InPreparationAt:    inPreparationAt,
+		Priority:           row.Priority,
+		// A Remake links to the wasted source unit it replaces; originals
+		// carry a nil link.
+		RemakeOfPreparationUnitID: remakeOf,
 	}, nil
 }

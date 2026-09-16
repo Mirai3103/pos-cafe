@@ -306,6 +306,8 @@ func TestPreparationHTTPQueuePrivacyContract(t *testing.T) {
 		"id", "order_item_id", "order_item_unit_count", "unit_number",
 		"state", "service_number", "table_names", "category_name", "item_name",
 		"size_name", "modifiers", "preparation_note", "queued_at", "in_preparation_at",
+		// Phase 6B (spec §6.1): unit responses gain Remake priority metadata.
+		"priority", "remake_of_preparation_unit_id",
 	}, keys, "the queue unit must expose exactly the bar projection keys")
 
 	// The whole raw response, decoded, must not carry any financial or
