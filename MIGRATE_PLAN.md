@@ -163,6 +163,16 @@ The source project is already cleanly structured around domain boundaries. We ma
 ### Phase 6: Preparation Station / Kitchen Display (`internal/preparation`)
 *Focus: Real-time drink queue for Baristas, status transitions.*
 
+*Approved 6A Design Spec:* [`docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md`](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md)
+
+> The checklist below predates Phase 5D, which already created Preparation Units synchronously at Submit and introduced the single-unit advance command. Phase 6 is delivered as ordered sub-phases so Cancellation can be designed with its unfinished Refund/Comp and closure dependencies instead of weakening those boundaries.
+
+| Sub-phase | Scope | Status |
+| :--- | :--- | :---: |
+| **6A** — Preparation Queue reads and bulk transitions | [spec](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md) | 📝 SPEC APPROVED |
+| **6B** — Alerts, Waste, Remake, priority, and state correction | Pending design | ⏳ PENDING |
+| **6C** — Cancellation/change and financial correction integration | Pending design | ⏳ PENDING |
+
 - [ ] **6.1 Database Schema Migration:**
   - Create table `preparation_units` (`id`, `order_item_id`, `item_name`, `options_summary`, `status` [QUEUED, BREWING, READY, SERVED], `notes`, `created_at`, `updated_at`).
 - [ ] **6.2 Event Consumer (Watermill):**
