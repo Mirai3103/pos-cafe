@@ -212,7 +212,10 @@ type Querier interface {
 	// one unit cannot duplicate the row). Active Remakes come first, active
 	// STANDARD units second, alert-retained terminal units last; each lane is
 	// FIFO by queued_at then id. unit_count is every physical unit of the Order
-	// Item, including Remakes and terminal units.
+	// Item, including Remakes and terminal units, computed per row via a
+	// correlated subquery (order_item_id is the leading column of
+	// preparation_unit_item_number_unique) rather than a full-table GROUP BY, so
+	// the cost tracks the small active-queue result set on this polled read.
 	ListActivePreparationUnits(ctx context.Context) ([]ListActivePreparationUnitsRow, error)
 	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)

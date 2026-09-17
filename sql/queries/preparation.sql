@@ -45,12 +45,10 @@ SELECT clock_timestamp()::timestamptz AS current_time;
 -- one unit cannot duplicate the row). Active Remakes come first, active
 -- STANDARD units second, alert-retained terminal units last; each lane is
 -- FIFO by queued_at then id. unit_count is every physical unit of the Order
--- Item, including Remakes and terminal units.
-WITH unit_counts AS (
-    SELECT order_item_id, count(*)::integer AS unit_count
-    FROM preparation_units
-    GROUP BY order_item_id
-)
+-- Item, including Remakes and terminal units, computed per row via a
+-- correlated subquery (order_item_id is the leading column of
+-- preparation_unit_item_number_unique) rather than a full-table GROUP BY, so
+-- the cost tracks the small active-queue result set on this polled read.
 SELECT pu.id,
        pu.order_item_id,
        pu.unit_number,
@@ -66,11 +64,12 @@ SELECT pu.id,
        pu.priority,
        pu.remake_of_preparation_unit_id,
        o.service_session_id,
-       uc.unit_count AS order_item_unit_count
+       (SELECT count(*)::integer
+        FROM preparation_units AS pu2
+        WHERE pu2.order_item_id = pu.order_item_id) AS order_item_unit_count
 FROM preparation_units AS pu
 JOIN order_items AS oi ON oi.id = pu.order_item_id
 JOIN orders AS o ON o.id = oi.order_id
-JOIN unit_counts AS uc ON uc.order_item_id = pu.order_item_id
 WHERE pu.state IN ('QUEUED', 'IN_PREPARATION', 'READY')
    OR (
        pu.state IN ('CANCELLED', 'WASTED')
