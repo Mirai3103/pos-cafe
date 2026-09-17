@@ -725,6 +725,11 @@ definitions:
       price_vnd:
         type: integer
     type: object
+  preparation.AcknowledgeAlertCommand:
+    properties:
+      request_id:
+        type: string
+    type: object
   preparation.AdvanceUnitCommand:
     properties:
       request_id:
@@ -734,6 +739,25 @@ definitions:
     required:
     - request_id
     - target_state
+    type: object
+  preparation.AlertResponse:
+    properties:
+      acknowledged_at:
+        type: string
+      acknowledged_by_staff_identity_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      kind:
+        type: string
+      note:
+        type: string
+      preparation_unit_id:
+        type: string
+      reason:
+        type: string
     type: object
   preparation.BulkAdvanceCommand:
     properties:
@@ -766,8 +790,107 @@ definitions:
       target_state:
         type: string
     type: object
+  preparation.CorrectStateCommand:
+    properties:
+      manager_pin:
+        type: string
+      note:
+        type: string
+      preparation_unit_ids:
+        items:
+          type: string
+        type: array
+      reason:
+        type: string
+      request_id:
+        type: string
+      target_state:
+        type: string
+    type: object
+  preparation.CorrectStateOutcome:
+    properties:
+      corrected_at:
+        type: string
+      correction_id:
+        type: string
+      preparation_unit_id:
+        type: string
+      prior_state:
+        type: string
+      resulting_state:
+        type: string
+    type: object
+  preparation.CorrectStateResponse:
+    properties:
+      outcomes:
+        items:
+          $ref: '#/definitions/preparation.CorrectStateOutcome'
+        type: array
+    type: object
+  preparation.QueueAlertResponse:
+    properties:
+      acknowledged_at:
+        type: string
+      acknowledged_by_staff_identity_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      item_name:
+        type: string
+      kind:
+        type: string
+      note:
+        type: string
+      preparation_unit_id:
+        type: string
+      reason:
+        type: string
+      service_number:
+        type: string
+      unit_number:
+        type: integer
+      waste_id:
+        type: string
+    type: object
+  preparation.QueueCorrectionResponse:
+    properties:
+      entry_kind:
+        type: string
+      id:
+        type: string
+      item_name:
+        type: string
+      note:
+        type: string
+      occurred_at:
+        type: string
+      preparation_unit_id:
+        type: string
+      reason:
+        type: string
+      service_number:
+        type: string
+      source_preparation_unit_id:
+        type: string
+      source_unit_number:
+        type: integer
+      unit_number:
+        type: integer
+      waste_id:
+        type: string
+    type: object
   preparation.QueueResponse:
     properties:
+      alerts:
+        items:
+          $ref: '#/definitions/preparation.QueueAlertResponse'
+        type: array
+      corrections:
+        items:
+          $ref: '#/definitions/preparation.QueueCorrectionResponse'
+        type: array
       observed_at:
         type: string
       units:
@@ -795,7 +918,14 @@ definitions:
         type: integer
       preparation_note:
         type: string
+      priority:
+        description: |-
+          Priority and the Remake link mirror UnitResponse (spec §6.1): only
+          active Remakes take the queue's priority lane.
+        type: string
       queued_at:
+        type: string
+      remake_of_preparation_unit_id:
         type: string
       service_number:
         type: string
@@ -809,6 +939,32 @@ definitions:
         type: array
       unit_number:
         type: integer
+    type: object
+  preparation.RemakeResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      note:
+        type: string
+      reason:
+        type: string
+      source_preparation_unit_id:
+        type: string
+      unit:
+        $ref: '#/definitions/preparation.UnitResponse'
+      waste_id:
+        type: string
+    type: object
+  preparation.RemakeUnitCommand:
+    properties:
+      note:
+        type: string
+      reason:
+        type: string
+      request_id:
+        type: string
     type: object
   preparation.UnitModifierResponse:
     properties:
@@ -835,7 +991,17 @@ definitions:
         type: string
       preparation_note:
         type: string
+      priority:
+        description: |-
+          Priority is STANDARD for every original unit and REMAKE for linked
+          replacements (spec §5.1).
+        type: string
       queued_at:
+        type: string
+      remake_of_preparation_unit_id:
+        description: |-
+          RemakeOfPreparationUnitID links a Remake to the wasted source unit it
+          replaces; nil for originals.
         type: string
       service_number:
         type: string
@@ -845,6 +1011,34 @@ definitions:
         type: string
       unit_number:
         type: integer
+    type: object
+  preparation.WasteResponse:
+    properties:
+      alert:
+        $ref: '#/definitions/preparation.AlertResponse'
+      id:
+        type: string
+      note:
+        type: string
+      occurred_at:
+        type: string
+      preparation_unit_id:
+        type: string
+      prior_state:
+        type: string
+      reason:
+        type: string
+      resulting_state:
+        type: string
+    type: object
+  preparation.WasteUnitCommand:
+    properties:
+      note:
+        type: string
+      reason:
+        type: string
+      request_id:
+        type: string
     type: object
   response.APIError:
     properties:
@@ -1164,7 +1358,14 @@ definitions:
         type: string
       preparation_note:
         type: string
+      priority:
+        type: string
       queued_at:
+        type: string
+      remake_of_preparation_unit_id:
+        description: |-
+          RemakeOfPreparationUnitID links a Remake to the wasted source unit it
+          replaces; nil for every original unit.
         type: string
       service_number:
         type: string
@@ -3389,6 +3590,67 @@ paths:
       summary: Ngừng kinh doanh kích thước món
       tags:
       - Catalog
+  /preparation/alerts/{alert_id}/acknowledge:
+    post:
+      consumes:
+      - application/json
+      description: Fills the alert's acknowledgment tuple — the acking actor's identity,
+        their Staff Access Session, and one timestamp — inside one transaction. It
+        changes no unit state, Waste, or financial meaning, and requires no Manager
+        PIN.
+      parameters:
+      - description: Preparation Alert ID
+        in: path
+        name: alert_id
+        required: true
+        type: string
+      - description: Acknowledgment request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/preparation.AcknowledgeAlertCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/preparation.AlertResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Acknowledge a Preparation Alert
+      tags:
+      - preparation
   /preparation/queue:
     get:
       description: Returns active units in FIFO order with PostgreSQL observed time
@@ -3428,8 +3690,8 @@ paths:
       - application/json
       description: Moves one unit along the linear chain QUEUED -> IN_PREPARATION
         -> READY -> FULFILLED. The target state is explicit, so two baristas acting
-        on a stale display get a conflict rather than a silent double advance. Cancellation,
-        Waste, Remake, and State Correction are Phase 6B/6C.
+        on a stale display get a conflict rather than a silent double advance. Waste,
+        Remake, and State Correction are Phase 6B; Cancellation remains Phase 6C.
       parameters:
       - description: Preparation Unit ID
         in: path
@@ -3483,6 +3745,67 @@ paths:
       summary: Advance a Preparation Unit
       tags:
       - preparation
+  /preparation/units/{unit_id}/waste:
+    post:
+      consumes:
+      - application/json
+      description: Records the terminal Waste fact, sets the unit to WASTED, and creates
+        the unacknowledged WASTE alert in one transaction. The reason must be in the
+        Waste catalog and the optional note is normalized before validation. Requires
+        no Manager PIN.
+      parameters:
+      - description: Preparation Unit ID
+        in: path
+        name: unit_id
+        required: true
+        type: string
+      - description: Waste request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/preparation.WasteUnitCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/preparation.WasteResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Waste a Preparation Unit
+      tags:
+      - preparation
   /preparation/units/advance-many:
     post:
       consumes:
@@ -3531,6 +3854,126 @@ paths:
       security:
       - BearerAuth: []
       summary: Advance selected Preparation Units
+      tags:
+      - preparation
+  /preparation/units/correct-state:
+    post:
+      consumes:
+      - application/json
+      description: 'Reverses 1 through 50 selected units one step along the chain
+        — IN_PREPARATION to QUEUED, READY to IN_PREPARATION, FULFILLED to READY —
+        as one all-or-nothing batch. Requires the Manager''s own current PIN: the
+        Manager role and PIN checks run inside the mutation transaction, so a wrong
+        PIN is a collapsed 403 while a malformed PIN shape is 400 before any transaction.
+        The PIN never appears in any response.'
+      parameters:
+      - description: State Correction request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/preparation.CorrectStateCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/preparation.CorrectStateResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Correct Preparation Unit states
+      tags:
+      - preparation
+  /preparation/wastes/{waste_id}/remake:
+    post:
+      consumes:
+      - application/json
+      description: Creates the linked replacement Preparation Unit — a fresh QUEUED
+        unit with the next unit number of the same Order Item, the source's immutable
+        preparation snapshot, and REMAKE priority — plus the Remake fact, in one transaction.
+        The reason must be in the Remake catalog and the optional note is normalized
+        before validation. Requires no Manager PIN.
+      parameters:
+      - description: Preparation Waste ID
+        in: path
+        name: waste_id
+        required: true
+        type: string
+      - description: Remake request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/preparation.RemakeUnitCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/preparation.RemakeResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Remake a Waste
       tags:
       - preparation
   /sales/checks/{check_id}/payments/cash:

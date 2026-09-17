@@ -15,16 +15,26 @@ type Slices struct {
 	ActiveQueue *ActiveQueueHandler
 	AdvanceUnit *AdvanceUnitHandler
 	BulkAdvance *BulkAdvanceHandler
+
+	// Phase 6B: Corrections & Recovery.
+	WasteUnit        *WasteUnitHandler
+	RemakeUnit       *RemakeUnitHandler
+	AcknowledgeAlert *AcknowledgeAlertHandler
+	CorrectState     *CorrectStateHandler
 }
 
 // NewSlices wires every Preparation handler onto a shared Runner.
 func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 	runner := NewRunner(db, queries)
 	return &Slices{
-		Runner:      runner,
-		ActiveQueue: NewActiveQueueHandler(runner),
-		AdvanceUnit: NewAdvanceUnitHandler(runner),
-		BulkAdvance: NewBulkAdvanceHandler(runner),
+		Runner:           runner,
+		ActiveQueue:      NewActiveQueueHandler(runner),
+		AdvanceUnit:      NewAdvanceUnitHandler(runner),
+		BulkAdvance:      NewBulkAdvanceHandler(runner),
+		WasteUnit:        NewWasteUnitHandler(runner),
+		RemakeUnit:       NewRemakeUnitHandler(runner),
+		AcknowledgeAlert: NewAcknowledgeAlertHandler(runner),
+		CorrectState:     NewCorrectStateHandler(runner),
 	}
 }
 
@@ -40,5 +50,17 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/preparation/units/advance-many", s.handleBulkAdvance,
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
 	v1.POST("/preparation/units/:unit_id/advance", s.handleAdvanceUnit,
+		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
+
+	// Phase 6B: Corrections & Recovery. Every mutation carries the same
+	// capability middleware; State Correction's Manager role and PIN checks
+	// live inside the mutation transaction, not in a middleware-only gate.
+	v1.POST("/preparation/alerts/:alert_id/acknowledge", s.handleAcknowledgeAlert,
+		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
+	v1.POST("/preparation/units/:unit_id/waste", s.handleWasteUnit,
+		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
+	v1.POST("/preparation/wastes/:waste_id/remake", s.handleRemakeUnit,
+		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
+	v1.POST("/preparation/units/correct-state", s.handleCorrectState,
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
 }
