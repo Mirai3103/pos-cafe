@@ -151,6 +151,15 @@ WHERE upper(btrim(login_code)) = upper(btrim($1))
 LIMIT 1
 FOR UPDATE;
 
+-- name: GetStaffByIDForUpdate :one
+-- Locks the actor's own identity row so State Correction's self-PIN
+-- verification cannot interleave with a concurrent disablement or PIN
+-- rotation. Follow with GetStaffRolesForUpdate on the same identity.
+SELECT id, display_name, login_code, pin_hash, enabled, created_at
+FROM staff_identities
+WHERE id = $1
+FOR UPDATE;
+
 -- name: GetStaffRolesForUpdate :many
 SELECT role
 FROM staff_operational_roles

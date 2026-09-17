@@ -297,6 +297,30 @@ func (q *Queries) GetStaffByID(ctx context.Context, id uuid.UUID) (StaffIdentity
 	return i, err
 }
 
+const getStaffByIDForUpdate = `-- name: GetStaffByIDForUpdate :one
+SELECT id, display_name, login_code, pin_hash, enabled, created_at
+FROM staff_identities
+WHERE id = $1
+FOR UPDATE
+`
+
+// Locks the actor's own identity row so State Correction's self-PIN
+// verification cannot interleave with a concurrent disablement or PIN
+// rotation. Follow with GetStaffRolesForUpdate on the same identity.
+func (q *Queries) GetStaffByIDForUpdate(ctx context.Context, id uuid.UUID) (StaffIdentity, error) {
+	row := q.db.QueryRowContext(ctx, getStaffByIDForUpdate, id)
+	var i StaffIdentity
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.LoginCode,
+		&i.PinHash,
+		&i.Enabled,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getStaffByLoginCode = `-- name: GetStaffByLoginCode :one
 SELECT id, display_name, login_code, pin_hash, enabled, created_at
 FROM staff_identities

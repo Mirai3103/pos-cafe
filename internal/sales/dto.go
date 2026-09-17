@@ -345,6 +345,12 @@ type UnitModifierResponse struct {
 
 // PreparationUnitResponse is one individually prepared unit of an ordered
 // item. A Committed Item of quantity three becomes three of these.
+//
+// Priority and RemakeOfPreparationUnitID are the Phase 6B Remake metadata the
+// read projects for both the live Service Session and the Completed Sale:
+// originals are STANDARD with a constant null link, and only a linked
+// replacement is REMAKE pointing at the exact wasted source unit (spec §5.1).
+// No alert or correction-history fields ride on the unit object.
 type PreparationUnitResponse struct {
 	ID              uuid.UUID              `json:"id"`
 	OrderItemID     uuid.UUID              `json:"order_item_id"`
@@ -357,6 +363,10 @@ type PreparationUnitResponse struct {
 	Modifiers       []UnitModifierResponse `json:"modifiers"`
 	PreparationNote *string                `json:"preparation_note"`
 	QueuedAt        time.Time              `json:"queued_at"`
+	Priority        string                 `json:"priority"`
+	// RemakeOfPreparationUnitID links a Remake to the wasted source unit it
+	// replaces; nil for every original unit.
+	RemakeOfPreparationUnitID *uuid.UUID `json:"remake_of_preparation_unit_id"`
 }
 
 // SubmitOrderCommand sends a Service Session's committed round to the bar.

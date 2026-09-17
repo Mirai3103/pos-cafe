@@ -488,3 +488,63 @@ CREATE TABLE idempotency_keys (
 * expose a side-effect-free GET with PostgreSQL `observed_at`; let Phase 7 poll and invalidate after local mutations.
 * **Consequences:**
 * Phase 6A adds no SSE, WebSockets, notifier seam, long-lived connections, or background fan-out.
+
+---
+
+## ADR-036: Phase 6B uses typed correction facts and typed transition history
+
+* **Decision Date:** 2026-09-17
+* **Status:** Accepted
+* **Context:** Waste, Remake, State Correction, and Alerts are the exceptional half of preparation, and every one of them changes a unit's current state. Storing the facts as audit JSON, or reconstructing a Completed Sale's history by re-deriving states from audit payloads, would repeat the exact pattern ADR-027 rejected for the advance chain — real business content resting on unparseable, unparsed log rows.
+* **Decision:**
+* Waste, Remake, State Correction, and Alerts each receive an explicit append-only table (`preparation_wastes`, `preparation_remakes`, `preparation_state_corrections`, `preparation_alerts`), with CHECK-enforced reason catalogs and transition pairs.
+* Every current-state change — forward advance, WASTED, one-step reverse — also writes a typed `preparation_unit_transitions` row in the same transaction, so a Completed Sale's history is read from tables and never reconstructed from audit JSON.
+* **Consequences:**
+* Correction history carries real foreign keys and database-enforced integrity; the cost is four tables and the deliberate, documented double write of each moment to a fact and an audit with different purposes (ADR-027's precedent extended to 6B).
+* Replay and conflict detection stay on the shared `idempotency_keys` executor (ADR-026); facts are never consulted to answer an idempotency question.
+
+---
+
+## ADR-037: A Remake is a linked new unit and the only launch priority
+
+* **Decision Date:** 2026-09-17
+* **Status:** Accepted
+* **Context:** A wasted drink must be remade without touching the customer's bill, and the bar must see the replacement ahead of ordinary FIFO work. A general rush priority — any unit boostable on request — would reintroduce the queue-jumping the FIFO lane exists to prevent and would need its own authorization policy.
+* **Decision:**
+* A Remake creates one linked new unit: it copies the source's immutable preparation snapshot, allocates the Order Item's next unit number under the Order Item lock, and links to the exact wasted source unit through `remake_of_preparation_unit_id`.
+* REMAKE is the only priority. It is derived from the remake link rather than being a requestable field, and only active REMAKE units take the queue's priority lane.
+* A Remake changes no Order Item, allocation, Check charge, Payment, Refund, or Comp, and one Waste carries at most one Remake, enforced by a database constraint.
+* **Consequences:**
+* Queue order stays explainable — linked remakes first, then FIFO — with no general rush priority to govern; the cost is that a barista cannot prioritize anything a Waste did not create.
+* Every replacement is traceable to its wasted source forever, and the copy is the snapshot at waste time, not a re-resolution of the catalog.
+
+---
+
+## ADR-038: State Correction is an atomic one-step reverse command with Manager self re-authentication
+
+* **Decision Date:** 2026-09-17
+* **Status:** Accepted
+* **Context:** A barista can advance a unit one step too far, and nothing can undo it. `VerifyManagerApproval` (ADR-009) exists for second-party approval of money movements, but a state correction only undoes a recorded mistake on the actor's own station — there is no second party whose approval the act needs, only certainty about who is acting.
+* **Decision:**
+* State Correction is one all-or-nothing command accepting 1 through 50 unique units, each moved exactly one step backward — QUEUED ← IN_PREPARATION ← READY ← FULFILLED — with no skipping and no multi-step reversal.
+* The command requires the actor to hold Manager and re-authenticate with their own current PIN inside the mutation transaction, before the fingerprint is hashed and before any replay. It is self re-authentication, deliberately not ADR-009 second-party approval.
+* The PIN is request-only: it never enters a fingerprint, stored result, database fact, audit, response, or log.
+* **Consequences:**
+* A stolen unlocked session cannot rewrite preparation history without the Manager's PIN, and PIN rotation or role revocation takes effect on the very next call — including replays — because the gate runs before the claim is consulted.
+* The loser of a concurrent advance or correction re-reads the winner's committed state and the whole batch refuses; a closed Session refuses the whole batch before any unit is touched. Partial reversals cannot exist.
+* **Supersedes nothing; complements ADR-009**, which remains the primitive for approving other people's financial acts.
+
+---
+
+## ADR-039: Alert acknowledgment controls terminal-unit queue visibility only
+
+* **Decision Date:** 2026-09-17
+* **Status:** Accepted
+* **Context:** A WASTED unit is terminal the instant its Waste fact commits, so state-based queue membership would hide it before anyone has seen it; keeping terminal units visible forever would eventually bury the live queue under acknowledged history. Neither the queue's unit list nor the unit's state domain has room for a third answer.
+* **Decision:**
+* An unacknowledged WASTE alert retains its terminal unit on the queue, in a lane behind the live work; the acknowledgment records who saw it — identity, access session, time — and is the only act that removes the unit from the queue.
+* Acknowledgment changes no unit state, transition, closure verdict, Check, Payment, or allocation; it writes its evidence and nothing else.
+* Phase 6B writes only the WASTE kind; the reserved CANCELLATION and CHANGE kinds stay unwritten until 6C, without a schema migration.
+* **Consequences:**
+* Exceptional work can neither be silently lost nor buried by acknowledged history; alerts are the visibility mechanism, so no extra state is added to the unit.
+* Closure ignores alerts entirely — a wasted unit is terminal for closure whether or not anyone acknowledged it — because the alert exists for the bar display, not for the closure policy.

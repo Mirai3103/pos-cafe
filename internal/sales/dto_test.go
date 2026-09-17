@@ -242,3 +242,83 @@ func TestEmptyOrdersAndUnitsSerializeAsArrays(t *testing.T) {
 	require.Contains(t, string(b), `"orders":[]`)
 	require.Contains(t, string(b), `"preparation_units":[]`)
 }
+
+// Phase 6B adds the Remake metadata to the unit object. The additions are
+// additive — priority and remake_of_preparation_unit_id ride alongside the 5D
+// fields — and no Preparation alert, credential, or financial field ever
+// reaches a unit object: the bar display and the receipt read the same shape
+// from both projections, and neither may grow keys owned by another slice.
+func TestPreparationUnitResponseRemakeMetadata(t *testing.T) {
+	t.Run("an original unit serializes STANDARD with a null remake link", func(t *testing.T) {
+		raw, err := json.Marshal(PreparationUnitResponse{
+			ID:        uuid.New(),
+			State:     UnitStateQueued,
+			Modifiers: make([]UnitModifierResponse, 0),
+		})
+		require.NoError(t, err)
+
+		var decoded map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.Contains(t, decoded, "priority", "priority must be in the unit contract")
+		assert.Contains(t, decoded, "remake_of_preparation_unit_id",
+			"the remake link must be in the unit contract")
+		assert.JSONEq(t, "null", string(decoded["remake_of_preparation_unit_id"]),
+			"an original unit's remake link is a constant null")
+	})
+
+	t.Run("a remake unit serializes REMAKE with its exact source link", func(t *testing.T) {
+		source := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+		raw, err := json.Marshal(PreparationUnitResponse{
+			ID:                        uuid.New(),
+			State:                     UnitStateQueued,
+			Modifiers:                 make([]UnitModifierResponse, 0),
+			Priority:                  "REMAKE",
+			RemakeOfPreparationUnitID: &source,
+		})
+		require.NoError(t, err)
+
+		var decoded map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.JSONEq(t, `"REMAKE"`, string(decoded["priority"]))
+		assert.JSONEq(t, `"44444444-4444-4444-4444-444444444444"`,
+			string(decoded["remake_of_preparation_unit_id"]))
+	})
+
+	t.Run("empty and populated unit objects never leak alerts, credentials, or financial fields", func(t *testing.T) {
+		source := uuid.New()
+		populated := PreparationUnitResponse{
+			ID:                        uuid.New(),
+			OrderItemID:               uuid.New(),
+			UnitNumber:                2,
+			State:                     UnitStateQueued,
+			ServiceNumber:             "S00001",
+			CategoryName:              "Cà phê",
+			ItemName:                  "Cà phê sữa",
+			Modifiers:                 make([]UnitModifierResponse, 0),
+			Priority:                  "REMAKE",
+			RemakeOfPreparationUnitID: &source,
+		}
+
+		emptyRaw, err := json.Marshal(PreparationUnitResponse{
+			Modifiers: make([]UnitModifierResponse, 0),
+		})
+		require.NoError(t, err)
+		populatedRaw, err := json.Marshal(populated)
+		require.NoError(t, err)
+
+		for name, body := range map[string]string{
+			"empty unit object":     string(emptyRaw),
+			"populated unit object": string(populatedRaw),
+		} {
+			assert.NotContains(t, body, "alert", "%s must not carry Preparation alert fields", name)
+			assert.NotContains(t, body, "acknowledged", "%s must not carry acknowledgment fields", name)
+			assert.NotContains(t, body, "pin", "%s must not carry credential fields", name)
+			assert.NotContains(t, body, "waste_id", "%s must not carry Waste fact fields", name)
+			assert.NotContains(t, body, "charge", "%s must not carry financial fields", name)
+			assert.NotContains(t, body, "payment", "%s must not carry financial fields", name)
+			assert.NotContains(t, body, "applied_amount", "%s must not carry financial fields", name)
+			assert.NotContains(t, body, "balance", "%s must not carry financial fields", name)
+			assert.NotContains(t, body, "correction", "%s must not carry correction-history fields", name)
+		}
+	})
+}
