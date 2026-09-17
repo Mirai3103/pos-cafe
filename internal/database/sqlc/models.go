@@ -271,6 +271,7 @@ type PreparationUnit struct {
 	Modifiers       json.RawMessage `json:"modifiers"`
 	PreparationNote sql.NullString  `json:"preparation_note"`
 	QueuedAt        time.Time       `json:"queued_at"`
+	InPreparationAt sql.NullTime    `json:"in_preparation_at"`
 }
 
 type PreparationUnitTransition struct {

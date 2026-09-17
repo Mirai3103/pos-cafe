@@ -42,6 +42,34 @@ type MutationSpec struct {
 // MutationContext carries per-execution facts the mutation body needs.
 type MutationContext struct {
 	Queries *sqlc.Queries
+	tx      *sql.Tx
+}
+
+// withUnitSavepoint runs fn inside a fixed, package-private savepoint so one
+// unit's failure can be undone without aborting the surrounding bulk
+// transaction: fn's error rolls the savepoint back and is returned for the
+// caller to convert (or not) into a per-unit outcome, while a savepoint
+// statement's own failure aborts the mutation outright. The name is a
+// constant and carries no request data.
+func (mc MutationContext) withUnitSavepoint(ctx context.Context,
+	fn func(*sqlc.Queries) error,
+) error {
+	if _, err := mc.tx.ExecContext(ctx, "SAVEPOINT preparation_unit"); err != nil {
+		return fmt.Errorf("create preparation unit savepoint: %w", err)
+	}
+	if err := fn(mc.Queries); err != nil {
+		if _, rollbackErr := mc.tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT preparation_unit"); rollbackErr != nil {
+			return fmt.Errorf("rollback preparation unit savepoint after callback failure: %w", rollbackErr)
+		}
+		if _, releaseErr := mc.tx.ExecContext(ctx, "RELEASE SAVEPOINT preparation_unit"); releaseErr != nil {
+			return fmt.Errorf("release rolled-back preparation unit savepoint: %w", releaseErr)
+		}
+		return err
+	}
+	if _, err := mc.tx.ExecContext(ctx, "RELEASE SAVEPOINT preparation_unit"); err != nil {
+		return fmt.Errorf("release preparation unit savepoint: %w", err)
+	}
+	return nil
 }
 
 // AuditRecord describes the audit event to insert after a successful mutation.
@@ -293,7 +321,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 	}
 
 	// 7. Run the mutation.
-	resultCode, result, audit, err := fn(MutationContext{Queries: q})
+	resultCode, result, audit, err := fn(MutationContext{Queries: q, tx: tx})
 	if err != nil {
 		return 0, zero, err
 	}
@@ -333,4 +361,74 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return 0, zero, fmt.Errorf("commit transaction: %w", err)
 	}
 	return resultCode, result, nil
+}
+
+// auditReadDenial records a read's authorization denial in a separate short
+// write transaction. A denied read runs inside a read-only transaction that
+// cannot hold its own audit write, and the denial must reach the client even
+// when the evidence write fails, so this is best-effort by construction: any
+// failure is logged and the original denial is returned untouched.
+func (r *Runner) auditReadDenial(ctx context.Context, actor Actor,
+	authority sqlc.GetSalesSessionAuthorityRow, operation string, denialErr error,
+) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		slog.Error("begin read-denial audit", "operation", operation, "error", err)
+		return
+	}
+	defer tx.Rollback() //nolint:errcheck
+	outcome := recordDenial(ctx, r.queries.WithTx(tx), actor, authority, operation, denialErr)
+	if !outcome.committed {
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		slog.Error("commit read-denial audit", "operation", operation, "error", err)
+	}
+}
+
+// ExecuteRead runs a read-only REPEATABLE READ transaction with the same
+// in-transaction authority reload and capability verification as
+// ExecuteMutation, so a revoked session or a stripped role is denied before
+// the body runs. Because the transaction is read-only, a denial's audit event
+// is written by auditReadDenial in a separate write transaction, best-effort.
+//
+// The isolation level gives the body one repeatable snapshot for its whole
+// run, which is what makes the queue projection internally consistent.
+func ExecuteRead[T any](ctx context.Context, r *Runner, actor Actor,
+	operation, requiredCapability string,
+	fn func(*sqlc.Queries) (T, error),
+) (T, error) {
+	var zero T
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{
+		ReadOnly:  true,
+		Isolation: sql.LevelRepeatableRead,
+	})
+	if err != nil {
+		return zero, fmt.Errorf("begin read transaction: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	q := r.queries.WithTx(tx)
+	authority, caps, err := reloadAuthority(ctx, q, actor)
+	if err != nil {
+		if isSecurityDenial(err) {
+			_ = tx.Rollback()
+			r.auditReadDenial(ctx, actor, authority, operation, err)
+		}
+		return zero, err
+	}
+	if err := verifyCapabilities([]string{requiredCapability}, caps); err != nil {
+		_ = tx.Rollback()
+		r.auditReadDenial(ctx, actor, authority, operation, err)
+		return zero, err
+	}
+
+	result, err := fn(q)
+	if err != nil {
+		return zero, err
+	}
+	if err := tx.Commit(); err != nil {
+		return zero, fmt.Errorf("commit read transaction: %w", err)
+	}
+	return result, nil
 }

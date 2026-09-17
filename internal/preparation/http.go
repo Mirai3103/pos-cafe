@@ -97,10 +97,66 @@ func sendError(c echo.Context, err error) error {
 	return c.JSON(status, body)
 }
 
+// handleActiveQueue godoc
+//
+//	@Summary		Read the active Preparation Queue
+//	@Description	Returns active units in FIFO order with PostgreSQL observed time and current Table names. The projection contains no financial data.
+//	@Tags			preparation
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{object}	response.APIResponse{data=QueueResponse}
+//	@Failure		401	{object}	response.APIResponse
+//	@Failure		403	{object}	response.APIResponse
+//	@Failure		500	{object}	response.APIResponse
+//	@Router			/preparation/queue [get]
+func (s *Slices) handleActiveQueue(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	result, err := s.ActiveQueue.Handle(c.Request().Context(), actor)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return response.OK(c, result)
+}
+
+// handleBulkAdvance godoc
+//
+//	@Summary		Advance selected Preparation Units
+//	@Description	Advances 1 through 50 selected units. Missing or stale units are per-unit failures; unexpected failures roll back the request.
+//	@Tags			preparation
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			body	body		BulkAdvanceCommand	true	"Bulk advance request"
+//	@Success		200		{object}	response.APIResponse{data=BulkAdvanceResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/preparation/units/advance-many [post]
+func (s *Slices) handleBulkAdvance(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[BulkAdvanceCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	status, result, err := s.BulkAdvance.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
 // handleAdvanceUnit godoc
 //
 //	@Summary		Advance a Preparation Unit
-//	@Description	Moves one unit along the linear chain QUEUED -> IN_PREPARATION -> READY -> FULFILLED. The target state is explicit, so two baristas acting on a stale display get a conflict rather than a silent double advance. Cancellation, Waste, Remake, and State Correction are Phase 6.
+//	@Description	Moves one unit along the linear chain QUEUED -> IN_PREPARATION -> READY -> FULFILLED. The target state is explicit, so two baristas acting on a stale display get a conflict rather than a silent double advance. Cancellation, Waste, Remake, and State Correction are Phase 6B/6C.
 //	@Tags			preparation
 //	@Accept			json
 //	@Produce		json
@@ -108,10 +164,12 @@ func sendError(c echo.Context, err error) error {
 //	@Param			unit_id	path		string				true	"Preparation Unit ID"
 //	@Param			body	body		AdvanceUnitCommand	true	"Advance request"
 //	@Success		200		{object}	response.APIResponse{data=UnitResponse}
+//	@Failure		400		{object}	response.APIResponse
 //	@Failure		401		{object}	response.APIResponse
 //	@Failure		403		{object}	response.APIResponse
 //	@Failure		404		{object}	response.APIResponse
 //	@Failure		409		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
 //	@Router			/preparation/units/{unit_id}/advance [post]
 func (s *Slices) handleAdvanceUnit(c echo.Context) error {
 	actor, err := getActor(c)

@@ -12,7 +12,9 @@ import (
 type Slices struct {
 	Runner *Runner
 
+	ActiveQueue *ActiveQueueHandler
 	AdvanceUnit *AdvanceUnitHandler
+	BulkAdvance *BulkAdvanceHandler
 }
 
 // NewSlices wires every Preparation handler onto a shared Runner.
@@ -20,7 +22,9 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 	runner := NewRunner(db, queries)
 	return &Slices{
 		Runner:      runner,
+		ActiveQueue: NewActiveQueueHandler(runner),
 		AdvanceUnit: NewAdvanceUnitHandler(runner),
+		BulkAdvance: NewBulkAdvanceHandler(runner),
 	}
 }
 
@@ -31,6 +35,10 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 // also auto-registers two echo_route_not_found catch-all routes. This matches
 // internal/sales, internal/tables, and internal/shift.
 func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
+	v1.GET("/preparation/queue", s.handleActiveQueue,
+		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
+	v1.POST("/preparation/units/advance-many", s.handleBulkAdvance,
+		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
 	v1.POST("/preparation/units/:unit_id/advance", s.handleAdvanceUnit,
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
 }
