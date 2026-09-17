@@ -164,13 +164,15 @@ The source project is already cleanly structured around domain boundaries. We ma
 *Focus: Real-time drink queue for Baristas, status transitions.*
 
 *Approved 6A Design Spec:* [`docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md`](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md)
+*Approved 6B Design Spec:* [`docs/superpowers/specs/2026-09-17-preparation-corrections-design.md`](docs/superpowers/specs/2026-09-17-preparation-corrections-design.md)
+*Approved 6B Implementation Plan:* [`docs/superpowers/plans/2026-09-17-preparation-corrections.md`](docs/superpowers/plans/2026-09-17-preparation-corrections.md)
 
 > The sketch checklist at the bottom of this section predates Phase 5D, which already created Preparation Units synchronously at Submit and introduced the single-unit advance command; it is kept only as a record of the original sketch, and the sub-phase checklists below are authoritative. Phase 6 is delivered as ordered sub-phases (ADR-032) so Cancellation can be designed with its unfinished Refund/Comp and closure dependencies instead of weakening those boundaries. Synchronous Submit remains the queue-creation boundary: `order.submitted` is neither published nor consumed through Watermill for queue creation, per ADR-033.
 
 | Sub-phase | Scope | Status |
 | :--- | :--- | :---: |
 | **6A** — Preparation Queue reads and bulk transitions | [spec](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md) | ✅ COMPLETED (2026-09-16) |
-| **6B** — Alerts, Waste, Remake, priority, and state correction | Pending design | ⏳ PENDING |
+| **6B** — Alerts, Waste, Remake, priority, and state correction | [spec](docs/superpowers/specs/2026-09-17-preparation-corrections-design.md) / [plan](docs/superpowers/plans/2026-09-17-preparation-corrections.md) | ✅ COMPLETED (2026-09-17) |
 | **6C** — Cancellation/change and financial correction integration | Pending design | ⏳ PENDING |
 
 **6A — Preparation Queue reads and bulk transitions (✅ COMPLETED 2026-09-16):**
@@ -184,20 +186,26 @@ The source project is already cleanly structured around domain boundaries. We ma
 - [x] **6A.7 HTTP Routes & Swagger:** queue read and bulk advance routes with capability authorization, uniform error mapping, and OpenAPI 2.0 documentation.
 - [x] **6A.8 Testing:** unit and PostgreSQL integration suites under `-race`, focused concurrency verification (`TestConcurrentAdvance`, `TestOverlappingBulkAdvance`), idempotent replay coverage, and green Sales regression (Submit, fulfillment, Completed Sale, Service Session closure).
 
-**6B — Alerts, Waste, Remake, priority, and state correction (⏳ PENDING):**
+**6B — Alerts, Waste, Remake, priority, and state correction (✅ COMPLETED 2026-09-17):**
 
-- [ ] Alerts and acknowledgment.
-- [ ] `waste_item.go`: Record wasted drinks.
-- [ ] `remake_item.go`: Record remade drinks.
-- [ ] Priority handling.
-- [ ] State Correction.
+- [x] **6B.1 Database Schema Migration:** `000013_add_preparation_corrections.sql` — typed correction facts (`preparation_wastes`, `preparation_remakes`, `preparation_state_corrections`, `preparation_alerts`), `priority` + `remake_of_preparation_unit_id` on `preparation_units` with a `STANDARD` backfill and enforced priority/link pairing, CHECK-enforced reason catalogs and exactly the eight Phase 6B transition pairs, and typed fact integrity (ADR-036).
+- [x] **6B.2 SQL Queries (`sql/queries/preparation.sql`):** Waste/Acknowledge/Remake/CorrectState lock-and-write queries (session-first locking shared with closure), active-alert and correction-history queue projections, and the extended Sales unit reads carrying priority/link metadata; idempotency through the shared `idempotency_keys` queries (ADR-007), all sqlc generated.
+- [x] **6B.3 Waste:** one atomic command writing the terminal Waste fact, `WASTED` state, typed transition, unacknowledged WASTE alert, two audits, and the replayable result; only `IN_PREPARATION`/`READY` units are admissible.
+- [x] **6B.4 Alert Acknowledgment:** records complete evidence (identity, session, time) and controls only active-alert state and terminal-unit queue visibility; no closure, commercial, or financial effect (ADR-039).
+- [x] **6B.5 Remake:** copies the immutable preparation snapshot, allocates a unique next unit number under the Order Item lock, links its wasted source, receives the REMAKE priority — the only launch priority (ADR-037) — and changes no charge.
+- [x] **6B.6 State Correction:** Manager-only, own-PIN-gated before replay (ADR-038), one-step reverse over 1–50 unique units, deterministic UUID-byte lock ordering, all-or-nothing across the batch.
+- [x] **6B.7 Queue & Sales Projections:** the queue returns non-null `units`/`alerts`/`corrections` from one repeatable-read snapshot with deterministic ordering and no financial leakage; Service Session and Completed Sale project priority/link metadata and the complete typed transition history (including Waste and Correction transitions).
+- [x] **6B.8 HTTP Routes & Swagger:** correction routes with capability authorization, uniform error mapping, and OpenAPI 2.0 documentation; `manager_pin` exists only in the request binding and executor input.
+- [x] **6B.9 Testing:** unit and PostgreSQL integration suites under `-race`, the ten-suite focused concurrency matrix (unit-level races, correction/remake versus closure), exact-replay and PIN rotation/revocation coverage, and the three end-to-end recovery workflows through real handlers on both sides of the ADR-024 boundary.
 
 **6C — Cancellation/change and financial correction integration (⏳ PENDING):**
 
-- [ ] Cancellation/change commands.
-- [ ] Refund/Comp integration.
+- [ ] Cancellation/change commands (writing the reserved `CANCELLED` state and `CANCELLATION`/`CHANGE` alert kinds — no 6B command writes them).
+- [ ] Refund integration.
+- [ ] Comp integration.
+- [ ] Payment Void.
+- [ ] Charge adjustment.
 - [ ] Pending-Refund closure policy (restores the branch ADR-029 omitted).
-- [ ] Financial correction integration.
 
 The original sketch below is superseded by the sub-phase checklists above.
 
@@ -243,7 +251,7 @@ The original sketch below is superseded by the sub-phase checklists above.
 | **3. Tables & Layout** | ✅ DONE | 4 | 4 / 4 | 2026-09-12 |
 | **4. Sales Shift & Cash** | ✅ DONE | 3 | 3 / 3 | 2026-09-13 |
 | **5. Sales, Orders & Pay** | ✅ DONE | 6 | 6 / 6 | 2026-09-15 |
-| **6. Preparation (Barista)** | ⏳ PENDING | 3 | 1 / 3 | Phase 6 |
+| **6. Preparation (Barista)** | ⏳ PENDING | 3 | 2 / 3 | Phase 6 |
 | **7. Frontend Single-Binary**| ⏳ PENDING | 2 | 0 / 2 | Phase 7 |
 
 ---

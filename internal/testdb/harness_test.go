@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -57,4 +58,44 @@ func TestInstanceCloseOnlyDropsCloneItCreated(t *testing.T) {
 	}
 	require.Error(t, created.Close(context.Background()),
 		"a clone this invocation created must be dropped on teardown")
+}
+
+// stubExecDB is a dbtx whose ExecContext answers with a canned error and whose
+// read methods are never reached by dropDatabase.
+type stubExecDB struct{ err error }
+
+func (s stubExecDB) ExecContext(context.Context, string, ...any) (sql.Result, error) {
+	return nil, s.err
+}
+
+func (s stubExecDB) QueryContext(context.Context, string, ...any) (*sql.Rows, error) {
+	return nil, errors.New("stubExecDB: QueryContext is not used by dropDatabase")
+}
+
+func (s stubExecDB) QueryRowContext(context.Context, string, ...any) *sql.Row {
+	return nil
+}
+
+// TestDropDatabaseTreatsAlreadyDroppedAsSuccess pins the stale-clone drop
+// tolerance: the Cleanup scanner and a finishing package's own Close can race
+// to drop the same clone — the scanner observes zero sessions while the owner
+// commits its DROP — and whoever drops second receives SQLSTATE 3D000. The
+// database no longer existing is exactly the end state both sides want, so
+// dropDatabase must answer nil for it while every other failure still fails.
+func TestDropDatabaseTreatsAlreadyDroppedAsSuccess(t *testing.T) {
+	name := "cafe_pos_test_sales_0123456789ab"
+
+	alreadyDropped := &pgconn.PgError{
+		Code:    "3D000",
+		Message: `database "cafe_pos_test_sales_0123456789ab" does not exist`,
+	}
+	require.NoError(t, dropDatabase(context.Background(), stubExecDB{err: alreadyDropped}, name),
+		"an already-dropped clone is the desired end state")
+
+	permissionDenied := &pgconn.PgError{Code: "42501", Message: "permission denied"}
+	require.ErrorIs(t, dropDatabase(context.Background(), stubExecDB{err: permissionDenied}, name),
+		permissionDenied, "every other PostgreSQL failure still fails")
+
+	require.Error(t, dropDatabase(context.Background(), stubExecDB{err: errors.New("connection refused")}, name),
+		"non-PostgreSQL failures still fail")
 }
