@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/google/uuid"
@@ -93,7 +92,10 @@ func (h *SubmitOrderHandler) Handle(ctx context.Context, actor Actor,
 				}
 			}
 
-			occurredAt := time.Now()
+			occurredAt, err := q.GetSalesOccurredAt(ctx)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("read submission occurrence time: %w", err)
+			}
 			orderID, err := q.InsertOrder(ctx, sqlc.InsertOrderParams{
 				ServiceSessionID:              cmd.ServiceSessionID,
 				OrderDraftID:                  draftID,

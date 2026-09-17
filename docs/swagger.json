@@ -3065,6 +3065,142 @@
                 }
             }
         },
+        "/preparation/queue": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns active units in FIFO order with PostgreSQL observed time and current Table names. The projection contains no financial data.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preparation"
+                ],
+                "summary": "Read the active Preparation Queue",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/preparation.QueueResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/preparation/units/advance-many": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Advances 1 through 50 selected units. Missing or stale units are per-unit failures; unexpected failures roll back the request.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preparation"
+                ],
+                "summary": "Advance selected Preparation Units",
+                "parameters": [
+                    {
+                        "description": "Bulk advance request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/preparation.BulkAdvanceCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/preparation.BulkAdvanceResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/preparation/units/{unit_id}/advance": {
             "post": {
                 "security": [
@@ -3072,7 +3208,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Moves one unit along the linear chain QUEUED -\u003e IN_PREPARATION -\u003e READY -\u003e FULFILLED. The target state is explicit, so two baristas acting on a stale display get a conflict rather than a silent double advance. Cancellation, Waste, Remake, and State Correction are Phase 6.",
+                "description": "Moves one unit along the linear chain QUEUED -\u003e IN_PREPARATION -\u003e READY -\u003e FULFILLED. The target state is explicit, so two baristas acting on a stale display get a conflict rather than a silent double advance. Cancellation, Waste, Remake, and State Correction are Phase 6B/6C.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3120,6 +3256,12 @@
                             ]
                         }
                     },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
@@ -3140,6 +3282,12 @@
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -7034,6 +7182,121 @@
                 }
             }
         },
+        "preparation.BulkAdvanceCommand": {
+            "type": "object",
+            "properties": {
+                "preparation_unit_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "target_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.BulkAdvanceOutcome": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "unit": {
+                    "$ref": "#/definitions/preparation.UnitResponse"
+                }
+            }
+        },
+        "preparation.BulkAdvanceResponse": {
+            "type": "object",
+            "properties": {
+                "outcomes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.BulkAdvanceOutcome"
+                    }
+                },
+                "target_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.QueueResponse": {
+            "type": "object",
+            "properties": {
+                "observed_at": {
+                    "type": "string"
+                },
+                "units": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.QueueUnitResponse"
+                    }
+                }
+            }
+        },
+        "preparation.QueueUnitResponse": {
+            "type": "object",
+            "properties": {
+                "category_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "in_preparation_at": {
+                    "type": "string"
+                },
+                "item_name": {
+                    "type": "string"
+                },
+                "modifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.UnitModifierResponse"
+                    }
+                },
+                "order_item_id": {
+                    "type": "string"
+                },
+                "order_item_unit_count": {
+                    "type": "integer"
+                },
+                "preparation_note": {
+                    "type": "string"
+                },
+                "queued_at": {
+                    "type": "string"
+                },
+                "service_number": {
+                    "type": "string"
+                },
+                "size_name": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "table_names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "unit_number": {
+                    "type": "integer"
+                }
+            }
+        },
         "preparation.UnitModifierResponse": {
             "type": "object",
             "properties": {
@@ -7052,6 +7315,9 @@
                     "type": "string"
                 },
                 "id": {
+                    "type": "string"
+                },
+                "in_preparation_at": {
                     "type": "string"
                 },
                 "item_name": {

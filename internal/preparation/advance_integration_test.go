@@ -18,15 +18,21 @@ func TestAdvanceUnit(t *testing.T) {
 		unit := env.SubmittedUnits(t, 1)[0]
 		require.Equal(t, preparation.StateQueued, unit.State)
 
-		for _, target := range []string{
-			preparation.StateInPreparation,
-			preparation.StateReady,
-			preparation.StateFulfilled,
-		} {
-			got, _, err := env.Advance(t, unit.ID, target)
-			require.NoError(t, err)
-			require.Equal(t, target, got.State)
-		}
+		started, _, err := env.Advance(t, unit.ID, preparation.StateInPreparation)
+		require.NoError(t, err)
+		require.NotNil(t, started.InPreparationAt)
+		startedAt := *started.InPreparationAt
+
+		ready, _, err := env.Advance(t, unit.ID, preparation.StateReady)
+		require.NoError(t, err)
+		require.NotNil(t, ready.InPreparationAt)
+		require.Equal(t, startedAt, *ready.InPreparationAt)
+
+		fulfilled, _, err := env.Advance(t, unit.ID, preparation.StateFulfilled)
+		require.NoError(t, err)
+		require.NotNil(t, fulfilled.InPreparationAt)
+		require.Equal(t, startedAt, *fulfilled.InPreparationAt)
+		require.Equal(t, preparation.StateFulfilled, fulfilled.State)
 		require.Equal(t, preparation.StateFulfilled, env.UnitState(t, unit.ID))
 		require.Equal(t, 3, env.CountTransitions(t, unit.ID),
 			"one transition row per advance")

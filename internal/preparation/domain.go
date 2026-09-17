@@ -21,8 +21,22 @@ const CapPreparationOperate = "preparation.operate"
 // idempotency_keys.action (VARCHAR(50)).
 const OpAdvanceUnit = "preparation.advance_unit"
 
+// OpReadActiveQueue names the active-queue read for denial-audit evidence.
+// Reads are not idempotency-keyed, so the name appears only in audit details.
+const OpReadActiveQueue = "preparation.read_active_queue"
+
 // EventPreparationUnitAdvanced is the audit event type.
 const EventPreparationUnitAdvanced = "PREPARATION_UNIT_ADVANCED"
+
+const (
+	OpBulkAdvance = "preparation.bulk_advance"
+
+	BulkStatusAdvanced = "ADVANCED"
+	BulkStatusFailed   = "FAILED"
+
+	BulkCodeUnitNotFound      = "UNIT_NOT_FOUND"
+	BulkCodeInvalidTransition = "INVALID_TRANSITION"
+)
 
 // Preparation Unit states. 5D writes only the first four; StateCancelled and
 // StateWasted arrive with Phase 6's commands (ADR-028).

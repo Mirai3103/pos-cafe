@@ -311,6 +311,17 @@ func (q *Queries) GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (s
 	return check_target, err
 }
 
+const getSalesOccurredAt = `-- name: GetSalesOccurredAt :one
+SELECT clock_timestamp()::timestamptz AS occurred_at
+`
+
+func (q *Queries) GetSalesOccurredAt(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, getSalesOccurredAt)
+	var occurred_at time.Time
+	err := row.Scan(&occurred_at)
+	return occurred_at, err
+}
+
 const getSalesSessionAuthority = `-- name: GetSalesSessionAuthority :one
 
 SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
@@ -1967,15 +1978,29 @@ WHERE o.service_session_id = $1
 ORDER BY pu.queued_at ASC, pu.id ASC
 `
 
-func (q *Queries) ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnit, error) {
+type ListSessionPreparationUnitsRow struct {
+	ID              uuid.UUID       `json:"id"`
+	OrderItemID     uuid.UUID       `json:"order_item_id"`
+	UnitNumber      int32           `json:"unit_number"`
+	State           string          `json:"state"`
+	ServiceNumber   string          `json:"service_number"`
+	CategoryName    string          `json:"category_name"`
+	ItemName        string          `json:"item_name"`
+	SizeName        sql.NullString  `json:"size_name"`
+	Modifiers       json.RawMessage `json:"modifiers"`
+	PreparationNote sql.NullString  `json:"preparation_note"`
+	QueuedAt        time.Time       `json:"queued_at"`
+}
+
+func (q *Queries) ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionPreparationUnitsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSessionPreparationUnits, serviceSessionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []PreparationUnit{}
+	items := []ListSessionPreparationUnitsRow{}
 	for rows.Next() {
-		var i PreparationUnit
+		var i ListSessionPreparationUnitsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OrderItemID,

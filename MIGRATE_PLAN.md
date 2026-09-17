@@ -163,6 +163,44 @@ The source project is already cleanly structured around domain boundaries. We ma
 ### Phase 6: Preparation Station / Kitchen Display (`internal/preparation`)
 *Focus: Real-time drink queue for Baristas, status transitions.*
 
+*Approved 6A Design Spec:* [`docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md`](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md)
+
+> The sketch checklist at the bottom of this section predates Phase 5D, which already created Preparation Units synchronously at Submit and introduced the single-unit advance command; it is kept only as a record of the original sketch, and the sub-phase checklists below are authoritative. Phase 6 is delivered as ordered sub-phases (ADR-032) so Cancellation can be designed with its unfinished Refund/Comp and closure dependencies instead of weakening those boundaries. Synchronous Submit remains the queue-creation boundary: `order.submitted` is neither published nor consumed through Watermill for queue creation, per ADR-033.
+
+| Sub-phase | Scope | Status |
+| :--- | :--- | :---: |
+| **6A** — Preparation Queue reads and bulk transitions | [spec](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md) | ✅ COMPLETED (2026-09-16) |
+| **6B** — Alerts, Waste, Remake, priority, and state correction | Pending design | ⏳ PENDING |
+| **6C** — Cancellation/change and financial correction integration | Pending design | ⏳ PENDING |
+
+**6A — Preparation Queue reads and bulk transitions (✅ COMPLETED 2026-09-16):**
+
+- [x] **6A.1 Database Schema Migration:** `000012_add_preparation_queue_fields.sql` — `in_preparation_at` aging field on `preparation_units` with backfill from `preparation_unit_transitions`, keeping all six canonical states from ADR-028 and the queue read schema private.
+- [x] **6A.2 SQL Queries (`sql/queries/preparation.sql`):** active queue projection, per-unit transition locks and writes, `preparation_unit_transitions` and audit writes; idempotency through the shared `idempotency_keys` queries (ADR-007), all sqlc generated.
+- [x] **6A.3 Shared Timestamp-Aware Transition:** one timestamp-aware advance helper shared by the 5D single-unit command and the 6A bulk path; missing and stale units become typed outcomes.
+- [x] **6A.4 Authorized Read Executor:** read-only `REPEATABLE READ` transaction executor that re-verifies current authority on every queue read.
+- [x] **6A.5 Active Queue Projection:** side-effect-free `GET` whose response contains only `observed_at` (the PostgreSQL clock at the read) and the active units ordered by `queued_at`, with `in_preparation_at` aging; launch freshness is polling with client invalidation after local mutations, per ADR-035 — no SSE, WebSockets, notifier seam, or background fan-out.
+- [x] **6A.6 Bulk Advance:** contract normalization and validation, authority and idempotency verified once, unique units locked in UUID order, each unit processed in a fixed package-private PostgreSQL savepoint (ADR-034), exact replay with no duplicate transitions or audits, and outer-transaction rollback when audit or idempotency storage fails.
+- [x] **6A.7 HTTP Routes & Swagger:** queue read and bulk advance routes with capability authorization, uniform error mapping, and OpenAPI 2.0 documentation.
+- [x] **6A.8 Testing:** unit and PostgreSQL integration suites under `-race`, focused concurrency verification (`TestConcurrentAdvance`, `TestOverlappingBulkAdvance`), idempotent replay coverage, and green Sales regression (Submit, fulfillment, Completed Sale, Service Session closure).
+
+**6B — Alerts, Waste, Remake, priority, and state correction (⏳ PENDING):**
+
+- [ ] Alerts and acknowledgment.
+- [ ] `waste_item.go`: Record wasted drinks.
+- [ ] `remake_item.go`: Record remade drinks.
+- [ ] Priority handling.
+- [ ] State Correction.
+
+**6C — Cancellation/change and financial correction integration (⏳ PENDING):**
+
+- [ ] Cancellation/change commands.
+- [ ] Refund/Comp integration.
+- [ ] Pending-Refund closure policy (restores the branch ADR-029 omitted).
+- [ ] Financial correction integration.
+
+The original sketch below is superseded by the sub-phase checklists above.
+
 - [ ] **6.1 Database Schema Migration:**
   - Create table `preparation_units` (`id`, `order_item_id`, `item_name`, `options_summary`, `status` [QUEUED, BREWING, READY, SERVED], `notes`, `created_at`, `updated_at`).
 - [ ] **6.2 Event Consumer (Watermill):**
@@ -205,7 +243,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 | **3. Tables & Layout** | ✅ DONE | 4 | 4 / 4 | 2026-09-12 |
 | **4. Sales Shift & Cash** | ✅ DONE | 3 | 3 / 3 | 2026-09-13 |
 | **5. Sales, Orders & Pay** | ✅ DONE | 6 | 6 / 6 | 2026-09-15 |
-| **6. Preparation (Barista)** | ⏳ PENDING | 3 | 0 / 3 | Phase 6 |
+| **6. Preparation (Barista)** | ⏳ PENDING | 3 | 1 / 3 | Phase 6 |
 | **7. Frontend Single-Binary**| ⏳ PENDING | 2 | 0 / 2 | Phase 7 |
 
 ---

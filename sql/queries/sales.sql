@@ -20,6 +20,9 @@ ORDER BY role ASC;
 -- name: SalesAdvisoryLock :exec
 SELECT pg_advisory_xact_lock($1);
 
+-- name: GetSalesOccurredAt :one
+SELECT clock_timestamp()::timestamptz AS occurred_at;
+
 -- name: GetServiceSession :one
 SELECT id, service_number, sequence, service_mode, state, sales_shift_id,
        created_by_staff_identity_id, created_at

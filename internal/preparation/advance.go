@@ -3,7 +3,6 @@ package preparation
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -41,62 +40,81 @@ func (h *AdvanceUnitHandler) Handle(ctx context.Context, actor Actor,
 
 	return ExecuteMutation(ctx, h.runner, actor, spec,
 		func(mc MutationContext) (int, UnitResponse, AuditRecord, error) {
-			var zero UnitResponse
-			q := mc.Queries
-
-			if !IsAdvanceTarget(cmd.TargetState) {
-				return 0, zero, AuditRecord{}, fmt.Errorf(
-					"%w: %q is not an advance target", ErrInvalidTransition, cmd.TargetState)
-			}
-
-			unit, err := q.LockPreparationUnit(ctx, cmd.UnitID)
+			outcome, err := applyAdvance(ctx, mc.Queries, actor, cmd.UnitID, cmd.TargetState)
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return 0, zero, AuditRecord{}, fmt.Errorf("%w: %s", ErrUnitNotFound, cmd.UnitID)
-				}
-				return 0, zero, AuditRecord{}, fmt.Errorf("lock preparation unit: %w", err)
+				return 0, UnitResponse{}, AuditRecord{}, err
 			}
-			if !IsLegalAdvance(unit.State, cmd.TargetState) {
-				return 0, zero, AuditRecord{}, fmt.Errorf(
-					"%w: %s cannot advance to %s", ErrInvalidTransition, unit.State, cmd.TargetState)
-			}
-
-			occurredAt := time.Now()
-			if err := q.SetPreparationUnitState(ctx, sqlc.SetPreparationUnitStateParams{
-				ID:    unit.ID,
-				State: cmd.TargetState,
-			}); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("set preparation unit state: %w", err)
-			}
-			// The transition row is business data a Completed Sale is made of,
-			// not a derived report (ADR-027). The audit event below records
-			// the same moment for a different purpose.
-			if err := q.InsertPreparationUnitTransition(ctx,
-				sqlc.InsertPreparationUnitTransitionParams{
-					PreparationUnitID:    unit.ID,
-					PriorState:           unit.State,
-					ResultingState:       cmd.TargetState,
-					ActorStaffIdentityID: actor.StaffID,
-					StaffAccessSessionID: actor.SessionID,
-					OccurredAt:           occurredAt,
-				}); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("insert preparation unit transition: %w", err)
-			}
-
-			out, err := loadUnit(ctx, q, unit.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			return http.StatusOK, out, AuditRecord{
-				EventType: EventPreparationUnitAdvanced,
-				Details: map[string]any{
-					"preparation_unit_id": unit.ID,
-					"prior_state":         unit.State,
-					"resulting_state":     cmd.TargetState,
-				},
-			}, nil
+			return http.StatusOK, outcome.Unit, outcome.Audit, nil
 		})
+}
+
+// transitionOutcome is the result of one advance: the unit as it now reads,
+// plus the audit record the mutation layer should persist.
+type transitionOutcome struct {
+	Unit  UnitResponse
+	Audit AuditRecord
+}
+
+// applyAdvance moves one Preparation Unit to an explicit target state and is
+// the single transition implementation shared by the single-unit command and
+// the bulk queue advance: lock, validate, stamp, insert the transition row.
+func applyAdvance(ctx context.Context, q *sqlc.Queries, actor Actor,
+	unitID uuid.UUID, target string,
+) (transitionOutcome, error) {
+	var zero transitionOutcome
+	if !IsAdvanceTarget(target) {
+		return zero, fmt.Errorf("%w: %q is not an advance target", ErrInvalidTransition, target)
+	}
+
+	unit, err := q.LockPreparationUnit(ctx, unitID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return zero, fmt.Errorf("%w: %s", ErrUnitNotFound, unitID)
+		}
+		return zero, fmt.Errorf("lock preparation unit: %w", err)
+	}
+	if !IsLegalAdvance(unit.State, target) {
+		return zero, fmt.Errorf("%w: %s cannot advance to %s", ErrInvalidTransition, unit.State, target)
+	}
+
+	occurredAt, err := q.GetPreparationCurrentTime(ctx)
+	if err != nil {
+		return zero, fmt.Errorf("read preparation occurrence time: %w", err)
+	}
+	if err := q.SetPreparationUnitState(ctx, sqlc.SetPreparationUnitStateParams{
+		ID: unit.ID, State: target, OccurredAt: occurredAt,
+	}); err != nil {
+		return zero, fmt.Errorf("set preparation unit state: %w", err)
+	}
+	// The transition row is business data a Completed Sale is made of,
+	// not a derived report (ADR-027). The audit event below records
+	// the same moment for a different purpose.
+	if err := q.InsertPreparationUnitTransition(ctx, sqlc.InsertPreparationUnitTransitionParams{
+		PreparationUnitID:    unit.ID,
+		PriorState:           unit.State,
+		ResultingState:       target,
+		ActorStaffIdentityID: actor.StaffID,
+		StaffAccessSessionID: actor.SessionID,
+		OccurredAt:           occurredAt,
+	}); err != nil {
+		return zero, fmt.Errorf("insert preparation unit transition: %w", err)
+	}
+
+	out, err := loadUnit(ctx, q, unit.ID)
+	if err != nil {
+		return zero, err
+	}
+	return transitionOutcome{
+		Unit: out,
+		Audit: AuditRecord{
+			EventType: EventPreparationUnitAdvanced,
+			Details: map[string]any{
+				"preparation_unit_id": unit.ID,
+				"prior_state":         unit.State,
+				"resulting_state":     target,
+			},
+		},
+	}, nil
 }
 
 // loadUnit reads one Preparation Unit back after the update.
@@ -108,11 +126,9 @@ func loadUnit(ctx context.Context, q *sqlc.Queries, unitID uuid.UUID) (UnitRespo
 		}
 		return UnitResponse{}, fmt.Errorf("load preparation unit: %w", err)
 	}
-	mods := make([]UnitModifierResponse, 0)
-	if len(row.Modifiers) > 0 {
-		if err := json.Unmarshal(row.Modifiers, &mods); err != nil {
-			return UnitResponse{}, fmt.Errorf("decode preparation unit modifiers: %w", err)
-		}
+	mods, err := decodeModifiers(row.Modifiers)
+	if err != nil {
+		return UnitResponse{}, err
 	}
 	var sizeName, note *string
 	if row.SizeName.Valid {
@@ -120,6 +136,11 @@ func loadUnit(ctx context.Context, q *sqlc.Queries, unitID uuid.UUID) (UnitRespo
 	}
 	if row.PreparationNote.Valid {
 		note = &row.PreparationNote.String
+	}
+	var inPreparationAt *time.Time
+	if row.InPreparationAt.Valid {
+		value := row.InPreparationAt.Time
+		inPreparationAt = &value
 	}
 	return UnitResponse{
 		ID:              row.ID,
@@ -133,5 +154,6 @@ func loadUnit(ctx context.Context, q *sqlc.Queries, unitID uuid.UUID) (UnitRespo
 		Modifiers:       mods,
 		PreparationNote: note,
 		QueuedAt:        row.QueuedAt,
+		InPreparationAt: inPreparationAt,
 	}, nil
 }

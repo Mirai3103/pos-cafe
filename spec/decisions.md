@@ -440,3 +440,51 @@ CREATE TABLE idempotency_keys (
 * **Consequences:**
 * A concurrent Payment racing a Submit on one Session can surface a single 500 (40P01) and succeed on retry; the rollback leaves no partial state and no stored result, so the retry is a first attempt, not a replay.
 * The exposure stays bounded by the two-round-trip width of Submit's lock span and the empirical record — observed twice in the split's first runs, then 20/20 stable `-race` runs. If the window ever observably hurts, reordering Submit to Checks-then-Session remains open for Phase 6 as its own measured change.
+
+---
+
+## ADR-032: Phase 6 is decomposed
+
+* **Decision Date:** 2026-09-16
+* **Status:** Accepted
+* **Context:** Preparation spans ordinary queue work, exceptional corrections, and Cancellation's unresolved Refund/Comp dependencies.
+* **Decision:**
+* ship 6A queue and ordinary transitions, 6B exceptional preparation workflows, and 6C cancellation with its financial dependencies.
+* **Consequences:**
+* ordinary operational work remains independent from correction and refund policy; Phase 6 is not complete when 6A ships.
+
+---
+
+## ADR-033: Submit remains the queue creation boundary
+
+* **Decision Date:** 2026-09-16
+* **Status:** Accepted
+* **Context:** Phase 5D already creates Preparation Units atomically with Submit.
+* **Decision:**
+* do not publish or consume `order.submitted` through Watermill for queue creation.
+* **Consequences:**
+* a committed Submit is immediately queue-visible with no duplicate delivery path; Sales remains the sole creator while Preparation owns transitions.
+
+---
+
+## ADR-034: Bulk advance uses per-unit savepoints
+
+* **Decision Date:** 2026-09-16
+* **Status:** Accepted
+* **Context:** stale or missing selected units are normal operational outcomes, while audit, database, and idempotency failures are not.
+* **Decision:**
+* verify authority and idempotency once, lock unique units in UUID order, and process each unit in a fixed package-private PostgreSQL savepoint.
+* **Consequences:**
+* missing and stale units become typed outcomes; infrastructure failures abort every successful unit in the outer transaction.
+
+---
+
+## ADR-035: Launch queue freshness uses polling
+
+* **Decision Date:** 2026-09-16
+* **Status:** Accepted
+* **Context:** the staff-LAN client needs fresh shared queue state but no Phase 6A behavior requires server push.
+* **Decision:**
+* expose a side-effect-free GET with PostgreSQL `observed_at`; let Phase 7 poll and invalidate after local mutations.
+* **Consequences:**
+* Phase 6A adds no SSE, WebSockets, notifier seam, long-lived connections, or background fan-out.
