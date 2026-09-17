@@ -32,6 +32,26 @@ func testLoginCode(prefix string) string {
 	return prefix + strings.ReplaceAll(uuid.NewString(), "-", "")[:room]
 }
 
+// knownActorPINs records the plaintext PIN of every seeded actor, keyed by the
+// identity id. The plaintext stays out of the production preparation.Actor on
+// purpose: Actor is what the executor and handlers see, and no production path
+// may carry a PIN. The executor's Manager self-PIN gate consumes the plaintext
+// only through these test fixtures.
+var knownActorPINs sync.Map // staff_identity_id -> plaintext test PIN
+
+// seedKnownPIN registers a seeded actor's plaintext test PIN.
+func seedKnownPIN(staffID uuid.UUID, pin string) {
+	knownActorPINs.Store(staffID, pin)
+}
+
+// knownPIN returns the plaintext test PIN registered for a seeded actor, or ""
+// when the actor was not seeded by this package.
+func knownPIN(actor preparation.Actor) string {
+	pin, _ := knownActorPINs.Load(actor.StaffID)
+	pinText, _ := pin.(string)
+	return pinText
+}
+
 // prepTestDB is the single pool every Preparation integration test shares,
 // bound by TestMain before any test runs.
 var prepTestDB *sql.DB
@@ -45,10 +65,13 @@ var (
 
 // TestMain provisions this package's isolated clone of the migrated test
 // template and binds one shared pool for the whole package. The clone is
-// already migrated, so tests never run migrations themselves.
+// already migrated, so tests never run migrations themselves. The same pool is
+// handed to the package's in-process (internal) integration tests, which
+// cannot reach this file's unexported fixtures.
 func TestMain(m *testing.M) {
 	os.Exit(testdb.Run(m, "preparation", func(db *sql.DB) {
 		prepTestDB = db
+		preparation.SetInternalTestDB(db)
 	}))
 }
 
@@ -82,7 +105,10 @@ func truncatePrepTables(t *testing.T, db *sql.DB) {
 }
 
 // seedActor creates an enabled identity with the given roles and an active
-// access session, returning the Actor the Preparation executor expects.
+// access session, returning the Actor the Preparation executor expects. The
+// identity's plaintext test PIN ("1234") is registered in knownActorPINs so
+// the Manager self-PIN gate tests can supply it; it never travels on the
+// returned Actor.
 func seedActor(t *testing.T, q *sqlc.Queries, roles []string) preparation.Actor {
 	t.Helper()
 	ctx := context.Background()
@@ -102,6 +128,7 @@ func seedActor(t *testing.T, q *sqlc.Queries, roles []string) preparation.Actor 
 		Enabled:     true,
 	})
 	require.NoError(t, err)
+	seedKnownPIN(identity.ID, "1234")
 
 	for _, role := range roles {
 		require.NoError(t, q.AddStaffRole(ctx, sqlc.AddStaffRoleParams{
@@ -228,6 +255,10 @@ type prepEnv struct {
 	// CoffeeID is a directly priced Menu Item (25,000 VND) whose Category
 	// carries the Topping group.
 	CoffeeID uuid.UUID
+	// ToppingOptionID is the Topping group's surcharged (5,000 VND) Modifier
+	// Option, so a round can be submitted with a non-trivial frozen modifier
+	// snapshot.
+	ToppingOptionID uuid.UUID
 	// TableID is one available dine-in Table.
 	TableID uuid.UUID
 }
@@ -261,6 +292,7 @@ func newPrepEnv(t *testing.T) *prepEnv {
 		toppingOptionID)
 	require.NoError(t, err)
 	env.CoffeeID = seedMenuItemInCategory(t, db, coffeeCategoryID, "Cà phê sữa", 25000)
+	env.ToppingOptionID = toppingOptionID
 	env.TableID = seedTable(t, db, "Bàn 1")
 
 	return env
@@ -500,6 +532,51 @@ func (e *prepEnv) CashierActor() preparation.Actor { return e.cashier }
 // BaristaActor returns the seeded BARISTA actor, who holds preparation.operate.
 func (e *prepEnv) BaristaActor() preparation.Actor { return e.barista }
 
+// ManagerActor returns the seeded MANAGER actor, who holds preparation.operate
+// plus every other Manager capability and is the subject of the executor's
+// self-PIN gate tests.
+func (e *prepEnv) ManagerActor() preparation.Actor { return e.manager }
+
+// PINOf returns the plaintext test PIN registered for a seeded actor.
+func (e *prepEnv) PINOf(actor preparation.Actor) string {
+	return knownPIN(actor)
+}
+
+// RotatePIN rotates a seeded actor's PIN to the new plaintext through the
+// generated UpdateStaffPin query and refreshes the known-plaintext registry,
+// so a later PINOf still reports the truth. Only digit PINs of a valid shape
+// (4-8 digits) are accepted, mirroring auth.ValidatePinFormat.
+func (e *prepEnv) RotatePIN(t *testing.T, actor preparation.Actor, newPIN string) {
+	t.Helper()
+	require.Regexp(t, `^\d{4,8}$`, newPIN, "test PINs must keep auth's PIN shape")
+	hash, err := auth.HashPin(newPIN)
+	require.NoError(t, err)
+	require.NoError(t, e.Queries.UpdateStaffPin(context.Background(),
+		sqlc.UpdateStaffPinParams{ID: actor.StaffID, PinHash: hash}))
+	seedKnownPIN(actor.StaffID, newPIN)
+}
+
+// ReplaceRoles swaps a seeded actor's operational roles for exactly the given
+// set, through the generated ClearStaffRoles and AddStaffRole queries.
+func (e *prepEnv) ReplaceRoles(t *testing.T, actor preparation.Actor, roles []string) {
+	t.Helper()
+	require.NoError(t, e.Queries.ClearStaffRoles(context.Background(), actor.StaffID))
+	for _, role := range roles {
+		require.NoError(t, e.Queries.AddStaffRole(context.Background(), sqlc.AddStaffRoleParams{
+			StaffIdentityID: actor.StaffID,
+			Role:            role,
+		}))
+	}
+}
+
+// SetIdentityEnabled enables or disables a seeded actor's identity row.
+func (e *prepEnv) SetIdentityEnabled(t *testing.T, actor preparation.Actor, enabled bool) {
+	t.Helper()
+	_, err := e.Queries.SetStaffEnabled(context.Background(),
+		sqlc.SetStaffEnabledParams{ID: actor.StaffID, Enabled: enabled})
+	require.NoError(t, err)
+}
+
 // CountAuditEvents counts the audit events of the given type. Used to assert
 // exactly one denial evidence row per denied call.
 func (e *prepEnv) CountAuditEvents(t *testing.T, eventType string) int {
@@ -524,13 +601,722 @@ func (e *prepEnv) BulkAdvance(t *testing.T, cmd preparation.BulkAdvanceCommand) 
 // Preparation Unit, so a test can prove a unit moved exactly once.
 func (e *prepEnv) UnitAuditCount(t *testing.T, unitID uuid.UUID) int {
 	t.Helper()
+	return e.CountAuditEventsByTypeAndUnit(t, preparation.EventPreparationUnitAdvanced, unitID)
+}
+
+// CountAuditEventsByTypeAndUnit counts the audit events of one type whose
+// details name one Preparation Unit. The generic form lets suites pin the
+// audit trail of any unit-scoped Preparation event.
+func (e *prepEnv) CountAuditEventsByTypeAndUnit(t *testing.T, eventType string, unitID uuid.UUID) int {
+	t.Helper()
 	var n int
 	require.NoError(t, e.DB.QueryRow(`
 		SELECT count(*)
 		FROM audit_events
 		WHERE event_type = $1
 		  AND details->>'preparation_unit_id' = $2`,
-		preparation.EventPreparationUnitAdvanced, unitID.String(),
+		eventType, unitID.String(),
 	).Scan(&n))
 	return n
+}
+
+// --- Phase 6B: Waste fixtures ---
+
+// waste runs the waste command under a caller-chosen request id as the given
+// actor, deriving the status the HTTP layer would have answered with on error
+// the way the advance helpers do.
+func (e *prepEnv) waste(t *testing.T, requestID uuid.UUID, actor preparation.Actor,
+	unitID uuid.UUID, reason string, note *string,
+) (preparation.WasteResponse, int, error) {
+	t.Helper()
+	status, resp, err := preparation.NewWasteUnitHandler(e.PreparationRunner).
+		Handle(context.Background(), actor, preparation.WasteUnitCommand{
+			RequestID: requestID,
+			UnitID:    unitID,
+			Reason:    reason,
+			Note:      note,
+		})
+	if err != nil {
+		status, _ = preparation.ErrorResponse(err)
+	}
+	return resp, status, err
+}
+
+// Waste runs the waste command as the Barista, who holds preparation.operate.
+func (e *prepEnv) Waste(t *testing.T, unitID uuid.UUID, reason string, note *string) (
+	preparation.WasteResponse, int, error,
+) {
+	t.Helper()
+	return e.waste(t, uuid.New(), e.barista, unitID, reason, note)
+}
+
+// WasteAs runs the waste command as an arbitrary actor, for capability tests.
+func (e *prepEnv) WasteAs(t *testing.T, actor preparation.Actor, unitID uuid.UUID,
+	reason string, note *string,
+) (preparation.WasteResponse, int, error) {
+	t.Helper()
+	return e.waste(t, uuid.New(), actor, unitID, reason, note)
+}
+
+// WasteWithRequestID replays a specific request id, as the Barista.
+func (e *prepEnv) WasteWithRequestID(t *testing.T, requestID, unitID uuid.UUID,
+	reason string, note *string,
+) (preparation.WasteResponse, int, error) {
+	t.Helper()
+	return e.waste(t, requestID, e.barista, unitID, reason, note)
+}
+
+// CountWastes counts the Waste facts recorded for one unit.
+func (e *prepEnv) CountWastes(t *testing.T, unitID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_wastes WHERE preparation_unit_id = $1`,
+		unitID).Scan(&n))
+	return n
+}
+
+// CountAlerts counts the alerts created for one unit.
+func (e *prepEnv) CountAlerts(t *testing.T, unitID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_alerts WHERE preparation_unit_id = $1`,
+		unitID).Scan(&n))
+	return n
+}
+
+// wasteFactRow is one stored Waste fact row as the fixtures read it back.
+type wasteFactRow struct {
+	ID         uuid.UUID
+	PriorState string
+	Reason     string
+	Note       *string
+	OccurredAt time.Time
+	ActorID    uuid.UUID
+	SessionID  uuid.UUID
+}
+
+// UnitWaste reads the single Waste fact of one unit; the suite requires
+// exactly one row to exist before calling.
+func (e *prepEnv) UnitWaste(t *testing.T, unitID uuid.UUID) wasteFactRow {
+	t.Helper()
+	var row wasteFactRow
+	var note sql.NullString
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, prior_state, reason, note, occurred_at,
+		       actor_staff_identity_id, staff_access_session_id
+		FROM preparation_wastes
+		WHERE preparation_unit_id = $1`, unitID).
+		Scan(&row.ID, &row.PriorState, &row.Reason, &note, &row.OccurredAt,
+			&row.ActorID, &row.SessionID))
+	if note.Valid {
+		row.Note = &note.String
+	}
+	return row
+}
+
+// alertFactRow is one stored alert row as the fixtures read it back.
+type alertFactRow struct {
+	ID             uuid.UUID
+	Kind           string
+	Reason         string
+	Note           *string
+	CreatedAt      time.Time
+	AcknowledgedAt *time.Time
+}
+
+// UnitAlert reads the single alert of one unit; the suite requires exactly one
+// row to exist before calling.
+func (e *prepEnv) UnitAlert(t *testing.T, unitID uuid.UUID) alertFactRow {
+	t.Helper()
+	var row alertFactRow
+	var note sql.NullString
+	var acknowledgedAt sql.NullTime
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, kind, reason, note, created_at, acknowledged_at
+		FROM preparation_alerts
+		WHERE preparation_unit_id = $1`, unitID).
+		Scan(&row.ID, &row.Kind, &row.Reason, &note, &row.CreatedAt, &acknowledgedAt))
+	if note.Valid {
+		row.Note = &note.String
+	}
+	if acknowledgedAt.Valid {
+		row.AcknowledgedAt = &acknowledgedAt.Time
+	}
+	return row
+}
+
+// --- Phase 6B: Alert acknowledgment fixtures ---
+
+// acknowledge runs the acknowledgment command under a caller-chosen request id
+// as the given actor, deriving the status the HTTP layer would have answered
+// with on error the way the waste helpers do.
+func (e *prepEnv) acknowledge(t *testing.T, requestID uuid.UUID, actor preparation.Actor,
+	alertID uuid.UUID,
+) (preparation.AlertResponse, int, error) {
+	t.Helper()
+	status, resp, err := preparation.NewAcknowledgeAlertHandler(e.PreparationRunner).
+		Handle(context.Background(), actor, preparation.AcknowledgeAlertCommand{
+			RequestID: requestID,
+			AlertID:   alertID,
+		})
+	if err != nil {
+		status, _ = preparation.ErrorResponse(err)
+	}
+	return resp, status, err
+}
+
+// Acknowledge runs the acknowledgment command as the Barista, who holds
+// preparation.operate.
+func (e *prepEnv) Acknowledge(t *testing.T, alertID uuid.UUID) (
+	preparation.AlertResponse, int, error,
+) {
+	t.Helper()
+	return e.acknowledge(t, uuid.New(), e.barista, alertID)
+}
+
+// AcknowledgeAs runs the acknowledgment command as an arbitrary actor, for the
+// Manager/Barista equivalence tests.
+func (e *prepEnv) AcknowledgeAs(t *testing.T, actor preparation.Actor, alertID uuid.UUID) (
+	preparation.AlertResponse, int, error,
+) {
+	t.Helper()
+	return e.acknowledge(t, uuid.New(), actor, alertID)
+}
+
+// AcknowledgeWithRequestID replays a specific request id, as the Barista.
+func (e *prepEnv) AcknowledgeWithRequestID(t *testing.T, requestID, alertID uuid.UUID) (
+	preparation.AlertResponse, int, error,
+) {
+	t.Helper()
+	return e.acknowledge(t, requestID, e.barista, alertID)
+}
+
+// AcknowledgeWithRequestIDAs runs the acknowledgment command with full control
+// over the request id and the actor.
+func (e *prepEnv) AcknowledgeWithRequestIDAs(t *testing.T, requestID uuid.UUID,
+	actor preparation.Actor, alertID uuid.UUID,
+) (preparation.AlertResponse, int, error) {
+	t.Helper()
+	return e.acknowledge(t, requestID, actor, alertID)
+}
+
+// alertAcknowledgmentRow is the acknowledgment evidence of one stored alert,
+// straight from the database. All three fields are nil while the alert is
+// active; the acknowledgment tuple constraint means they fill together or not
+// at all.
+type alertAcknowledgmentRow struct {
+	AcknowledgedBy        *uuid.UUID
+	AcknowledgedSessionID *uuid.UUID
+	AcknowledgedAt        *time.Time
+}
+
+// AlertAcknowledgment reads one alert's acknowledgment tuple from the
+// database.
+func (e *prepEnv) AlertAcknowledgment(t *testing.T, alertID uuid.UUID) alertAcknowledgmentRow {
+	t.Helper()
+	var row alertAcknowledgmentRow
+	var by, session uuid.NullUUID
+	var at sql.NullTime
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT acknowledged_by_staff_identity_id,
+		       acknowledged_staff_access_session_id,
+		       acknowledged_at
+		FROM preparation_alerts
+		WHERE id = $1`, alertID).
+		Scan(&by, &session, &at))
+	if by.Valid {
+		row.AcknowledgedBy = &by.UUID
+	}
+	if session.Valid {
+		row.AcknowledgedSessionID = &session.UUID
+	}
+	if at.Valid {
+		row.AcknowledgedAt = &at.Time
+	}
+	return row
+}
+
+// checkFinancials is the slice of one Check's stored meaning a Preparation
+// command must never touch: its state, charge, applied amounts, and the
+// counts of its Payments and Charge Allocations.
+type checkFinancials struct {
+	ID              uuid.UUID
+	State           string
+	ChargeVND       int64
+	TotalAppliedVND int64
+	BalanceVND      int64
+	PaymentCount    int
+	AllocationCount int
+}
+
+// sessionFinancials is the financial-and-closure slice of one Service
+// Session's projection: every Check's charge meaning plus the closure
+// readiness verdict, read through the real Sales loader and evaluator so a
+// Preparation suite can prove its command changed no financial meaning.
+type sessionFinancials struct {
+	State              string
+	Checks             []checkFinancials
+	ClosureEligible    bool
+	UnsettledCheckIDs  []uuid.UUID
+	UnsubmittedItemIDs []uuid.UUID
+	NonterminalUnitIDs []uuid.UUID
+}
+
+// SessionFinancials reads the financial-and-closure slice of one Service
+// Session through the exported Sales projection and closure policy.
+func (e *prepEnv) SessionFinancials(t *testing.T, sessionID uuid.UUID) sessionFinancials {
+	t.Helper()
+	projection, err := sales.LoadServiceSession(context.Background(), e.Queries, sessionID)
+	require.NoError(t, err)
+	readiness := sales.EvaluateClosureReadiness(projection)
+	out := sessionFinancials{
+		State:              projection.State,
+		Checks:             make([]checkFinancials, 0, len(projection.Checks)),
+		ClosureEligible:    readiness.Eligible,
+		UnsettledCheckIDs:  readiness.UnsettledCheckIDs,
+		UnsubmittedItemIDs: readiness.UnsubmittedCommittedItemIDs,
+		NonterminalUnitIDs: readiness.NonterminalUnitIDs,
+	}
+	for _, check := range projection.Checks {
+		out.Checks = append(out.Checks, checkFinancials{
+			ID:              check.ID,
+			State:           check.State,
+			ChargeVND:       check.ChargeVND,
+			TotalAppliedVND: check.TotalAppliedVND,
+			BalanceVND:      check.BalanceVND,
+			PaymentCount:    len(check.Payments),
+			AllocationCount: len(check.Allocations),
+		})
+	}
+	return out
+}
+
+// SettleAndCloseSession pays every surviving Check of one Service Session in
+// cash and closes the Session, both through the real Sales handlers, so a
+// suite can arrange a closed Session without reproducing Sales SQL. The
+// Manager drives the Sales path.
+func (e *prepEnv) SettleAndCloseSession(t *testing.T, sessionID uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	actor := e.salesActor(e.manager)
+
+	projection, err := sales.LoadServiceSession(ctx, e.Queries, sessionID)
+	require.NoError(t, err)
+	for _, check := range projection.Checks {
+		if check.State == sales.CheckStateSettled || check.State == sales.CheckStateMerged {
+			continue
+		}
+		_, _, err := sales.NewPayCashHandler(e.SalesRunner).Handle(ctx, actor, sales.PayCashCommand{
+			RequestID:        uuid.New(),
+			CheckID:          check.ID,
+			AppliedAmountVND: check.ChargeVND,
+			CashTenderedVND:  check.ChargeVND,
+		})
+		require.NoError(t, err)
+	}
+
+	_, _, err = sales.NewCloseServiceSessionHandler(e.SalesRunner).Handle(ctx, actor,
+		sales.CloseServiceSessionCommand{RequestID: uuid.New(), ServiceSessionID: sessionID})
+	require.NoError(t, err)
+}
+
+// transitionFactRow is one stored unit transition row as the fixtures read it
+// back.
+type transitionFactRow struct {
+	PriorState     string
+	ResultingState string
+	OccurredAt     time.Time
+}
+
+// UnitTransitionTo reads the single transition of one unit into the given
+// resulting state; the suite requires exactly one row to exist before calling.
+func (e *prepEnv) UnitTransitionTo(t *testing.T, unitID uuid.UUID,
+	resulting string,
+) transitionFactRow {
+	t.Helper()
+	var row transitionFactRow
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT prior_state, resulting_state, occurred_at
+		FROM preparation_unit_transitions
+		WHERE preparation_unit_id = $1 AND resulting_state = $2`,
+		unitID, resulting).
+		Scan(&row.PriorState, &row.ResultingState, &row.OccurredAt))
+	return row
+}
+
+// CountTransitionsTo counts the transitions of one unit into one resulting
+// state.
+func (e *prepEnv) CountTransitionsTo(t *testing.T, unitID uuid.UUID,
+	resulting string,
+) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT count(*) FROM preparation_unit_transitions
+		WHERE preparation_unit_id = $1 AND resulting_state = $2`,
+		unitID, resulting).Scan(&n))
+	return n
+}
+
+// UnitInPreparationAt reads a unit's in_preparation_at straight from the
+// database, nil when the unit never entered preparation.
+func (e *prepEnv) UnitInPreparationAt(t *testing.T, unitID uuid.UUID) *time.Time {
+	t.Helper()
+	var value sql.NullTime
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT in_preparation_at FROM preparation_units WHERE id = $1`, unitID).
+		Scan(&value))
+	if !value.Valid {
+		return nil
+	}
+	return &value.Time
+}
+
+// auditEventRow is one stored audit event naming a unit, as the fixtures read
+// it back.
+type auditEventRow struct {
+	EventType  string
+	OccurredAt time.Time
+}
+
+// UnitAuditEvents reads the audit events of the given types whose details name
+// one unit, ordered deterministically, so a suite can pin the event types and
+// their shared occurrence time.
+func (e *prepEnv) UnitAuditEvents(t *testing.T, unitID uuid.UUID,
+	eventTypes ...string,
+) []auditEventRow {
+	t.Helper()
+	rows, err := e.DB.Query(`
+		SELECT event_type, occurred_at
+		FROM audit_events
+		WHERE event_type = ANY($1)
+		  AND details->>'preparation_unit_id' = $2
+		ORDER BY event_type ASC, occurred_at ASC, id ASC`,
+		eventTypes, unitID.String())
+	require.NoError(t, err)
+	defer rows.Close()
+	events := []auditEventRow{}
+	for rows.Next() {
+		var event auditEventRow
+		require.NoError(t, rows.Scan(&event.EventType, &event.OccurredAt))
+		events = append(events, event)
+	}
+	require.NoError(t, rows.Err())
+	return events
+}
+
+// idempotencyClaim is the stored idempotency claim of one mutation request.
+type idempotencyClaim struct {
+	Action       string
+	RequestHash  string
+	ResponseCode int32
+	ResponseBody []byte
+}
+
+// IdempotencyClaim reads the idempotency claim an actor stored for a request
+// id. The second result reports whether a claim exists, so tests can prove a
+// denial left nothing claimed and a success stored its result.
+func (e *prepEnv) IdempotencyClaim(t *testing.T, actor preparation.Actor,
+	requestID uuid.UUID,
+) (idempotencyClaim, bool) {
+	t.Helper()
+	var claim idempotencyClaim
+	err := e.DB.QueryRow(`
+		SELECT action, request_hash, response_code, response_body
+		FROM idempotency_keys
+		WHERE actor_id = $1 AND key = $2`,
+		actor.StaffID, requestID,
+	).Scan(&claim.Action, &claim.RequestHash, &claim.ResponseCode, &claim.ResponseBody)
+	if err == sql.ErrNoRows {
+		return idempotencyClaim{}, false
+	}
+	require.NoError(t, err)
+	return claim, true
+}
+
+// --- Phase 6B: Remake fixtures ---
+
+// SubmittedDressedUnits returns the Preparation Units of a freshly submitted
+// dine-in round of the given quantity whose item carries a preparation note
+// and a surcharged Topping modifier Option, so a suite can verify a Remake
+// copies a non-trivial preparation snapshot. Driven through the same exported
+// internal/sales handlers as SubmittedUnits; the Manager drives the Sales path.
+func (e *prepEnv) SubmittedDressedUnits(t *testing.T, quantity int32) []sales.PreparationUnitResponse {
+	t.Helper()
+	require.GreaterOrEqual(t, quantity, int32(1), "the round needs at least one unit")
+
+	ctx := context.Background()
+	actor := e.salesActor(e.manager)
+
+	_, session, err := sales.NewStartDineInSessionHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.StartDineInSessionCommand{
+			RequestID: uuid.New(),
+			TableIDs:  []uuid.UUID{e.TableID},
+		})
+	require.NoError(t, err)
+
+	note := "Ít đá, đem đi"
+	optionIDs := []uuid.UUID{e.ToppingOptionID}
+	_, resp, err := sales.NewAddDraftItemHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.AddDraftItemCommand{
+			RequestID:         uuid.New(),
+			ServiceSessionID:  session.ID,
+			MenuItemID:        e.CoffeeID,
+			PreparationNote:   &note,
+			ModifierOptionIDs: &optionIDs,
+		})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Draft.Items, "the added item must be in the draft")
+
+	_, _, err = sales.NewSetDraftItemQuantityHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.SetDraftItemQuantityCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+			DraftItemID:      resp.Draft.Items[0].ID,
+			Quantity:         &quantity,
+		})
+	require.NoError(t, err)
+
+	_, _, err = sales.NewCommitOrderDraftHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.CommitOrderDraftCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+		})
+	require.NoError(t, err)
+
+	_, submitted, err := sales.NewSubmitOrderHandler(e.SalesRunner).
+		Handle(ctx, actor, sales.SubmitOrderCommand{
+			RequestID:        uuid.New(),
+			ServiceSessionID: session.ID,
+		})
+	require.NoError(t, err)
+
+	require.Len(t, submitted.PreparationUnits, int(quantity),
+		"one Preparation Unit per unit of ordered quantity")
+	return submitted.PreparationUnits
+}
+
+// remake runs the remake command under a caller-chosen request id as the given
+// actor, deriving the status the HTTP layer would have answered with on error
+// the way the waste helpers do.
+func (e *prepEnv) remake(t *testing.T, requestID uuid.UUID, actor preparation.Actor,
+	wasteID uuid.UUID, reason string, note *string,
+) (preparation.RemakeResponse, int, error) {
+	t.Helper()
+	status, resp, err := preparation.NewRemakeUnitHandler(e.PreparationRunner).
+		Handle(context.Background(), actor, preparation.RemakeUnitCommand{
+			RequestID: requestID,
+			WasteID:   wasteID,
+			Reason:    reason,
+			Note:      note,
+		})
+	if err != nil {
+		status, _ = preparation.ErrorResponse(err)
+	}
+	return resp, status, err
+}
+
+// Remake runs the remake command as the Barista, who holds preparation.operate.
+func (e *prepEnv) Remake(t *testing.T, wasteID uuid.UUID, reason string, note *string) (
+	preparation.RemakeResponse, int, error,
+) {
+	t.Helper()
+	return e.remake(t, uuid.New(), e.barista, wasteID, reason, note)
+}
+
+// RemakeAs runs the remake command as an arbitrary actor, for capability tests.
+func (e *prepEnv) RemakeAs(t *testing.T, actor preparation.Actor, wasteID uuid.UUID,
+	reason string, note *string,
+) (preparation.RemakeResponse, int, error) {
+	t.Helper()
+	return e.remake(t, uuid.New(), actor, wasteID, reason, note)
+}
+
+// RemakeWithRequestID replays a specific request id, as the Barista.
+func (e *prepEnv) RemakeWithRequestID(t *testing.T, requestID, wasteID uuid.UUID,
+	reason string, note *string,
+) (preparation.RemakeResponse, int, error) {
+	t.Helper()
+	return e.remake(t, requestID, e.barista, wasteID, reason, note)
+}
+
+// CountRemakes counts the Remake facts recorded for one Waste.
+func (e *prepEnv) CountRemakes(t *testing.T, wasteID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_remakes WHERE waste_id = $1`, wasteID).Scan(&n))
+	return n
+}
+
+// remakeFactRow is one stored Remake fact row as the fixtures read it back.
+type remakeFactRow struct {
+	ID                uuid.UUID
+	WasteID           uuid.UUID
+	ReplacementUnitID uuid.UUID
+	Reason            string
+	Note              *string
+	CreatedAt         time.Time
+	ActorID           uuid.UUID
+	SessionID         uuid.UUID
+}
+
+// WasteRemake reads the single Remake fact of one Waste; the suite requires
+// exactly one row to exist before calling.
+func (e *prepEnv) WasteRemake(t *testing.T, wasteID uuid.UUID) remakeFactRow {
+	t.Helper()
+	var row remakeFactRow
+	var note sql.NullString
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, waste_id, preparation_unit_id, reason, note, created_at,
+		       actor_staff_identity_id, staff_access_session_id
+		FROM preparation_remakes
+		WHERE waste_id = $1`, wasteID).
+		Scan(&row.ID, &row.WasteID, &row.ReplacementUnitID, &row.Reason, &note,
+			&row.CreatedAt, &row.ActorID, &row.SessionID))
+	if note.Valid {
+		row.Note = &note.String
+	}
+	return row
+}
+
+// --- Phase 6B: State Correction fixtures ---
+
+// CorrectStateAs runs the correction command as the given actor, deriving the
+// status the HTTP layer would have answered with on error the way the remake
+// helpers do. The actor's own registered PIN fills the command when it carries
+// none, and a fresh request id fills it when it carries none — the wrong-PIN
+// and replay cases set those fields explicitly instead.
+func (e *prepEnv) CorrectStateAs(t *testing.T, actor preparation.Actor,
+	cmd preparation.CorrectStateCommand,
+) (preparation.CorrectStateResponse, int, error) {
+	t.Helper()
+	if cmd.ManagerPIN == "" {
+		cmd.ManagerPIN = e.PINOf(actor)
+	}
+	if cmd.RequestID == uuid.Nil {
+		cmd.RequestID = uuid.New()
+	}
+	status, resp, err := preparation.NewCorrectStateHandler(e.PreparationRunner).
+		Handle(context.Background(), actor, cmd)
+	if err != nil {
+		status, _ = preparation.ErrorResponse(err)
+	}
+	return resp, status, err
+}
+
+// CorrectState runs the correction command as the seeded MANAGER with their
+// own registered PIN, which every success path exercises.
+func (e *prepEnv) CorrectState(t *testing.T, cmd preparation.CorrectStateCommand) (
+	preparation.CorrectStateResponse, int, error,
+) {
+	t.Helper()
+	return e.CorrectStateAs(t, e.ManagerActor(), cmd)
+}
+
+// CorrectStateWithRequestIDAs runs the correction with an explicit request id
+// and actor, for the replay and race suites.
+func (e *prepEnv) CorrectStateWithRequestIDAs(t *testing.T, requestID uuid.UUID,
+	actor preparation.Actor, cmd preparation.CorrectStateCommand,
+) (preparation.CorrectStateResponse, int, error) {
+	t.Helper()
+	cmd.RequestID = requestID
+	return e.CorrectStateAs(t, actor, cmd)
+}
+
+// CorrectStateWithRequestID replays a specific request id as the Manager.
+func (e *prepEnv) CorrectStateWithRequestID(t *testing.T, requestID uuid.UUID,
+	cmd preparation.CorrectStateCommand,
+) (preparation.CorrectStateResponse, int, error) {
+	t.Helper()
+	return e.CorrectStateWithRequestIDAs(t, requestID, e.ManagerActor(), cmd)
+}
+
+// CountCorrections counts the State Correction facts recorded for one unit.
+func (e *prepEnv) CountCorrections(t *testing.T, unitID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_state_corrections WHERE preparation_unit_id = $1`,
+		unitID).Scan(&n))
+	return n
+}
+
+// CountAllCorrections counts every State Correction fact in the database, so a
+// suite can prove a rejected batch wrote none.
+func (e *prepEnv) CountAllCorrections(t *testing.T) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(
+		`SELECT count(*) FROM preparation_state_corrections`).Scan(&n))
+	return n
+}
+
+// correctionFactRow is one stored State Correction fact row as the fixtures
+// read it back.
+type correctionFactRow struct {
+	ID             uuid.UUID
+	PriorState     string
+	ResultingState string
+	Reason         string
+	Note           *string
+	OccurredAt     time.Time
+	ActorID        uuid.UUID
+	SessionID      uuid.UUID
+}
+
+// UnitCorrection reads the single State Correction fact of one unit; the suite
+// requires exactly one row to exist before calling.
+func (e *prepEnv) UnitCorrection(t *testing.T, unitID uuid.UUID) correctionFactRow {
+	t.Helper()
+	var row correctionFactRow
+	var note sql.NullString
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, prior_state, resulting_state, reason, note, occurred_at,
+		       actor_staff_identity_id, staff_access_session_id
+		FROM preparation_state_corrections
+		WHERE preparation_unit_id = $1`, unitID).
+		Scan(&row.ID, &row.PriorState, &row.ResultingState, &row.Reason, &note,
+			&row.OccurredAt, &row.ActorID, &row.SessionID))
+	if note.Valid {
+		row.Note = &note.String
+	}
+	return row
+}
+
+// OrderItemCount counts the Order Items of one Service Session, so a suite can
+// prove a Remake added none.
+func (e *prepEnv) OrderItemCount(t *testing.T, sessionID uuid.UUID) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT count(*)
+		FROM order_items oi
+		JOIN orders o ON o.id = oi.order_id
+		WHERE o.service_session_id = $1`, sessionID).Scan(&n))
+	return n
+}
+
+// OrderItemUnitNumbers returns every unit number of the Order Item that owns
+// the given unit, ordered by number, so a suite can pin unit-number
+// allocation and its serialization across concurrent Remakes.
+func (e *prepEnv) OrderItemUnitNumbers(t *testing.T, unitID uuid.UUID) []int32 {
+	t.Helper()
+	rows, err := e.DB.Query(`
+		SELECT pu.unit_number
+		FROM preparation_units pu
+		WHERE pu.order_item_id = (SELECT order_item_id FROM preparation_units WHERE id = $1)
+		ORDER BY pu.unit_number ASC`, unitID)
+	require.NoError(t, err)
+	defer rows.Close()
+	numbers := []int32{}
+	for rows.Next() {
+		var n int32
+		require.NoError(t, rows.Scan(&n))
+		numbers = append(numbers, n)
+	}
+	require.NoError(t, rows.Err())
+	return numbers
 }

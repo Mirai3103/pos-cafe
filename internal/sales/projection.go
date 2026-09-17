@@ -422,7 +422,11 @@ func loadOrders(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 // loadPreparationUnits assembles the Session's Preparation Units.
 //
 // internal/sales reads unit state here and creates units at Submit; every
-// state transition belongs to internal/preparation (ADR-024).
+// state transition belongs to internal/preparation (ADR-024). The read is the
+// one query feeding both the live Service Session and the Completed Sale unit
+// projections, so the Phase 6B Remake metadata maps once: originals are
+// STANDARD with a null link, a linked replacement is REMAKE pointing at its
+// wasted source.
 func loadPreparationUnits(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 	[]PreparationUnitResponse, error,
 ) {
@@ -444,20 +448,31 @@ func loadPreparationUnits(ctx context.Context, q *sqlc.Queries, sessionID uuid.U
 			}
 		}
 		out = append(out, PreparationUnitResponse{
-			ID:              row.ID,
-			OrderItemID:     row.OrderItemID,
-			UnitNumber:      row.UnitNumber,
-			State:           row.State,
-			ServiceNumber:   row.ServiceNumber,
-			CategoryName:    row.CategoryName,
-			ItemName:        row.ItemName,
-			SizeName:        nullStringPtr(row.SizeName),
-			Modifiers:       mods,
-			PreparationNote: nullStringPtr(row.PreparationNote),
-			QueuedAt:        row.QueuedAt,
+			ID:                        row.ID,
+			OrderItemID:               row.OrderItemID,
+			UnitNumber:                row.UnitNumber,
+			State:                     row.State,
+			ServiceNumber:             row.ServiceNumber,
+			CategoryName:              row.CategoryName,
+			ItemName:                  row.ItemName,
+			SizeName:                  nullStringPtr(row.SizeName),
+			Modifiers:                 mods,
+			PreparationNote:           nullStringPtr(row.PreparationNote),
+			QueuedAt:                  row.QueuedAt,
+			Priority:                  row.Priority,
+			RemakeOfPreparationUnitID: nullUUIDPtr(row.RemakeOfPreparationUnitID),
 		})
 	}
 	return out, nil
+}
+
+// nullUUIDPtr converts a nullable UUID column to an optional id pointer.
+func nullUUIDPtr(v uuid.NullUUID) *uuid.UUID {
+	if !v.Valid {
+		return nil
+	}
+	id := v.UUID
+	return &id
 }
 
 // loadSubmittedItems returns the set of Committed Items that have entered an

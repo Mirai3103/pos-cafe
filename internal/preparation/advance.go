@@ -142,6 +142,11 @@ func loadUnit(ctx context.Context, q *sqlc.Queries, unitID uuid.UUID) (UnitRespo
 		value := row.InPreparationAt.Time
 		inPreparationAt = &value
 	}
+	var remakeOf *uuid.UUID
+	if row.RemakeOfPreparationUnitID.Valid {
+		value := row.RemakeOfPreparationUnitID.UUID
+		remakeOf = &value
+	}
 	return UnitResponse{
 		ID:              row.ID,
 		OrderItemID:     row.OrderItemID,
@@ -155,5 +160,9 @@ func loadUnit(ctx context.Context, q *sqlc.Queries, unitID uuid.UUID) (UnitRespo
 		PreparationNote: note,
 		QueuedAt:        row.QueuedAt,
 		InPreparationAt: inPreparationAt,
+		Priority:        row.Priority,
+		// A Remake links to the wasted source unit it replaces; originals
+		// carry a nil link.
+		RemakeOfPreparationUnitID: remakeOf,
 	}, nil
 }

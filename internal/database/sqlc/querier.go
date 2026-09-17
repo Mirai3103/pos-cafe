@@ -12,6 +12,9 @@ import (
 )
 
 type Querier interface {
+	// Fills the acknowledgment tuple together; the all-or-nothing check
+	// constraint rejects any partial write.
+	AcknowledgePreparationAlert(ctx context.Context, arg AcknowledgePreparationAlertParams) (AcknowledgePreparationAlertRow, error)
 	AddStaffRole(ctx context.Context, arg AddStaffRoleParams) error
 	// -- Advisory Lock --
 	CatalogAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
@@ -93,6 +96,9 @@ type Querier interface {
 	GetModifierGroupForUpdate(ctx context.Context, id uuid.UUID) (ModifierGroup, error)
 	GetModifierOptionByID(ctx context.Context, id uuid.UUID) (ModifierOption, error)
 	GetModifierOptionForUpdate(ctx context.Context, id uuid.UUID) (ModifierOption, error)
+	// Runs under the owning Order Item lock, so max + 1 cannot collide across
+	// concurrent Remakes of the same item.
+	GetNextPreparationUnitNumber(ctx context.Context, orderItemID uuid.UUID) (int32, error)
 	// Callers MUST hold the advisory lock on the Sales Shift before running this.
 	// Without it two concurrent opens read the same maximum and one loses to the
 	// unique index.
@@ -122,6 +128,10 @@ type Querier interface {
 	GetShiftSessionAuthority(ctx context.Context, arg GetShiftSessionAuthorityParams) (GetShiftSessionAuthorityRow, error)
 	GetShiftSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetStaffByID(ctx context.Context, id uuid.UUID) (StaffIdentity, error)
+	// Locks the actor's own identity row so State Correction's self-PIN
+	// verification cannot interleave with a concurrent disablement or PIN
+	// rotation. Follow with GetStaffRolesForUpdate on the same identity.
+	GetStaffByIDForUpdate(ctx context.Context, id uuid.UUID) (StaffIdentity, error)
 	GetStaffByLoginCode(ctx context.Context, btrim string) (StaffIdentity, error)
 	// Locks the approver row so a concurrent disablement or role change cannot
 	// interleave between verification and use. Used by VerifyManagerApproval.
@@ -166,8 +176,24 @@ type Querier interface {
 	InsertOrderDraftForSession(ctx context.Context, arg InsertOrderDraftForSessionParams) (InsertOrderDraftForSessionRow, error)
 	InsertOrderItem(ctx context.Context, arg InsertOrderItemParams) (uuid.UUID, error)
 	InsertPayment(ctx context.Context, arg InsertPaymentParams) (uuid.UUID, error)
+	InsertPreparationAlert(ctx context.Context, arg InsertPreparationAlertParams) (PreparationAlert, error)
+	// Batches audit events of differing types into one round trip. event_types
+	// and details_batch must be equal length; the parallel unnests zip row-wise
+	// and pad the shorter array with nulls, so any caller drift fails the target
+	// columns' NOT NULL constraints instead of silently truncating one array.
+	// details_batch is text[] cast to jsonb per element, for the same pq.Array
+	// reason the Catalog batch query records. Callers validate equal non-zero
+	// lengths in Go before calling.
+	InsertPreparationAuditEventsBatch(ctx context.Context, arg InsertPreparationAuditEventsBatchParams) error
+	InsertPreparationRemake(ctx context.Context, arg InsertPreparationRemakeParams) (PreparationRemake, error)
+	// Creates the linked replacement unit: the source unit's immutable
+	// preparation snapshot under the next unit number, QUEUED at REMAKE
+	// priority, and linked back to its source. Adds no Order Item or charge.
+	InsertPreparationRemakeUnit(ctx context.Context, arg InsertPreparationRemakeUnitParams) (PreparationUnit, error)
+	InsertPreparationStateCorrection(ctx context.Context, arg InsertPreparationStateCorrectionParams) (PreparationStateCorrection, error)
 	InsertPreparationUnit(ctx context.Context, arg InsertPreparationUnitParams) error
 	InsertPreparationUnitTransition(ctx context.Context, arg InsertPreparationUnitTransitionParams) error
+	InsertPreparationWaste(ctx context.Context, arg InsertPreparationWasteParams) (PreparationWaste, error)
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
 	// Batches assignTables' per-Table insert loop into one round trip. Two
 	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
@@ -176,6 +202,20 @@ type Querier interface {
 	// in that order.
 	InsertTableAssignmentsBatch(ctx context.Context, arg InsertTableAssignmentsBatchParams) ([]InsertTableAssignmentsBatchRow, error)
 	ListActiveIdentities(ctx context.Context) ([]ListActiveIdentitiesRow, error)
+	// The queue's active alerts, oldest first. The Waste join matches only
+	// WASTE alerts, so waste_id resolves through the Waste fact for WASTE and
+	// stays null for the reserved Cancellation kinds even if their unit carries
+	// a Waste.
+	ListActivePreparationAlerts(ctx context.Context) ([]ListActivePreparationAlertsRow, error)
+	// The bar's work list: every active unit, plus a CANCELLED or WASTED unit
+	// while it still has an unacknowledged alert (EXISTS, so several alerts on
+	// one unit cannot duplicate the row). Active Remakes come first, active
+	// STANDARD units second, alert-retained terminal units last; each lane is
+	// FIFO by queued_at then id. unit_count is every physical unit of the Order
+	// Item, including Remakes and terminal units, computed per row via a
+	// correlated subquery (order_item_id is the leading column of
+	// preparation_unit_item_number_unique) rather than a full-table GROUP BY, so
+	// the cost tracks the small active-queue result set on this polled read.
 	ListActivePreparationUnits(ctx context.Context) ([]ListActivePreparationUnitsRow, error)
 	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
@@ -263,11 +303,21 @@ type Querier interface {
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
 	ListModifierOptionsForValidation(ctx context.Context, optionIds []uuid.UUID) ([]ListModifierOptionsForValidationRow, error)
 	ListOrderItems(ctx context.Context, orderIds []uuid.UUID) ([]OrderItem, error)
+	// Resolves the selected units and their owning Sessions without locks, so a
+	// correction can reject missing ids before taking any.
+	ListPreparationUnitsForCorrection(ctx context.Context, preparationUnitIds []uuid.UUID) ([]ListPreparationUnitsForCorrectionRow, error)
+	// The queue's Waste and Remake history for active Sessions: one set-based
+	// UNION ALL, newest first, capped at 50. entry_kind discriminates the two
+	// row shapes; the nullable columns carry what each shape needs.
+	ListRecentPreparationCorrections(ctx context.Context) ([]ListRecentPreparationCorrectionsRow, error)
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
 	ListSessionOrders(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionOrdersRow, error)
 	ListSessionPreparationTransitions(ctx context.Context, serviceSessionID uuid.UUID) ([]PreparationUnitTransition, error)
+	// One read feeding both the live Service Session and Completed Sale unit
+	// projections. priority and remake_of_preparation_unit_id carry the Phase 6B
+	// Remake metadata; original units are STANDARD with a null link.
 	ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionPreparationUnitsRow, error)
 	// The `submitted` flag on a Charge Allocation is derived, not stored: there is
 	// no submitted column anywhere in the schema, and therefore no flag that can
@@ -369,12 +419,32 @@ type Querier interface {
 	//
 	// No row means no Shift is open.
 	LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, error)
+	// Locks one alert for acknowledgment, returning its creation and
+	// acknowledgment evidence.
+	LockPreparationAlert(ctx context.Context, id uuid.UUID) (PreparationAlert, error)
+	// Locks the Order Item so Remake's max(unit_number) + 1 allocation
+	// serializes across concurrent Wastes of the same item, and returns the
+	// owning Session the caller locked first.
+	LockPreparationOrderItem(ctx context.Context, id uuid.UUID) (LockPreparationOrderItemRow, error)
+	// Phase 6B: correction locks, facts, and queue recovery reads.
+	//
+	// Lock order is the concurrency contract (design section 10): Remake and
+	// State Correction lock owning Service Sessions before their work rows, so
+	// they serialize with Service Session closure. Waste uses the unit lock.
+	// Locks the owning Service Sessions before correction work. Callers pass
+	// unique ids; ORDER BY id makes the multi-Session lock order deterministic.
+	LockPreparationServiceSessions(ctx context.Context, serviceSessionIds []uuid.UUID) ([]LockPreparationServiceSessionsRow, error)
 	// Preparation slice queries.
 	//
 	// Boundary (ADR-024): nothing here writes orders, order_items, or
 	// completed_sales. internal/sales creates Preparation Units at Submit and
 	// reads their state during closure; this package owns every transition.
 	LockPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
+	// Locks the correction batch in unit-id order after its Sessions are locked.
+	LockPreparationUnitsForCorrection(ctx context.Context, preparationUnitIds []uuid.UUID) ([]LockPreparationUnitsForCorrectionRow, error)
+	// Locks the Waste and its source Preparation Unit, and resolves the owning
+	// Order Item and Service Session ids the caller has already locked.
+	LockPreparationWaste(ctx context.Context, id uuid.UUID) (LockPreparationWasteRow, error)
 	LockServiceSessionForClosure(ctx context.Context, id uuid.UUID) (LockServiceSessionForClosureRow, error)
 	// The Submit source's Service Session, locked first. The state is returned
 	// rather than filtered so an unknown Session and a closed one map to their own
@@ -441,6 +511,10 @@ type Querier interface {
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error
+	// Applies one reverse correction. Only a correction back to QUEUED clears
+	// in_preparation_at; the later targets keep it because the unit really did
+	// enter preparation at the earlier recorded instant.
+	SetPreparationUnitCorrectedState(ctx context.Context, arg SetPreparationUnitCorrectedStateParams) error
 	SetPreparationUnitState(ctx context.Context, arg SetPreparationUnitStateParams) error
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	SetTableAvailability(ctx context.Context, arg SetTableAvailabilityParams) (Table, error)

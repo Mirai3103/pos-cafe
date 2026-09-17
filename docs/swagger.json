@@ -3065,6 +3065,100 @@
                 }
             }
         },
+        "/preparation/alerts/{alert_id}/acknowledge": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Fills the alert's acknowledgment tuple — the acking actor's identity, their Staff Access Session, and one timestamp — inside one transaction. It changes no unit state, Waste, or financial meaning, and requires no Manager PIN.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preparation"
+                ],
+                "summary": "Acknowledge a Preparation Alert",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Preparation Alert ID",
+                        "name": "alert_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Acknowledgment request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/preparation.AcknowledgeAlertCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/preparation.AlertResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/preparation/queue": {
             "get": {
                 "security": [
@@ -3201,6 +3295,93 @@
                 }
             }
         },
+        "/preparation/units/correct-state": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reverses 1 through 50 selected units one step along the chain — IN_PREPARATION to QUEUED, READY to IN_PREPARATION, FULFILLED to READY — as one all-or-nothing batch. Requires the Manager's own current PIN: the Manager role and PIN checks run inside the mutation transaction, so a wrong PIN is a collapsed 403 while a malformed PIN shape is 400 before any transaction. The PIN never appears in any response.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preparation"
+                ],
+                "summary": "Correct Preparation Unit states",
+                "parameters": [
+                    {
+                        "description": "State Correction request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/preparation.CorrectStateCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/preparation.CorrectStateResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/preparation/units/{unit_id}/advance": {
             "post": {
                 "security": [
@@ -3208,7 +3389,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Moves one unit along the linear chain QUEUED -\u003e IN_PREPARATION -\u003e READY -\u003e FULFILLED. The target state is explicit, so two baristas acting on a stale display get a conflict rather than a silent double advance. Cancellation, Waste, Remake, and State Correction are Phase 6B/6C.",
+                "description": "Moves one unit along the linear chain QUEUED -\u003e IN_PREPARATION -\u003e READY -\u003e FULFILLED. The target state is explicit, so two baristas acting on a stale display get a conflict rather than a silent double advance. Waste, Remake, and State Correction are Phase 6B; Cancellation remains Phase 6C.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3250,6 +3431,194 @@
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/preparation.UnitResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/preparation/units/{unit_id}/waste": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records the terminal Waste fact, sets the unit to WASTED, and creates the unacknowledged WASTE alert in one transaction. The reason must be in the Waste catalog and the optional note is normalized before validation. Requires no Manager PIN.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preparation"
+                ],
+                "summary": "Waste a Preparation Unit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Preparation Unit ID",
+                        "name": "unit_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Waste request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/preparation.WasteUnitCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/preparation.WasteResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/preparation/wastes/{waste_id}/remake": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates the linked replacement Preparation Unit — a fresh QUEUED unit with the next unit number of the same Order Item, the source's immutable preparation snapshot, and REMAKE priority — plus the Remake fact, in one transaction. The reason must be in the Remake catalog and the optional note is normalized before validation. Requires no Manager PIN.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preparation"
+                ],
+                "summary": "Remake a Waste",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Preparation Waste ID",
+                        "name": "waste_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Remake request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/preparation.RemakeUnitCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/preparation.RemakeResponse"
                                         }
                                     }
                                 }
@@ -7167,6 +7536,14 @@
                 }
             }
         },
+        "preparation.AcknowledgeAlertCommand": {
+            "type": "object",
+            "properties": {
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
         "preparation.AdvanceUnitCommand": {
             "type": "object",
             "required": [
@@ -7178,6 +7555,35 @@
                     "type": "string"
                 },
                 "target_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.AlertResponse": {
+            "type": "object",
+            "properties": {
+                "acknowledged_at": {
+                    "type": "string"
+                },
+                "acknowledged_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "reason": {
                     "type": "string"
                 }
             }
@@ -7230,9 +7636,160 @@
                 }
             }
         },
+        "preparation.CorrectStateCommand": {
+            "type": "object",
+            "properties": {
+                "manager_pin": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "preparation_unit_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "target_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.CorrectStateOutcome": {
+            "type": "object",
+            "properties": {
+                "corrected_at": {
+                    "type": "string"
+                },
+                "correction_id": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "prior_state": {
+                    "type": "string"
+                },
+                "resulting_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.CorrectStateResponse": {
+            "type": "object",
+            "properties": {
+                "outcomes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.CorrectStateOutcome"
+                    }
+                }
+            }
+        },
+        "preparation.QueueAlertResponse": {
+            "type": "object",
+            "properties": {
+                "acknowledged_at": {
+                    "type": "string"
+                },
+                "acknowledged_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "item_name": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "service_number": {
+                    "type": "string"
+                },
+                "unit_number": {
+                    "type": "integer"
+                },
+                "waste_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.QueueCorrectionResponse": {
+            "type": "object",
+            "properties": {
+                "entry_kind": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "item_name": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "service_number": {
+                    "type": "string"
+                },
+                "source_preparation_unit_id": {
+                    "type": "string"
+                },
+                "source_unit_number": {
+                    "type": "integer"
+                },
+                "unit_number": {
+                    "type": "integer"
+                },
+                "waste_id": {
+                    "type": "string"
+                }
+            }
+        },
         "preparation.QueueResponse": {
             "type": "object",
             "properties": {
+                "alerts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.QueueAlertResponse"
+                    }
+                },
+                "corrections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.QueueCorrectionResponse"
+                    }
+                },
                 "observed_at": {
                     "type": "string"
                 },
@@ -7274,7 +7831,14 @@
                 "preparation_note": {
                     "type": "string"
                 },
+                "priority": {
+                    "description": "Priority and the Remake link mirror UnitResponse (spec §6.1): only\nactive Remakes take the queue's priority lane.",
+                    "type": "string"
+                },
                 "queued_at": {
+                    "type": "string"
+                },
+                "remake_of_preparation_unit_id": {
                     "type": "string"
                 },
                 "service_number": {
@@ -7294,6 +7858,46 @@
                 },
                 "unit_number": {
                     "type": "integer"
+                }
+            }
+        },
+        "preparation.RemakeResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "source_preparation_unit_id": {
+                    "type": "string"
+                },
+                "unit": {
+                    "$ref": "#/definitions/preparation.UnitResponse"
+                },
+                "waste_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.RemakeUnitCommand": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
                 }
             }
         },
@@ -7335,7 +7939,15 @@
                 "preparation_note": {
                     "type": "string"
                 },
+                "priority": {
+                    "description": "Priority is STANDARD for every original unit and REMAKE for linked\nreplacements (spec §5.1).",
+                    "type": "string"
+                },
                 "queued_at": {
+                    "type": "string"
+                },
+                "remake_of_preparation_unit_id": {
+                    "description": "RemakeOfPreparationUnitID links a Remake to the wasted source unit it\nreplaces; nil for originals.",
                     "type": "string"
                 },
                 "service_number": {
@@ -7349,6 +7961,49 @@
                 },
                 "unit_number": {
                     "type": "integer"
+                }
+            }
+        },
+        "preparation.WasteResponse": {
+            "type": "object",
+            "properties": {
+                "alert": {
+                    "$ref": "#/definitions/preparation.AlertResponse"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "prior_state": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "resulting_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.WasteUnitCommand": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
                 }
             }
         },
@@ -7838,7 +8493,14 @@
                 "preparation_note": {
                     "type": "string"
                 },
+                "priority": {
+                    "type": "string"
+                },
                 "queued_at": {
+                    "type": "string"
+                },
+                "remake_of_preparation_unit_id": {
+                    "description": "RemakeOfPreparationUnitID links a Remake to the wasted source unit it\nreplaces; nil for every original unit.",
                     "type": "string"
                 },
                 "service_number": {

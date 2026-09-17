@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/database"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
 )
 
@@ -271,6 +272,15 @@ func dropDatabase(ctx context.Context, db dbtx, name string) error {
 	statement := fmt.Sprintf("DROP DATABASE %s WITH (FORCE)", pq.QuoteIdentifier(name))
 	//nolint:gosec // G701 cannot see that name is allowlist-validated and quoted on the line above.
 	if _, err := db.ExecContext(ctx, statement); err != nil {
+		// The Cleanup scanner and a finishing package's own Close race to drop
+		// the same clone: the scanner observes zero sessions while the owner
+		// commits its DROP, and whoever drops second receives SQLSTATE 3D000.
+		// The database no longer existing is exactly the end state both sides
+		// want, so that one failure is success; every other failure still fails.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "3D000" {
+			return nil
+		}
 		return err
 	}
 	return nil

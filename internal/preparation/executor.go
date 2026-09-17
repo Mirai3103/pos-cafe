@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
@@ -30,13 +31,27 @@ type Actor struct {
 
 // MutationSpec carries request-level metadata for a mutation command.
 //
-// No Sales operation in 5A takes a PIN or any other secret, so unlike Shift's
-// spec there is no approval field and no secret can reach the fingerprint.
+// Fingerprint stays credential-free: it is the normalized business input and
+// must never carry the Manager PIN or any other secret. When RequireManagerPIN
+// is set, ManagerPIN carries the actor's own current PIN; the executor
+// verifies it inside the mutation transaction, before the fingerprint is
+// hashed and before any idempotency replay, and never writes it into the
+// fingerprint, an audit row, a log line, or any stored value.
 type MutationSpec struct {
 	RequestID   uuid.UUID
 	Operation   string
 	Fingerprint any
 	Required    []string
+
+	// RequireManagerPIN turns on the current-Manager self-PIN gate: the actor
+	// must still be an enabled Manager holding the required capability and
+	// must re-authenticate with their own current PIN, even when the request
+	// is an exact replay of an earlier success.
+	RequireManagerPIN bool
+	// ManagerPIN is the actor's own plaintext PIN, consumed only when
+	// RequireManagerPIN is true. It never reaches an error message, the audit
+	// trail, or the stored result.
+	ManagerPIN string
 }
 
 // MutationContext carries per-execution facts the mutation body needs.
@@ -79,6 +94,53 @@ type AuditRecord struct {
 	Details   any
 }
 
+// writePreparationAudits batches several audit events — possibly of differing
+// types — into one insert through InsertPreparationAuditEventsBatch, with one
+// actor, one session, and one shared occurrence time. Commands that emit more
+// than one business event for a single mutation (Waste writes its fact and its
+// alert event; State Correction writes one event per corrected unit) call it
+// instead of the executor's single-AuditRecord step, which stays unchanged for
+// single-event commands.
+//
+// The caller chooses occurredAt so every event of one mutation shares one
+// moment. Empty input is a no-op. The event and details arrays must be
+// equal-length and non-empty: the generated query's parallel unnests zip
+// row-wise and pad a shorter array with nulls, so drift fails the target
+// columns' NOT NULL constraints — validating in Go keeps that failure out of
+// the database.
+func writePreparationAudits(ctx context.Context, q *sqlc.Queries, actor Actor,
+	occurredAt time.Time, audits []AuditRecord,
+) error {
+	if len(audits) == 0 {
+		return nil
+	}
+	eventTypes := make([]string, len(audits))
+	detailsBatch := make([]string, len(audits))
+	for i, audit := range audits {
+		details, err := json.Marshal(audit.Details)
+		if err != nil {
+			return fmt.Errorf("marshal preparation audit details for %q: %w", audit.EventType, err)
+		}
+		eventTypes[i] = audit.EventType
+		detailsBatch[i] = string(details)
+	}
+	if len(eventTypes) != len(detailsBatch) || len(eventTypes) == 0 {
+		return fmt.Errorf(
+			"preparation audit batch must be non-empty with equal-length event and details arrays: %d events, %d details",
+			len(eventTypes), len(detailsBatch))
+	}
+	if err := q.InsertPreparationAuditEventsBatch(ctx, sqlc.InsertPreparationAuditEventsBatchParams{
+		ActorID:      actor.StaffID,
+		SessionID:    actor.SessionID,
+		OccurredAt:   occurredAt,
+		EventTypes:   eventTypes,
+		DetailsBatch: detailsBatch,
+	}); err != nil {
+		return fmt.Errorf("insert preparation audit batch: %w", err)
+	}
+	return nil
+}
+
 // committedDenial carries a resolved authorization denial: err is the original
 // denial reason the client must see, and committed reports whether its audit
 // event was durably written.
@@ -118,9 +180,12 @@ func fpHash(v any) (string, error) {
 }
 
 // reloadAuthority loads the current session, roles, and capabilities inside the
-// transaction, so authority removed mid-session takes effect immediately.
+// transaction, so authority removed mid-session takes effect immediately. The
+// current roles are returned alongside the derived capabilities for callers
+// that need the role names themselves (the self-PIN gate re-locks the roles
+// through GetStaffRolesForUpdate instead of reusing these).
 func reloadAuthority(ctx context.Context, q *sqlc.Queries, actor Actor) (
-	sqlc.GetSalesSessionAuthorityRow, []string, error,
+	sqlc.GetSalesSessionAuthorityRow, []string, []string, error,
 ) {
 	authRow, err := q.GetSalesSessionAuthority(ctx, sqlc.GetSalesSessionAuthorityParams{
 		ID:              actor.SessionID,
@@ -128,37 +193,37 @@ func reloadAuthority(ctx context.Context, q *sqlc.Queries, actor Actor) (
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return authRow, nil, fmt.Errorf("%w: session not found or identity mismatch", ErrUnauthorized)
+			return authRow, nil, nil, fmt.Errorf("%w: session not found or identity mismatch", ErrUnauthorized)
 		}
-		return authRow, nil, fmt.Errorf("reload session authority: %w", err)
+		return authRow, nil, nil, fmt.Errorf("reload session authority: %w", err)
 	}
 
 	if authRow.State == auth.SessionStateLocked {
-		return authRow, nil, fmt.Errorf("%w: session locked", ErrUnauthorized)
+		return authRow, nil, nil, fmt.Errorf("%w: session locked", ErrUnauthorized)
 	}
 	if authRow.RevokedAt.Valid {
-		return authRow, nil, fmt.Errorf("%w: session revoked", ErrUnauthorized)
+		return authRow, nil, nil, fmt.Errorf("%w: session revoked", ErrUnauthorized)
 	}
 	if time.Now().After(authRow.ExpiresAt) {
-		return authRow, nil, fmt.Errorf("%w: session expired", ErrUnauthorized)
+		return authRow, nil, nil, fmt.Errorf("%w: session expired", ErrUnauthorized)
 	}
 	if !authRow.IdentityEnabled {
-		return authRow, nil, fmt.Errorf("%w: identity disabled", ErrForbidden)
+		return authRow, nil, nil, fmt.Errorf("%w: identity disabled", ErrForbidden)
 	}
 	workspace := ""
 	if authRow.ActiveWorkspace.Valid {
 		workspace = authRow.ActiveWorkspace.String
 	}
 	if time.Since(authRow.LastHumanActivityAt) >= auth.GetInactivityTimeout(workspace) {
-		return authRow, nil, fmt.Errorf("%w: session inactive", ErrUnauthorized)
+		return authRow, nil, nil, fmt.Errorf("%w: session inactive", ErrUnauthorized)
 	}
 
 	roles, err := q.GetSalesSessionRoles(ctx, authRow.StaffIdentityID)
 	if err != nil {
-		return authRow, nil, fmt.Errorf("reload session roles: %w", err)
+		return authRow, nil, nil, fmt.Errorf("reload session roles: %w", err)
 	}
 
-	return authRow, auth.DeriveCapabilities(roles), nil
+	return authRow, roles, auth.DeriveCapabilities(roles), nil
 }
 
 // verifyCapabilities checks that all required capabilities are present.
@@ -171,6 +236,55 @@ func verifyCapabilities(required []string, available []string) error {
 		if _, ok := avail[need]; !ok {
 			return fmt.Errorf("%w: missing capability %q", ErrForbidden, need)
 		}
+	}
+	return nil
+}
+
+// verifyCurrentManagerPIN re-authenticates the actor as a current Manager
+// inside the mutation transaction: it locks the actor's own identity row by id
+// (so a concurrent disablement or PIN rotation cannot interleave between
+// verification and use), locks the identity's roles, re-checks the enabled
+// status, the MANAGER role, and the required capability against those locked
+// rows, and bcrypt-verifies the supplied PIN against the identity's current
+// hash.
+//
+// Every expected failure wraps ErrForbidden or ErrInvalidManagerPIN — both
+// security denials — so denial evidence is committed and the client receives
+// the collapsed NOT_AUTHORIZED response. The attempted PIN is never included
+// in any error, audit row, or log.
+func verifyCurrentManagerPIN(ctx context.Context, q *sqlc.Queries, actor Actor,
+	pin string, requiredCapability string,
+) error {
+	identity, err := q.GetStaffByIDForUpdate(ctx, actor.StaffID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: staff identity not found", ErrForbidden)
+		}
+		return fmt.Errorf("lock staff identity: %w", err)
+	}
+	roles, err := q.GetStaffRolesForUpdate(ctx, actor.StaffID)
+	if err != nil {
+		return fmt.Errorf("lock staff roles: %w", err)
+	}
+
+	// Spend the bcrypt comparison before any rejection decision so a denied
+	// attempt costs the same regardless of which condition failed — the same
+	// rule VerifyManagerApproval follows. The PIN is consumed here and
+	// discarded; it never reaches a wrapped error below.
+	pinOK := auth.VerifyPin(identity.PinHash, pin)
+
+	if !identity.Enabled {
+		return fmt.Errorf("%w: identity disabled", ErrForbidden)
+	}
+	if !slices.Contains(roles, auth.RoleManager) {
+		return fmt.Errorf("%w: manager role required", ErrForbidden)
+	}
+	if requiredCapability != "" &&
+		!slices.Contains(auth.DeriveCapabilities(roles), requiredCapability) {
+		return fmt.Errorf("%w: missing capability %q", ErrForbidden, requiredCapability)
+	}
+	if !pinOK {
+		return fmt.Errorf("%w: pin rejected", ErrInvalidManagerPIN)
 	}
 	return nil
 }
@@ -225,7 +339,9 @@ func finishDenial(tx *sql.Tx, outcome *committedDenial) error {
 }
 
 func isSecurityDenial(err error) bool {
-	return errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrForbidden)
+	return errors.Is(err, ErrUnauthorized) ||
+		errors.Is(err, ErrForbidden) ||
+		errors.Is(err, ErrInvalidManagerPIN)
 }
 
 // AdvisoryLock takes a transaction-scoped advisory lock on the given key.
@@ -238,14 +354,18 @@ func (r *Runner) AdvisoryLock(ctx context.Context, q *sqlc.Queries, key int64) e
 }
 
 // ExecuteMutation runs a mutation inside one transaction with authorization,
-// idempotency, and audit. On success it returns the HTTP status and result.
+// optional self re-authentication, idempotency, and audit. On success it
+// returns the HTTP status and result.
 //
 // The order of steps is load-bearing. Authority is reloaded before the
 // idempotency replay, so an actor whose session was revoked or whose role was
-// removed cannot replay an earlier success. The open-Sales-Shift precondition
-// deliberately lives inside fn, which runs after the claim, so a replay of a
-// request that succeeded during a Shift still returns its stored result after
-// that Shift closes.
+// removed cannot replay an earlier success. The optional Manager self-PIN gate
+// runs after capability verification and before the fingerprint and the
+// replay, so a rotated PIN or a lost Manager role denies even an exact replay
+// of an earlier success. The open-Sales-Shift precondition deliberately lives
+// inside fn, which runs after the claim, so a replay of a request that
+// succeeded during a Shift still returns its stored result after that Shift
+// closes.
 func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 	spec MutationSpec,
 	fn func(MutationContext) (int, T, AuditRecord, error),
@@ -260,8 +380,8 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 
 	q := r.queries.WithTx(tx)
 
-	// 1. Reload current authority inside the transaction.
-	authRow, caps, err := reloadAuthority(ctx, q, actor)
+	// 1. Reload current authority and roles inside the transaction.
+	authRow, _, caps, err := reloadAuthority(ctx, q, actor)
 	if err != nil {
 		if isSecurityDenial(err) {
 			return 0, zero, finishDenial(tx, recordDenial(ctx, q, actor, authRow, spec.Operation, err))
@@ -274,18 +394,45 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return 0, zero, finishDenial(tx, recordDenial(ctx, q, actor, authRow, spec.Operation, err))
 	}
 
-	// 3. Fingerprint the normalized business input.
+	// 3. Verify the current-Manager self-PIN, when the command requires it.
+	// The gate runs before the fingerprint and the idempotency replay, so a
+	// rotated PIN or a lost Manager role denies even an exact replay of an
+	// earlier success. Every expected gate failure is a security denial, so
+	// its evidence is committed before the denial is returned.
+	if spec.RequireManagerPIN {
+		gateCapabilities := spec.Required
+		if len(gateCapabilities) == 0 {
+			// No capability is required of this command, but the gate still
+			// demands an enabled current Manager who knows their own PIN; the
+			// gate's capability re-check itself is vacuous.
+			gateCapabilities = []string{""}
+		}
+		for _, capability := range gateCapabilities {
+			err := verifyCurrentManagerPIN(ctx, q, actor, spec.ManagerPIN, capability)
+			if err == nil {
+				continue
+			}
+			if isSecurityDenial(err) {
+				return 0, zero, finishDenial(tx, recordDenial(ctx, q, actor, authRow, spec.Operation, err))
+			}
+			return 0, zero, err
+		}
+	}
+
+	// 4. Fingerprint the normalized business input. Credential-free by
+	// contract: the Manager PIN, when present, was verified in step 3 and
+	// never enters this hash.
 	reqHash, err := fpHash(spec.Fingerprint)
 	if err != nil {
 		return 0, zero, err
 	}
 
-	// 4. Advisory lock to serialize concurrent duplicates of this request.
+	// 5. Advisory lock to serialize concurrent duplicates of this request.
 	if err := r.AdvisoryLock(ctx, q, IDToLockKey(actor.StaffID)^IDToLockKey(spec.RequestID)); err != nil {
 		return 0, zero, err
 	}
 
-	// 5. Look for an existing record, now that the lock is held.
+	// 6. Look for an existing record, now that the lock is held.
 	existing, err := q.GetIdempotencyRecord(ctx, sqlc.GetIdempotencyRecordParams{
 		ActorID: actor.StaffID,
 		Key:     spec.RequestID,
@@ -304,7 +451,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return int(existing.ResponseCode), result, nil
 	}
 
-	// 6. Claim the request before any business mutation.
+	// 7. Claim the request before any business mutation.
 	claimed, err := q.ClaimIdempotencyRecord(ctx, sqlc.ClaimIdempotencyRecordParams{
 		Key:          spec.RequestID,
 		ActorID:      actor.StaffID,
@@ -320,13 +467,13 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return 0, zero, fmt.Errorf("%w: request was claimed concurrently", ErrRequestConflict)
 	}
 
-	// 7. Run the mutation.
+	// 8. Run the mutation.
 	resultCode, result, audit, err := fn(MutationContext{Queries: q, tx: tx})
 	if err != nil {
 		return 0, zero, err
 	}
 
-	// 8. Write the business audit event, when there is one.
+	// 9. Write the business audit event, when there is one.
 	if audit.EventType != "" {
 		detailsBytes, err := json.Marshal(audit.Details)
 		if err != nil {
@@ -343,7 +490,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		}
 	}
 
-	// 9. Store the replayable result.
+	// 10. Store the replayable result.
 	bodyBytes, err := json.Marshal(result)
 	if err != nil {
 		return 0, zero, fmt.Errorf("marshal response body: %w", err)
@@ -409,7 +556,7 @@ func ExecuteRead[T any](ctx context.Context, r *Runner, actor Actor,
 	defer tx.Rollback() //nolint:errcheck
 
 	q := r.queries.WithTx(tx)
-	authority, caps, err := reloadAuthority(ctx, q, actor)
+	authority, _, caps, err := reloadAuthority(ctx, q, actor)
 	if err != nil {
 		if isSecurityDenial(err) {
 			_ = tx.Rollback()
