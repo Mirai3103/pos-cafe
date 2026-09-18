@@ -859,6 +859,54 @@ func (q *Queries) ListCurrentPreparationTables(ctx context.Context, serviceSessi
 	return items, nil
 }
 
+const listPreparationUnitsByIDs = `-- name: ListPreparationUnitsByIDs :many
+SELECT id, order_item_id, unit_number, state, service_number, category_name,
+       item_name, size_name, modifiers, preparation_note, queued_at,
+       in_preparation_at, priority, remake_of_preparation_unit_id
+FROM preparation_units
+WHERE id = ANY($1::uuid[])
+`
+
+// Batched projection read for a set of ids already known to exist (e.g. a
+// cancellation batch), avoiding one GetPreparationUnit round trip per unit.
+func (q *Queries) ListPreparationUnitsByIDs(ctx context.Context, preparationUnitIds []uuid.UUID) ([]PreparationUnit, error) {
+	rows, err := q.db.QueryContext(ctx, listPreparationUnitsByIDs, pq.Array(preparationUnitIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PreparationUnit{}
+	for rows.Next() {
+		var i PreparationUnit
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrderItemID,
+			&i.UnitNumber,
+			&i.State,
+			&i.ServiceNumber,
+			&i.CategoryName,
+			&i.ItemName,
+			&i.SizeName,
+			&i.Modifiers,
+			&i.PreparationNote,
+			&i.QueuedAt,
+			&i.InPreparationAt,
+			&i.Priority,
+			&i.RemakeOfPreparationUnitID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPreparationUnitsForCorrection = `-- name: ListPreparationUnitsForCorrection :many
 SELECT pu.id, pu.state, pu.order_item_id, o.service_session_id
 FROM preparation_units AS pu

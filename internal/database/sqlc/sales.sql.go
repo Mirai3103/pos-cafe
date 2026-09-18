@@ -2544,6 +2544,45 @@ func (q *Queries) ListRefundAdjustmentAllocations(ctx context.Context, refundID 
 	return items, nil
 }
 
+const listRefundAdjustmentAllocationsByRefundIDs = `-- name: ListRefundAdjustmentAllocationsByRefundIDs :many
+SELECT refund_id, charge_adjustment_id, amount_vnd
+FROM refund_adjustment_allocations
+WHERE refund_id = ANY($1::uuid[])
+ORDER BY refund_id ASC, charge_adjustment_id ASC
+`
+
+type ListRefundAdjustmentAllocationsByRefundIDsRow struct {
+	RefundID           uuid.UUID `json:"refund_id"`
+	ChargeAdjustmentID uuid.UUID `json:"charge_adjustment_id"`
+	AmountVnd          int64     `json:"amount_vnd"`
+}
+
+// Every Charge Adjustment allocation for the given Refunds, for a Check's
+// batched Refund projection: one round trip replaces one
+// ListRefundAdjustmentAllocations call per Refund.
+func (q *Queries) ListRefundAdjustmentAllocationsByRefundIDs(ctx context.Context, refundIds []uuid.UUID) ([]ListRefundAdjustmentAllocationsByRefundIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRefundAdjustmentAllocationsByRefundIDs, pq.Array(refundIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRefundAdjustmentAllocationsByRefundIDsRow{}
+	for rows.Next() {
+		var i ListRefundAdjustmentAllocationsByRefundIDsRow
+		if err := rows.Scan(&i.RefundID, &i.ChargeAdjustmentID, &i.AmountVnd); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRefundPaymentAllocations = `-- name: ListRefundPaymentAllocations :many
 SELECT refund_id, payment_id, amount_vnd
 FROM refund_payment_allocations
@@ -2568,6 +2607,45 @@ func (q *Queries) ListRefundPaymentAllocations(ctx context.Context, refundID uui
 	items := []ListRefundPaymentAllocationsRow{}
 	for rows.Next() {
 		var i ListRefundPaymentAllocationsRow
+		if err := rows.Scan(&i.RefundID, &i.PaymentID, &i.AmountVnd); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRefundPaymentAllocationsByRefundIDs = `-- name: ListRefundPaymentAllocationsByRefundIDs :many
+SELECT refund_id, payment_id, amount_vnd
+FROM refund_payment_allocations
+WHERE refund_id = ANY($1::uuid[])
+ORDER BY refund_id ASC, payment_id ASC
+`
+
+type ListRefundPaymentAllocationsByRefundIDsRow struct {
+	RefundID  uuid.UUID `json:"refund_id"`
+	PaymentID uuid.UUID `json:"payment_id"`
+	AmountVnd int64     `json:"amount_vnd"`
+}
+
+// Every Payment allocation for the given Refunds, for a Check's batched
+// Refund projection: one round trip replaces one ListRefundPaymentAllocations
+// call per Refund.
+func (q *Queries) ListRefundPaymentAllocationsByRefundIDs(ctx context.Context, refundIds []uuid.UUID) ([]ListRefundPaymentAllocationsByRefundIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRefundPaymentAllocationsByRefundIDs, pq.Array(refundIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRefundPaymentAllocationsByRefundIDsRow{}
+	for rows.Next() {
+		var i ListRefundPaymentAllocationsByRefundIDsRow
 		if err := rows.Scan(&i.RefundID, &i.PaymentID, &i.AmountVnd); err != nil {
 			return nil, err
 		}

@@ -564,6 +564,23 @@ func applyCancelUnits(ctx context.Context, q *sqlc.Queries, actor Actor,
 			})
 		}
 	}
+	// Per-unit CHECK_CHARGE_ADJUSTED audits report each unit's own incremental
+	// step, not the batch's aggregate before/after: a running charge per Check,
+	// seeded from its pre-batch stored charge and stepped down by each charged
+	// unit's immutable price in request order.
+	runningChargeByCheck := make(map[uuid.UUID]int64, len(checkIDs))
+	for _, checkID := range checkIDs {
+		runningChargeByCheck[checkID] = plans[checkID].StoredChargeVND
+	}
+
+	// The bar projection each alert carries (service_number, item_name,
+	// unit_number) is immutable across this cancellation, so one batched read
+	// replaces the per-unit GetPreparationUnit round trip the write loop below
+	// would otherwise make up to MaxCancellationUnits times.
+	unitViews, err := loadUnits(ctx, q, cmd.PreparationUnitIDs)
+	if err != nil {
+		return CancelUnitsResponse{}, err
+	}
 	for _, id := range cmd.PreparationUnitIDs {
 		unit := resolved[id]
 		index := indexByUnit[id]
@@ -631,11 +648,11 @@ func applyCancelUnits(ctx context.Context, q *sqlc.Queries, actor Actor,
 			return CancelUnitsResponse{}, fmt.Errorf("insert preparation alert: %w", err)
 		}
 
-		// The bar projection is read back so the alert carries the same
+		// The bar projection, batch-read above, carries the same
 		// service_number, item_name, and unit_number a queue read projects.
-		unitView, err := loadUnit(ctx, q, id)
-		if err != nil {
-			return CancelUnitsResponse{}, err
+		unitView, ok := unitViews[id]
+		if !ok {
+			return CancelUnitsResponse{}, fmt.Errorf("%w: %s", ErrUnitNotFound, id)
 		}
 
 		outcomes[index] = CancellationOutcome{
@@ -673,7 +690,12 @@ func applyCancelUnits(ctx context.Context, q *sqlc.Queries, actor Actor,
 				},
 			})
 		if outcomeAdjustmentID != nil {
-			plan := plans[unit.CheckID]
+			chargeBeforeVND := runningChargeByCheck[unit.CheckID]
+			chargeAfterVND, err := cancellationNewCharge(chargeBeforeVND, unit.UnitPriceVND)
+			if err != nil {
+				return CancelUnitsResponse{}, err
+			}
+			runningChargeByCheck[unit.CheckID] = chargeAfterVND
 			audits = append(audits, AuditRecord{
 				EventType: EventCheckChargeAdjusted,
 				Details: map[string]any{
@@ -681,8 +703,8 @@ func applyCancelUnits(ctx context.Context, q *sqlc.Queries, actor Actor,
 					"charge_adjustment_id": *outcomeAdjustmentID,
 					"preparation_unit_id":  id,
 					"amount_vnd":           unit.UnitPriceVND,
-					"charge_before_vnd":    plan.StoredChargeVND,
-					"charge_after_vnd":     plan.NewChargeVND,
+					"charge_before_vnd":    chargeBeforeVND,
+					"charge_after_vnd":     chargeAfterVND,
 				},
 			})
 		}

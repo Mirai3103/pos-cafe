@@ -281,7 +281,7 @@ func applyRecordRefund(ctx context.Context, q *sqlc.Queries, actor Actor,
 	// this gate reports obligation overruns in every scope, so a set of
 	// intents can never promise more than can ever be paid back.
 	availableVND, target, err := loadPendingRefundHeadroom(ctx, q, cmd.CheckID, saleID,
-		isPostSale, checkRow.ChargeVnd)
+		isPostSale, checkRow.ChargeVnd, checkPayments)
 	if err != nil {
 		return RefundResult{}, AuditRecord{}, err
 	}
@@ -298,7 +298,10 @@ func applyRecordRefund(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 
 	// 7. Insert the Refund and both allocation sets.
-	occurredAt := time.Now()
+	occurredAt, err := q.GetSalesOccurredAt(ctx)
+	if err != nil {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf("read refund time: %w", err)
+	}
 	refund, err := q.InsertRefund(ctx, sqlc.InsertRefundParams{
 		CheckID:                   cmd.CheckID,
 		CompletedSaleID:           uuid.NullUUID{UUID: saleID, Valid: isPostSale},
@@ -393,7 +396,7 @@ func applyRecordRefund(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 
 	if completion != nil {
-		if err := writeRefundAudit(ctx, q, actor, occurredAt, EventRefundCompleted,
+		if err := writeSalesAudit(ctx, q, actor, occurredAt, EventRefundCompleted,
 			refundCompletedAudit{
 				RefundID:                      refund.ID,
 				CheckID:                       refund.CheckID,
@@ -690,7 +693,16 @@ func assertRefundConfirmationHeadroom(ctx context.Context, q *sqlc.Queries,
 		return nil
 	}
 
-	pendingVND, err := loadCheckPendingRefundVND(ctx, q, refund.CheckID, storedChargeVND)
+	checkPayments, err := q.ListCheckPayments(ctx, refund.CheckID)
+	if err != nil {
+		return fmt.Errorf("load check payments: %w", err)
+	}
+	checkRefunds, err := q.ListCheckRefunds(ctx, refund.CheckID)
+	if err != nil {
+		return fmt.Errorf("load check refunds: %w", err)
+	}
+	pendingVND, err := loadCheckPendingRefundVND(ctx, q, refund.CheckID, storedChargeVND,
+		checkPayments, checkRefunds)
 	if err != nil {
 		return err
 	}
@@ -893,25 +905,18 @@ func refundAdjustmentIDs(allocs []RefundAdjustmentAllocationInput) []uuid.UUID {
 // receipt side is then valid Payments less completed live Refunds. Pending
 // Manual QR Refunds have not moved money and do not reduce the obligation.
 func loadCheckPendingRefundVND(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
-	storedChargeVND int64,
+	storedChargeVND int64, checkPayments []sqlc.ListCheckPaymentsRow,
+	checkRefunds []sqlc.ListCheckRefundsRow,
 ) (int64, error) {
 	if err := assertChargeMatchesAllocations(ctx, q, checkID, storedChargeVND); err != nil {
 		return 0, err
 	}
 
-	paymentRows, err := q.ListCheckPayments(ctx, checkID)
-	if err != nil {
-		return 0, fmt.Errorf("load check payments: %w", err)
-	}
-	originalVND, voidedVND, err := sumPaymentAmounts(paymentRows)
+	originalVND, voidedVND, err := sumPaymentAmounts(checkPayments)
 	if err != nil {
 		return 0, fmt.Errorf("check %s: %w", checkID, err)
 	}
-	refundRows, err := q.ListCheckRefunds(ctx, checkID)
-	if err != nil {
-		return 0, fmt.Errorf("load check refunds: %w", err)
-	}
-	completedRefundVND, err := sumCompletedRefundsVND(refundRows)
+	completedRefundVND, err := sumCompletedRefundsVND(checkRefunds)
 	if err != nil {
 		return 0, fmt.Errorf("check %s: %w", checkID, err)
 	}
@@ -936,7 +941,7 @@ func loadCheckPendingRefundVND(ctx context.Context, q *sqlc.Queries, checkID uui
 // PENDING Refund whose amount is already promised. It returns the available
 // amount and a human-readable target for the refusal message.
 func loadPendingRefundHeadroom(ctx context.Context, q *sqlc.Queries, checkID, saleID uuid.UUID,
-	isPostSale bool, storedChargeVND int64,
+	isPostSale bool, storedChargeVND int64, checkPayments []sqlc.ListCheckPaymentsRow,
 ) (int64, string, error) {
 	if isPostSale {
 		outstandingVND, err := loadOutstandingPostSaleRefundVND(ctx, q, saleID)
@@ -952,11 +957,16 @@ func loadPendingRefundHeadroom(ctx context.Context, q *sqlc.Queries, checkID, sa
 		return availableVND, target, err
 	}
 
-	pendingVND, err := loadCheckPendingRefundVND(ctx, q, checkID, storedChargeVND)
+	checkRefunds, err := q.ListCheckRefunds(ctx, checkID)
+	if err != nil {
+		return 0, "", fmt.Errorf("load check refunds: %w", err)
+	}
+	pendingVND, err := loadCheckPendingRefundVND(ctx, q, checkID, storedChargeVND,
+		checkPayments, checkRefunds)
 	if err != nil {
 		return 0, "", err
 	}
-	reservedVND, err := loadPendingLiveRefundVND(ctx, q, checkID)
+	reservedVND, err := loadPendingLiveRefundVND(checkRefunds)
 	if err != nil {
 		return 0, "", err
 	}
@@ -978,17 +988,14 @@ func subtractPendingReservation(obligationVND, reservedVND int64, target string)
 	return availableVND, nil
 }
 
-// loadPendingLiveRefundVND sums every PENDING live Refund of one Check: money
-// already promised back that has not moved. The query excludes post-sale
-// Refunds structurally and exposes completion evidence, so a completed Refund
-// — already subtracted by the corrected financials — is never counted twice.
-func loadPendingLiveRefundVND(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID) (int64, error) {
-	rows, err := q.ListCheckRefunds(ctx, checkID)
-	if err != nil {
-		return 0, fmt.Errorf("load check refunds: %w", err)
-	}
+// loadPendingLiveRefundVND sums every PENDING live Refund of one Check from
+// rows already scoped to that Check: money already promised back that has not
+// moved. The caller's rows exclude post-sale Refunds structurally and expose
+// completion evidence, so a completed Refund — already subtracted by the
+// corrected financials — is never counted twice.
+func loadPendingLiveRefundVND(checkRefunds []sqlc.ListCheckRefundsRow) (int64, error) {
 	var reservedVND int64
-	for _, row := range rows {
+	for _, row := range checkRefunds {
 		if row.CompletionID.Valid {
 			continue
 		}
@@ -1132,25 +1139,4 @@ func refundAdjustmentAllocationAudits(allocs []RefundAdjustmentAllocationInput) 
 		out = append(out, refundAdjustmentAllocationAudit(allocation))
 	}
 	return out
-}
-
-// writeRefundAudit inserts one Refund business event inside the mutation
-// transaction, on an explicit occurrence instant.
-func writeRefundAudit(ctx context.Context, q *sqlc.Queries, actor Actor,
-	occurredAt time.Time, eventType string, details any,
-) error {
-	raw, err := marshalAuditDetails(details)
-	if err != nil {
-		return err
-	}
-	if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-		EventType:  eventType,
-		ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-		SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-		Details:    raw,
-		OccurredAt: occurredAt,
-	}); err != nil {
-		return fmt.Errorf("insert %s audit event: %w", eventType, err)
-	}
-	return nil
 }

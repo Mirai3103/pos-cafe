@@ -1073,6 +1073,24 @@ FROM refund_adjustment_allocations
 WHERE refund_id = $1
 ORDER BY charge_adjustment_id ASC;
 
+-- name: ListRefundPaymentAllocationsByRefundIDs :many
+-- Every Payment allocation for the given Refunds, for a Check's batched
+-- Refund projection: one round trip replaces one ListRefundPaymentAllocations
+-- call per Refund.
+SELECT refund_id, payment_id, amount_vnd
+FROM refund_payment_allocations
+WHERE refund_id = ANY(sqlc.arg(refund_ids)::uuid[])
+ORDER BY refund_id ASC, payment_id ASC;
+
+-- name: ListRefundAdjustmentAllocationsByRefundIDs :many
+-- Every Charge Adjustment allocation for the given Refunds, for a Check's
+-- batched Refund projection: one round trip replaces one
+-- ListRefundAdjustmentAllocations call per Refund.
+SELECT refund_id, charge_adjustment_id, amount_vnd
+FROM refund_adjustment_allocations
+WHERE refund_id = ANY(sqlc.arg(refund_ids)::uuid[])
+ORDER BY refund_id ASC, charge_adjustment_id ASC;
+
 -- name: ListPaymentRefundAllocations :many
 -- Every Refund allocation against the given Payments, with the owning Refund's
 -- scope and completion evidence, so the Check projection can derive each

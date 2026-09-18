@@ -469,16 +469,19 @@ func loadCheckRefunds(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID) (
 		return nil, 0, fmt.Errorf("check %s: %w", checkID, err)
 	}
 
+	refundIDs := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		refundIDs[i] = row.ID
+	}
+	paymentsByRefund, adjustmentsByRefund, err := loadRefundAllocationsByRefundIDs(ctx, q, refundIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	out := make([]RefundResponse, 0, len(rows))
 	for _, row := range rows {
-		paymentRows, err := q.ListRefundPaymentAllocations(ctx, row.ID)
-		if err != nil {
-			return nil, 0, fmt.Errorf("load refund payment allocations: %w", err)
-		}
-		adjustmentRows, err := q.ListRefundAdjustmentAllocations(ctx, row.ID)
-		if err != nil {
-			return nil, 0, fmt.Errorf("load refund adjustment allocations: %w", err)
-		}
+		paymentRows := paymentsByRefund[row.ID]
+		adjustmentRows := adjustmentsByRefund[row.ID]
 		if err := assertRefundAllocationSums(row, paymentRows, adjustmentRows); err != nil {
 			return nil, 0, err
 		}
@@ -543,11 +546,47 @@ func sumCompletedRefundsVND(rows []sqlc.ListCheckRefundsRow) (int64, error) {
 	return completedVND, nil
 }
 
+// loadRefundAllocationsByRefundIDs batch-loads the Payment and Charge
+// Adjustment allocations of several Refunds in two round trips, grouped by
+// Refund id, replacing the two per-Refund round trips a loop would otherwise
+// make for each of the given ids.
+func loadRefundAllocationsByRefundIDs(ctx context.Context, q *sqlc.Queries,
+	refundIDs []uuid.UUID,
+) (
+	map[uuid.UUID][]sqlc.ListRefundPaymentAllocationsByRefundIDsRow,
+	map[uuid.UUID][]sqlc.ListRefundAdjustmentAllocationsByRefundIDsRow,
+	error,
+) {
+	paymentsByRefund := make(map[uuid.UUID][]sqlc.ListRefundPaymentAllocationsByRefundIDsRow, len(refundIDs))
+	adjustmentsByRefund := make(map[uuid.UUID][]sqlc.ListRefundAdjustmentAllocationsByRefundIDsRow, len(refundIDs))
+	if len(refundIDs) == 0 {
+		return paymentsByRefund, adjustmentsByRefund, nil
+	}
+
+	paymentRows, err := q.ListRefundPaymentAllocationsByRefundIDs(ctx, refundIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load refund payment allocations: %w", err)
+	}
+	for _, row := range paymentRows {
+		paymentsByRefund[row.RefundID] = append(paymentsByRefund[row.RefundID], row)
+	}
+
+	adjustmentRows, err := q.ListRefundAdjustmentAllocationsByRefundIDs(ctx, refundIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load refund adjustment allocations: %w", err)
+	}
+	for _, row := range adjustmentRows {
+		adjustmentsByRefund[row.RefundID] = append(adjustmentsByRefund[row.RefundID], row)
+	}
+
+	return paymentsByRefund, adjustmentsByRefund, nil
+}
+
 // assertRefundAllocationSums enforces refund.amount_vnd = sum(payment
 // allocations) = sum(adjustment allocations) on the persisted facts.
 func assertRefundAllocationSums(row sqlc.ListCheckRefundsRow,
-	paymentRows []sqlc.ListRefundPaymentAllocationsRow,
-	adjustmentRows []sqlc.ListRefundAdjustmentAllocationsRow,
+	paymentRows []sqlc.ListRefundPaymentAllocationsByRefundIDsRow,
+	adjustmentRows []sqlc.ListRefundAdjustmentAllocationsByRefundIDsRow,
 ) error {
 	var paymentVND, adjustmentVND int64
 	var err error

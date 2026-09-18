@@ -19,6 +19,15 @@ SELECT id, order_item_id, unit_number, state, service_number, category_name,
 FROM preparation_units
 WHERE id = $1;
 
+-- name: ListPreparationUnitsByIDs :many
+-- Batched projection read for a set of ids already known to exist (e.g. a
+-- cancellation batch), avoiding one GetPreparationUnit round trip per unit.
+SELECT id, order_item_id, unit_number, state, service_number, category_name,
+       item_name, size_name, modifiers, preparation_note, queued_at,
+       in_preparation_at, priority, remake_of_preparation_unit_id
+FROM preparation_units
+WHERE id = ANY(sqlc.arg(preparation_unit_ids)::uuid[]);
+
 -- name: SetPreparationUnitState :exec
 UPDATE preparation_units
 SET state = sqlc.arg(state),

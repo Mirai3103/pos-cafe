@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
@@ -269,7 +268,7 @@ func applyVoidPayment(ctx context.Context, runner *Runner, q *sqlc.Queries, acto
 		if err := q.ReopenCheckAfterPaymentVoid(ctx, checkID); err != nil {
 			return zero, AuditRecord{}, fmt.Errorf("reopen check after payment void: %w", err)
 		}
-		if err := writeVoidAudit(ctx, q, actor, occurredAt, EventCheckReopenedAfterPaymentVoid,
+		if err := writeSalesAudit(ctx, q, actor, occurredAt, EventCheckReopenedAfterPaymentVoid,
 			checkReopenedAfterPaymentVoidAudit{
 				CheckID:          checkID,
 				PaymentVoidID:    void.ID,
@@ -337,25 +336,4 @@ type checkReopenedAfterPaymentVoidAudit struct {
 	ChargeVND        int64     `json:"charge_vnd"`
 	BalanceVND       int64     `json:"balance_vnd"`
 	VoidedAmountVND  int64     `json:"voided_amount_vnd"`
-}
-
-// writeVoidAudit inserts one Payment Void business event inside the mutation
-// transaction, on the same occurrence instant as the facts it describes.
-func writeVoidAudit(ctx context.Context, q *sqlc.Queries, actor Actor,
-	occurredAt time.Time, eventType string, details any,
-) error {
-	raw, err := marshalAuditDetails(details)
-	if err != nil {
-		return err
-	}
-	if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-		EventType:  eventType,
-		ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-		SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-		Details:    raw,
-		OccurredAt: occurredAt,
-	}); err != nil {
-		return fmt.Errorf("insert %s audit event: %w", eventType, err)
-	}
-	return nil
 }

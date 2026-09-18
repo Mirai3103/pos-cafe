@@ -448,6 +448,29 @@ func marshalAuditDetails(v any) ([]byte, error) {
 	return b, nil
 }
 
+// writeSalesAudit appends one audit event inside a mutation body rather than
+// by ExecuteMutation, shared by every financial-correction handler (Comp,
+// Payment Void, Refund) that must write more than the one audit event the
+// executor already covers.
+func writeSalesAudit(ctx context.Context, q *sqlc.Queries, actor Actor,
+	occurredAt time.Time, eventType string, details any,
+) error {
+	raw, err := marshalAuditDetails(details)
+	if err != nil {
+		return err
+	}
+	if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
+		EventType:  eventType,
+		ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
+		SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
+		Details:    raw,
+		OccurredAt: occurredAt,
+	}); err != nil {
+		return fmt.Errorf("insert %s audit event: %w", eventType, err)
+	}
+	return nil
+}
+
 type manualQRPaymentAudit struct {
 	PaymentID                uuid.UUID `json:"payment_id"`
 	CheckID                  uuid.UUID `json:"check_id"`

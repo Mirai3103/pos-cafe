@@ -434,11 +434,12 @@ const (
 	EventSalesCompRecorded   = "SALES_COMP_RECORDED"
 )
 
-// NormalizeCompNote trims surrounding whitespace from an optional Comp note
+// normalizeCorrectionNote trims surrounding whitespace from an optional note
 // and collapses a blank note to nil. Callers normalize BEFORE validating and
 // BEFORE building the fingerprint, so replays of differently padded input stay
-// equal.
-func NormalizeCompNote(note *string) *string {
+// equal. Shared by every financial-correction note (Comp, Refund, Payment
+// Void).
+func normalizeCorrectionNote(note *string) *string {
 	if note == nil {
 		return nil
 	}
@@ -447,6 +448,33 @@ func NormalizeCompNote(note *string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+// validateCorrectionNote validates an already-normalized optional note: a
+// present note is 1 through MaxCorrectionNoteRunes code points, and the given
+// otherReason requires one. Shared by every financial-correction note (Comp,
+// Refund, Payment Void).
+func validateCorrectionNote(reason, otherReason string, note *string) error {
+	if note != nil {
+		runes := utf8.RuneCountInString(*note)
+		if runes < 1 || runes > MaxCorrectionNoteRunes {
+			return fmt.Errorf("%w: a note must be 1 through %d characters",
+				response.ErrInvalid, MaxCorrectionNoteRunes)
+		}
+		return nil
+	}
+	if reason == otherReason {
+		return fmt.Errorf("%w: the %s reason requires a note", response.ErrInvalid, otherReason)
+	}
+	return nil
+}
+
+// NormalizeCompNote trims surrounding whitespace from an optional Comp note
+// and collapses a blank note to nil. Callers normalize BEFORE validating and
+// BEFORE building the fingerprint, so replays of differently padded input stay
+// equal.
+func NormalizeCompNote(note *string) *string {
+	return normalizeCorrectionNote(note)
 }
 
 // ValidateCompReason checks a Comp reason against the Comp catalog.
@@ -463,18 +491,7 @@ func ValidateCompReason(reason string) error {
 // note is 1 through MaxCorrectionNoteRunes code points, and the OTHER reason
 // requires one.
 func ValidateCompNote(reason string, note *string) error {
-	if note != nil {
-		runes := utf8.RuneCountInString(*note)
-		if runes < 1 || runes > MaxCorrectionNoteRunes {
-			return fmt.Errorf("%w: a note must be 1 through %d characters",
-				response.ErrInvalid, MaxCorrectionNoteRunes)
-		}
-		return nil
-	}
-	if reason == CompReasonOther {
-		return fmt.Errorf("%w: the %s reason requires a note", response.ErrInvalid, CompReasonOther)
-	}
-	return nil
+	return validateCorrectionNote(reason, CompReasonOther, note)
 }
 
 // ValidateManagerApprovalInput checks the shape of one inline Manager Approval
@@ -544,14 +561,7 @@ const (
 // and BEFORE building the fingerprint, so replays of differently padded input
 // stay equal.
 func NormalizeRefundNote(note *string) *string {
-	if note == nil {
-		return nil
-	}
-	trimmed := strings.TrimSpace(*note)
-	if trimmed == "" {
-		return nil
-	}
-	return &trimmed
+	return normalizeCorrectionNote(note)
 }
 
 // ValidateRefundMethod checks a Refund method against the fixed allowlist. A
@@ -581,18 +591,7 @@ func ValidateRefundReason(reason string) error {
 // note is 1 through MaxCorrectionNoteRunes code points, and the OTHER reason
 // requires one.
 func ValidateRefundNote(reason string, note *string) error {
-	if note != nil {
-		runes := utf8.RuneCountInString(*note)
-		if runes < 1 || runes > MaxCorrectionNoteRunes {
-			return fmt.Errorf("%w: a note must be 1 through %d characters",
-				response.ErrInvalid, MaxCorrectionNoteRunes)
-		}
-		return nil
-	}
-	if reason == RefundReasonOther {
-		return fmt.Errorf("%w: the %s reason requires a note", response.ErrInvalid, RefundReasonOther)
-	}
-	return nil
+	return validateCorrectionNote(reason, RefundReasonOther, note)
 }
 
 // NormalizeRefundAllocations orders both allocation collections by source
@@ -766,14 +765,7 @@ const (
 // BEFORE validating and BEFORE building the fingerprint, so replays of
 // differently padded input stay equal.
 func NormalizeVoidPaymentNote(note *string) *string {
-	if note == nil {
-		return nil
-	}
-	trimmed := strings.TrimSpace(*note)
-	if trimmed == "" {
-		return nil
-	}
-	return &trimmed
+	return normalizeCorrectionNote(note)
 }
 
 // ValidateVoidPaymentReason checks a Payment Void reason against the Void
@@ -791,18 +783,7 @@ func ValidateVoidPaymentReason(reason string) error {
 // present note is 1 through MaxCorrectionNoteRunes code points, and the OTHER
 // reason requires one.
 func ValidateVoidPaymentNote(reason string, note *string) error {
-	if note != nil {
-		runes := utf8.RuneCountInString(*note)
-		if runes < 1 || runes > MaxCorrectionNoteRunes {
-			return fmt.Errorf("%w: a note must be 1 through %d characters",
-				response.ErrInvalid, MaxCorrectionNoteRunes)
-		}
-		return nil
-	}
-	if reason == VoidReasonOther {
-		return fmt.Errorf("%w: the %s reason requires a note", response.ErrInvalid, VoidReasonOther)
-	}
-	return nil
+	return validateCorrectionNote(reason, VoidReasonOther, note)
 }
 
 // ValidateVoidPaymentCommand validates a Payment Void at the boundary, before

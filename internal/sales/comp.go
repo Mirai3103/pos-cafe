@@ -271,7 +271,10 @@ func applyCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 			ErrChargeInvariantViolated, post.CheckID.UUID, lockedCheck.ID)
 	}
 
-	occurredAt := time.Now()
+	occurredAt, err := q.GetSalesOccurredAt(ctx)
+	if err != nil {
+		return CompResult{}, AuditRecord{}, fmt.Errorf("read comp time: %w", err)
+	}
 	if sessionRow.State == StateActive {
 		if post.CompletedSaleID.Valid {
 			return CompResult{}, AuditRecord{}, fmt.Errorf(
@@ -393,7 +396,7 @@ func applyLiveCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 
 	chargeBeforeVND, chargeAfterVND := lockedCheck.ChargeVnd, newChargeVND
-	if err := writeCompAudit(ctx, q, actor, occurredAt, EventCheckChargeAdjusted,
+	if err := writeSalesAudit(ctx, q, actor, occurredAt, EventCheckChargeAdjusted,
 		compChargeAdjustedAudit{
 			CheckID:            checkID,
 			ChargeAdjustmentID: adjustment.ID,
@@ -409,7 +412,7 @@ func applyLiveCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return CompResult{}, AuditRecord{}, err
 	}
 	if settled {
-		if err := writeCompAudit(ctx, q, actor, occurredAt, EventCheckSettled,
+		if err := writeSalesAudit(ctx, q, actor, occurredAt, EventCheckSettled,
 			compSettledAudit{
 				CheckID:            checkID,
 				SalesShiftID:       shiftID,
@@ -488,7 +491,7 @@ func applyPostSaleCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return CompResult{}, AuditRecord{}, fmt.Errorf("insert sales comp: %w", mapCompDBError(err))
 	}
 
-	if err := writeCompAudit(ctx, q, actor, occurredAt, EventCheckChargeAdjusted,
+	if err := writeSalesAudit(ctx, q, actor, occurredAt, EventCheckChargeAdjusted,
 		compChargeAdjustedAudit{
 			CheckID:            source.CheckID.UUID,
 			ChargeAdjustmentID: adjustment.ID,
@@ -637,25 +640,4 @@ type compRecordedAudit struct {
 	Note                      *string    `json:"note,omitempty"`
 	ActorStaffIdentityID      uuid.UUID  `json:"actor_staff_identity_id"`
 	ApprovedByStaffIdentityID uuid.UUID  `json:"approved_by_staff_identity_id"`
-}
-
-// writeCompAudit inserts one Comp business event inside the mutation
-// transaction, on the same occurrence instant as the facts it describes.
-func writeCompAudit(ctx context.Context, q *sqlc.Queries, actor Actor,
-	occurredAt time.Time, eventType string, details any,
-) error {
-	raw, err := marshalAuditDetails(details)
-	if err != nil {
-		return err
-	}
-	if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-		EventType:  eventType,
-		ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-		SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-		Details:    raw,
-		OccurredAt: occurredAt,
-	}); err != nil {
-		return fmt.Errorf("insert %s audit event: %w", eventType, err)
-	}
-	return nil
 }

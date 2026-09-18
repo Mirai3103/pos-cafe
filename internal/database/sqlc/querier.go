@@ -389,6 +389,9 @@ type Querier interface {
 	// snapshot rule (a post-sale allocation belongs to history, not the live
 	// capacity) through refund_completed_sale_id.
 	ListPaymentRefundAllocations(ctx context.Context, paymentIds []uuid.UUID) ([]ListPaymentRefundAllocationsRow, error)
+	// Batched projection read for a set of ids already known to exist (e.g. a
+	// cancellation batch), avoiding one GetPreparationUnit round trip per unit.
+	ListPreparationUnitsByIDs(ctx context.Context, preparationUnitIds []uuid.UUID) ([]PreparationUnit, error)
 	// Resolves the selected units and their owning Sessions without locks, so a
 	// correction can reject missing ids before taking any.
 	ListPreparationUnitsForCorrection(ctx context.Context, preparationUnitIds []uuid.UUID) ([]ListPreparationUnitsForCorrectionRow, error)
@@ -398,9 +401,17 @@ type Querier interface {
 	ListRecentPreparationCorrections(ctx context.Context) ([]ListRecentPreparationCorrectionsRow, error)
 	// One Refund's Charge Adjustment allocations, ordered by Adjustment id.
 	ListRefundAdjustmentAllocations(ctx context.Context, refundID uuid.UUID) ([]ListRefundAdjustmentAllocationsRow, error)
+	// Every Charge Adjustment allocation for the given Refunds, for a Check's
+	// batched Refund projection: one round trip replaces one
+	// ListRefundAdjustmentAllocations call per Refund.
+	ListRefundAdjustmentAllocationsByRefundIDs(ctx context.Context, refundIds []uuid.UUID) ([]ListRefundAdjustmentAllocationsByRefundIDsRow, error)
 	// One Refund's Payment allocations, ordered by Payment id, for the Refund
 	// result and the Completed Sale history.
 	ListRefundPaymentAllocations(ctx context.Context, refundID uuid.UUID) ([]ListRefundPaymentAllocationsRow, error)
+	// Every Payment allocation for the given Refunds, for a Check's batched
+	// Refund projection: one round trip replaces one ListRefundPaymentAllocations
+	// call per Refund.
+	ListRefundPaymentAllocationsByRefundIDs(ctx context.Context, refundIds []uuid.UUID) ([]ListRefundPaymentAllocationsByRefundIDsRow, error)
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
