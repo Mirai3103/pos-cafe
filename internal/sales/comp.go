@@ -508,20 +508,18 @@ func applyPostSaleCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return CompResult{}, AuditRecord{}, err
 	}
 
-	// The mutation projects the correction it created; the Completed Sale read
-	// projects the sale's whole additive history (spec §12.3).
-	entry := PostSaleCorrectionResponse{
-		Adjustment:           chargeAdjustmentResponseFromFact(adjustment),
-		Comp:                 compResponseFromFact(comp, source),
-		Refunds:              make([]RefundResponse, 0),
-		OutstandingRefundVND: adjustment.AmountVnd,
+	// The mutation projects the sale's whole additive history, so a later
+	// correction never hides an earlier one (spec §12.3).
+	history, err := loadCompletedSalePostSaleCorrections(ctx, q, saleID)
+	if err != nil {
+		return CompResult{}, AuditRecord{}, err
 	}
 	return CompResult{
 		Scope:                        CompScopePostSale,
 		Comp:                         compResponseFromFact(comp, source),
 		CompletedSaleID:              &saleID,
 		OutstandingPostSaleRefundVND: &outstandingVND,
-		PostSaleCorrections:          []PostSaleCorrectionResponse{entry},
+		PostSaleCorrections:          history,
 	}, AuditRecord{
 		EventType: EventSalesCompRecorded,
 		Details: compRecordedAudit{
@@ -597,33 +595,6 @@ func compResponseFromFact(comp sqlc.SalesComp, source compWasteSource) CompRespo
 		ApprovedByStaffIdentityID: comp.ApprovedByStaffIdentityID,
 		OccurredAt:                comp.OccurredAt,
 	}
-}
-
-// chargeAdjustmentResponseFromFact assembles a Charge Adjustment projection
-// from its stored row. The adjustment was just inserted, so no Refund has
-// allocated against it yet and its whole amount remains refundable; the Refund
-// command is what consumes that capacity.
-func chargeAdjustmentResponseFromFact(adjustment sqlc.ChargeAdjustment) ChargeAdjustmentResponse {
-	out := ChargeAdjustmentResponse{
-		ID:                     adjustment.ID,
-		Kind:                   adjustment.Kind,
-		Scope:                  adjustment.Scope,
-		PreparationUnitID:      adjustment.PreparationUnitID,
-		ChargeAllocationID:     adjustment.ChargeAllocationID,
-		SalesShiftID:           adjustment.SalesShiftID,
-		AmountVND:              adjustment.AmountVnd,
-		RemainingRefundableVND: adjustment.AmountVnd,
-		CreatedAt:              adjustment.CreatedAt,
-	}
-	if adjustment.PreparationWasteID.Valid {
-		wasteID := adjustment.PreparationWasteID.UUID
-		out.PreparationWasteID = &wasteID
-	}
-	if adjustment.CompletedSaleID.Valid {
-		saleID := adjustment.CompletedSaleID.UUID
-		out.CompletedSaleID = &saleID
-	}
-	return out
 }
 
 // audit detail shapes. Each carries stable business ids and financial meaning

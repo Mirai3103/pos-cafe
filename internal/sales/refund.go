@@ -359,7 +359,7 @@ func applyRecordRefund(ctx context.Context, q *sqlc.Queries, actor Actor,
 
 	result := RefundResult{Scope: CompScopeLiveCheck, Refund: refundResponse}
 	if isPostSale {
-		history, err := loadPostSaleCorrectionHistory(ctx, q, saleID, &refundResponse)
+		history, err := loadCompletedSalePostSaleCorrections(ctx, q, saleID)
 		if err != nil {
 			return RefundResult{}, AuditRecord{}, err
 		}
@@ -634,7 +634,7 @@ func applyConfirmManualQRRefund(ctx context.Context, runner *Runner, q *sqlc.Que
 	result := RefundResult{Scope: CompScopeLiveCheck, Refund: refundResponse}
 	if refundRow.CompletedSaleID.Valid {
 		saleID := refundRow.CompletedSaleID.UUID
-		history, err := loadPostSaleCorrectionHistory(ctx, q, saleID, &refundResponse)
+		history, err := loadCompletedSalePostSaleCorrections(ctx, q, saleID)
 		if err != nil {
 			return RefundResult{}, AuditRecord{}, err
 		}
@@ -1076,126 +1076,6 @@ func refundResponseFromFact(refund sqlc.Refund,
 		}
 	}
 	return out
-}
-
-// loadPostSaleCorrectionHistory projects the Completed Sale's additive
-// correction history for the post-sale Refund result. Every POST_SALE Comp
-// correction carries its adjustment, its Comp fact, the Refund that this
-// mutation recorded against it (if any), the correction amount whose capacity
-// is still unallocated, and the amount whose money has not actually moved: a
-// pending Manual QR intent reserves capacity but leaves the obligation
-// outstanding until its completion exists.
-//
-// The correction-list query deliberately projects a union row shape, so two
-// Charge Adjustment columns it does not select — charge_allocation_id and
-// sales_shift_id — stay zero here; the Completed Sale read enriched in Task 11
-// fills them from its own dedicated loaders.
-func loadPostSaleCorrectionHistory(ctx context.Context, q *sqlc.Queries, saleID uuid.UUID,
-	newRefund *RefundResponse,
-) ([]PostSaleCorrectionResponse, error) {
-	rows, err := q.ListCompletedSalePostSaleCorrections(ctx, saleID)
-	if err != nil {
-		return nil, fmt.Errorf("load post-sale corrections: %w", err)
-	}
-
-	adjustmentIDs := make([]uuid.UUID, 0, len(rows))
-	for _, row := range rows {
-		if row.EntryKind.Valid && row.EntryKind.String == postSaleEntryKindComp &&
-			row.ChargeAdjustmentID.Valid {
-			adjustmentIDs = append(adjustmentIDs, row.ChargeAdjustmentID.UUID)
-		}
-	}
-	allocations, err := q.ListAdjustmentRefundAllocations(ctx, adjustmentIDs)
-	if err != nil {
-		return nil, fmt.Errorf("load post-sale refund allocations: %w", err)
-	}
-	allocated := make(map[uuid.UUID]int64, len(adjustmentIDs))
-	completed := make(map[uuid.UUID]int64, len(adjustmentIDs))
-	for _, allocation := range allocations {
-		next, err := AddCharge(allocated[allocation.ChargeAdjustmentID], allocation.AmountVnd)
-		if err != nil {
-			return nil, fmt.Errorf("%w: post-sale refund allocations: %v",
-				ErrFinancialInvariantViolated, err)
-		}
-		allocated[allocation.ChargeAdjustmentID] = next
-		if !allocation.RefundCompleted {
-			continue
-		}
-		next, err = AddCharge(completed[allocation.ChargeAdjustmentID], allocation.AmountVnd)
-		if err != nil {
-			return nil, fmt.Errorf("%w: completed post-sale refunds: %v",
-				ErrFinancialInvariantViolated, err)
-		}
-		completed[allocation.ChargeAdjustmentID] = next
-	}
-
-	out := make([]PostSaleCorrectionResponse, 0, len(adjustmentIDs))
-	for _, row := range rows {
-		if !row.EntryKind.Valid || row.EntryKind.String != postSaleEntryKindComp ||
-			!row.ChargeAdjustmentID.Valid || !row.AmountVnd.Valid {
-			continue
-		}
-		adjustmentID := row.ChargeAdjustmentID.UUID
-		remainingVND := row.AmountVnd.Int64 - allocated[adjustmentID]
-		outstandingVND := row.AmountVnd.Int64 - completed[adjustmentID]
-		if remainingVND < 0 || outstandingVND < 0 {
-			return nil, fmt.Errorf(
-				"%w: post-sale adjustment %s amount %d is below its refund allocations",
-				ErrFinancialInvariantViolated, adjustmentID, row.AmountVnd.Int64)
-		}
-
-		adjustment := ChargeAdjustmentResponse{
-			ID:                     adjustmentID,
-			Kind:                   ChargeAdjustmentKindComp,
-			Scope:                  CompScopePostSale,
-			PreparationUnitID:      row.PreparationUnitID.UUID,
-			ChargeAllocationID:     uuid.Nil,
-			CompletedSaleID:        &saleID,
-			SalesShiftID:           uuid.Nil,
-			AmountVND:              row.AmountVnd.Int64,
-			RemainingRefundableVND: remainingVND,
-			CreatedAt:              row.OccurredAt.Time,
-		}
-		if row.PreparationWasteID.Valid {
-			wasteID := row.PreparationWasteID.UUID
-			adjustment.PreparationWasteID = &wasteID
-		}
-
-		entry := PostSaleCorrectionResponse{
-			Adjustment: adjustment,
-			Comp: CompResponse{
-				ID:                        row.SalesCompID.UUID,
-				WasteID:                   row.PreparationWasteID.UUID,
-				PreparationUnitID:         row.PreparationUnitID.UUID,
-				ChargeAdjustmentID:        adjustmentID,
-				AmountVND:                 row.AmountVnd.Int64,
-				Reason:                    row.Reason.String,
-				Note:                      nullStringPtr(row.Note),
-				ActorStaffIdentityID:      row.ActorStaffIdentityID.UUID,
-				ApprovedByStaffIdentityID: row.ApprovedByStaffIdentityID.UUID,
-				OccurredAt:                row.OccurredAt.Time,
-			},
-			Refunds:              make([]RefundResponse, 0),
-			OutstandingRefundVND: outstandingVND,
-		}
-		if newRefund != nil && refundCoversAdjustment(*newRefund, adjustmentID) {
-			entry.Refunds = append(entry.Refunds, *newRefund)
-		}
-		out = append(out, entry)
-	}
-	return out, nil
-}
-
-// refundCoversAdjustment reports whether the Refund allocated against the
-// Charge Adjustment, so the history entry lists exactly the Refunds this
-// mutation can prove touched it.
-func refundCoversAdjustment(refund RefundResponse, adjustmentID uuid.UUID) bool {
-	for _, allocation := range refund.AdjustmentAllocations {
-		if allocation.ID == adjustmentID {
-			return true
-		}
-	}
-	return false
 }
 
 // audit detail shapes. Each carries stable business ids and financial meaning,

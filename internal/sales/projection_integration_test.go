@@ -5,6 +5,7 @@ package sales_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/preparation"
@@ -641,4 +642,94 @@ func TestCompletedSalePreparationRecoveryHistory(t *testing.T) {
 				"transition %d must not precede its predecessor", i)
 		}
 	})
+}
+
+// TestCompletedSaleCoreExcludesPostSaleCorrections proves the structural
+// snapshot boundary directly: after a post-sale Comp and Refund, the core
+// Check still projects only the LIVE_CHECK adjustments and live Refunds that
+// existed at closure, and its historical Payment refundable capacity ignores
+// the allocation the post-sale Refund consumed. Only post_sale_corrections
+// carries the later facts. No timestamp comparison is involved.
+func TestCompletedSaleCoreExcludesPostSaleCorrections(t *testing.T) {
+	env := newRefundEnv(t)
+
+	session := env.commitDineInDraftWithQuantity(t, 2)
+	checkID := env.soleCheckID(t, session.ID)
+	for range 2 {
+		_, status, err := env.payCash(t, checkID, 25000, 25000)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status)
+	}
+	session = env.Submit(t, session.ID)
+	require.Len(t, session.PreparationUnits, 2)
+
+	wasteIDs := make([]uuid.UUID, 0, 2)
+	for _, unit := range session.PreparationUnits {
+		wasteIDs = append(wasteIDs, env.wasteUnitAfterAdvance(t, unit.ID))
+	}
+	payments := env.paymentIDsForCheck(t, checkID)
+	require.Len(t, payments, 2)
+
+	preCloseComp := env.compOK(t, env.compCommand(t, wasteIDs[0], sales.CompReasonCafeError, nil))
+	require.Equal(t, sales.CompScopeLiveCheck, preCloseComp.Scope)
+	preCloseRefund := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash,
+		payments[0], preCloseComp.Comp.ChargeAdjustmentID, 25000))
+	require.Equal(t, sales.RefundStateCompleted, preCloseRefund.Refund.State)
+
+	sale := env.Close(t, session.ID)
+	require.Len(t, sale.Checks, 1)
+	require.Len(t, sale.Checks[0].ChargeAdjustments, 1)
+	require.Len(t, sale.Checks[0].Refunds, 1)
+
+	postCloseComp := env.compOK(t, env.compCommand(t, wasteIDs[1], sales.CompReasonCafeError, nil))
+	require.Equal(t, sales.CompScopePostSale, postCloseComp.Scope)
+	postCloseRefund := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash,
+		payments[1], postCloseComp.Comp.ChargeAdjustmentID, 25000))
+	require.Equal(t, sales.RefundStateCompleted, postCloseRefund.Refund.State)
+
+	after, _, err := env.GetCompletedSale(t, sale.ID)
+	require.NoError(t, err)
+	require.Len(t, after.Checks, 1)
+	check := after.Checks[0]
+
+	require.EqualValues(t, 50000, check.BaseChargeVND)
+	require.EqualValues(t, 25000, check.ChargeVND)
+	require.EqualValues(t, 50000, check.TotalAppliedVND)
+	require.EqualValues(t, 0, check.TotalVoidedVND)
+	require.EqualValues(t, 25000, check.TotalRefundedVND,
+		"the post-sale completed Refund is additive history, not closure evidence")
+	require.EqualValues(t, 25000, check.EffectiveReceivedVND)
+	require.EqualValues(t, 0, check.BalanceVND)
+	require.EqualValues(t, 0, check.PendingRefundVND)
+
+	require.Len(t, check.ChargeAdjustments, 1)
+	require.Equal(t, preCloseComp.Comp.ChargeAdjustmentID, check.ChargeAdjustments[0].ID)
+	require.Equal(t, sales.CompScopeLiveCheck, check.ChargeAdjustments[0].Scope)
+
+	require.Len(t, check.Refunds, 1)
+	require.Equal(t, preCloseRefund.Refund.ID, check.Refunds[0].ID)
+	for _, refund := range check.Refunds {
+		require.NotEqual(t, postCloseRefund.Refund.ID, refund.ID,
+			"a post-sale Refund never enters the core snapshot")
+	}
+
+	for _, payment := range check.Payments {
+		switch payment.ID {
+		case payments[0]:
+			require.EqualValues(t, 0, payment.RemainingRefundableVND,
+				"the pre-close Refund consumed this Payment's capacity")
+		case payments[1]:
+			require.EqualValues(t, 25000, payment.RemainingRefundableVND,
+				"the post-sale Refund allocation must not consume historical capacity")
+		}
+	}
+
+	require.Len(t, after.PostSaleCorrections, 1)
+	entry := after.PostSaleCorrections[0]
+	require.Equal(t, postCloseComp.Comp.ChargeAdjustmentID, entry.Adjustment.ID)
+	require.Equal(t, sales.CompScopePostSale, entry.Adjustment.Scope)
+	require.Len(t, entry.Refunds, 1)
+	require.Equal(t, postCloseRefund.Refund.ID, entry.Refunds[0].ID)
+	require.Zero(t, entry.Adjustment.RemainingRefundableVND)
+	require.Zero(t, entry.OutstandingRefundVND)
 }

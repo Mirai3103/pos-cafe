@@ -475,15 +475,25 @@ type CloseServiceSessionCommand struct {
 }
 
 // CompletedSaleCheckResponse is one Check as it stood at closure: settled,
-// with a zero balance, carrying its Payments and Charge Allocations.
+// with a zero balance, carrying its Payments, Charge Allocations, the live
+// Charge Adjustments and Refunds that existed before closure, and the complete
+// Phase 6C financial equation. It is the immutable core: post-sale corrections
+// appear only in CompletedSaleResponse.PostSaleCorrections.
 type CompletedSaleCheckResponse struct {
-	ID              uuid.UUID                  `json:"id"`
-	State           string                     `json:"state"`
-	ChargeVND       int64                      `json:"charge_vnd"`
-	TotalAppliedVND int64                      `json:"total_applied_vnd"`
-	BalanceVND      int64                      `json:"balance_vnd"`
-	Payments        []PaymentResponse          `json:"payments"`
-	Allocations     []ChargeAllocationResponse `json:"allocations"`
+	ID                   uuid.UUID                  `json:"id"`
+	State                string                     `json:"state"`
+	BaseChargeVND        int64                      `json:"base_charge_vnd"`
+	ChargeVND            int64                      `json:"charge_vnd"`
+	TotalAppliedVND      int64                      `json:"total_applied_vnd"`
+	TotalVoidedVND       int64                      `json:"total_voided_vnd"`
+	TotalRefundedVND     int64                      `json:"total_refunded_vnd"`
+	EffectiveReceivedVND int64                      `json:"effective_received_vnd"`
+	BalanceVND           int64                      `json:"balance_vnd"`
+	PendingRefundVND     int64                      `json:"pending_refund_vnd"`
+	Payments             []PaymentResponse          `json:"payments"`
+	Allocations          []ChargeAllocationResponse `json:"allocations"`
+	ChargeAdjustments    []ChargeAdjustmentResponse `json:"charge_adjustments"`
+	Refunds              []RefundResponse           `json:"refunds"`
 }
 
 // PreparationTransitionResponse is one recorded move of a Preparation Unit.
@@ -502,6 +512,8 @@ type PreparationTransitionResponse struct {
 }
 
 // CompletedSaleResponse is the immutable outcome of a closed Service Session.
+// PostSaleCorrections is the sole field that may change after closure: the
+// sale's additive Comp and Refund history, never null.
 type CompletedSaleResponse struct {
 	ID                     uuid.UUID                       `json:"id"`
 	State                  string                          `json:"state"`
@@ -518,6 +530,7 @@ type CompletedSaleResponse struct {
 	Orders                 []OrderResponse                 `json:"orders"`
 	PreparationUnits       []PreparationUnitResponse       `json:"preparation_units"`
 	PreparationHistory     []PreparationTransitionResponse `json:"preparation_history"`
+	PostSaleCorrections    []PostSaleCorrectionResponse    `json:"post_sale_corrections"`
 }
 
 // CompletedSaleStateCompleted is the only state a Completed Sale has. It is a

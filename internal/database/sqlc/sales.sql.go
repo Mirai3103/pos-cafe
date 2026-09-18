@@ -1771,37 +1771,55 @@ func (q *Queries) ListCommittedItemsForSubmission(ctx context.Context, orderDraf
 const listCompletedSalePostSaleCorrections = `-- name: ListCompletedSalePostSaleCorrections :many
 SELECT NULL::text AS entry_kind,
        NULL::uuid AS charge_adjustment_id,
+       NULL::text AS adjustment_kind,
        NULL::uuid AS preparation_unit_id,
        NULL::uuid AS preparation_waste_id,
        NULL::uuid AS sales_comp_id,
        NULL::uuid AS refund_id,
+       NULL::uuid AS check_id,
+       NULL::text AS scope,
+       NULL::uuid AS charge_allocation_id,
+       NULL::uuid AS sales_shift_id,
+       NULL::uuid AS completed_sale_id,
        NULL::bigint AS amount_vnd,
        NULL::text AS reason,
        NULL::text AS note,
        NULL::uuid AS actor_staff_identity_id,
        NULL::uuid AS approved_by_staff_identity_id,
        NULL::text AS refund_method,
+       NULL::uuid AS refund_completion_id,
        NULL::text AS transaction_reference,
        NULL::uuid AS completed_by_staff_identity_id,
+       NULL::uuid AS completed_staff_access_session_id,
        NULL::timestamptz AS completed_at,
+       NULL::timestamptz AS created_at,
        NULL::timestamptz AS occurred_at
 WHERE false
 UNION ALL
 SELECT 'COMP' AS entry_kind,
        ca.id AS charge_adjustment_id,
+       ca.kind AS adjustment_kind,
        ca.preparation_unit_id,
        ca.preparation_waste_id,
        sc.id AS sales_comp_id,
        NULL::uuid AS refund_id,
+       ca.check_id,
+       ca.scope,
+       ca.charge_allocation_id,
+       ca.sales_shift_id,
+       ca.completed_sale_id,
        ca.amount_vnd,
        sc.reason,
        sc.note,
        sc.actor_staff_identity_id,
        sc.approved_by_staff_identity_id,
        NULL::text AS refund_method,
+       NULL::uuid AS refund_completion_id,
        NULL::text AS transaction_reference,
        NULL::uuid AS completed_by_staff_identity_id,
+       NULL::uuid AS completed_staff_access_session_id,
        NULL::timestamptz AS completed_at,
+       ca.created_at,
        sc.occurred_at
 FROM charge_adjustments AS ca
 JOIN sales_comps AS sc ON sc.charge_adjustment_id = ca.id
@@ -1810,19 +1828,28 @@ WHERE ca.scope = 'POST_SALE'
 UNION ALL
 SELECT 'REFUND' AS entry_kind,
        NULL::uuid AS charge_adjustment_id,
+       NULL::text AS adjustment_kind,
        NULL::uuid AS preparation_unit_id,
        NULL::uuid AS preparation_waste_id,
        NULL::uuid AS sales_comp_id,
        r.id AS refund_id,
+       r.check_id,
+       NULL::text AS scope,
+       NULL::uuid AS charge_allocation_id,
+       r.sales_shift_id,
+       r.completed_sale_id,
        r.amount_vnd,
        r.reason,
        r.note,
        r.actor_staff_identity_id,
        r.approved_by_staff_identity_id,
        r.method AS refund_method,
+       rc.id AS refund_completion_id,
        rc.transaction_reference,
        rc.completed_by_staff_identity_id,
+       rc.staff_access_session_id AS completed_staff_access_session_id,
        rc.completed_at,
+       r.created_at,
        r.created_at AS occurred_at
 FROM refunds AS r
 LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
@@ -1833,22 +1860,31 @@ ORDER BY occurred_at ASC,
 `
 
 type ListCompletedSalePostSaleCorrectionsRow struct {
-	EntryKind                  sql.NullString `json:"entry_kind"`
-	ChargeAdjustmentID         uuid.NullUUID  `json:"charge_adjustment_id"`
-	PreparationUnitID          uuid.NullUUID  `json:"preparation_unit_id"`
-	PreparationWasteID         uuid.NullUUID  `json:"preparation_waste_id"`
-	SalesCompID                uuid.NullUUID  `json:"sales_comp_id"`
-	RefundID                   uuid.NullUUID  `json:"refund_id"`
-	AmountVnd                  sql.NullInt64  `json:"amount_vnd"`
-	Reason                     sql.NullString `json:"reason"`
-	Note                       sql.NullString `json:"note"`
-	ActorStaffIdentityID       uuid.NullUUID  `json:"actor_staff_identity_id"`
-	ApprovedByStaffIdentityID  uuid.NullUUID  `json:"approved_by_staff_identity_id"`
-	RefundMethod               sql.NullString `json:"refund_method"`
-	TransactionReference       sql.NullString `json:"transaction_reference"`
-	CompletedByStaffIdentityID uuid.NullUUID  `json:"completed_by_staff_identity_id"`
-	CompletedAt                sql.NullTime   `json:"completed_at"`
-	OccurredAt                 sql.NullTime   `json:"occurred_at"`
+	EntryKind                     sql.NullString `json:"entry_kind"`
+	ChargeAdjustmentID            uuid.NullUUID  `json:"charge_adjustment_id"`
+	AdjustmentKind                sql.NullString `json:"adjustment_kind"`
+	PreparationUnitID             uuid.NullUUID  `json:"preparation_unit_id"`
+	PreparationWasteID            uuid.NullUUID  `json:"preparation_waste_id"`
+	SalesCompID                   uuid.NullUUID  `json:"sales_comp_id"`
+	RefundID                      uuid.NullUUID  `json:"refund_id"`
+	CheckID                       uuid.NullUUID  `json:"check_id"`
+	Scope                         sql.NullString `json:"scope"`
+	ChargeAllocationID            uuid.NullUUID  `json:"charge_allocation_id"`
+	SalesShiftID                  uuid.NullUUID  `json:"sales_shift_id"`
+	CompletedSaleID               uuid.NullUUID  `json:"completed_sale_id"`
+	AmountVnd                     sql.NullInt64  `json:"amount_vnd"`
+	Reason                        sql.NullString `json:"reason"`
+	Note                          sql.NullString `json:"note"`
+	ActorStaffIdentityID          uuid.NullUUID  `json:"actor_staff_identity_id"`
+	ApprovedByStaffIdentityID     uuid.NullUUID  `json:"approved_by_staff_identity_id"`
+	RefundMethod                  sql.NullString `json:"refund_method"`
+	RefundCompletionID            uuid.NullUUID  `json:"refund_completion_id"`
+	TransactionReference          sql.NullString `json:"transaction_reference"`
+	CompletedByStaffIdentityID    uuid.NullUUID  `json:"completed_by_staff_identity_id"`
+	CompletedStaffAccessSessionID uuid.NullUUID  `json:"completed_staff_access_session_id"`
+	CompletedAt                   sql.NullTime   `json:"completed_at"`
+	CreatedAt                     sql.NullTime   `json:"created_at"`
+	OccurredAt                    sql.NullTime   `json:"occurred_at"`
 }
 
 // Additive post-sale correction history for one Completed Sale: every
@@ -1856,8 +1892,10 @@ type ListCompletedSalePostSaleCorrectionsRow struct {
 // ordered by occurrence then id. entry_kind discriminates the two row shapes;
 // each shape fills only its own columns. The leading WHERE false header exists
 // so the generated row type carries every column as nullable; a real row
-// always fills its own shape. The immutable sale snapshot itself is never
-// rebuilt from these rows.
+// always fills its own shape. Each row carries every column a full
+// PostSaleCorrectionResponse needs, so the shared loader never fabricates a
+// zero placeholder. The immutable sale snapshot itself is never rebuilt from
+// these rows.
 func (q *Queries) ListCompletedSalePostSaleCorrections(ctx context.Context, completedSaleID uuid.UUID) ([]ListCompletedSalePostSaleCorrectionsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCompletedSalePostSaleCorrections, completedSaleID)
 	if err != nil {
@@ -1870,19 +1908,28 @@ func (q *Queries) ListCompletedSalePostSaleCorrections(ctx context.Context, comp
 		if err := rows.Scan(
 			&i.EntryKind,
 			&i.ChargeAdjustmentID,
+			&i.AdjustmentKind,
 			&i.PreparationUnitID,
 			&i.PreparationWasteID,
 			&i.SalesCompID,
 			&i.RefundID,
+			&i.CheckID,
+			&i.Scope,
+			&i.ChargeAllocationID,
+			&i.SalesShiftID,
+			&i.CompletedSaleID,
 			&i.AmountVnd,
 			&i.Reason,
 			&i.Note,
 			&i.ActorStaffIdentityID,
 			&i.ApprovedByStaffIdentityID,
 			&i.RefundMethod,
+			&i.RefundCompletionID,
 			&i.TransactionReference,
 			&i.CompletedByStaffIdentityID,
+			&i.CompletedStaffAccessSessionID,
 			&i.CompletedAt,
+			&i.CreatedAt,
 			&i.OccurredAt,
 		); err != nil {
 			return nil, err

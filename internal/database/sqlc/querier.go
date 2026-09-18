@@ -321,8 +321,10 @@ type Querier interface {
 	// ordered by occurrence then id. entry_kind discriminates the two row shapes;
 	// each shape fills only its own columns. The leading WHERE false header exists
 	// so the generated row type carries every column as nullable; a real row
-	// always fills its own shape. The immutable sale snapshot itself is never
-	// rebuilt from these rows.
+	// always fills its own shape. Each row carries every column a full
+	// PostSaleCorrectionResponse needs, so the shared loader never fabricates a
+	// zero placeholder. The immutable sale snapshot itself is never rebuilt from
+	// these rows.
 	ListCompletedSalePostSaleCorrections(ctx context.Context, completedSaleID uuid.UUID) ([]ListCompletedSalePostSaleCorrectionsRow, error)
 	ListCurrentPreparationTables(ctx context.Context, serviceSessionIds []uuid.UUID) ([]ListCurrentPreparationTablesRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
