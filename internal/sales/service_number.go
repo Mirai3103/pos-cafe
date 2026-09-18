@@ -10,19 +10,29 @@ import (
 	"github.com/google/uuid"
 )
 
-// requireOpenSalesShift returns the open Sales Shift's id, or
-// ErrOpenShiftRequired when none is open.
+// lockOpenSalesShiftForStart returns the open Sales Shift's id, or
+// ErrOpenShiftRequired when none is open. It is Session Start's gate; the
+// lockOpenSalesShift twin in payments.go reports a missing Shift through
+// checkPreconditions instead, so the two cannot share a name or a contract.
 //
 // It runs inside the mutation body, after the idempotency claim, so that a
 // replay of a request that succeeded during a Shift still returns its stored
 // result once that Shift has closed. The precondition guards new work only.
-func requireOpenSalesShift(ctx context.Context, q *sqlc.Queries) (uuid.UUID, error) {
-	id, err := q.GetOpenSalesShiftID(ctx)
+//
+// The read takes the Shift row FOR SHARE and holds it through the Session
+// insert and the transaction's commit, so a Shift closure that validates its
+// blockers under FOR UPDATE cannot miss a Session created concurrently: a
+// closure either commits before the start's validation and this read answers
+// nothing or re-checks the OPEN predicate against the committed CLOSING row,
+// or it waits behind the start and sees the Session as a blocker. Only OPEN
+// matches — a CLOSING Shift must not start a Session.
+func lockOpenSalesShiftForStart(ctx context.Context, q *sqlc.Queries) (uuid.UUID, error) {
+	id, err := q.LockOpenSalesShiftForShare(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return uuid.Nil, ErrOpenShiftRequired
+	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return uuid.Nil, ErrOpenShiftRequired
-		}
-		return uuid.Nil, fmt.Errorf("load open sales shift: %w", err)
+		return uuid.Nil, fmt.Errorf("lock open sales shift: %w", err)
 	}
 	return id, nil
 }

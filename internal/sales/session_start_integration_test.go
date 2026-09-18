@@ -4,8 +4,12 @@ package sales_test
 
 import (
 	"context"
+	"database/sql"
+	"net/http"
+	"sync"
 	"testing"
 
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -20,6 +24,111 @@ func startTakeaway(t *testing.T, runner *sales.Runner, actor sales.Actor, reques
 	return sales.NewStartTakeawaySessionHandler(runner).Handle(
 		context.Background(), actor,
 		sales.StartTakeawaySessionCommand{RequestID: requestID})
+}
+
+// startErrorCode maps a handler error through the HTTP layer's mapping and
+// returns its stable code, the way paymentErrorCode does for Payments.
+func startErrorCode(t *testing.T, err error) string {
+	t.Helper()
+	_, mapped := mapErrorStatus(err)
+	var coded *response.CodedError
+	require.ErrorAs(t, mapped, &coded, "expected a coded error, got %v", mapped)
+	return coded.Code
+}
+
+// countServiceSessions counts every Service Session row.
+func countServiceSessions(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	var n int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM service_sessions`).Scan(&n))
+	return n
+}
+
+// Session Start must acquire the one open Sales Shift FOR SHARE before
+// inserting its Session and hold it through commit (spec 11.1): the holder
+// transaction below plays reconciliation, which takes the Shift FOR UPDATE and
+// validates closure blockers against committed data. A Session that appears
+// only after the release cannot be missed by blocker validation.
+func TestSessionStartLocksOpenShift(t *testing.T) {
+	t.Run("start blocks on a held open shift and starts after release", func(t *testing.T) {
+		db, q := openSalesTestDB(t)
+		truncateSalesTables(t, db)
+		runner := sales.NewRunner(db, q)
+
+		actor := seedActor(t, q, []string{"CASHIER"})
+		shiftID := seedOpenShift(t, q, actor.StaffID)
+
+		// Hold the Shift FOR UPDATE, like reconciliation start does.
+		holder := holdRowLock(t, db,
+			`SELECT id::text FROM sales_shifts WHERE id = $1 FOR UPDATE`, shiftID)
+
+		var wg sync.WaitGroup
+		var status int
+		var resp sales.ServiceSessionResponse
+		var err error
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			status, resp, err = startTakeaway(t, runner, actor, uuid.New())
+		}()
+
+		// The start must be parked on the Shift row while the holder owns it.
+		// The uncommitted Session insert would also park here later, on the
+		// FK's FOR KEY SHARE — which is exactly too late, as the CLOSING
+		// subtest proves — so this wait only synchronizes the race; the gate
+		// itself is discriminated below.
+		waitForLockWaiters(t, db, 1)
+		holder.release(t)
+		requireCorrectionRaceResolved(t, &wg)
+
+		require.NoError(t, err)
+		assert.Equal(t, 201, status)
+		assert.Equal(t, shiftID, resp.SalesShiftID)
+		assert.Equal(t, 1, countServiceSessions(t, db),
+			"the released start must insert exactly its one Session")
+
+		var state string
+		require.NoError(t, db.QueryRow(
+			`SELECT state FROM sales_shifts WHERE id = $1`, shiftID).Scan(&state))
+		assert.Equal(t, "OPEN", state, "the start must leave the Shift OPEN")
+	})
+
+	t.Run("a shift that turns CLOSING under the lock rejects start", func(t *testing.T) {
+		db, q := openSalesTestDB(t)
+		truncateSalesTables(t, db)
+		runner := sales.NewRunner(db, q)
+
+		actor := seedActor(t, q, []string{"CASHIER"})
+		shiftID := seedOpenShift(t, q, actor.StaffID)
+
+		holder := holdRowLock(t, db,
+			`SELECT id::text FROM sales_shifts WHERE id = $1 FOR UPDATE`, shiftID)
+
+		var wg sync.WaitGroup
+		var err error
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err = startTakeaway(t, runner, actor, uuid.New())
+		}()
+		waitForLockWaiters(t, db, 1)
+
+		// Reconciliation's OPEN -> CLOSING transition happens under its own
+		// FOR UPDATE, which the holder already owns, so the flip is written on
+		// the holder transaction and becomes visible exactly at release.
+		_, execErr := holder.tx.Exec(
+			`UPDATE sales_shifts SET state = 'CLOSING' WHERE id = $1`, shiftID)
+		require.NoError(t, execErr)
+		holder.release(t)
+		requireCorrectionRaceResolved(t, &wg)
+
+		require.ErrorIs(t, err, sales.ErrOpenShiftRequired)
+		status, _ := mapErrorStatus(err)
+		assert.Equal(t, http.StatusConflict, status)
+		assert.Equal(t, "OPEN_SALES_SHIFT_REQUIRED", startErrorCode(t, err))
+		assert.Equal(t, 0, countServiceSessions(t, db),
+			"a rejected start must insert no Session")
+	})
 }
 
 func TestStartTakeawaySessionAllocatesSequentialNumbers(t *testing.T) {
