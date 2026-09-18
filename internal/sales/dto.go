@@ -8,6 +8,16 @@ import (
 
 // ---------- Commands ----------
 
+// ManagerApprovalInput is one inline Manager Approval: a second identity's
+// login code and PIN, supplied with the request that needs one. It is
+// request-only credentials. The executor copies the values into ApprovalSpec,
+// and neither value ever reaches a fingerprint, stored result, business fact,
+// audit detail, or log.
+type ManagerApprovalInput struct {
+	ApproverLoginCode string `json:"approver_login_code"`
+	ManagerPIN        string `json:"manager_pin"`
+}
+
 // StartTakeawaySessionCommand opens an anonymous Takeaway Service Session.
 type StartTakeawaySessionCommand struct {
 	RequestID uuid.UUID `json:"request_id"`

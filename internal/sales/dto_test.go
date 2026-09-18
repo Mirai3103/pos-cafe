@@ -89,6 +89,24 @@ func TestAddDraftItemCommandDistinguishesAbsentFromEmpty(t *testing.T) {
 	assert.Empty(t, *empty.ModifierOptionIDs)
 }
 
+// ManagerApprovalInput is the request-only credential block Comp, Refund, and
+// Payment Void embed. The JSON tags are the wire contract, and the type
+// appears in no response.
+func TestManagerApprovalInputIsRequestOnlyCredentials(t *testing.T) {
+	raw, err := json.Marshal(ManagerApprovalInput{
+		ApproverLoginCode: "MANAGER01",
+		ManagerPIN:        "8642",
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"approver_login_code":"MANAGER01","manager_pin":"8642"}`, string(raw))
+
+	var in ManagerApprovalInput
+	require.NoError(t, json.Unmarshal(
+		[]byte(`{"approver_login_code":"manager01","manager_pin":"8642"}`), &in))
+	assert.Equal(t, "manager01", in.ApproverLoginCode)
+	assert.Equal(t, "8642", in.ManagerPIN)
+}
+
 func TestCheckResponseSerialization(t *testing.T) {
 	check := CheckResponse{
 		ID:              uuid.New(),

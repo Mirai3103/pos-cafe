@@ -22,20 +22,35 @@ type Actor struct {
 	SessionID uuid.UUID
 }
 
+// ApprovalSpec requires a second identity holding the Manager role to
+// authenticate inline before the request is claimed.
+type ApprovalSpec struct {
+	ApproverLoginCode string
+	ManagerPIN        string
+	// RequiredCapability is the capability the approver must also hold, so a
+	// Manager cannot approve an operation outside their own authority.
+	RequiredCapability string
+}
+
 // MutationSpec carries request-level metadata for a mutation command.
 //
-// No Sales operation in 5A takes a PIN or any other secret, so unlike Shift's
-// spec there is no approval field and no secret can reach the fingerprint.
+// Fingerprint must never contain a PIN or an approver login code. Including a
+// credential would make the idempotency key sensitive to it and would store a
+// credential-derived value at rest.
 type MutationSpec struct {
 	RequestID   uuid.UUID
 	Operation   string
 	Fingerprint any
 	Required    []string
+	// Approval is nil for operations needing no second-party approval.
+	Approval *ApprovalSpec
 }
 
 // MutationContext carries per-execution facts the mutation body needs.
+// Approver is nil when the spec required no approval.
 type MutationContext struct {
-	Queries *sqlc.Queries
+	Queries  *sqlc.Queries
+	Approver *auth.ApproverSummary
 }
 
 // AuditRecord describes the audit event to insert after a successful mutation.
@@ -204,7 +219,8 @@ func (r *Runner) AdvisoryLock(ctx context.Context, q *sqlc.Queries, key int64) e
 }
 
 // ExecuteMutation runs a mutation inside one transaction with authorization,
-// idempotency, and audit. On success it returns the HTTP status and result.
+// optional second-party approval, idempotency, and audit. On success it returns
+// the HTTP status and result.
 //
 // The order of steps is load-bearing. Authority is reloaded before the
 // idempotency replay, so an actor whose session was revoked or whose role was
@@ -240,18 +256,39 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return 0, zero, finishDenial(tx, recordDenial(ctx, q, actor, authRow, spec.Operation, err))
 	}
 
-	// 3. Fingerprint the normalized business input.
+	// 3. Verify second-party Manager approval, when the operation needs one.
+	// This runs before the idempotency claim, so a replay cannot succeed using
+	// an approver who has since been disabled or demoted. The approver row stays
+	// locked for the rest of this transaction.
+	var approver *auth.ApproverSummary
+	if spec.Approval != nil {
+		summary, approvalErr := auth.VerifyManagerApproval(ctx, q,
+			spec.Approval.ApproverLoginCode,
+			spec.Approval.ManagerPIN,
+			spec.Approval.RequiredCapability)
+		if approvalErr != nil {
+			if errors.Is(approvalErr, auth.ErrManagerApprovalDenied) {
+				denial := fmt.Errorf("%w: %s", ErrForbidden, approvalErr.Error())
+				return 0, zero, finishDenial(tx, recordDenial(ctx, q, actor, authRow, spec.Operation, denial))
+			}
+			return 0, zero, approvalErr
+		}
+		approver = &summary
+	}
+
+	// 4. Fingerprint the normalized business input. The spec's Fingerprint
+	// type carries no credential, so none reaches the hash.
 	reqHash, err := fpHash(spec.Fingerprint)
 	if err != nil {
 		return 0, zero, err
 	}
 
-	// 4. Advisory lock to serialize concurrent duplicates of this request.
+	// 5. Advisory lock to serialize concurrent duplicates of this request.
 	if err := r.AdvisoryLock(ctx, q, IDToLockKey(actor.StaffID)^IDToLockKey(spec.RequestID)); err != nil {
 		return 0, zero, err
 	}
 
-	// 5. Look for an existing record, now that the lock is held.
+	// 6. Look for an existing record, now that the lock is held.
 	existing, err := q.GetIdempotencyRecord(ctx, sqlc.GetIdempotencyRecordParams{
 		ActorID: actor.StaffID,
 		Key:     spec.RequestID,
@@ -270,7 +307,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return int(existing.ResponseCode), result, nil
 	}
 
-	// 6. Claim the request before any business mutation.
+	// 7. Claim the request before any business mutation.
 	claimed, err := q.ClaimIdempotencyRecord(ctx, sqlc.ClaimIdempotencyRecordParams{
 		Key:          spec.RequestID,
 		ActorID:      actor.StaffID,
@@ -286,13 +323,13 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		return 0, zero, fmt.Errorf("%w: request was claimed concurrently", ErrRequestConflict)
 	}
 
-	// 7. Run the mutation.
-	resultCode, result, audit, err := fn(MutationContext{Queries: q})
+	// 8. Run the mutation.
+	resultCode, result, audit, err := fn(MutationContext{Queries: q, Approver: approver})
 	if err != nil {
 		return 0, zero, err
 	}
 
-	// 8. Write the business audit event, when there is one.
+	// 9. Write the business audit event, when there is one.
 	if audit.EventType != "" {
 		detailsBytes, err := json.Marshal(audit.Details)
 		if err != nil {
@@ -309,7 +346,7 @@ func ExecuteMutation[T any](ctx context.Context, r *Runner, actor Actor,
 		}
 	}
 
-	// 9. Store the replayable result.
+	// 10. Store the replayable result.
 	bodyBytes, err := json.Marshal(result)
 	if err != nil {
 		return 0, zero, fmt.Errorf("marshal response body: %w", err)
