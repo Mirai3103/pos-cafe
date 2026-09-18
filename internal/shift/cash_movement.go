@@ -46,8 +46,9 @@ func NewRecordCashMovementHandler(runner *Runner) *RecordCashMovementHandler {
 }
 
 // Handle records a Cash Movement against an open Sales Shift and returns the
-// resulting Expected Cash, so the terminal updates its drawer figure without a
-// second request.
+// created movement. While the Shift is OPEN the response carries no Expected
+// Cash or source total: no aggregate may be revealed before the blind initial
+// count commits.
 //
 // Cash Movements are append-only: Phase 4 provides no edit, reverse, or delete.
 func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd RecordCashMovementCommand) (int, CashMovementResult, error) {
@@ -125,21 +126,6 @@ func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd
 				return 0, zero, AuditRecord{}, MapDBError(err)
 			}
 
-			sums, err := mc.Queries.SumCashMovements(ctx, openShift.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("sum cash movements: %w", err)
-			}
-			totals, err := mc.Queries.GetShiftReconciliationTotals(ctx, openShift.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("get shift reconciliation totals: %w", err)
-			}
-
-			expected, err := ComputeExpectedCash(openShift.OpeningFloatVnd, totals.CashPaymentVnd,
-				totals.CashPaymentVoidVnd, totals.CashRefundVnd, sums.PayInVnd, sums.PayOutVnd)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
 			movement := CashMovementResponse{
 				ID:           inserted.ID,
 				SalesShiftID: openShift.ID,
@@ -157,8 +143,7 @@ func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd
 			}
 
 			return 201, CashMovementResult{
-				Movement:        movement,
-				ExpectedCashVND: expected,
+				Movement: movement,
 			}, AuditRecord{
 				EventType: EventCashMovementRecorded,
 				Details: cashMovementAuditDetails{

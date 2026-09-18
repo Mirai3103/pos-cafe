@@ -29,11 +29,35 @@ const (
 	EventAuthorizationDenied  = "shift.authorization_denied"
 )
 
-// Sales Shift states. Phase 4 produces only StateOpen; StateClosed exists in
-// the schema so Phase 5 adds a close command without a state-domain migration.
+// Sales Shift states. StateClosing marks a Shift whose reconciliation has
+// started but that has not closed yet: ordinary commands still require OPEN,
+// and no route returns a CLOSING Shift to OPEN or reopens a CLOSED one.
 const (
-	StateOpen   = "OPEN"
-	StateClosed = "CLOSED"
+	StateOpen    = "OPEN"
+	StateClosing = "CLOSING"
+	StateClosed  = "CLOSED"
+)
+
+// DiscrepancyDimension is one axis a closure difference is measured on.
+type DiscrepancyDimension string
+
+// DiscrepancyReason is one catalogued explanation for a nonzero difference.
+type DiscrepancyReason string
+
+// Reconciliation dimensions, in preview order.
+const (
+	DimensionCash             = "CASH"
+	DimensionManualQRReceived = "MANUAL_QR_RECEIVED"
+	DimensionManualQRRefunded = "MANUAL_QR_REFUNDED"
+)
+
+// Discrepancy reasons. ReasonOther is declared once with the Cash Movement
+// reasons above and shared with this catalog: the same OTHER value carries the
+// same requires-a-note rule in both.
+const (
+	ReasonCashCountDifference     = "CASH_COUNT_DIFFERENCE"
+	ReasonQRObservationDifference = "QR_OBSERVATION_DIFFERENCE"
+	ReasonUnexplained             = "UNEXPLAINED"
 )
 
 // Cash Movement methods. Direction is carried here, never by a negative amount.
@@ -126,12 +150,63 @@ func ValidateNote(note *string, reason string) error {
 		}
 		return nil
 	}
+	return checkNoteLength(note)
+}
+
+// checkNoteLength enforces the inclusive 1..MaxNoteLength rune bound on a
+// present note. Runes, not bytes, so Go agrees with the database char_length
+// check.
+func checkNoteLength(note *string) error {
 	n := utf8.RuneCountInString(*note)
 	if n < 1 {
 		return fmt.Errorf("note cannot be empty")
 	}
 	if n > MaxNoteLength {
 		return fmt.Errorf("note is %d characters, maximum is %d", n, MaxNoteLength)
+	}
+	return nil
+}
+
+// ValidateDiscrepancyReason checks a discrepancy reason against its dimension
+// and the reason catalog's note rules.
+//
+// CASH_COUNT_DIFFERENCE is valid only for CASH and QR_OBSERVATION_DIFFERENCE
+// only for the two Manual QR dimensions; UNEXPLAINED and OTHER are valid for
+// every dimension. OTHER requires a note; every other reason forbids one. The
+// note must already be normalized (trimmed), as with ValidateNote.
+func ValidateDiscrepancyReason(dimension, reason string, note *string) error {
+	switch dimension {
+	case DimensionCash, DimensionManualQRReceived, DimensionManualQRRefunded:
+	default:
+		return fmt.Errorf("dimension must be one of %s, %s, %s",
+			DimensionCash, DimensionManualQRReceived, DimensionManualQRRefunded)
+	}
+
+	switch reason {
+	case ReasonCashCountDifference:
+		if dimension != DimensionCash {
+			return fmt.Errorf("reason %s is valid only for dimension %s",
+				ReasonCashCountDifference, DimensionCash)
+		}
+	case ReasonQRObservationDifference:
+		if dimension != DimensionManualQRReceived && dimension != DimensionManualQRRefunded {
+			return fmt.Errorf("reason %s is valid only for dimensions %s and %s",
+				ReasonQRObservationDifference, DimensionManualQRReceived, DimensionManualQRRefunded)
+		}
+	case ReasonUnexplained, ReasonOther:
+	default:
+		return fmt.Errorf("reason must be one of %s, %s, %s, %s",
+			ReasonCashCountDifference, ReasonQRObservationDifference, ReasonUnexplained, ReasonOther)
+	}
+
+	if reason == ReasonOther {
+		if note == nil {
+			return fmt.Errorf("note is required when reason is %s", ReasonOther)
+		}
+		return checkNoteLength(note)
+	}
+	if note != nil {
+		return fmt.Errorf("note is only allowed when reason is %s", ReasonOther)
 	}
 	return nil
 }
@@ -171,6 +246,14 @@ func ComputeExpectedCash(
 			ErrExpectedCashOutOfRange, total, -MaxAmountVND, MaxAmountVND)
 	}
 	return total, nil
+}
+
+// ComputeDifference returns the signed closure difference observed - expected.
+// A positive value is an excess; a negative value is a shortage. It runs
+// through the same guarded arithmetic as Expected Cash so a wrap cannot
+// masquerade as a legitimate difference.
+func ComputeDifference(observed, expected int64) (int64, error) {
+	return subtractAmount(observed, expected)
 }
 
 // addAmount and subtractAmount are the guarded arithmetic this formula runs

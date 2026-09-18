@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
@@ -136,20 +138,25 @@ func TestShiftHTTPHappyPath(t *testing.T) {
 		"/api/v1/shifts/"+opened.ID.String()+"/cash-movements", cashierToken, body)
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 
+	// The Cash Movement response carries the created movement only: while the
+	// Shift is OPEN no Expected Cash or source total may cross the boundary.
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
 	var result shift.CashMovementResult
 	require.NoError(t, json.Unmarshal(env.Data, &result))
-	assert.Equal(t, int64(450000), result.ExpectedCashVND)
+	assert.NotContains(t, string(env.Data), "expected_cash_vnd")
+	assert.NotEqual(t, uuid.Nil, result.Movement.ID)
+	assert.Equal(t, shift.MethodPayOut, result.Movement.Method)
+	assert.Equal(t, int64(50000), result.Movement.AmountVND)
 
-	// The current read now reports the movement.
+	// The current read is redacted for an OPEN Shift: the raw JSON carries
+	// only the four allowed keys, never money or history fields.
 	rec = doRequest(t, e, http.MethodGet, "/api/v1/shifts/current", cashierToken, nil)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
-	var current shift.CurrentSalesShiftResponse
+	var current map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(env.Data, &current))
-	assert.Equal(t, int64(450000), current.ExpectedCashVND)
-	require.Len(t, current.CashMovements, 1)
-	assert.Equal(t, result.Movement.ID, current.CashMovements[0].ID)
+	assert.ElementsMatch(t, []string{"id", "state", "opened_at", "opener"},
+		slices.Collect(maps.Keys(current)))
 }
 
 func TestShiftHTTPSerializesEmptyListsAsArrays(t *testing.T) {
@@ -163,11 +170,21 @@ func TestShiftHTTPSerializesEmptyListsAsArrays(t *testing.T) {
 	rec = doRequest(t, e, http.MethodGet, "/api/v1/shifts/current", token, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	// Assert on the raw JSON: an empty list must be [] and never null.
-	assert.Contains(t, rec.Body.String(), `"cash_movements":[]`)
-	assert.NotContains(t, rec.Body.String(), `"cash_movements":null`)
-	assert.Contains(t, rec.Body.String(), `"refunds":[]`)
-	assert.NotContains(t, rec.Body.String(), `"refunds":null`)
+	// The redacted OPEN read has no collections at all: the money and history
+	// keys are absent entirely, never serialized as null. (The []-not-null
+	// rule moves to the CLOSING and closed shapes in the reconciliation
+	// tasks.)
+	assert.NotContains(t, rec.Body.String(), `"cash_movements"`)
+	assert.NotContains(t, rec.Body.String(), `"refunds"`)
+	assert.NotContains(t, rec.Body.String(), `"expected_cash_vnd"`)
+	assert.NotContains(t, rec.Body.String(), `"opening_float_vnd"`)
+
+	var env envelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+	var current map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(env.Data, &current))
+	assert.ElementsMatch(t, []string{"id", "state", "opened_at", "opener"},
+		slices.Collect(maps.Keys(current)))
 }
 
 func TestShiftHTTPAuthorization(t *testing.T) {
