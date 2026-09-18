@@ -81,6 +81,106 @@ func (q *Queries) GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) 
 	return i, err
 }
 
+const getShiftReconciliationTotals = `-- name: GetShiftReconciliationTotals :one
+
+SELECT
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     WHERE p.sales_shift_id = $1
+       AND p.method = 'CASH') AS cash_payment_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     JOIN payment_voids AS pv ON pv.payment_id = p.id
+     WHERE p.sales_shift_id = $1
+       AND p.method = 'CASH') AS cash_payment_void_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     JOIN refund_completions AS rc ON rc.refund_id = r.id
+     WHERE r.sales_shift_id = $1
+       AND r.method = 'CASH') AS cash_refund_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     WHERE p.sales_shift_id = $1
+       AND p.method = 'MANUAL_QR') AS manual_qr_payment_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     JOIN payment_voids AS pv ON pv.payment_id = p.id
+     WHERE p.sales_shift_id = $1
+       AND p.method = 'MANUAL_QR') AS manual_qr_payment_void_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     JOIN refund_completions AS rc ON rc.refund_id = r.id
+     WHERE r.sales_shift_id = $1
+       AND r.method = 'MANUAL_QR') AS manual_qr_refund_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+     WHERE r.sales_shift_id = $1
+       AND r.method = 'MANUAL_QR'
+       AND rc.id IS NULL) AS pending_manual_qr_refund_vnd,
+    (SELECT (COALESCE(SUM(ca.amount_vnd), 0)
+             - COALESCE((SELECT SUM(raa.amount_vnd)
+                         FROM refund_adjustment_allocations AS raa
+                         JOIN refunds AS r ON r.id = raa.refund_id
+                         JOIN refund_completions AS rc ON rc.refund_id = r.id
+                         JOIN charge_adjustments AS ca2
+                           ON ca2.id = raa.charge_adjustment_id
+                         WHERE ca2.sales_shift_id = $1), 0))::BIGINT
+     FROM charge_adjustments AS ca
+     WHERE ca.sales_shift_id = $1) AS pending_refund_vnd,
+    (SELECT (COALESCE(SUM(ca.amount_vnd), 0)
+             - COALESCE((SELECT SUM(raa.amount_vnd)
+                         FROM refund_adjustment_allocations AS raa
+                         JOIN refunds AS r ON r.id = raa.refund_id
+                         JOIN refund_completions AS rc ON rc.refund_id = r.id
+                         JOIN charge_adjustments AS ca2
+                           ON ca2.id = raa.charge_adjustment_id
+                         WHERE ca2.sales_shift_id = $1
+                           AND ca2.scope = 'POST_SALE'), 0))::BIGINT
+     FROM charge_adjustments AS ca
+     WHERE ca.sales_shift_id = $1
+       AND ca.scope = 'POST_SALE') AS unresolved_post_sale_adjustment_vnd
+`
+
+type GetShiftReconciliationTotalsRow struct {
+	CashPaymentVnd                  int64 `json:"cash_payment_vnd"`
+	CashPaymentVoidVnd              int64 `json:"cash_payment_void_vnd"`
+	CashRefundVnd                   int64 `json:"cash_refund_vnd"`
+	ManualQrPaymentVnd              int64 `json:"manual_qr_payment_vnd"`
+	ManualQrPaymentVoidVnd          int64 `json:"manual_qr_payment_void_vnd"`
+	ManualQrRefundVnd               int64 `json:"manual_qr_refund_vnd"`
+	PendingManualQrRefundVnd        int64 `json:"pending_manual_qr_refund_vnd"`
+	PendingRefundVnd                int64 `json:"pending_refund_vnd"`
+	UnresolvedPostSaleAdjustmentVnd int64 `json:"unresolved_post_sale_adjustment_vnd"`
+}
+
+// -- Phase 6C: Payment Void, Refund & correction reconciliation --
+// Every Phase 6C reconciliation term for one Shift in one read (ADR-046).
+// Cash and Manual QR Payment terms count original applied amounts; a Payment
+// Void removes its source's whole amount; completed Refunds count money out;
+// a pending Manual QR Refund has not moved money yet. pending_refund_vnd is
+// the unresolved corrected capacity of every Charge Adjustment attributed to
+// the Shift (its full amount less the Refund allocations already completed
+// against it, pending intents included); unresolved_post_sale_adjustment_vnd
+// is the POST_SALE subset. internal/shift owns this SQL and imports neither
+// sales nor preparation.
+func (q *Queries) GetShiftReconciliationTotals(ctx context.Context, salesShiftID uuid.UUID) (GetShiftReconciliationTotalsRow, error) {
+	row := q.db.QueryRowContext(ctx, getShiftReconciliationTotals, salesShiftID)
+	var i GetShiftReconciliationTotalsRow
+	err := row.Scan(
+		&i.CashPaymentVnd,
+		&i.CashPaymentVoidVnd,
+		&i.CashRefundVnd,
+		&i.ManualQrPaymentVnd,
+		&i.ManualQrPaymentVoidVnd,
+		&i.ManualQrRefundVnd,
+		&i.PendingManualQrRefundVnd,
+		&i.PendingRefundVnd,
+		&i.UnresolvedPostSaleAdjustmentVnd,
+	)
+	return i, err
+}
+
 const getShiftSessionAuthority = `-- name: GetShiftSessionAuthority :one
 
 SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
@@ -294,6 +394,68 @@ func (q *Queries) ListCashMovements(ctx context.Context, salesShiftID uuid.UUID)
 			&i.ApproverID,
 			&i.ApproverDisplayName,
 			&i.ApproverLoginCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShiftRefunds = `-- name: ListShiftRefunds :many
+SELECT r.id, r.check_id, r.completed_sale_id, r.method, r.amount_vnd,
+       r.reason, r.note, r.created_at,
+       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS completed,
+       rc.completed_at, rc.transaction_reference
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.sales_shift_id = $1
+ORDER BY r.created_at ASC, r.id ASC
+`
+
+type ListShiftRefundsRow struct {
+	ID                   uuid.UUID      `json:"id"`
+	CheckID              uuid.UUID      `json:"check_id"`
+	CompletedSaleID      uuid.NullUUID  `json:"completed_sale_id"`
+	Method               string         `json:"method"`
+	AmountVnd            int64          `json:"amount_vnd"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	CreatedAt            time.Time      `json:"created_at"`
+	Completed            bool           `json:"completed"`
+	CompletedAt          sql.NullTime   `json:"completed_at"`
+	TransactionReference sql.NullString `json:"transaction_reference"`
+}
+
+// The Shift response's Refund summaries ordered by (created_at, id), each
+// carrying derived completion state and no credentials.
+func (q *Queries) ListShiftRefunds(ctx context.Context, salesShiftID uuid.UUID) ([]ListShiftRefundsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listShiftRefunds, salesShiftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShiftRefundsRow{}
+	for rows.Next() {
+		var i ListShiftRefundsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CheckID,
+			&i.CompletedSaleID,
+			&i.Method,
+			&i.AmountVnd,
+			&i.Reason,
+			&i.Note,
+			&i.CreatedAt,
+			&i.Completed,
+			&i.CompletedAt,
+			&i.TransactionReference,
 		); err != nil {
 			return nil, err
 		}

@@ -24,6 +24,23 @@ func (q *Queries) CloseServiceSession(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const countLiveChargeAdjustmentsForChecks = `-- name: CountLiveChargeAdjustmentsForChecks :one
+SELECT count(*)::BIGINT AS live_adjustment_count
+FROM charge_adjustments
+WHERE check_id = ANY($1::uuid[])
+  AND scope = 'LIVE_CHECK'
+`
+
+// Split and Merge rejection evidence (design section 6.2): the number of the
+// given Checks that carry at least one LIVE_CHECK Charge Adjustment. The
+// caller rejects with CHECK_HAS_CHARGE_ADJUSTMENT when this is non-zero.
+func (q *Queries) CountLiveChargeAdjustmentsForChecks(ctx context.Context, checkIds []uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countLiveChargeAdjustmentsForChecks, pq.Array(checkIds))
+	var live_adjustment_count int64
+	err := row.Scan(&live_adjustment_count)
+	return live_adjustment_count, err
+}
+
 const countPaymentsForChecks = `-- name: CountPaymentsForChecks :one
 SELECT count(*)::BIGINT AS payment_count
 FROM payments
@@ -801,6 +818,57 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (u
 	return id, err
 }
 
+const insertPaymentVoid = `-- name: InsertPaymentVoid :one
+INSERT INTO payment_voids (
+    payment_id, sales_shift_id, amount_vnd, reason, note,
+    actor_staff_identity_id, staff_access_session_id,
+    approved_by_staff_identity_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, payment_id, sales_shift_id, amount_vnd, reason, note,
+          actor_staff_identity_id, staff_access_session_id,
+          approved_by_staff_identity_id, occurred_at
+`
+
+type InsertPaymentVoidParams struct {
+	PaymentID                 uuid.UUID      `json:"payment_id"`
+	SalesShiftID              uuid.UUID      `json:"sales_shift_id"`
+	AmountVnd                 int64          `json:"amount_vnd"`
+	Reason                    string         `json:"reason"`
+	Note                      sql.NullString `json:"note"`
+	ActorStaffIdentityID      uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID      uuid.UUID      `json:"staff_access_session_id"`
+	ApprovedByStaffIdentityID uuid.UUID      `json:"approved_by_staff_identity_id"`
+	OccurredAt                time.Time      `json:"occurred_at"`
+}
+
+func (q *Queries) InsertPaymentVoid(ctx context.Context, arg InsertPaymentVoidParams) (PaymentVoid, error) {
+	row := q.db.QueryRowContext(ctx, insertPaymentVoid,
+		arg.PaymentID,
+		arg.SalesShiftID,
+		arg.AmountVnd,
+		arg.Reason,
+		arg.Note,
+		arg.ActorStaffIdentityID,
+		arg.StaffAccessSessionID,
+		arg.ApprovedByStaffIdentityID,
+		arg.OccurredAt,
+	)
+	var i PaymentVoid
+	err := row.Scan(
+		&i.ID,
+		&i.PaymentID,
+		&i.SalesShiftID,
+		&i.AmountVnd,
+		&i.Reason,
+		&i.Note,
+		&i.ActorStaffIdentityID,
+		&i.StaffAccessSessionID,
+		&i.ApprovedByStaffIdentityID,
+		&i.OccurredAt,
+	)
+	return i, err
+}
+
 const insertPreparationUnit = `-- name: InsertPreparationUnit :exec
 INSERT INTO preparation_units (order_item_id, unit_number, service_number,
                                category_name, item_name, size_name,
@@ -833,6 +901,193 @@ func (q *Queries) InsertPreparationUnit(ctx context.Context, arg InsertPreparati
 		arg.QueuedAt,
 	)
 	return err
+}
+
+const insertRefund = `-- name: InsertRefund :one
+INSERT INTO refunds (
+    check_id, completed_sale_id, sales_shift_id, method, amount_vnd,
+    reason, note, actor_staff_identity_id, staff_access_session_id,
+    approved_by_staff_identity_id, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, check_id, completed_sale_id, sales_shift_id, method, amount_vnd,
+          reason, note, actor_staff_identity_id, staff_access_session_id,
+          approved_by_staff_identity_id, created_at
+`
+
+type InsertRefundParams struct {
+	CheckID                   uuid.UUID      `json:"check_id"`
+	CompletedSaleID           uuid.NullUUID  `json:"completed_sale_id"`
+	SalesShiftID              uuid.UUID      `json:"sales_shift_id"`
+	Method                    string         `json:"method"`
+	AmountVnd                 int64          `json:"amount_vnd"`
+	Reason                    string         `json:"reason"`
+	Note                      sql.NullString `json:"note"`
+	ActorStaffIdentityID      uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID      uuid.UUID      `json:"staff_access_session_id"`
+	ApprovedByStaffIdentityID uuid.UUID      `json:"approved_by_staff_identity_id"`
+	CreatedAt                 time.Time      `json:"created_at"`
+}
+
+func (q *Queries) InsertRefund(ctx context.Context, arg InsertRefundParams) (Refund, error) {
+	row := q.db.QueryRowContext(ctx, insertRefund,
+		arg.CheckID,
+		arg.CompletedSaleID,
+		arg.SalesShiftID,
+		arg.Method,
+		arg.AmountVnd,
+		arg.Reason,
+		arg.Note,
+		arg.ActorStaffIdentityID,
+		arg.StaffAccessSessionID,
+		arg.ApprovedByStaffIdentityID,
+		arg.CreatedAt,
+	)
+	var i Refund
+	err := row.Scan(
+		&i.ID,
+		&i.CheckID,
+		&i.CompletedSaleID,
+		&i.SalesShiftID,
+		&i.Method,
+		&i.AmountVnd,
+		&i.Reason,
+		&i.Note,
+		&i.ActorStaffIdentityID,
+		&i.StaffAccessSessionID,
+		&i.ApprovedByStaffIdentityID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const insertRefundAdjustmentAllocations = `-- name: InsertRefundAdjustmentAllocations :exec
+INSERT INTO refund_adjustment_allocations (refund_id, charge_adjustment_id, amount_vnd)
+SELECT $1::uuid, ca.charge_adjustment_id, a.amount_vnd
+FROM unnest($2::uuid[]) WITH ORDINALITY
+     AS ca(charge_adjustment_id, ord)
+JOIN unnest($3::bigint[]) WITH ORDINALITY AS a(amount_vnd, ord)
+  ON a.ord = ca.ord
+`
+
+type InsertRefundAdjustmentAllocationsParams struct {
+	RefundID            uuid.UUID   `json:"refund_id"`
+	ChargeAdjustmentIds []uuid.UUID `json:"charge_adjustment_ids"`
+	Amounts             []int64     `json:"amounts"`
+}
+
+// The Charge Adjustment counterpart of InsertRefundPaymentAllocations.
+func (q *Queries) InsertRefundAdjustmentAllocations(ctx context.Context, arg InsertRefundAdjustmentAllocationsParams) error {
+	_, err := q.db.ExecContext(ctx, insertRefundAdjustmentAllocations, arg.RefundID, pq.Array(arg.ChargeAdjustmentIds), pq.Array(arg.Amounts))
+	return err
+}
+
+const insertRefundCompletion = `-- name: InsertRefundCompletion :one
+INSERT INTO refund_completions (
+    refund_id, transaction_reference, completed_by_staff_identity_id,
+    staff_access_session_id, completed_at
+) VALUES ($1, $2, $3, $4, $5)
+RETURNING id, refund_id, transaction_reference,
+          completed_by_staff_identity_id, staff_access_session_id, completed_at
+`
+
+type InsertRefundCompletionParams struct {
+	RefundID                   uuid.UUID      `json:"refund_id"`
+	TransactionReference       sql.NullString `json:"transaction_reference"`
+	CompletedByStaffIdentityID uuid.UUID      `json:"completed_by_staff_identity_id"`
+	StaffAccessSessionID       uuid.UUID      `json:"staff_access_session_id"`
+	CompletedAt                time.Time      `json:"completed_at"`
+}
+
+func (q *Queries) InsertRefundCompletion(ctx context.Context, arg InsertRefundCompletionParams) (RefundCompletion, error) {
+	row := q.db.QueryRowContext(ctx, insertRefundCompletion,
+		arg.RefundID,
+		arg.TransactionReference,
+		arg.CompletedByStaffIdentityID,
+		arg.StaffAccessSessionID,
+		arg.CompletedAt,
+	)
+	var i RefundCompletion
+	err := row.Scan(
+		&i.ID,
+		&i.RefundID,
+		&i.TransactionReference,
+		&i.CompletedByStaffIdentityID,
+		&i.StaffAccessSessionID,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
+const insertRefundPaymentAllocations = `-- name: InsertRefundPaymentAllocations :exec
+INSERT INTO refund_payment_allocations (refund_id, payment_id, amount_vnd)
+SELECT $1::uuid, p.payment_id, a.amount_vnd
+FROM unnest($2::uuid[]) WITH ORDINALITY AS p(payment_id, ord)
+JOIN unnest($3::bigint[]) WITH ORDINALITY AS a(amount_vnd, ord)
+  ON a.ord = p.ord
+`
+
+type InsertRefundPaymentAllocationsParams struct {
+	RefundID   uuid.UUID   `json:"refund_id"`
+	PaymentIds []uuid.UUID `json:"payment_ids"`
+	Amounts    []int64     `json:"amounts"`
+}
+
+// Writes one Refund's whole Payment allocation set in one round trip. The two
+// single-array unnests zip row-wise by ordinality, so row i is
+// (payment_ids[i], amounts[i]); the caller validates equal lengths and
+// positive amounts before calling, and the pair unique constraint rejects a
+// duplicated source.
+func (q *Queries) InsertRefundPaymentAllocations(ctx context.Context, arg InsertRefundPaymentAllocationsParams) error {
+	_, err := q.db.ExecContext(ctx, insertRefundPaymentAllocations, arg.RefundID, pq.Array(arg.PaymentIds), pq.Array(arg.Amounts))
+	return err
+}
+
+const insertSalesComp = `-- name: InsertSalesComp :one
+INSERT INTO sales_comps (
+    preparation_waste_id, charge_adjustment_id, reason, note,
+    actor_staff_identity_id, staff_access_session_id,
+    approved_by_staff_identity_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, preparation_waste_id, charge_adjustment_id, reason, note,
+          actor_staff_identity_id, staff_access_session_id,
+          approved_by_staff_identity_id, occurred_at
+`
+
+type InsertSalesCompParams struct {
+	PreparationWasteID        uuid.UUID      `json:"preparation_waste_id"`
+	ChargeAdjustmentID        uuid.UUID      `json:"charge_adjustment_id"`
+	Reason                    string         `json:"reason"`
+	Note                      sql.NullString `json:"note"`
+	ActorStaffIdentityID      uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID      uuid.UUID      `json:"staff_access_session_id"`
+	ApprovedByStaffIdentityID uuid.UUID      `json:"approved_by_staff_identity_id"`
+	OccurredAt                time.Time      `json:"occurred_at"`
+}
+
+func (q *Queries) InsertSalesComp(ctx context.Context, arg InsertSalesCompParams) (SalesComp, error) {
+	row := q.db.QueryRowContext(ctx, insertSalesComp,
+		arg.PreparationWasteID,
+		arg.ChargeAdjustmentID,
+		arg.Reason,
+		arg.Note,
+		arg.ActorStaffIdentityID,
+		arg.StaffAccessSessionID,
+		arg.ApprovedByStaffIdentityID,
+		arg.OccurredAt,
+	)
+	var i SalesComp
+	err := row.Scan(
+		&i.ID,
+		&i.PreparationWasteID,
+		&i.ChargeAdjustmentID,
+		&i.Reason,
+		&i.Note,
+		&i.ActorStaffIdentityID,
+		&i.StaffAccessSessionID,
+		&i.ApprovedByStaffIdentityID,
+		&i.OccurredAt,
+	)
+	return i, err
 }
 
 const insertServiceSession = `-- name: InsertServiceSession :one
@@ -981,6 +1236,61 @@ func (q *Queries) ListActiveServiceSessions(ctx context.Context) ([]ListActiveSe
 			&i.SalesShiftID,
 			&i.CreatedByStaffIdentityID,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAdjustmentRefundAllocations = `-- name: ListAdjustmentRefundAllocations :many
+SELECT raa.refund_id, raa.charge_adjustment_id, raa.amount_vnd,
+       r.completed_sale_id AS refund_completed_sale_id,
+       r.method AS refund_method,
+       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS refund_completed
+FROM refund_adjustment_allocations AS raa
+JOIN refunds AS r ON r.id = raa.refund_id
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE raa.charge_adjustment_id = ANY($1::uuid[])
+ORDER BY raa.charge_adjustment_id ASC, raa.refund_id ASC
+`
+
+type ListAdjustmentRefundAllocationsRow struct {
+	RefundID              uuid.UUID     `json:"refund_id"`
+	ChargeAdjustmentID    uuid.UUID     `json:"charge_adjustment_id"`
+	AmountVnd             int64         `json:"amount_vnd"`
+	RefundCompletedSaleID uuid.NullUUID `json:"refund_completed_sale_id"`
+	RefundMethod          string        `json:"refund_method"`
+	RefundCompleted       bool          `json:"refund_completed"`
+}
+
+// Every Refund allocation against the given Charge Adjustments, with the
+// owning Refund's scope and completion evidence, so the Check projection can
+// derive each Adjustment's remaining corrected capacity. Pending Manual QR
+// intents reserve capacity here too.
+func (q *Queries) ListAdjustmentRefundAllocations(ctx context.Context, chargeAdjustmentIds []uuid.UUID) ([]ListAdjustmentRefundAllocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAdjustmentRefundAllocations, pq.Array(chargeAdjustmentIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAdjustmentRefundAllocationsRow{}
+	for rows.Next() {
+		var i ListAdjustmentRefundAllocationsRow
+		if err := rows.Scan(
+			&i.RefundID,
+			&i.ChargeAdjustmentID,
+			&i.AmountVnd,
+			&i.RefundCompletedSaleID,
+			&i.RefundMethod,
+			&i.RefundCompleted,
 		); err != nil {
 			return nil, err
 		}
@@ -1148,26 +1458,104 @@ func (q *Queries) ListCheckAllocations(ctx context.Context, checkID uuid.UUID) (
 	return items, nil
 }
 
+const listCheckChargeAdjustments = `-- name: ListCheckChargeAdjustments :many
+SELECT id, kind, scope, preparation_unit_id, preparation_waste_id,
+       charge_allocation_id, completed_sale_id, sales_shift_id, amount_vnd,
+       created_at
+FROM charge_adjustments
+WHERE check_id = $1 AND scope = 'LIVE_CHECK'
+ORDER BY created_at ASC, id ASC
+`
+
+type ListCheckChargeAdjustmentsRow struct {
+	ID                 uuid.UUID     `json:"id"`
+	Kind               string        `json:"kind"`
+	Scope              string        `json:"scope"`
+	PreparationUnitID  uuid.UUID     `json:"preparation_unit_id"`
+	PreparationWasteID uuid.NullUUID `json:"preparation_waste_id"`
+	ChargeAllocationID uuid.UUID     `json:"charge_allocation_id"`
+	CompletedSaleID    uuid.NullUUID `json:"completed_sale_id"`
+	SalesShiftID       uuid.UUID     `json:"sales_shift_id"`
+	AmountVnd          int64         `json:"amount_vnd"`
+	CreatedAt          time.Time     `json:"created_at"`
+}
+
+// The live Check projection's append-only charge reductions, ordered by
+// occurrence then id. POST_SALE adjustments are excluded: they correct a
+// closed sale and are read through ListCompletedSalePostSaleCorrections.
+func (q *Queries) ListCheckChargeAdjustments(ctx context.Context, checkID uuid.UUID) ([]ListCheckChargeAdjustmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCheckChargeAdjustments, checkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCheckChargeAdjustmentsRow{}
+	for rows.Next() {
+		var i ListCheckChargeAdjustmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Scope,
+			&i.PreparationUnitID,
+			&i.PreparationWasteID,
+			&i.ChargeAllocationID,
+			&i.CompletedSaleID,
+			&i.SalesShiftID,
+			&i.AmountVnd,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCheckPayments = `-- name: ListCheckPayments :many
-SELECT id, method, applied_amount_vnd, cash_tendered_vnd, change_due_vnd,
-       transaction_reference, sales_shift_id, received_at
-FROM payments
-WHERE check_id = $1
-ORDER BY received_at ASC, id ASC
+SELECT p.id, p.method, p.applied_amount_vnd, p.cash_tendered_vnd,
+       p.change_due_vnd, p.transaction_reference, p.sales_shift_id,
+       p.received_at,
+       pv.id AS void_id,
+       pv.amount_vnd AS void_amount_vnd,
+       pv.reason AS void_reason,
+       pv.note AS void_note,
+       pv.actor_staff_identity_id AS void_actor_staff_identity_id,
+       pv.approved_by_staff_identity_id AS void_approved_by_staff_identity_id,
+       pv.occurred_at AS void_occurred_at
+FROM payments AS p
+LEFT JOIN payment_voids AS pv ON pv.payment_id = p.id
+WHERE p.check_id = $1
+ORDER BY p.received_at ASC, p.id ASC
 `
 
 type ListCheckPaymentsRow struct {
-	ID                   uuid.UUID      `json:"id"`
-	Method               string         `json:"method"`
-	AppliedAmountVnd     int64          `json:"applied_amount_vnd"`
-	CashTenderedVnd      sql.NullInt64  `json:"cash_tendered_vnd"`
-	ChangeDueVnd         sql.NullInt64  `json:"change_due_vnd"`
-	TransactionReference sql.NullString `json:"transaction_reference"`
-	SalesShiftID         uuid.UUID      `json:"sales_shift_id"`
-	ReceivedAt           time.Time      `json:"received_at"`
+	ID                            uuid.UUID      `json:"id"`
+	Method                        string         `json:"method"`
+	AppliedAmountVnd              int64          `json:"applied_amount_vnd"`
+	CashTenderedVnd               sql.NullInt64  `json:"cash_tendered_vnd"`
+	ChangeDueVnd                  sql.NullInt64  `json:"change_due_vnd"`
+	TransactionReference          sql.NullString `json:"transaction_reference"`
+	SalesShiftID                  uuid.UUID      `json:"sales_shift_id"`
+	ReceivedAt                    time.Time      `json:"received_at"`
+	VoidID                        uuid.NullUUID  `json:"void_id"`
+	VoidAmountVnd                 sql.NullInt64  `json:"void_amount_vnd"`
+	VoidReason                    sql.NullString `json:"void_reason"`
+	VoidNote                      sql.NullString `json:"void_note"`
+	VoidActorStaffIdentityID      uuid.NullUUID  `json:"void_actor_staff_identity_id"`
+	VoidApprovedByStaffIdentityID uuid.NullUUID  `json:"void_approved_by_staff_identity_id"`
+	VoidOccurredAt                sql.NullTime   `json:"void_occurred_at"`
 }
 
-// Ordered by (received_at, id), served directly by payment_check_index.
+// Ordered by (received_at, id), served directly by payment_check_index. The
+// LEFT JOIN carries Phase 6C Payment Void evidence so the Check projection can
+// present and subtract a voided Payment without a second read; void_id is null
+// while the Payment stands.
 func (q *Queries) ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]ListCheckPaymentsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCheckPayments, checkID)
 	if err != nil {
@@ -1186,6 +1574,93 @@ func (q *Queries) ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]L
 			&i.TransactionReference,
 			&i.SalesShiftID,
 			&i.ReceivedAt,
+			&i.VoidID,
+			&i.VoidAmountVnd,
+			&i.VoidReason,
+			&i.VoidNote,
+			&i.VoidActorStaffIdentityID,
+			&i.VoidApprovedByStaffIdentityID,
+			&i.VoidOccurredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCheckRefunds = `-- name: ListCheckRefunds :many
+SELECT r.id, r.check_id, r.completed_sale_id, r.sales_shift_id, r.method,
+       r.amount_vnd, r.reason, r.note, r.actor_staff_identity_id,
+       r.staff_access_session_id, r.approved_by_staff_identity_id,
+       r.created_at,
+       rc.id AS completion_id, rc.transaction_reference,
+       rc.completed_by_staff_identity_id,
+       rc.staff_access_session_id AS completed_staff_access_session_id,
+       rc.completed_at
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.check_id = $1 AND r.completed_sale_id IS NULL
+ORDER BY r.created_at ASC, r.id ASC
+`
+
+type ListCheckRefundsRow struct {
+	ID                            uuid.UUID      `json:"id"`
+	CheckID                       uuid.UUID      `json:"check_id"`
+	CompletedSaleID               uuid.NullUUID  `json:"completed_sale_id"`
+	SalesShiftID                  uuid.UUID      `json:"sales_shift_id"`
+	Method                        string         `json:"method"`
+	AmountVnd                     int64          `json:"amount_vnd"`
+	Reason                        string         `json:"reason"`
+	Note                          sql.NullString `json:"note"`
+	ActorStaffIdentityID          uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID          uuid.UUID      `json:"staff_access_session_id"`
+	ApprovedByStaffIdentityID     uuid.UUID      `json:"approved_by_staff_identity_id"`
+	CreatedAt                     time.Time      `json:"created_at"`
+	CompletionID                  uuid.NullUUID  `json:"completion_id"`
+	TransactionReference          sql.NullString `json:"transaction_reference"`
+	CompletedByStaffIdentityID    uuid.NullUUID  `json:"completed_by_staff_identity_id"`
+	CompletedStaffAccessSessionID uuid.NullUUID  `json:"completed_staff_access_session_id"`
+	CompletedAt                   sql.NullTime   `json:"completed_at"`
+}
+
+// The live Check projection's Refunds, each with nullable completion evidence
+// so the caller derives PENDING or COMPLETED without a mutable state column.
+// Post-sale Refunds are excluded; they are read through
+// ListCompletedSalePostSaleCorrections.
+func (q *Queries) ListCheckRefunds(ctx context.Context, checkID uuid.UUID) ([]ListCheckRefundsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCheckRefunds, checkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCheckRefundsRow{}
+	for rows.Next() {
+		var i ListCheckRefundsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CheckID,
+			&i.CompletedSaleID,
+			&i.SalesShiftID,
+			&i.Method,
+			&i.AmountVnd,
+			&i.Reason,
+			&i.Note,
+			&i.ActorStaffIdentityID,
+			&i.StaffAccessSessionID,
+			&i.ApprovedByStaffIdentityID,
+			&i.CreatedAt,
+			&i.CompletionID,
+			&i.TransactionReference,
+			&i.CompletedByStaffIdentityID,
+			&i.CompletedStaffAccessSessionID,
+			&i.CompletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1279,6 +1754,136 @@ func (q *Queries) ListCommittedItemsForSubmission(ctx context.Context, orderDraf
 			&i.SizeName,
 			&i.Quantity,
 			&i.PreparationNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCompletedSalePostSaleCorrections = `-- name: ListCompletedSalePostSaleCorrections :many
+SELECT NULL::text AS entry_kind,
+       NULL::uuid AS charge_adjustment_id,
+       NULL::uuid AS preparation_unit_id,
+       NULL::uuid AS preparation_waste_id,
+       NULL::uuid AS sales_comp_id,
+       NULL::uuid AS refund_id,
+       NULL::bigint AS amount_vnd,
+       NULL::text AS reason,
+       NULL::text AS note,
+       NULL::uuid AS actor_staff_identity_id,
+       NULL::uuid AS approved_by_staff_identity_id,
+       NULL::text AS refund_method,
+       NULL::text AS transaction_reference,
+       NULL::uuid AS completed_by_staff_identity_id,
+       NULL::timestamptz AS completed_at,
+       NULL::timestamptz AS occurred_at
+WHERE false
+UNION ALL
+SELECT 'COMP' AS entry_kind,
+       ca.id AS charge_adjustment_id,
+       ca.preparation_unit_id,
+       ca.preparation_waste_id,
+       sc.id AS sales_comp_id,
+       NULL::uuid AS refund_id,
+       ca.amount_vnd,
+       sc.reason,
+       sc.note,
+       sc.actor_staff_identity_id,
+       sc.approved_by_staff_identity_id,
+       NULL::text AS refund_method,
+       NULL::text AS transaction_reference,
+       NULL::uuid AS completed_by_staff_identity_id,
+       NULL::timestamptz AS completed_at,
+       sc.occurred_at
+FROM charge_adjustments AS ca
+JOIN sales_comps AS sc ON sc.charge_adjustment_id = ca.id
+WHERE ca.scope = 'POST_SALE'
+  AND ca.completed_sale_id = $1::uuid
+UNION ALL
+SELECT 'REFUND' AS entry_kind,
+       NULL::uuid AS charge_adjustment_id,
+       NULL::uuid AS preparation_unit_id,
+       NULL::uuid AS preparation_waste_id,
+       NULL::uuid AS sales_comp_id,
+       r.id AS refund_id,
+       r.amount_vnd,
+       r.reason,
+       r.note,
+       r.actor_staff_identity_id,
+       r.approved_by_staff_identity_id,
+       r.method AS refund_method,
+       rc.transaction_reference,
+       rc.completed_by_staff_identity_id,
+       rc.completed_at,
+       r.created_at AS occurred_at
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.completed_sale_id = $1::uuid
+ORDER BY occurred_at ASC,
+         charge_adjustment_id ASC NULLS LAST,
+         refund_id ASC NULLS LAST
+`
+
+type ListCompletedSalePostSaleCorrectionsRow struct {
+	EntryKind                  sql.NullString `json:"entry_kind"`
+	ChargeAdjustmentID         uuid.NullUUID  `json:"charge_adjustment_id"`
+	PreparationUnitID          uuid.NullUUID  `json:"preparation_unit_id"`
+	PreparationWasteID         uuid.NullUUID  `json:"preparation_waste_id"`
+	SalesCompID                uuid.NullUUID  `json:"sales_comp_id"`
+	RefundID                   uuid.NullUUID  `json:"refund_id"`
+	AmountVnd                  sql.NullInt64  `json:"amount_vnd"`
+	Reason                     sql.NullString `json:"reason"`
+	Note                       sql.NullString `json:"note"`
+	ActorStaffIdentityID       uuid.NullUUID  `json:"actor_staff_identity_id"`
+	ApprovedByStaffIdentityID  uuid.NullUUID  `json:"approved_by_staff_identity_id"`
+	RefundMethod               sql.NullString `json:"refund_method"`
+	TransactionReference       sql.NullString `json:"transaction_reference"`
+	CompletedByStaffIdentityID uuid.NullUUID  `json:"completed_by_staff_identity_id"`
+	CompletedAt                sql.NullTime   `json:"completed_at"`
+	OccurredAt                 sql.NullTime   `json:"occurred_at"`
+}
+
+// Additive post-sale correction history for one Completed Sale: every
+// POST_SALE charge reduction (with its Comp fact) and every post-sale Refund,
+// ordered by occurrence then id. entry_kind discriminates the two row shapes;
+// each shape fills only its own columns. The leading WHERE false header exists
+// so the generated row type carries every column as nullable; a real row
+// always fills its own shape. The immutable sale snapshot itself is never
+// rebuilt from these rows.
+func (q *Queries) ListCompletedSalePostSaleCorrections(ctx context.Context, completedSaleID uuid.UUID) ([]ListCompletedSalePostSaleCorrectionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCompletedSalePostSaleCorrections, completedSaleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompletedSalePostSaleCorrectionsRow{}
+	for rows.Next() {
+		var i ListCompletedSalePostSaleCorrectionsRow
+		if err := rows.Scan(
+			&i.EntryKind,
+			&i.ChargeAdjustmentID,
+			&i.PreparationUnitID,
+			&i.PreparationWasteID,
+			&i.SalesCompID,
+			&i.RefundID,
+			&i.AmountVnd,
+			&i.Reason,
+			&i.Note,
+			&i.ActorStaffIdentityID,
+			&i.ApprovedByStaffIdentityID,
+			&i.RefundMethod,
+			&i.TransactionReference,
+			&i.CompletedByStaffIdentityID,
+			&i.CompletedAt,
+			&i.OccurredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1798,6 +2403,138 @@ func (q *Queries) ListOrderItems(ctx context.Context, orderIds []uuid.UUID) ([]O
 	return items, nil
 }
 
+const listPaymentRefundAllocations = `-- name: ListPaymentRefundAllocations :many
+SELECT rpa.refund_id, rpa.payment_id, rpa.amount_vnd,
+       r.completed_sale_id AS refund_completed_sale_id,
+       r.method AS refund_method,
+       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS refund_completed
+FROM refund_payment_allocations AS rpa
+JOIN refunds AS r ON r.id = rpa.refund_id
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE rpa.payment_id = ANY($1::uuid[])
+ORDER BY rpa.payment_id ASC, rpa.refund_id ASC
+`
+
+type ListPaymentRefundAllocationsRow struct {
+	RefundID              uuid.UUID     `json:"refund_id"`
+	PaymentID             uuid.UUID     `json:"payment_id"`
+	AmountVnd             int64         `json:"amount_vnd"`
+	RefundCompletedSaleID uuid.NullUUID `json:"refund_completed_sale_id"`
+	RefundMethod          string        `json:"refund_method"`
+	RefundCompleted       bool          `json:"refund_completed"`
+}
+
+// Every Refund allocation against the given Payments, with the owning Refund's
+// scope and completion evidence, so the Check projection can derive each
+// Payment's remaining_refundable_vnd. Pending Manual QR intents appear too:
+// they reserve capacity before money moves. The caller applies the structural
+// snapshot rule (a post-sale allocation belongs to history, not the live
+// capacity) through refund_completed_sale_id.
+func (q *Queries) ListPaymentRefundAllocations(ctx context.Context, paymentIds []uuid.UUID) ([]ListPaymentRefundAllocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPaymentRefundAllocations, pq.Array(paymentIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPaymentRefundAllocationsRow{}
+	for rows.Next() {
+		var i ListPaymentRefundAllocationsRow
+		if err := rows.Scan(
+			&i.RefundID,
+			&i.PaymentID,
+			&i.AmountVnd,
+			&i.RefundCompletedSaleID,
+			&i.RefundMethod,
+			&i.RefundCompleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRefundAdjustmentAllocations = `-- name: ListRefundAdjustmentAllocations :many
+SELECT refund_id, charge_adjustment_id, amount_vnd
+FROM refund_adjustment_allocations
+WHERE refund_id = $1
+ORDER BY charge_adjustment_id ASC
+`
+
+type ListRefundAdjustmentAllocationsRow struct {
+	RefundID           uuid.UUID `json:"refund_id"`
+	ChargeAdjustmentID uuid.UUID `json:"charge_adjustment_id"`
+	AmountVnd          int64     `json:"amount_vnd"`
+}
+
+// One Refund's Charge Adjustment allocations, ordered by Adjustment id.
+func (q *Queries) ListRefundAdjustmentAllocations(ctx context.Context, refundID uuid.UUID) ([]ListRefundAdjustmentAllocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRefundAdjustmentAllocations, refundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRefundAdjustmentAllocationsRow{}
+	for rows.Next() {
+		var i ListRefundAdjustmentAllocationsRow
+		if err := rows.Scan(&i.RefundID, &i.ChargeAdjustmentID, &i.AmountVnd); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRefundPaymentAllocations = `-- name: ListRefundPaymentAllocations :many
+SELECT refund_id, payment_id, amount_vnd
+FROM refund_payment_allocations
+WHERE refund_id = $1
+ORDER BY payment_id ASC
+`
+
+type ListRefundPaymentAllocationsRow struct {
+	RefundID  uuid.UUID `json:"refund_id"`
+	PaymentID uuid.UUID `json:"payment_id"`
+	AmountVnd int64     `json:"amount_vnd"`
+}
+
+// One Refund's Payment allocations, ordered by Payment id, for the Refund
+// result and the Completed Sale history.
+func (q *Queries) ListRefundPaymentAllocations(ctx context.Context, refundID uuid.UUID) ([]ListRefundPaymentAllocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRefundPaymentAllocations, refundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRefundPaymentAllocationsRow{}
+	for rows.Next() {
+		var i ListRefundPaymentAllocationsRow
+		if err := rows.Scan(&i.RefundID, &i.PaymentID, &i.AmountVnd); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServiceSessionTables = `-- name: ListServiceSessionTables :many
 SELECT t.id, t.name, a.sequence
 FROM table_assignments a
@@ -2057,6 +2794,53 @@ func (q *Queries) ListSubmittedCommittedItems(ctx context.Context, committedItem
 			return nil, err
 		}
 		items = append(items, committed_item_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockChargeAdjustmentsForRefund = `-- name: LockChargeAdjustmentsForRefund :many
+SELECT ca.id, ca.scope, ca.check_id, ca.completed_sale_id, ca.amount_vnd
+FROM charge_adjustments AS ca
+WHERE ca.id = ANY($1::uuid[])
+ORDER BY ca.id
+FOR UPDATE
+`
+
+type LockChargeAdjustmentsForRefundRow struct {
+	ID              uuid.UUID     `json:"id"`
+	Scope           string        `json:"scope"`
+	CheckID         uuid.UUID     `json:"check_id"`
+	CompletedSaleID uuid.NullUUID `json:"completed_sale_id"`
+	AmountVnd       int64         `json:"amount_vnd"`
+}
+
+// Step 4: the selected Charge Adjustments FOR UPDATE, each ascending UUID,
+// after the Payments so both refundable capacities are held in one order.
+func (q *Queries) LockChargeAdjustmentsForRefund(ctx context.Context, chargeAdjustmentIds []uuid.UUID) ([]LockChargeAdjustmentsForRefundRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockChargeAdjustmentsForRefund, pq.Array(chargeAdjustmentIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockChargeAdjustmentsForRefundRow{}
+	for rows.Next() {
+		var i LockChargeAdjustmentsForRefundRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Scope,
+			&i.CheckID,
+			&i.CompletedSaleID,
+			&i.AmountVnd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -2565,6 +3349,128 @@ func (q *Queries) LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, er
 	return id, err
 }
 
+const lockPaymentForVoid = `-- name: LockPaymentForVoid :one
+SELECT id, check_id, sales_shift_id, method, applied_amount_vnd, received_at
+FROM payments
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockPaymentForVoidRow struct {
+	ID               uuid.UUID `json:"id"`
+	CheckID          uuid.UUID `json:"check_id"`
+	SalesShiftID     uuid.UUID `json:"sales_shift_id"`
+	Method           string    `json:"method"`
+	AppliedAmountVnd int64     `json:"applied_amount_vnd"`
+	ReceivedAt       time.Time `json:"received_at"`
+}
+
+// Locks one Payment for Void after its Check, Session, and Shift are locked.
+// Refund allocations, if any, are read separately under this lock to reject a
+// refunded Payment.
+func (q *Queries) LockPaymentForVoid(ctx context.Context, id uuid.UUID) (LockPaymentForVoidRow, error) {
+	row := q.db.QueryRowContext(ctx, lockPaymentForVoid, id)
+	var i LockPaymentForVoidRow
+	err := row.Scan(
+		&i.ID,
+		&i.CheckID,
+		&i.SalesShiftID,
+		&i.Method,
+		&i.AppliedAmountVnd,
+		&i.ReceivedAt,
+	)
+	return i, err
+}
+
+const lockPaymentsForRefund = `-- name: LockPaymentsForRefund :many
+SELECT p.id, p.check_id, p.sales_shift_id, p.method, p.applied_amount_vnd
+FROM payments AS p
+WHERE p.id = ANY($1::uuid[])
+ORDER BY p.id
+FOR UPDATE
+`
+
+type LockPaymentsForRefundRow struct {
+	ID               uuid.UUID `json:"id"`
+	CheckID          uuid.UUID `json:"check_id"`
+	SalesShiftID     uuid.UUID `json:"sales_shift_id"`
+	Method           string    `json:"method"`
+	AppliedAmountVnd int64     `json:"applied_amount_vnd"`
+}
+
+// Steps 4: the selected Payments FOR UPDATE, each ascending UUID, so two
+// overlapping Refunds cannot allocate the same capacity twice and cannot
+// deadlock against each other.
+func (q *Queries) LockPaymentsForRefund(ctx context.Context, paymentIds []uuid.UUID) ([]LockPaymentsForRefundRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockPaymentsForRefund, pq.Array(paymentIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockPaymentsForRefundRow{}
+	for rows.Next() {
+		var i LockPaymentsForRefundRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CheckID,
+			&i.SalesShiftID,
+			&i.Method,
+			&i.AppliedAmountVnd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockRefundForConfirmation = `-- name: LockRefundForConfirmation :one
+SELECT r.id, r.check_id, r.completed_sale_id, r.sales_shift_id, r.method,
+       r.amount_vnd, r.created_at,
+       rc.id AS completion_id, rc.completed_at
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.id = $1
+FOR UPDATE OF r
+`
+
+type LockRefundForConfirmationRow struct {
+	ID              uuid.UUID     `json:"id"`
+	CheckID         uuid.UUID     `json:"check_id"`
+	CompletedSaleID uuid.NullUUID `json:"completed_sale_id"`
+	SalesShiftID    uuid.UUID     `json:"sales_shift_id"`
+	Method          string        `json:"method"`
+	AmountVnd       int64         `json:"amount_vnd"`
+	CreatedAt       time.Time     `json:"created_at"`
+	CompletionID    uuid.NullUUID `json:"completion_id"`
+	CompletedAt     sql.NullTime  `json:"completed_at"`
+}
+
+// Locks one Refund for Manual QR confirmation, after its Check, Session, and
+// Shift are locked, and returns the completion evidence that decides replay.
+func (q *Queries) LockRefundForConfirmation(ctx context.Context, id uuid.UUID) (LockRefundForConfirmationRow, error) {
+	row := q.db.QueryRowContext(ctx, lockRefundForConfirmation, id)
+	var i LockRefundForConfirmationRow
+	err := row.Scan(
+		&i.ID,
+		&i.CheckID,
+		&i.CompletedSaleID,
+		&i.SalesShiftID,
+		&i.Method,
+		&i.AmountVnd,
+		&i.CreatedAt,
+		&i.CompletionID,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
 const lockServiceSessionForClosure = `-- name: LockServiceSessionForClosure :one
 SELECT id, state, service_number, service_mode, created_at
 FROM service_sessions
@@ -2720,6 +3626,54 @@ func (q *Queries) LockTablesForAssignment(ctx context.Context, tableIds []uuid.U
 	return items, nil
 }
 
+const lockWasteForComp = `-- name: LockWasteForComp :one
+SELECT w.id, w.preparation_unit_id, w.prior_state, w.reason, w.note,
+       w.actor_staff_identity_id, w.staff_access_session_id, w.occurred_at,
+       pu.state AS unit_state, pu.priority, pu.unit_number, pu.order_item_id
+FROM preparation_wastes AS w
+JOIN preparation_units AS pu ON pu.id = w.preparation_unit_id
+WHERE w.id = $1
+FOR UPDATE OF w, pu
+`
+
+type LockWasteForCompRow struct {
+	ID                   uuid.UUID      `json:"id"`
+	PreparationUnitID    uuid.UUID      `json:"preparation_unit_id"`
+	PriorState           string         `json:"prior_state"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	OccurredAt           time.Time      `json:"occurred_at"`
+	UnitState            string         `json:"unit_state"`
+	Priority             string         `json:"priority"`
+	UnitNumber           int32          `json:"unit_number"`
+	OrderItemID          uuid.UUID      `json:"order_item_id"`
+}
+
+// Step 5: the Waste and its source Preparation Unit, locked after the Check,
+// Session, and Shift resolved by ResolveCompSource. The unit lock serializes
+// concurrent Comps of one Waste alongside the unique Waste reference.
+func (q *Queries) LockWasteForComp(ctx context.Context, id uuid.UUID) (LockWasteForCompRow, error) {
+	row := q.db.QueryRowContext(ctx, lockWasteForComp, id)
+	var i LockWasteForCompRow
+	err := row.Scan(
+		&i.ID,
+		&i.PreparationUnitID,
+		&i.PriorState,
+		&i.Reason,
+		&i.Note,
+		&i.ActorStaffIdentityID,
+		&i.StaffAccessSessionID,
+		&i.OccurredAt,
+		&i.UnitState,
+		&i.Priority,
+		&i.UnitNumber,
+		&i.OrderItemID,
+	)
+	return i, err
+}
+
 const markCheckMerged = `-- name: MarkCheckMerged :exec
 UPDATE checks
 SET state = 'MERGED', charge_vnd = 0, merged_into_check_id = $2
@@ -2794,6 +3748,99 @@ type ReleaseTableAssignmentParams struct {
 func (q *Queries) ReleaseTableAssignment(ctx context.Context, arg ReleaseTableAssignmentParams) error {
 	_, err := q.db.ExecContext(ctx, releaseTableAssignment, arg.ID, arg.ReleasedByStaffIdentityID)
 	return err
+}
+
+const resolveCompSource = `-- name: ResolveCompSource :one
+
+WITH source AS (
+    SELECT w.id AS waste_id, w.preparation_unit_id, w.prior_state,
+           pu.state AS unit_state, pu.priority, pu.unit_number,
+           oi.id AS order_item_id, oi.committed_item_id, o.service_session_id
+    FROM preparation_wastes AS w
+    JOIN preparation_units AS pu ON pu.id = w.preparation_unit_id
+    JOIN order_items AS oi ON oi.id = pu.order_item_id
+    JOIN orders AS o ON o.id = oi.order_id
+    WHERE w.id = $1
+),
+ranges AS (
+    SELECT ca.committed_item_id, ca.id AS charge_allocation_id, ca.check_id,
+           ci.unit_price_vnd,
+           COALESCE(SUM(ca.quantity) OVER (
+               PARTITION BY ca.committed_item_id
+               ORDER BY ca.created_at, ca.id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)::BIGINT
+               AS range_start,
+           COALESCE(SUM(ca.quantity) OVER (
+               PARTITION BY ca.committed_item_id
+               ORDER BY ca.created_at, ca.id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), 0)::BIGINT
+               AS range_end
+    FROM charge_allocations AS ca
+    JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+    WHERE ca.committed_item_id = (SELECT committed_item_id FROM source)
+)
+SELECT s.waste_id, s.preparation_unit_id, s.prior_state, s.unit_state,
+       s.priority, s.unit_number, s.order_item_id, s.service_session_id,
+       ss.state AS service_session_state,
+       cs.id AS completed_sale_id,
+       r.charge_allocation_id, r.check_id, r.unit_price_vnd AS amount_vnd
+FROM source AS s
+JOIN service_sessions AS ss ON ss.id = s.service_session_id
+LEFT JOIN completed_sales AS cs ON cs.service_session_id = s.service_session_id
+LEFT JOIN ranges AS r
+       ON r.committed_item_id = s.committed_item_id
+      AND s.priority = 'STANDARD'
+      AND s.unit_number > r.range_start
+      AND s.unit_number <= r.range_end
+`
+
+type ResolveCompSourceRow struct {
+	WasteID             uuid.UUID     `json:"waste_id"`
+	PreparationUnitID   uuid.UUID     `json:"preparation_unit_id"`
+	PriorState          string        `json:"prior_state"`
+	UnitState           string        `json:"unit_state"`
+	Priority            string        `json:"priority"`
+	UnitNumber          int32         `json:"unit_number"`
+	OrderItemID         uuid.UUID     `json:"order_item_id"`
+	ServiceSessionID    uuid.UUID     `json:"service_session_id"`
+	ServiceSessionState string        `json:"service_session_state"`
+	CompletedSaleID     uuid.NullUUID `json:"completed_sale_id"`
+	ChargeAllocationID  uuid.NullUUID `json:"charge_allocation_id"`
+	CheckID             uuid.NullUUID `json:"check_id"`
+	AmountVnd           sql.NullInt64 `json:"amount_vnd"`
+}
+
+// Phase 6C: Comp, Refund, and Payment Void resolution, locks, and facts.
+//
+// Lock order is the concurrency contract (design section 11.1): non-locking
+// resolution first, then Checks ascending, Service Sessions ascending, the
+// current or original Sales Shift, Payments and Charge Adjustments each
+// ascending, and finally Preparation source facts and Units ascending.
+// Non-locking ownership resolution for Comp. Resolves the Waste, its source
+// unit, the owning Order Item and Service Session, the Completed Sale when the
+// Session is already closed, and the original Charge Allocation whose
+// cumulative quantity range (allocations ordered by created_at then id) covers
+// the unit_number. A Wasted Remake maps to a null allocation and price because
+// it was never charged.
+func (q *Queries) ResolveCompSource(ctx context.Context, id uuid.UUID) (ResolveCompSourceRow, error) {
+	row := q.db.QueryRowContext(ctx, resolveCompSource, id)
+	var i ResolveCompSourceRow
+	err := row.Scan(
+		&i.WasteID,
+		&i.PreparationUnitID,
+		&i.PriorState,
+		&i.UnitState,
+		&i.Priority,
+		&i.UnitNumber,
+		&i.OrderItemID,
+		&i.ServiceSessionID,
+		&i.ServiceSessionState,
+		&i.CompletedSaleID,
+		&i.ChargeAllocationID,
+		&i.CheckID,
+		&i.AmountVnd,
+	)
+	return i, err
 }
 
 const salesAdvisoryLock = `-- name: SalesAdvisoryLock :exec

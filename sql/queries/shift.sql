@@ -95,3 +95,85 @@ SELECT COALESCE(SUM(applied_amount_vnd) FILTER (WHERE method = 'CASH'), 0)::BIGI
     AS cash_payment_vnd
 FROM payments
 WHERE sales_shift_id = $1;
+
+-- -- Phase 6C: Payment Void, Refund & correction reconciliation --
+
+-- name: GetShiftReconciliationTotals :one
+-- Every Phase 6C reconciliation term for one Shift in one read (ADR-046).
+-- Cash and Manual QR Payment terms count original applied amounts; a Payment
+-- Void removes its source's whole amount; completed Refunds count money out;
+-- a pending Manual QR Refund has not moved money yet. pending_refund_vnd is
+-- the unresolved corrected capacity of every Charge Adjustment attributed to
+-- the Shift (its full amount less the Refund allocations already completed
+-- against it, pending intents included); unresolved_post_sale_adjustment_vnd
+-- is the POST_SALE subset. internal/shift owns this SQL and imports neither
+-- sales nor preparation.
+SELECT
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     WHERE p.sales_shift_id = $1
+       AND p.method = 'CASH') AS cash_payment_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     JOIN payment_voids AS pv ON pv.payment_id = p.id
+     WHERE p.sales_shift_id = $1
+       AND p.method = 'CASH') AS cash_payment_void_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     JOIN refund_completions AS rc ON rc.refund_id = r.id
+     WHERE r.sales_shift_id = $1
+       AND r.method = 'CASH') AS cash_refund_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     WHERE p.sales_shift_id = $1
+       AND p.method = 'MANUAL_QR') AS manual_qr_payment_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     JOIN payment_voids AS pv ON pv.payment_id = p.id
+     WHERE p.sales_shift_id = $1
+       AND p.method = 'MANUAL_QR') AS manual_qr_payment_void_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     JOIN refund_completions AS rc ON rc.refund_id = r.id
+     WHERE r.sales_shift_id = $1
+       AND r.method = 'MANUAL_QR') AS manual_qr_refund_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+     WHERE r.sales_shift_id = $1
+       AND r.method = 'MANUAL_QR'
+       AND rc.id IS NULL) AS pending_manual_qr_refund_vnd,
+    (SELECT (COALESCE(SUM(ca.amount_vnd), 0)
+             - COALESCE((SELECT SUM(raa.amount_vnd)
+                         FROM refund_adjustment_allocations AS raa
+                         JOIN refunds AS r ON r.id = raa.refund_id
+                         JOIN refund_completions AS rc ON rc.refund_id = r.id
+                         JOIN charge_adjustments AS ca2
+                           ON ca2.id = raa.charge_adjustment_id
+                         WHERE ca2.sales_shift_id = $1), 0))::BIGINT
+     FROM charge_adjustments AS ca
+     WHERE ca.sales_shift_id = $1) AS pending_refund_vnd,
+    (SELECT (COALESCE(SUM(ca.amount_vnd), 0)
+             - COALESCE((SELECT SUM(raa.amount_vnd)
+                         FROM refund_adjustment_allocations AS raa
+                         JOIN refunds AS r ON r.id = raa.refund_id
+                         JOIN refund_completions AS rc ON rc.refund_id = r.id
+                         JOIN charge_adjustments AS ca2
+                           ON ca2.id = raa.charge_adjustment_id
+                         WHERE ca2.sales_shift_id = $1
+                           AND ca2.scope = 'POST_SALE'), 0))::BIGINT
+     FROM charge_adjustments AS ca
+     WHERE ca.sales_shift_id = $1
+       AND ca.scope = 'POST_SALE') AS unresolved_post_sale_adjustment_vnd;
+
+-- name: ListShiftRefunds :many
+-- The Shift response's Refund summaries ordered by (created_at, id), each
+-- carrying derived completion state and no credentials.
+SELECT r.id, r.check_id, r.completed_sale_id, r.method, r.amount_vnd,
+       r.reason, r.note, r.created_at,
+       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS completed,
+       rc.completed_at, rc.transaction_reference
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.sales_shift_id = $1
+ORDER BY r.created_at ASC, r.id ASC;
