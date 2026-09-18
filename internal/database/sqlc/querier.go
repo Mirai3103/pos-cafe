@@ -143,12 +143,23 @@ type Querier interface {
 	// Every Phase 6C reconciliation term for one Shift in one read (ADR-046).
 	// Cash and Manual QR Payment terms count original applied amounts; a Payment
 	// Void removes its source's whole amount; completed Refunds count money out;
-	// a pending Manual QR Refund has not moved money yet. pending_refund_vnd is
-	// the unresolved corrected capacity of every Charge Adjustment attributed to
-	// the Shift (its full amount less the Refund allocations already completed
-	// against it, pending intents included); unresolved_post_sale_adjustment_vnd
-	// is the POST_SALE subset. internal/shift owns this SQL and imports neither
-	// sales nor preparation.
+	// a pending Manual QR Refund has not moved money yet.
+	//
+	// pending_refund_vnd is money owed back, matching the Check equation in spec
+	// 6.1. For every distinct Check carrying a LIVE_CHECK Charge Adjustment
+	// attributed to this Shift it sums
+	//     greatest(valid_payments - completed_live_refunds - corrected_charge, 0)
+	// where corrected_charge = base allocations - all LIVE_CHECK adjustments on
+	// that Check (from every shift, because they all shape its current charge),
+	// valid_payments excludes voided Payments, and completed_live_refunds counts
+	// only completed Refunds without a Completed Sale. A Check touched by more
+	// than one shift reports its whole live obligation in each affected shift's
+	// read; a single shift read is the authoritative view of its own obligations
+	// and never over-reports from adjustment capacity. unresolved_post_sale_
+	// adjustment_vnd keeps its capacity-based meaning (the POST_SALE adjustment
+	// amount not yet covered by completed Refunds) and is included in
+	// pending_refund_vnd. internal/shift owns this SQL and imports neither sales
+	// nor preparation.
 	GetShiftReconciliationTotals(ctx context.Context, salesShiftID uuid.UUID) (GetShiftReconciliationTotalsRow, error)
 	// -- Authority --
 	// Names are prefixed because sqlc query names are global across the package.
