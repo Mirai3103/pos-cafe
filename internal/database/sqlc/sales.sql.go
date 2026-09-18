@@ -3750,6 +3750,26 @@ func (q *Queries) ReleaseTableAssignment(ctx context.Context, arg ReleaseTableAs
 	return err
 }
 
+const reopenCheckAfterPaymentVoid = `-- name: ReopenCheckAfterPaymentVoid :exec
+UPDATE checks
+SET state = 'OPEN',
+    settled_at = NULL,
+    settled_by_staff_identity_id = NULL,
+    settled_during_sales_shift_id = NULL,
+    settled_staff_access_session_id = NULL
+WHERE id = $1 AND state = 'SETTLED'
+`
+
+// The settlement consequence of a whole Payment Void that leaves a positive
+// balance: the Check moves back from SETTLED to OPEN. All four
+// settlement-evidence columns are cleared in the same statement because
+// check_settlement_evidence_valid rejects OPEN with any evidence set. The
+// caller has already recomputed the positive balance under the Check lock.
+func (q *Queries) ReopenCheckAfterPaymentVoid(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, reopenCheckAfterPaymentVoid, id)
+	return err
+}
+
 const resolveCompSource = `-- name: ResolveCompSource :one
 
 WITH source AS (

@@ -614,6 +614,12 @@ type Querier interface {
 	RenameModifierGroup(ctx context.Context, arg RenameModifierGroupParams) (ModifierGroup, error)
 	RenameModifierOption(ctx context.Context, arg RenameModifierOptionParams) (ModifierOption, error)
 	RenameTable(ctx context.Context, arg RenameTableParams) (Table, error)
+	// The settlement consequence of a whole Payment Void that leaves a positive
+	// balance: the Check moves back from SETTLED to OPEN. All four
+	// settlement-evidence columns are cleared in the same statement because
+	// check_settlement_evidence_valid rejects OPEN with any evidence set. The
+	// caller has already recomputed the positive balance under the Check lock.
+	ReopenCheckAfterPaymentVoid(ctx context.Context, id uuid.UUID) error
 	RepriceMenuItem(ctx context.Context, arg RepriceMenuItemParams) (MenuItem, error)
 	RepriceMenuItemSize(ctx context.Context, arg RepriceMenuItemSizeParams) (MenuItemSize, error)
 	RepriceModifierOption(ctx context.Context, arg RepriceModifierOptionParams) (ModifierOption, error)

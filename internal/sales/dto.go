@@ -628,3 +628,18 @@ type RefundResult struct {
 	CompletedSaleID     *uuid.UUID                   `json:"completed_sale_id,omitempty"`
 	PostSaleCorrections []PostSaleCorrectionResponse `json:"post_sale_corrections,omitempty"`
 }
+
+// ---------- Phase 6C: Payment Void ----------
+
+// VoidPaymentCommand declares one whole Payment incorrect. PaymentID is
+// json:"-": it comes from the path, never the body. ManagerApproval carries
+// request-only credentials; the executor verifies them inline, and no
+// credential ever reaches a fingerprint, stored result, business fact, audit
+// detail, or log (spec §10).
+type VoidPaymentCommand struct {
+	RequestID       uuid.UUID            `json:"request_id"`
+	PaymentID       uuid.UUID            `json:"-"`
+	Reason          string               `json:"reason"`
+	Note            *string              `json:"note"`
+	ManagerApproval ManagerApprovalInput `json:"manager_approval"`
+}

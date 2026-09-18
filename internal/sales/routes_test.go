@@ -50,6 +50,7 @@ func TestRouteRegistration(t *testing.T) {
 		"POST /api/v1/sales/wastes/:waste_id/comp":                                       true,
 		"POST /api/v1/sales/refunds":                                                     true,
 		"POST /api/v1/sales/refunds/:refund_id/confirm":                                  true,
+		"POST /api/v1/sales/payments/:payment_id/void":                                   true,
 	}
 
 	got := make(map[string]bool)
@@ -101,8 +102,8 @@ func TestCommitRoutesRequireSalesOperate(t *testing.T) {
 	}
 }
 
-func TestSalesExposesTwentyFiveOperations(t *testing.T) {
-	require.Len(t, registeredSalesRoutes(t), 25)
+func TestSalesExposesTwentySixOperations(t *testing.T) {
+	require.Len(t, registeredSalesRoutes(t), 26)
 }
 
 func TestPhase5CRoutesAreRegistered(t *testing.T) {
@@ -111,7 +112,7 @@ func TestPhase5CRoutesAreRegistered(t *testing.T) {
 	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/payments/manual-qr")
 	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/split")
 	require.Contains(t, routes, "POST /api/v1/sales/checks/merge")
-	require.Len(t, routes, 25, "the Sales surface has grown to twenty-five operations by Phase 6C")
+	require.Len(t, routes, 26, "the Sales surface has grown to twenty-six operations by Phase 6C")
 }
 
 func TestPhase5DRoutesAreRegistered(t *testing.T) {
@@ -120,7 +121,7 @@ func TestPhase5DRoutesAreRegistered(t *testing.T) {
 	require.Contains(t, routes, "POST /api/v1/sales/service-sessions/:id/close")
 	require.Contains(t, routes, "GET /api/v1/sales/completed-sales/:id")
 	require.Contains(t, routes, "GET /api/v1/sales/service-sessions/:id/completed-sale")
-	require.Len(t, routes, 25, "Phase 6C brings the Sales surface to twenty-five operations")
+	require.Len(t, routes, 26, "Phase 6C brings the Sales surface to twenty-six operations")
 }
 
 func TestPhase6CCompRouteIsRegistered(t *testing.T) {
@@ -128,4 +129,5 @@ func TestPhase6CCompRouteIsRegistered(t *testing.T) {
 	require.Contains(t, routes, "POST /api/v1/sales/wastes/:waste_id/comp")
 	require.Contains(t, routes, "POST /api/v1/sales/refunds")
 	require.Contains(t, routes, "POST /api/v1/sales/refunds/:refund_id/confirm")
+	require.Contains(t, routes, "POST /api/v1/sales/payments/:payment_id/void")
 }

@@ -731,3 +731,95 @@ func ValidateRecordRefundCommand(cmd RecordRefundCommand, note *string) error {
 	}
 	return nil
 }
+
+// --- Phase 6C: Payment Void ---
+
+// OpVoidPayment is the idempotency action name, stored in
+// idempotency_keys.action (VARCHAR(50)).
+const OpVoidPayment = "sales.void_payment"
+
+// Payment Void reason catalog (spec §2). Every operation keeps its own
+// allowlist; the migration 000014 constraint enforces the same set at the
+// database boundary.
+const (
+	VoidReasonDuplicatePayment       = "DUPLICATE_PAYMENT"
+	VoidReasonWrongAmount            = "WRONG_AMOUNT"
+	VoidReasonWrongMethod            = "WRONG_METHOD"
+	VoidReasonPaymentRecordedInError = "PAYMENT_RECORDED_IN_ERROR"
+	VoidReasonOther                  = "OTHER"
+)
+
+var voidPaymentReasons = []string{
+	VoidReasonDuplicatePayment, VoidReasonWrongAmount, VoidReasonWrongMethod,
+	VoidReasonPaymentRecordedInError, VoidReasonOther,
+}
+
+// Phase 6C Payment Void audit event types (spec §15). The reopening event is
+// written only when the Void leaves a positive balance behind.
+const (
+	EventPaymentVoided                 = "PAYMENT_VOIDED"
+	EventCheckReopenedAfterPaymentVoid = "CHECK_REOPENED_AFTER_PAYMENT_VOID"
+)
+
+// NormalizeVoidPaymentNote trims surrounding whitespace from an optional
+// Payment Void note and collapses a blank note to nil. Callers normalize
+// BEFORE validating and BEFORE building the fingerprint, so replays of
+// differently padded input stay equal.
+func NormalizeVoidPaymentNote(note *string) *string {
+	if note == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*note)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+// ValidateVoidPaymentReason checks a Payment Void reason against the Void
+// catalog.
+func ValidateVoidPaymentReason(reason string) error {
+	for _, allowed := range voidPaymentReasons {
+		if reason == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %q is not a valid payment void reason", response.ErrInvalid, reason)
+}
+
+// ValidateVoidPaymentNote validates an already-normalized optional note: a
+// present note is 1 through MaxCorrectionNoteRunes code points, and the OTHER
+// reason requires one.
+func ValidateVoidPaymentNote(reason string, note *string) error {
+	if note != nil {
+		runes := utf8.RuneCountInString(*note)
+		if runes < 1 || runes > MaxCorrectionNoteRunes {
+			return fmt.Errorf("%w: a note must be 1 through %d characters",
+				response.ErrInvalid, MaxCorrectionNoteRunes)
+		}
+		return nil
+	}
+	if reason == VoidReasonOther {
+		return fmt.Errorf("%w: the %s reason requires a note", response.ErrInvalid, VoidReasonOther)
+	}
+	return nil
+}
+
+// ValidateVoidPaymentCommand validates a Payment Void at the boundary, before
+// any transaction and before the credential values are copied into the
+// executor's ApprovalSpec. The note arrives already normalized.
+func ValidateVoidPaymentCommand(cmd VoidPaymentCommand, note *string) error {
+	if cmd.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	if cmd.PaymentID == uuid.Nil {
+		return fmt.Errorf("%w: payment_id is required", response.ErrInvalid)
+	}
+	if err := ValidateVoidPaymentReason(cmd.Reason); err != nil {
+		return err
+	}
+	if err := ValidateVoidPaymentNote(cmd.Reason, note); err != nil {
+		return err
+	}
+	return ValidateManagerApprovalInput(cmd.ManagerApproval)
+}

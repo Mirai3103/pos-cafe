@@ -926,6 +926,20 @@ FROM payments
 WHERE id = $1
 FOR UPDATE;
 
+-- name: ReopenCheckAfterPaymentVoid :exec
+-- The settlement consequence of a whole Payment Void that leaves a positive
+-- balance: the Check moves back from SETTLED to OPEN. All four
+-- settlement-evidence columns are cleared in the same statement because
+-- check_settlement_evidence_valid rejects OPEN with any evidence set. The
+-- caller has already recomputed the positive balance under the Check lock.
+UPDATE checks
+SET state = 'OPEN',
+    settled_at = NULL,
+    settled_by_staff_identity_id = NULL,
+    settled_during_sales_shift_id = NULL,
+    settled_staff_access_session_id = NULL
+WHERE id = $1 AND state = 'SETTLED';
+
 -- name: LockPaymentsForRefund :many
 -- Steps 4: the selected Payments FOR UPDATE, each ascending UUID, so two
 -- overlapping Refunds cannot allocate the same capacity twice and cannot

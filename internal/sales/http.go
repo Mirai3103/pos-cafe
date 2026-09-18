@@ -1055,3 +1055,47 @@ func (s *Slices) handleConfirmManualQRRefund(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleVoidPayment godoc
+//
+//	@Summary		Void a whole Payment
+//	@Description	Declares one whole Payment incorrect while its original Sales Shift is still open, appends an immutable reversal without editing or deleting the source Payment, recomputes the Check's corrected financials, and reopens the Check with all settlement evidence cleared when the remaining valid coverage no longer covers its charge. Rejected for a merged Check, an already-voided Payment, any Payment carrying a Refund allocation (pending or completed), a closed Service Session, and a Payment whose original Shift is closed or is no longer the currently open one. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately. The Void is always for the entire applied amount, and a replacement Payment is recorded through the ordinary Cash or Manual QR command.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			payment_id	path		string				true	"Payment ID"
+//	@Param			request		body		VoidPaymentCommand	true	"Void request"
+//	@Success		201			{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/sales/payments/{payment_id}/void [post]
+func (s *Slices) handleVoidPayment(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	paymentID, err := parseUUIDParam(c, "payment_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[VoidPaymentCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// PaymentID is json:"-": it comes from the path, never the body.
+	body.PaymentID = paymentID
+
+	status, result, err := s.VoidPayment.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

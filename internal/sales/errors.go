@@ -137,6 +137,17 @@ var (
 	ErrRefundExceedsPendingRefund      = errors.New("refund exceeds the pending refund still owed back")
 	ErrRefundMethodMismatch            = errors.New("refund method does not match the payment method")
 	ErrRefundAlreadyCompleted          = errors.New("refund is already completed")
+
+	// Phase 6C Payment Void conditions. A missing Payment is a not-found
+	// answer; one whole Void per Payment makes a second attempt a lifecycle
+	// conflict; any Refund allocation — pending or completed — locks the
+	// Payment for good; and the original Shift must still be the currently
+	// open one because voiding after a Shift close needs the separately
+	// deferred Post-Shift Payment Correction.
+	ErrPaymentNotFound        = errors.New("payment not found")
+	ErrPaymentAlreadyVoided   = errors.New("payment already carries a void")
+	ErrPaymentHasRefund       = errors.New("payment carries a refund allocation")
+	ErrPaymentVoidShiftClosed = errors.New("the payment's original sales shift is not currently open")
 )
 
 // serviceSessionSalesShiftFK is the auto-generated name of the only foreign
@@ -367,6 +378,14 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "REFUND_METHOD_MISMATCH", ErrRefundMethodMismatch)
 	case errors.Is(err, ErrRefundAlreadyCompleted):
 		return coded(http.StatusConflict, "REFUND_ALREADY_COMPLETED", ErrRefundAlreadyCompleted)
+	case errors.Is(err, ErrPaymentNotFound):
+		return coded(http.StatusNotFound, "PAYMENT_NOT_FOUND", ErrPaymentNotFound)
+	case errors.Is(err, ErrPaymentAlreadyVoided):
+		return coded(http.StatusConflict, "PAYMENT_ALREADY_VOIDED", ErrPaymentAlreadyVoided)
+	case errors.Is(err, ErrPaymentHasRefund):
+		return coded(http.StatusConflict, "PAYMENT_HAS_REFUND", ErrPaymentHasRefund)
+	case errors.Is(err, ErrPaymentVoidShiftClosed):
+		return coded(http.StatusConflict, "PAYMENT_VOID_SHIFT_CLOSED", ErrPaymentVoidShiftClosed)
 	default:
 		return err
 	}

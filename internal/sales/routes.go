@@ -37,6 +37,7 @@ type Slices struct {
 	CompWaste                 *CompWasteHandler
 	RecordRefund              *RecordRefundHandler
 	ConfirmManualQRRefund     *ConfirmManualQRRefundHandler
+	VoidPayment               *VoidPaymentHandler
 }
 
 // NewSlices wires every Sales handler onto a shared Runner.
@@ -69,6 +70,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		CompWaste:                 NewCompWasteHandler(runner),
 		RecordRefund:              NewRecordRefundHandler(runner),
 		ConfirmManualQRRefund:     NewConfirmManualQRRefundHandler(runner),
+		VoidPayment:               NewVoidPaymentHandler(runner),
 	}
 }
 
@@ -131,5 +133,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/sales/refunds", s.handleRecordRefund,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/sales/refunds/:refund_id/confirm", s.handleConfirmManualQRRefund,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/payments/:payment_id/void", s.handleVoidPayment,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 }
