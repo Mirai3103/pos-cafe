@@ -4,6 +4,7 @@ package sales_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"sync"
 	"testing"
@@ -17,12 +18,15 @@ import (
 )
 
 // TestCorrectionRaces pins the Sales correction concurrency contract of design
-// spec §11.2. Each subtest releases two commands simultaneously at their shared
-// lock boundary, accepts only the explicitly documented outcomes, and proves
-// afterwards that no hang, duplicate capacity, negative balance, or partial
-// fact survived. Only the active-Comp-versus-Submit pairing may surface
-// PostgreSQL 40P01 (ADR-031); every other pairing treats that abort as a
-// failure.
+// spec §11.2. Each subtest holds the row both commands must eventually take
+// from a test-owned transaction, launches both handlers behind a start
+// channel, waits (bounded, polled from PostgreSQL's own lock-wait state) until
+// both are demonstrably parked on that held row, and only then releases it —
+// so the collision happens at the shared lock boundary rather than at the
+// mercy of the scheduler. Afterwards no hang, duplicate capacity, negative
+// balance, or partial fact may have survived. Only the
+// active-Comp-versus-Submit pairing may surface PostgreSQL 40P01 (ADR-031);
+// every other pairing treats that abort as a failure.
 func TestCorrectionRaces(t *testing.T) {
 	t.Run("comp versus closure", func(t *testing.T) {
 		env := newCompEnv(t)
@@ -34,6 +38,11 @@ func TestCorrectionRaces(t *testing.T) {
 			ServiceSessionID: session.ID,
 		}
 
+		// Closure locks the Session only, while Comp locks the Check and then
+		// the Session: holding the Session parks closure on its first lock and
+		// Comp on its second.
+		holder := holdRowLock(t, env.DB,
+			`SELECT id::text FROM service_sessions WHERE id = $1 FOR UPDATE`, session.ID)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		var compErr, closeErr error
@@ -52,6 +61,8 @@ func TestCorrectionRaces(t *testing.T) {
 				Handle(context.Background(), env.Actor, closeCmd)
 		}()
 		close(start)
+		waitForLockWaiters(t, env.DB, 2)
+		holder.release(t)
 		requireCorrectionRaceResolved(t, &wg)
 
 		require.False(t, correctionRaceDeadlock(compErr))
@@ -116,6 +127,11 @@ func TestCorrectionRaces(t *testing.T) {
 			ServiceSessionID: session.ID,
 		}
 
+		// Submit locks the Session before its Draft and Checks, while Comp
+		// locks the Check before the Session; holding the Session parks both
+		// commands inside ADR-031's AB-BA window.
+		holder := holdRowLock(t, env.DB,
+			`SELECT id::text FROM service_sessions WHERE id = $1 FOR UPDATE`, session.ID)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		var compErr, submitErr error
@@ -133,6 +149,8 @@ func TestCorrectionRaces(t *testing.T) {
 				Handle(context.Background(), env.Actor, submitCmd)
 		}()
 		close(start)
+		waitForLockWaiters(t, env.DB, 2)
+		holder.release(t)
 		requireCorrectionRaceResolved(t, &wg)
 
 		// Comp locks Check then Session; Submit locks Session, Draft, then
@@ -189,6 +207,9 @@ func TestCorrectionRaces(t *testing.T) {
 		secondCmd := env.compCommand(t, wasteID, sales.CompReasonQualityFailure, nil)
 		secondCmd.RequestID = secondRequestID
 
+		// The Check is the row both Comps must take first.
+		holder := holdRowLock(t, env.DB,
+			`SELECT id::text FROM checks WHERE id = $1 FOR UPDATE`, checkID)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		var firstErr, secondErr error
@@ -206,6 +227,8 @@ func TestCorrectionRaces(t *testing.T) {
 				Handle(context.Background(), env.Actor, secondCmd)
 		}()
 		close(start)
+		waitForLockWaiters(t, env.DB, 2)
+		holder.release(t)
 		requireCorrectionRaceResolved(t, &wg)
 
 		require.False(t, correctionRaceDeadlock(firstErr))
@@ -243,6 +266,9 @@ func TestCorrectionRaces(t *testing.T) {
 			comp.Comp.ChargeAdjustmentID, 25000)
 		secondCmd.RequestID = secondRequestID
 
+		// The Check is the row both Refunds must take first.
+		holder := holdRowLock(t, env.DB,
+			`SELECT id::text FROM checks WHERE id = $1 FOR UPDATE`, checkID)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		var firstErr, secondErr error
@@ -261,6 +287,8 @@ func TestCorrectionRaces(t *testing.T) {
 				Handle(context.Background(), env.Actor, secondCmd)
 		}()
 		close(start)
+		waitForLockWaiters(t, env.DB, 2)
+		holder.release(t)
 		requireCorrectionRaceResolved(t, &wg)
 
 		// The Check lock serializes the two Refunds; the loser must fail on the
@@ -313,6 +341,9 @@ func TestCorrectionRaces(t *testing.T) {
 			compB.Comp.ChargeAdjustmentID, 25000)
 		secondCmd.RequestID = secondRequestID
 
+		// The Check is the row both Refunds must take first.
+		holder := holdRowLock(t, env.DB,
+			`SELECT id::text FROM checks WHERE id = $1 FOR UPDATE`, checkID)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		var firstErr, secondErr error
@@ -330,6 +361,8 @@ func TestCorrectionRaces(t *testing.T) {
 				Handle(context.Background(), env.Actor, secondCmd)
 		}()
 		close(start)
+		waitForLockWaiters(t, env.DB, 2)
+		holder.release(t)
 		requireCorrectionRaceResolved(t, &wg)
 
 		// Both Refunds name the same Payment with the same amount, so the
@@ -382,6 +415,10 @@ func TestCorrectionRaces(t *testing.T) {
 		voidCmd := env.voidCommand(paymentID, sales.VoidReasonWrongAmount, nil)
 		voidCmd.RequestID = voidRequestID
 
+		// Both commands take the Check first, so the held Check is the row the
+		// pair collides on.
+		holder := holdRowLock(t, env.DB,
+			`SELECT id::text FROM checks WHERE id = $1 FOR UPDATE`, checkID)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		var refundErr, voidErr error
@@ -399,6 +436,8 @@ func TestCorrectionRaces(t *testing.T) {
 				Handle(context.Background(), env.Actor, voidCmd)
 		}()
 		close(start)
+		waitForLockWaiters(t, env.DB, 2)
+		holder.release(t)
 		requireCorrectionRaceResolved(t, &wg)
 
 		// Both commands lock Check, Session, Shift, then the Payment, so they
@@ -469,6 +508,10 @@ func TestCorrectionRaces(t *testing.T) {
 			CashTenderedVND:  10000,
 		}
 
+		// Both commands take the Check first; the held row is the shared lock
+		// boundary.
+		holder := holdRowLock(t, env.DB,
+			`SELECT id::text FROM checks WHERE id = $1 FOR UPDATE`, checkID)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		var voidErr, replacementErr error
@@ -486,6 +529,8 @@ func TestCorrectionRaces(t *testing.T) {
 				Handle(context.Background(), env.Actor, replacementCmd)
 		}()
 		close(start)
+		waitForLockWaiters(t, env.DB, 2)
+		holder.release(t)
 		requireCorrectionRaceResolved(t, &wg)
 
 		// The Check lock serializes the Void and the replacement receipt. The
@@ -555,6 +600,70 @@ func (e *salesEnv) countValidPayments(t *testing.T, checkID uuid.UUID) int {
 		  AND NOT EXISTS (SELECT 1 FROM payment_voids AS v WHERE v.payment_id = p.id)`,
 		checkID).Scan(&n))
 	return n
+}
+
+// raceRowLock is one test-owned row lock. holdRowLock opens a transaction and
+// locks the row every racing command must eventually take, so the test can
+// launch both handlers behind the start barrier and know both are parked at
+// that exact lock boundary before releasing them. It is the test-side
+// substitute for a production test seam: no production code is aware of it.
+type raceRowLock struct {
+	tx     *sql.Tx
+	locked bool
+}
+
+// holdRowLock acquires one shared row FOR UPDATE on the caller's behalf. The
+// query must be a single-row SELECT ... FOR UPDATE naming the row both racing
+// commands serialize on. The lock is rolled back by cleanup unless release
+// commits it first, so a failing test can never strand the row and block the
+// next test's truncation.
+func holdRowLock(t *testing.T, db *sql.DB, query string, args ...any) *raceRowLock {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	var id string
+	require.NoError(t, tx.QueryRowContext(ctx, query, args...).Scan(&id),
+		"the lock-holder row must exist")
+	holder := &raceRowLock{tx: tx, locked: true}
+	t.Cleanup(func() {
+		if holder.locked {
+			_ = holder.tx.Rollback()
+		}
+	})
+	return holder
+}
+
+// release commits the holder, waking every command parked on the held row.
+func (h *raceRowLock) release(t *testing.T) {
+	t.Helper()
+	require.True(t, h.locked, "the race lock was already released")
+	h.locked = false
+	require.NoError(t, h.tx.Commit())
+}
+
+// waitForLockWaiters polls until want backends of this test database are
+// parked on a lock. PostgreSQL's own wait state is the synchronization; the
+// short interval only paces the poll, and no sleep decides any outcome. Tests
+// in a package run sequentially, so during a race the only lock waiters are
+// the racing handlers.
+func waitForLockWaiters(t *testing.T, db *sql.DB, want int) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	seen := 0
+	for time.Now().Before(deadline) {
+		require.NoError(t, db.QueryRow(`
+			SELECT count(*)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND pid <> pg_backend_pid()
+			  AND wait_event_type = 'Lock'`).Scan(&seen))
+		if seen >= want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("expected %d backend(s) parked on a lock, saw %d after 15s", want, seen)
 }
 
 // correctionRaceDeadlock reports whether err is PostgreSQL's retryable 40P01
