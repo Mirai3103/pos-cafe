@@ -681,3 +681,62 @@ CREATE TABLE idempotency_keys (
 * Role replacement does not revoke a Staff Access Session, because the next operation reloads current authority. Disabling an identity and resetting its PIN revoke all of its sessions.
 * Restated for this stack: the Echo HTTP layer authenticates transport context, validates input, and maps errors, but never becomes the sole authorization enforcement point.
 * Verifying a PIN before the business transaction was rejected: identity, role, capability, or PIN state could change before the mutation commits, and any returned proof could become reusable authority.
+
+---
+
+## ADR-049: Blind Shift reconciliation uses a non-abortable CLOSING state
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** Phase 07 requires an initial cash count before Expected Cash is revealed. The shipped current-Shift read exposes both Expected Cash and every source term needed to derive it, while leaving a Shift `OPEN` after reveal would allow the reconciled totals to change or let staff return to sales with knowledge of the target.
+* **Decision:**
+* While a Shift is `OPEN`, its current read exposes metadata but no Opening Float, Cash Movement history, Refund, Expected Cash, or aggregate reconciliation source amount, and Cash Movement mutation responses do not return recomputed Expected Cash. A mutation may echo the individual value its actor just supplied; the control prevents server disclosure of aggregate targets rather than pretending staff forget their own inputs. Starting reconciliation atomically records the blind initial count, freezes the authoritative totals, and changes the Shift to `CLOSING`; only the committed response reveals the snapshot.
+* No failed pre-commit reconciliation response exposes Expected Cash, an aggregate source total, or arithmetic operands; guarded calculation failures use a generic stable error.
+* `CLOSING` is resumable by any staff member with current `sales_shift.operate`, but it cannot be abandoned back to `OPEN`. At most one `OPEN` or `CLOSING` Shift may exist.
+* **Consequences:**
+* Current-Shift money visibility is an intentional breaking API change. Blind counting is enforced by the service rather than entrusted to a client.
+* An interrupted close does not strand ownership with one login, but normal sales remain suspended until an authorized staff member completes the durable workflow.
+* The earlier normal path in which a Service Session outlived its Shift is superseded for new closures; historical cross-Shift attribution remains valid.
+
+---
+
+## ADR-050: Shift closure uses global blockers and the Shift row as its writer gate
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** One cashier Shift is active for the cafe. Scoping blockers only to rows carrying its id can miss an active Session or open Check whose financial activity spans Shifts. Closure must also race safely with Session Start and financial writers without reversing their established Check-to-Session-to-Shift lock order.
+* **Decision:**
+* Reconciliation start and final closure reject global unsettled Checks, pending Refund intents, unresolved financial correction obligations, and active Service Sessions, in that precedence. The correction predicate sums every live adjusted Check's positive valid-receipt excess over corrected charge plus every post-sale adjustment's positive amount not covered by completed Refund allocations, without filtering by Shift attribution.
+* Start and close lock the Shift `FOR UPDATE` and perform non-locking blocker reads. Session Start and financial writers whose effects can survive Session closure coordinate through the Shift row; Session Start is brought under this protocol before it inserts a Session. Draft and Commit remain transitively excluded by the global active-Session blocker and their existing Session/Draft locks.
+* **Consequences:**
+* A writer commits wholly before the frozen snapshot or waits and rejects after the state leaves `OPEN`. Closure never takes Check or Session row locks while holding the Shift, avoiding an inverse lock cycle.
+* Financial blockers are reported before the generic active-Session blocker so staff receive the most actionable error.
+* Phase 08 may append Awaiting Submission to the precedence but may not weaken these blockers.
+
+---
+
+## ADR-051: Shift closure preserves normalized attempts and three discrepancy dimensions
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** Recounts and Manual QR rechecks require durable actor/time evidence, while one net or JSON discrepancy would hide whether Cash, QR received, or QR refunded failed to reconcile. A Manager Approval must authorize the exact final facts rather than a client-provided total.
+* **Decision:**
+* Cash Counts and Manual QR Observations are normalized append-only ledgers. Final closure references the latest attempt in each ledger and preserves an immutable scalar snapshot.
+* Differences are stored separately for `CASH`, `MANUAL_QR_RECEIVED`, and `MANUAL_QR_REFUNDED`, always as observed minus expected. Each nonzero dimension has its own immutable reason; cash-specific and QR-specific reasons may be used only with their matching dimensions, while `UNEXPLAINED` and `OTHER` are shared. One fresh Manager Approval authorizes the complete final discrepancy set.
+* A nonzero Cash difference requires a recount. Either nonzero QR difference requires a second full QR observation. No discrepancy creates a balancing financial record.
+* **Consequences:**
+* The product can explain shortages and excesses without reconstructing overwritten observations or conflating received and refunded bank activity.
+* Closure commands bind approval to latest attempt ids and server-derived differences. A later attempt makes a prepared close stale.
+* Phase 09 adds post-Shift correction history alongside this snapshot and never rewrites it.
+
+---
+
+## ADR-052: Closed Shift history requires audit.inspect
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** Cashiers need the result of the Shift they close, but complete historical reconciliation includes sensitive drawer and bank-observation facts. The role model already grants `audit.inspect` to Manager and not Cashier.
+* **Decision:**
+* The close mutation returns its immutable summary to the initiating Shift operator. Listing closed Shifts by time range and reading a closed Shift by id require current `audit.inspect` authority.
+* **Consequences:**
+* No new history capability or role is introduced. Manager can inspect the complete record; Cashier cannot browse historical Shifts after the close response.
