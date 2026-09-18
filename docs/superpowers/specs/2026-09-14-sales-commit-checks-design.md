@@ -12,7 +12,7 @@
 
 This specification defines the Go implementation of Commit — the commercial boundary of the Sales domain — together with the entities it creates: Committed Items, Checks, and Charge Allocations. It also implements the two Order Draft targeting commands that 5A deferred, because both exist only to steer where a Commit's charges land.
 
-As in 5A, the implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source in `cafe-pos/src/sales` and the definitions in `cafe-pos/CONTEXT.md`. Where the TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated, and every deviation is recorded as an ADR.
+As in 5A, the implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source in `cafe-pos/src/sales` and the definitions in `CONTEXT.md`. Where the TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated, and every deviation is recorded as an ADR.
 
 `MIGRATE_PLAN.md`'s Phase 5 sketch remains superseded, for the reasons 5A §1 gives. In particular the sketch's `checks` table carries `discount_vnd` and `tax_vnd` columns that exist nowhere in the canonical model; this specification does not create them.
 
@@ -52,7 +52,7 @@ As with 5A, 5B is not a deployable end state. It is a complete, testable consist
 
 ## 2. Authority And Terminology
 
-5B adds these terms from `cafe-pos/CONTEXT.md` to those 5A established:
+5B adds these terms from `CONTEXT.md` to those 5A established:
 
 - **Commit** is the commercial boundary that revalidates an Order Draft, creates immutable Committed Items, and places their charges in a Check without creating an Order or preparation work.
 - A **Committed Item** is an immutable commercial snapshot created when a valid draft item's charge joins a Check, preserving names, choices, quantity, price components, total, and Preparation Note before Payment or Order submission.

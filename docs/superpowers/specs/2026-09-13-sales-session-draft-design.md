@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-This specification defines the Go implementation of the Service Session and Order Draft portion of the existing TypeScript Sales behavior found in `cafe-pos/src/sales`. The implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source and the definitions in `cafe-pos/CONTEXT.md`.
+This specification defines the Go implementation of the Service Session and Order Draft portion of the existing TypeScript Sales behavior found in `cafe-pos/src/sales`. The implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source and the definitions in `CONTEXT.md`.
 
 When TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated.
 
@@ -42,7 +42,7 @@ Because 5A ships no Commit, an Order Draft can be built but never turned into a 
 
 ## 2. Authority And Terminology
 
-The implementation uses the terms defined in `cafe-pos/CONTEXT.md`:
+The implementation uses the terms defined in `CONTEXT.md`:
 
 - A **Service Session** is the continuous period in which one customer party is served, containing its Orders and current Table assignments until staff explicitly close it.
 - An **Anonymous Service Session** is an opening-day Service Session with no durable customer identity. Every Service Session in 5A is anonymous; `customer_identity_id` is not a column and is emitted as a constant `null` in the projection.

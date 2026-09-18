@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-This specification defines the Go implementation of the existing TypeScript Tables business behavior found in `cafe-pos/src/tables`. The implementation may improve structure and correctness, but it must preserve the canonical business rules in `cafe-pos/CONTEXT.md`.
+This specification defines the Go implementation of the existing TypeScript Tables business behavior found in `cafe-pos/src/tables`. The implementation may improve structure and correctness, but it must preserve the canonical business rules in `CONTEXT.md`.
 
 When TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated.
 
@@ -37,7 +37,7 @@ The Phase 3 section of `MIGRATE_PLAN.md` was written before the canonical source
 
 ## 2. Authority And Terminology
 
-The implementation uses the terms defined in `cafe-pos/CONTEXT.md`:
+The implementation uses the terms defined in `CONTEXT.md`:
 
 - A **Table** is a named physical service location that may be associated with one or more active Service Sessions. It is not an order owner and not an exclusive tab.
 - A **Service Session** is the continuous period in which one customer party is served, containing its Orders and current Table assignments until staff explicitly close it.

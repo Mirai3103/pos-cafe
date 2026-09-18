@@ -12,7 +12,7 @@
 
 This specification defines the Go implementation of the point at which money arrives: Cash and Manual QR Payments, the settlement transition that closes a fully paid Check, and the two restructuring operations — Split and Merge — that let staff arrange Checks before any money is taken. It also completes the `expected_cash_vnd` figure that ADR-008 shipped partial in Phase 4, because 5C is the first sub-phase that creates the Cash Payment term that figure was missing.
 
-As in 5A and 5B, the implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source in `cafe-pos/src/sales` and the definitions in `cafe-pos/CONTEXT.md`. Where the TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated, and every deviation is recorded as an ADR.
+As in 5A and 5B, the implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source in `cafe-pos/src/sales` and the definitions in `CONTEXT.md`. Where the TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated, and every deviation is recorded as an ADR.
 
 ### Goals
 
@@ -46,7 +46,7 @@ As with 5A and 5B, 5C is not a deployable end state. It is a complete, testable 
 
 ## 2. Authority And Terminology
 
-5C adds these terms from `cafe-pos/CONTEXT.md`:
+5C adds these terms from `CONTEXT.md`:
 
 - A **Payment** is a confirmed, immutable receipt of money applied to a Check, recorded independently from ordering and preparation; an attempted or unverified transfer is not a Payment.
 - A **Cash Payment** is a Payment recording the amount applied to a Check separately from cash tendered and change due; **its net cash effect is the applied amount**. That last clause is the authority for §6.6.

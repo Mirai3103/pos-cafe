@@ -1,5 +1,26 @@
 # POS Cafe Backend Migration Plan: TypeScript to Golang
 
+> ## 🔒 CLOSED — 2026-09-18
+>
+> **This migration is complete and this document is frozen.** See [ADR-047](spec/decisions.md).
+>
+> For current status and remaining work, read [`ROADMAP.md`](ROADMAP.md). This file
+> is retained as the historical record of Phases 0 through 6C — several ADRs
+> reference its checklists — and its body is not edited further.
+>
+> Three things to know before reading it:
+>
+> - **The tracker table at the bottom is stale.** It records Preparation as
+>   `PENDING 2/3`; Phase 6C completed on 2026-09-18 in commit `3c6f61e`, making it
+>   3/3. `ROADMAP.md` carries the corrected status.
+> - **Section 7 is superseded** by backlog [Phase 11](docs/backlog/phase-11-clients-over-lan-and-single-binary.md),
+>   which merges it with the LAN-serving requirements from the TypeScript tracker.
+> - **The Go system has passed its source.** TypeScript tickets 07 and 11 remain
+>   unimplemented in `cafe-pos` while Go delivered them as Phases 5C and 6C. From
+>   there on, no canonical implementation exists to port: remaining work is designed
+>   from [`CONTEXT.md`](CONTEXT.md), which now lives in this repository. References
+>   to `cafe-pos/src` below are historical provenance and carry no live authority.
+
 > **Source Project:** `/home/laffy/cafe-pos/src` (Fullstack TS: React 19 + tRPC + Drizzle ORM + PostgreSQL)  
 > **Target Project:** `/home/laffy/Desktop/go-vertical-slice-template-main/pos-cafe` (Go 1.26+ + Echo v4 + PostgreSQL + pgx/v5 + sqlc + Watermill)  
 > **Primary Goal:** Eliminate lag on low-spec POS terminals (Celeron, 2–4GB RAM), reduce RAM usage from ~500MB to < 30MB, achieve instant boot (< 20ms)

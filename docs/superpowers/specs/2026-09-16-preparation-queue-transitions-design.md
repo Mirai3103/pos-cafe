@@ -12,7 +12,7 @@
 
 Phase 5D created `internal/preparation`, created one Preparation Unit per physical item at Submit, and exposed the single-unit linear advance command needed to complete a sale. Phase 6A turns that command-only boundary into an operational bar queue without yet adding exceptional correction workflows.
 
-The implementation follows the canonical behavior in `cafe-pos/src/preparation`, `cafe-pos/CONTEXT.md`, and the existing Go architecture. Where the old checklist in `MIGRATE_PLAN.md` conflicts with the shipped Phase 5D boundary, the shipped boundary wins: Submit already creates Preparation Units atomically, so Phase 6A does not recreate them through an asynchronous event consumer.
+The implementation follows the canonical behavior in `cafe-pos/src/preparation`, `CONTEXT.md`, and the existing Go architecture. Where the old checklist in `MIGRATE_PLAN.md` conflicts with the shipped Phase 5D boundary, the shipped boundary wins: Submit already creates Preparation Units atomically, so Phase 6A does not recreate them through an asynchronous event consumer.
 
 ### Goals
 

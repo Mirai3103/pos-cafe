@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-This specification defines the Go implementation of the existing TypeScript Catalog business behavior. The implementation may improve structure and correctness, but it must preserve the canonical business rules in `/home/laffy/cafe-pos/CONTEXT.md` and the opening-day menu specification.
+This specification defines the Go implementation of the existing TypeScript Catalog business behavior. The implementation may improve structure and correctness, but it must preserve the canonical business rules in `CONTEXT.md` and the opening-day menu specification.
 
 When TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated.
 
@@ -42,7 +42,7 @@ Phase 2 replaces the disposable `internal/category` reference slice. Its routes,
 
 ## 2. Authority And Terminology
 
-The implementation uses the terms defined in `/home/laffy/cafe-pos/CONTEXT.md`:
+The implementation uses the terms defined in `CONTEXT.md`:
 
 - A Menu Item belongs to exactly one Menu Category.
 - An item is priced directly or through a required Size choice, never both.

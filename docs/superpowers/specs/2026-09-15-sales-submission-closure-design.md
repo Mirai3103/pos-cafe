@@ -12,7 +12,7 @@
 
 This specification defines the Go implementation of the preparation boundary and the end of a Service Session's life: Submit, which turns Committed Items into an Order and the Preparation Units the bar works from; the later Order Draft that Submit unblocks; the advance of a Preparation Unit along its prepared-to-delivered chain; and the closure that freezes everything into an immutable Completed Sale.
 
-As in 5A, 5B, and 5C, the implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source in `cafe-pos/src/sales` and the definitions in `cafe-pos/CONTEXT.md`. Where the TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated, and every deviation is recorded as an ADR.
+As in 5A, 5B, and 5C, the implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source in `cafe-pos/src/sales` and the definitions in `CONTEXT.md`. Where the TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated, and every deviation is recorded as an ADR.
 
 5D is the sub-phase at which Phase 5 becomes a deployable whole. Every earlier sub-phase closed with a note that it was a consistency boundary rather than an end state; this one closes the loop — open a Service Session, order, take money, prepare, and close the sale, entirely through the public API.
 
@@ -44,7 +44,7 @@ As in 5A, 5B, and 5C, the implementation may improve structure, schema, and corr
 
 ## 2. Authority And Terminology
 
-5D adds these terms from `cafe-pos/CONTEXT.md`:
+5D adds these terms from `CONTEXT.md`:
 
 - **Submit** is the preparation boundary that turns selected Committed Items into an Order and Preparation Units **without repricing them**. Its counterpart, Commit, is the commercial boundary; the two are distinct events and a Check exists between them.
 - An **Order Item** is a Committed Item after submission as part of an Order, retaining its immutable commercial snapshot for preparation and history. The word *retaining* is the authority for §5.2: the snapshot is preserved, not copied.

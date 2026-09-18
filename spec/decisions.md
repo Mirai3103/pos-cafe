@@ -642,3 +642,41 @@ CREATE TABLE idempotency_keys (
 * Expected Cash is Opening Float + non-voided Cash Payments − completed Cash Refunds + Pay Ins − Pay Outs; Manual QR net received is `manual_qr_payment_vnd - manual_qr_payment_void_vnd`, and completed Refunds remain separately visible rather than silently changing received history.
 * `internal/shift` derives every term with its own sqlc queries and imports no Sales or Preparation package.
 * Because Shift Close is not implemented, Phase 6C reports pending Refund intents and unresolved post-sale correction amounts in the current-Shift read but does not add a Shift closure route or claim to enforce its future closure policy; a later Shift Close design must consume these authoritative fields rather than inventing another calculation.
+
+
+---
+
+## ADR-047: Migration closed; pos-cafe is its own authority
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** The Go system has passed its TypeScript source. The `cafe-pos` tracker `.scratch/opening-day-pos-v0/` holds seventeen implementation tickets, of which nine are completed there; tickets 07 (Split Checks and mixed settlement) and 11 (Correct charges and Payments without mutation) remain `ready-for-agent` in TypeScript while Go delivered them as Phase 5C and Phase 6C. From ticket 12 onward no canonical implementation exists on either side. Meanwhile fifteen citations of `cafe-pos/CONTEXT.md` across the approved Phase 0-6C specifications made the binding domain authority live in a repository this project neither owns nor tracks.
+* **Decision:**
+* `CONTEXT.md` is copied verbatim into this repository and is the binding domain authority. The fifteen citations are rewritten to the local path.
+* References to `cafe-pos/src` and `cafe-pos/.scratch` inside Phase 0-6C specifications are historical provenance and carry no live authority. They are left exactly as written; rewriting them would falsify an approved record.
+* Work from Phase 07 onward is designed from `CONTEXT.md`, not ported. `ROADMAP.md` supersedes `MIGRATE_PLAN.md`, which is frozen as the migration's historical record.
+* The domain glossary is not annotated with Go deviations. Every deviation is recorded here, as this document has recorded forty-six of them.
+* **Consequences:**
+* Every authority citation in the repository resolves locally; the project has no documentation dependency on `cafe-pos`.
+* A future session must not treat the TypeScript repository as a specification source, and must not go looking for TypeScript code to port for any remaining phase.
+* The nine completed TypeScript effort directories are deliberately not imported. Their acceptance criteria name tRPC, Drizzle, and HeroUI, and the behavior that survived is already carried by the Go specifications, code, and tests. `cafe-pos` remains on disk for anyone needing the original wording.
+* The six remaining implementation tickets are renumbered onto Go phases 07 through 12 under `docs/backlog/`, each retaining a `Source:` line. They are marked `ready-for-design` rather than `ready-for-agent` because no approved Go design exists for any of them.
+* Unresolved design questions that gate launch - receipt and PDF boundary, opening-day readiness, cafe fiscal identity, and the fiscal invoice path - are preserved in `docs/backlog/open-questions.md`. The fiscal invoice path is covered by no phase; if the cafe needs registered e-invoices at opening, a phase must be added.
+
+---
+
+## ADR-048: Authorize current capabilities inside domain transactions
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** Adopted from `cafe-pos/docs/adr/0002-authorize-current-capabilities-inside-domain-transactions.md`, the one TypeScript architecture decision that survives migration. Every Go slice already implements this rule, and ADR-009 and ADR-038 record specific applications of it, but no existing record states it as the cross-cutting principle. Closing the migration without adopting it would leave the principle sourceless.
+* **Decision:**
+* The authenticated request context is not an authority token. Every domain command reloads the acting Staff Identity's current enabled state, roles, and capabilities inside its own transaction, before the idempotency claim and before any replay.
+* Manager-only administration and Manager Approval additionally require the current `MANAGER` role and a fresh PIN bound to the exact action.
+* Authorization denial returns a decision inside the transaction so its required Audit Event commits without committing an idempotency claim or business effect; the stable domain error is raised after that transaction completes.
+* **Consequences:**
+* `internal/auth` owns capability derivation, current-authority decisions, fresh-PIN verification, Staff Access Session policy, and security Audit Events behind a transaction-aware interface. Business slices invoke it inside their own single transaction.
+* Every idempotent replay rechecks current session, enabled state, Manager role where required, capability, and current PIN. PIN values are excluded from fingerprints, persisted results, Audit Events, logs, and responses.
+* Role replacement does not revoke a Staff Access Session, because the next operation reloads current authority. Disabling an identity and resetting its PIN revoke all of its sessions.
+* Restated for this stack: the Echo HTTP layer authenticates transport context, validates input, and maps errors, but never becomes the sole authorization enforcement point.
+* Verifying a PIN before the business transaction was rejected: identity, role, capability, or PIN state could change before the mutation commits, and any returned proof could become reusable authority.

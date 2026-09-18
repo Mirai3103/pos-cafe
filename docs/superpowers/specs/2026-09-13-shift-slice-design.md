@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-This specification defines the Go implementation of the existing TypeScript Sales Shift business behavior found in `cafe-pos/src/sales-shift`. The implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source and the definitions in `cafe-pos/CONTEXT.md`.
+This specification defines the Go implementation of the existing TypeScript Sales Shift business behavior found in `cafe-pos/src/sales-shift`. The implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source and the definitions in `CONTEXT.md`.
 
 When TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated.
 
@@ -41,7 +41,7 @@ Because Phase 4 ships no Close operation, a Sales Shift that has been opened rem
 
 ## 2. Authority And Terminology
 
-The implementation uses the terms defined in `cafe-pos/CONTEXT.md`:
+The implementation uses the terms defined in `CONTEXT.md`:
 
 - A **Sales Shift** is the continuous accountability window for the cashier station's cash fund and payment activity, opened and closed by identified staff while every intervening action retains its own actor.
 - An **Opening Float** is the actual whole-VND cash counted in the cashier station's fund when identified staff open a Sales Shift.
