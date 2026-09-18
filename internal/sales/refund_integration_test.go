@@ -352,11 +352,12 @@ func TestRecordRefundManualQRStaysPending(t *testing.T) {
 	assert.EqualValues(t, 0, projected.Payments[0].RemainingRefundableVND)
 	assert.EqualValues(t, 0, projected.ChargeAdjustments[0].RemainingRefundableVND)
 
-	// A second Refund cannot spend the reserved capacities again.
+	// A second Refund cannot spend the reserved capacities again: the pending
+	// intent already reserved the whole obligation.
 	second := env.refundCommand(checkID, sales.RefundMethodManualQR, paymentID,
 		comp.Comp.ChargeAdjustmentID, 1)
 	status, _, err := env.refund(t, second)
-	require.ErrorIs(t, err, sales.ErrRefundExceedsAdjustmentCapacity)
+	require.ErrorIs(t, err, sales.ErrRefundExceedsPendingRefund)
 	assert.Equal(t, http.StatusConflict, status)
 	assert.Equal(t, 1, env.refundCount(t, checkID))
 	assert.Equal(t, 1, env.countAuditEvents(t, sales.EventRefundRecorded))
@@ -509,6 +510,61 @@ func TestRecordRefundPostSaleManualQRStaysPending(t *testing.T) {
 	assert.Equal(t, 0, env.refundCompletionCount(t, result.Refund.ID))
 }
 
+// TestRecordRefundPostSaleAggregatePendingBound proves the post-sale gate is
+// cumulative too: pending intents reserve the Completed Sale's outstanding
+// correction amount, so they can never promise more than it still owes back.
+func TestRecordRefundPostSaleAggregatePendingBound(t *testing.T) {
+	env := newRefundEnv(t)
+	session := env.commitDineInDraftWithQuantity(t, 2)
+	checkID := env.soleCheckID(t, session.ID)
+	_, status, err := env.payManualQR(t, checkID, 50000, true, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	session = env.Submit(t, session.ID)
+	require.Len(t, session.PreparationUnits, 2)
+
+	wasteIDs := make([]uuid.UUID, 0, len(session.PreparationUnits))
+	for _, unit := range session.PreparationUnits {
+		wasteIDs = append(wasteIDs, env.wasteUnitAfterAdvance(t, unit.ID))
+	}
+	sale := env.Close(t, session.ID)
+	comp := env.compOK(t, env.compCommand(t, wasteIDs[0], sales.CompReasonCafeError, nil))
+	require.Equal(t, sales.CompScopePostSale, comp.Scope)
+	require.NotNil(t, comp.CompletedSaleID)
+	assert.Equal(t, sale.ID, *comp.CompletedSaleID)
+	require.NotNil(t, comp.OutstandingPostSaleRefundVND)
+	require.EqualValues(t, 25000, *comp.OutstandingPostSaleRefundVND)
+	paymentID := env.solePaymentIDForCheck(t, checkID)
+
+	// A 15,000 pending intent leaves 10,000 of the 25,000 obligation.
+	first := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+		paymentID, comp.Comp.ChargeAdjustmentID, 15000))
+	require.Equal(t, sales.CompScopePostSale, first.Scope)
+	require.Equal(t, sales.RefundStatePending, first.Refund.State)
+
+	// A second 15,000 exceeds the remaining obligation.
+	status, _, err = env.refund(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+		paymentID, comp.Comp.ChargeAdjustmentID, 15000))
+	require.ErrorIs(t, err, sales.ErrRefundExceedsPendingRefund)
+	assert.Equal(t, http.StatusConflict, status)
+
+	// The exact remainder records; both intents stay pending, so no money has
+	// moved and the entry still reports the whole 25,000 outstanding.
+	second := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+		paymentID, comp.Comp.ChargeAdjustmentID, 10000))
+	require.Len(t, second.PostSaleCorrections, 1)
+	assert.EqualValues(t, 0, second.PostSaleCorrections[0].Adjustment.RemainingRefundableVND)
+	assert.EqualValues(t, 25000, second.PostSaleCorrections[0].OutstandingRefundVND)
+
+	// Nothing is left to promise.
+	status, _, err = env.refund(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+		paymentID, comp.Comp.ChargeAdjustmentID, 1))
+	require.ErrorIs(t, err, sales.ErrRefundExceedsPendingRefund)
+	assert.Equal(t, http.StatusConflict, status)
+	assert.Equal(t, 2, env.refundCount(t, checkID))
+	assert.Equal(t, 0, env.countAuditEvents(t, sales.EventRefundCompleted))
+}
+
 // TestRecordRefundSourceRejections proves the in-transaction source checks:
 // a Payment or Adjustment of another Check, a Payment of another method, a
 // voided Payment, and a scope mismatch are all refused atomically.
@@ -619,13 +675,113 @@ func TestRecordRefundRejectsAbovePendingRefund(t *testing.T) {
 
 	status, _, err = env.refund(t, env.refundCommand(checkID, sales.RefundMethodCash,
 		paymentID, comp.Comp.ChargeAdjustmentID, 20000))
-	require.ErrorIs(t, err, sales.ErrRefundExceedsPaymentCapacity)
+	require.ErrorIs(t, err, sales.ErrRefundExceedsPendingRefund)
 	assert.Equal(t, http.StatusConflict, status)
 	assert.Equal(t, 0, env.refundCount(t, checkID))
 
 	// The largest valid amount still succeeds afterwards.
 	env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash,
 		paymentID, comp.Comp.ChargeAdjustmentID, 15000))
+}
+
+// TestRecordRefundAggregatePendingBound proves the pending gate is cumulative:
+// pending intents reserve the obligation at once, so a set of intents can
+// never promise more than the Check's pending Refund, however much source
+// capacity remains.
+func TestRecordRefundAggregatePendingBound(t *testing.T) {
+	env := newRefundEnv(t)
+	session := env.commitDineInDraftWithQuantity(t, 2)
+	checkID := env.soleCheckID(t, session.ID)
+
+	// 50,000 base, a 40,000 Manual QR receipt, one 25,000 Comp: only 15,000 is
+	// owed back while the Adjustment still carries 25,000 and the Payment
+	// 40,000 of refundable capacity.
+	_, status, err := env.payManualQR(t, checkID, 40000, true, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	session = env.Submit(t, session.ID)
+	require.Len(t, session.PreparationUnits, 2)
+	comp := env.compOK(t, env.compCommand(t,
+		env.wasteUnitAfterAdvance(t, session.PreparationUnits[0].ID),
+		sales.CompReasonCafeError, nil))
+	paymentID := env.solePaymentIDForCheck(t, checkID)
+
+	projected := env.projectedCheck(t, session.ID, checkID)
+	require.EqualValues(t, 15000, projected.PendingRefundVND)
+
+	// Three pending intents of 5,000 exactly fit the 15,000 obligation.
+	for i := range 3 {
+		result := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+			paymentID, comp.Comp.ChargeAdjustmentID, 5000))
+		require.Equal(t, sales.RefundStatePending, result.Refund.State, "intent %d", i)
+	}
+
+	// A fourth exceeds the obligation although both sources still have
+	// capacity: the gate aggregates the pending intents.
+	status, _, err = env.refund(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+		paymentID, comp.Comp.ChargeAdjustmentID, 1))
+	require.ErrorIs(t, err, sales.ErrRefundExceedsPendingRefund)
+	assert.Equal(t, http.StatusConflict, status)
+
+	assert.Equal(t, 3, env.refundCount(t, checkID))
+	assert.Equal(t, 3, env.countAuditEvents(t, sales.EventRefundRecorded))
+	assert.Equal(t, 0, env.countAuditEvents(t, sales.EventRefundCompleted))
+
+	// Pending money has not moved, so the projection still owes the same
+	// amount while all three intents keep their allocations reserved.
+	projected = env.projectedCheck(t, session.ID, checkID)
+	assert.EqualValues(t, 15000, projected.PendingRefundVND)
+	require.Len(t, projected.Payments, 1)
+	assert.EqualValues(t, 25000, projected.Payments[0].RemainingRefundableVND)
+	require.Len(t, projected.ChargeAdjustments, 1)
+	assert.EqualValues(t, 10000, projected.ChargeAdjustments[0].RemainingRefundableVND)
+}
+
+// TestRecordRefundCompletedDoesNotReservePending proves a completed Refund
+// reduces the obligation instead of counting as an outstanding reservation:
+// it already reduced pending_refund_vnd through the corrected financials.
+func TestRecordRefundCompletedDoesNotReservePending(t *testing.T) {
+	env := newRefundEnv(t)
+	session := env.commitDineInDraftWithQuantity(t, 2)
+	checkID := env.soleCheckID(t, session.ID)
+
+	// 50,000 base, 30,000 Cash plus 15,000 Manual QR, one 25,000 Comp:
+	// effective receipt 45,000 against a 25,000 charge leaves 20,000 owed.
+	_, status, err := env.payCash(t, checkID, 30000, 30000)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	_, status, err = env.payManualQR(t, checkID, 15000, true, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	session = env.Submit(t, session.ID)
+	require.Len(t, session.PreparationUnits, 2)
+	comp := env.compOK(t, env.compCommand(t,
+		env.wasteUnitAfterAdvance(t, session.PreparationUnits[0].ID),
+		sales.CompReasonCafeError, nil))
+	paymentIDs := env.paymentIDsForCheck(t, checkID)
+	require.Len(t, paymentIDs, 2)
+	cashPaymentID, qrPaymentID := paymentIDs[0], paymentIDs[1]
+
+	// A completed Cash Refund moves 10,000 and reduces the pending Refund to
+	// 10,000. It is not an outstanding reservation.
+	env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash, cashPaymentID,
+		comp.Comp.ChargeAdjustmentID, 10000))
+	projected := env.projectedCheck(t, session.ID, checkID)
+	require.EqualValues(t, 10000, projected.PendingRefundVND)
+
+	// The whole remaining 10,000 fits in two pending intents...
+	env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodManualQR, qrPaymentID,
+		comp.Comp.ChargeAdjustmentID, 5000))
+	env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodManualQR, qrPaymentID,
+		comp.Comp.ChargeAdjustmentID, 5000))
+
+	// ...and no more. Had the completed Refund been double counted as a
+	// reservation, the first 5,000 would have been refused.
+	status, _, err = env.refund(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+		qrPaymentID, comp.Comp.ChargeAdjustmentID, 1))
+	require.ErrorIs(t, err, sales.ErrRefundExceedsPendingRefund)
+	assert.Equal(t, http.StatusConflict, status)
+	assert.Equal(t, 3, env.refundCount(t, checkID))
 }
 
 // TestRecordRefundReplay proves an exact replay returns the identical stored
@@ -1186,6 +1342,6 @@ func TestSalesHTTPRefund(t *testing.T) {
 		var env envelope
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
 		require.NotNil(t, env.Error)
-		assert.Equal(t, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY", env.Error.Code)
+		assert.Equal(t, "REFUND_EXCEEDS_PENDING_REFUND", env.Error.Code)
 	})
 }

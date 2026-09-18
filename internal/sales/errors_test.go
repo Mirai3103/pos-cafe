@@ -217,3 +217,29 @@ func TestPhase5DErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+// TestPhase6CRefundErrorMapping pins every Refund condition code, including
+// the aggregate pending-obligation overrun, which is its own condition rather
+// than a source-capacity exhaustion.
+func TestPhase6CRefundErrorMapping(t *testing.T) {
+	cases := []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{ErrRefundNotFound, http.StatusNotFound, "REFUND_NOT_FOUND"},
+		{ErrRefundAllocationInvalid, http.StatusBadRequest, "REFUND_ALLOCATION_INVALID"},
+		{ErrRefundExceedsAdjustmentCapacity, http.StatusConflict, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY"},
+		{ErrRefundExceedsPaymentCapacity, http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY"},
+		{ErrRefundExceedsPendingRefund, http.StatusConflict, "REFUND_EXCEEDS_PENDING_REFUND"},
+		{ErrRefundMethodMismatch, http.StatusConflict, "REFUND_METHOD_MISMATCH"},
+		{ErrRefundAlreadyCompleted, http.StatusConflict, "REFUND_ALREADY_COMPLETED"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			coded := codedFrom(t, fmt.Errorf("wrapped: %w", tc.err))
+			require.Equal(t, tc.status, coded.Status)
+			require.Equal(t, tc.code, coded.Code)
+		})
+	}
+}

@@ -134,6 +134,7 @@ var (
 	ErrRefundAllocationInvalid         = errors.New("refund allocation is invalid")
 	ErrRefundExceedsAdjustmentCapacity = errors.New("refund exceeds the charge adjustment's remaining capacity")
 	ErrRefundExceedsPaymentCapacity    = errors.New("refund exceeds the payment's remaining capacity")
+	ErrRefundExceedsPendingRefund      = errors.New("refund exceeds the pending refund still owed back")
 	ErrRefundMethodMismatch            = errors.New("refund method does not match the payment method")
 	ErrRefundAlreadyCompleted          = errors.New("refund is already completed")
 )
@@ -359,6 +360,9 @@ func MapHTTPError(err error) error {
 	case errors.Is(err, ErrRefundExceedsPaymentCapacity):
 		return coded(http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY",
 			ErrRefundExceedsPaymentCapacity)
+	case errors.Is(err, ErrRefundExceedsPendingRefund):
+		return coded(http.StatusConflict, "REFUND_EXCEEDS_PENDING_REFUND",
+			ErrRefundExceedsPendingRefund)
 	case errors.Is(err, ErrRefundMethodMismatch):
 		return coded(http.StatusConflict, "REFUND_METHOD_MISMATCH", ErrRefundMethodMismatch)
 	case errors.Is(err, ErrRefundAlreadyCompleted):

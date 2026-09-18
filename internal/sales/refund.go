@@ -270,24 +270,28 @@ func applyRecordRefund(ctx context.Context, q *sqlc.Queries, actor Actor,
 		}
 	}
 
-	// 5. Sum every existing allocation, including pending Manual QR intents,
+	// 5. Bound the pending obligation cumulatively, before any insertion. The
+	// request may only spend what the Check or Completed Sale still owes back
+	// after every existing PENDING Refund, each of which reserved its amount
+	// when it was recorded. A completed Refund already reduced the obligation
+	// through the corrected financials, so it is not reserved a second time;
+	// this gate reports obligation overruns in every scope, so a set of
+	// intents can never promise more than can ever be paid back.
+	availableVND, target, err := loadPendingRefundHeadroom(ctx, q, cmd.CheckID, saleID,
+		isPostSale, checkRow.ChargeVnd)
+	if err != nil {
+		return RefundResult{}, AuditRecord{}, err
+	}
+	if amountVND > availableVND {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf(
+			"%w: refund %d exceeds %s pending refund headroom %d",
+			ErrRefundExceedsPendingRefund, amountVND, target, availableVND)
+	}
+
+	// 6. Sum every existing allocation, including pending Manual QR intents,
 	// and verify each source's remaining capacity independently.
 	if err := assertRefundCapacity(ctx, q, cmd, lockedPayments, lockedAdjustments); err != nil {
 		return RefundResult{}, AuditRecord{}, err
-	}
-
-	// 6. A live Refund can never exceed the Check's current pending Refund:
-	// money that is not owed back cannot be handed back.
-	if !isPostSale {
-		pendingVND, err := loadCheckPendingRefundVND(ctx, q, cmd.CheckID, checkRow.ChargeVnd)
-		if err != nil {
-			return RefundResult{}, AuditRecord{}, err
-		}
-		if amountVND > pendingVND {
-			return RefundResult{}, AuditRecord{}, fmt.Errorf(
-				"%w: refund %d exceeds check %s's pending refund %d",
-				ErrRefundExceedsPaymentCapacity, amountVND, cmd.CheckID, pendingVND)
-		}
 	}
 
 	// 7. Insert the Refund and both allocation sets.
@@ -548,6 +552,106 @@ func loadCheckPendingRefundVND(ctx context.Context, q *sqlc.Queries, checkID uui
 		return 0, err
 	}
 	return financials.PendingRefundVND, nil
+}
+
+// loadPendingRefundHeadroom is the cumulative pending-obligation bound: the
+// money the live Check or Completed Sale still owes back, less every existing
+// PENDING Refund whose amount is already promised. It returns the available
+// amount and a human-readable target for the refusal message.
+func loadPendingRefundHeadroom(ctx context.Context, q *sqlc.Queries, checkID, saleID uuid.UUID,
+	isPostSale bool, storedChargeVND int64,
+) (int64, string, error) {
+	if isPostSale {
+		outstandingVND, err := loadOutstandingPostSaleRefundVND(ctx, q, saleID)
+		if err != nil {
+			return 0, "", err
+		}
+		reservedVND, err := loadPendingPostSaleRefundVND(ctx, q, saleID)
+		if err != nil {
+			return 0, "", err
+		}
+		target := fmt.Sprintf("sale %s", saleID)
+		availableVND, err := subtractPendingReservation(outstandingVND, reservedVND, target)
+		return availableVND, target, err
+	}
+
+	pendingVND, err := loadCheckPendingRefundVND(ctx, q, checkID, storedChargeVND)
+	if err != nil {
+		return 0, "", err
+	}
+	reservedVND, err := loadPendingLiveRefundVND(ctx, q, checkID)
+	if err != nil {
+		return 0, "", err
+	}
+	target := fmt.Sprintf("check %s", checkID)
+	availableVND, err := subtractPendingReservation(pendingVND, reservedVND, target)
+	return availableVND, target, err
+}
+
+// subtractPendingReservation derives the available obligation. A negative
+// result means already-recorded pending intents promise more than the source
+// owes, which no client request can cause: it is a stored invariant failure,
+// not a conflict.
+func subtractPendingReservation(obligationVND, reservedVND int64, target string) (int64, error) {
+	availableVND, err := SubtractCharge(obligationVND, reservedVND)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s pending refund is below its reservations: %v",
+			ErrFinancialInvariantViolated, target, err)
+	}
+	return availableVND, nil
+}
+
+// loadPendingLiveRefundVND sums every PENDING live Refund of one Check: money
+// already promised back that has not moved. The query excludes post-sale
+// Refunds structurally and exposes completion evidence, so a completed Refund
+// — already subtracted by the corrected financials — is never counted twice.
+func loadPendingLiveRefundVND(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID) (int64, error) {
+	rows, err := q.ListCheckRefunds(ctx, checkID)
+	if err != nil {
+		return 0, fmt.Errorf("load check refunds: %w", err)
+	}
+	var reservedVND int64
+	for _, row := range rows {
+		if row.CompletionID.Valid {
+			continue
+		}
+		next, err := AddCharge(reservedVND, row.AmountVnd)
+		if err != nil {
+			return 0, fmt.Errorf("%w: pending live refunds: %v",
+				ErrFinancialInvariantViolated, err)
+		}
+		reservedVND = next
+	}
+	return reservedVND, nil
+}
+
+// loadPendingPostSaleRefundVND sums every PENDING post-sale Refund of one
+// Completed Sale from the same additive history the post-sale result projects.
+func loadPendingPostSaleRefundVND(ctx context.Context, q *sqlc.Queries,
+	saleID uuid.UUID,
+) (int64, error) {
+	rows, err := q.ListCompletedSalePostSaleCorrections(ctx, saleID)
+	if err != nil {
+		return 0, fmt.Errorf("load post-sale corrections: %w", err)
+	}
+	var reservedVND int64
+	for _, row := range rows {
+		if !row.EntryKind.Valid || row.EntryKind.String != postSaleEntryKindRefund ||
+			row.CompletedAt.Valid {
+			continue
+		}
+		if !row.AmountVnd.Valid || row.AmountVnd.Int64 < 0 {
+			return 0, fmt.Errorf("%w: pending post-sale refund amount %v is not a sum",
+				ErrFinancialInvariantViolated, row.AmountVnd)
+		}
+		next, err := AddCharge(reservedVND, row.AmountVnd.Int64)
+		if err != nil {
+			return 0, fmt.Errorf("%w: pending post-sale refunds: %v",
+				ErrFinancialInvariantViolated, err)
+		}
+		reservedVND = next
+	}
+	return reservedVND, nil
 }
 
 // refundResponseFromFact assembles the Refund result from the stored fact, its
