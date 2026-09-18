@@ -524,3 +524,61 @@ type CompletedSaleResponse struct {
 // literal in the contract so a client can branch on it exactly as it branches
 // on a Check's or a Session's state.
 const CompletedSaleStateCompleted = "COMPLETED"
+
+// ---------- Phase 6C: Comp ----------
+
+// CompWasteCommand waives the charge of one charged Wasted unit. WasteID is
+// json:"-": it comes from the path, never the body. ManagerApproval carries
+// request-only credentials; the executor verifies them inline, and no
+// credential ever reaches a fingerprint, stored result, business fact, audit
+// detail, or log (spec §8.1).
+type CompWasteCommand struct {
+	RequestID       uuid.UUID            `json:"request_id"`
+	WasteID         uuid.UUID            `json:"-"`
+	Reason          string               `json:"reason"`
+	Note            *string              `json:"note"`
+	ManagerApproval ManagerApprovalInput `json:"manager_approval"`
+}
+
+// CompResponse is one recorded Comp: the append-only fact a client reads back.
+// AmountVND is the immutable per-unit price the Comp waives; the Manager
+// approver is recorded separately from the initiator, so a self-approved
+// command stays distinguishable in the audit trail.
+type CompResponse struct {
+	ID                        uuid.UUID `json:"id"`
+	WasteID                   uuid.UUID `json:"waste_id"`
+	PreparationUnitID         uuid.UUID `json:"preparation_unit_id"`
+	ChargeAdjustmentID        uuid.UUID `json:"charge_adjustment_id"`
+	AmountVND                 int64     `json:"amount_vnd"`
+	Reason                    string    `json:"reason"`
+	Note                      *string   `json:"note"`
+	ActorStaffIdentityID      uuid.UUID `json:"actor_staff_identity_id"`
+	ApprovedByStaffIdentityID uuid.UUID `json:"approved_by_staff_identity_id"`
+	OccurredAt                time.Time `json:"occurred_at"`
+}
+
+// PostSaleCorrectionResponse is one post-sale Comp correction in a closed
+// sale's additive history: its POST_SALE Charge Adjustment, the Comp fact,
+// the Refunds that have consumed that adjustment's corrected capacity
+// (non-null, empty until the Refund command records one), and the amount of
+// the correction still owed back.
+type PostSaleCorrectionResponse struct {
+	Adjustment           ChargeAdjustmentResponse `json:"adjustment"`
+	Comp                 CompResponse             `json:"comp"`
+	Refunds              []RefundResponse         `json:"refunds"`
+	OutstandingRefundVND int64                    `json:"outstanding_refund_vnd"`
+}
+
+// CompResult is the discriminated Comp result. Exactly one branch is present:
+// a live Comp carries the updated Service Session, while a post-sale Comp
+// carries the Completed Sale id, the outstanding post-sale correction amount,
+// and the additive correction history, and no mutable Session projection
+// (spec §8.3, §12.3).
+type CompResult struct {
+	Scope                        string                       `json:"scope"`
+	Comp                         CompResponse                 `json:"comp"`
+	ServiceSession               *ServiceSessionResponse      `json:"service_session,omitempty"`
+	CompletedSaleID              *uuid.UUID                   `json:"completed_sale_id,omitempty"`
+	OutstandingPostSaleRefundVND *int64                       `json:"outstanding_post_sale_refund_vnd,omitempty"`
+	PostSaleCorrections          []PostSaleCorrectionResponse `json:"post_sale_corrections,omitempty"`
+}

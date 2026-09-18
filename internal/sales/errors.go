@@ -116,6 +116,15 @@ var (
 	ErrOrderRequiredForClosure          = errors.New("a service session with no order cannot close")
 	ErrUnfulfilledPreparationForClosure = errors.New("every preparation unit must be terminal before the service session closes")
 	ErrCompletedSaleNotFound            = errors.New("completed sale not found")
+
+	// Phase 6C Comp conditions. A missing Waste is a not-found answer; a
+	// Wasted Remake is an uncharged source; a second Comp of one Waste is
+	// a lifecycle conflict the unique facts reject; and a source mapping
+	// that moved under a concurrent restructuring refuses whole.
+	ErrWasteNotFound            = errors.New("waste not found")
+	ErrCompSourceNotCharged     = errors.New("the comp source is not a charged standard unit")
+	ErrWasteAlreadyComped       = errors.New("the waste already carries a comp")
+	ErrChargeAdjustmentConflict = errors.New("the charge mapping changed concurrently")
 )
 
 // serviceSessionSalesShiftFK is the auto-generated name of the only foreign
@@ -321,6 +330,14 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "UNFULFILLED_PREPARATION_FOR_CLOSURE", ErrUnfulfilledPreparationForClosure)
 	case errors.Is(err, ErrCompletedSaleNotFound):
 		return coded(http.StatusNotFound, "COMPLETED_SALE_NOT_FOUND", ErrCompletedSaleNotFound)
+	case errors.Is(err, ErrWasteNotFound):
+		return coded(http.StatusNotFound, "WASTE_NOT_FOUND", ErrWasteNotFound)
+	case errors.Is(err, ErrCompSourceNotCharged):
+		return coded(http.StatusConflict, "COMP_SOURCE_NOT_CHARGED", ErrCompSourceNotCharged)
+	case errors.Is(err, ErrWasteAlreadyComped):
+		return coded(http.StatusConflict, "WASTE_ALREADY_COMPED", ErrWasteAlreadyComped)
+	case errors.Is(err, ErrChargeAdjustmentConflict):
+		return coded(http.StatusConflict, "CHARGE_ADJUSTMENT_CONFLICT", ErrChargeAdjustmentConflict)
 	default:
 		return err
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
+	"github.com/Mirai3103/pos-cafe/internal/preparation"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/Mirai3103/pos-cafe/internal/shift"
 	"github.com/google/uuid"
@@ -32,9 +33,11 @@ type envelope struct {
 	} `json:"error"`
 }
 
-// newTestServer builds an Echo server with auth, shift, and sales routes
-// mounted the same way cmd/api/main.go mounts them. Shift is included because
-// a Session can only open against a Shift opened through the Shift API.
+// newTestServer builds an Echo server with auth, shift, sales, and
+// preparation routes mounted the same way cmd/api/main.go mounts them. Shift
+// is included because a Session can only open against a Shift opened through
+// the Shift API; preparation is included because a Waste must be recorded
+// through its real route before Comp can consume it.
 func newTestServer(t *testing.T) (*echo.Echo, *sql.DB, *sqlc.Queries) {
 	t.Helper()
 	db, q := openSalesTestDB(t)
@@ -52,6 +55,9 @@ func newTestServer(t *testing.T) (*echo.Echo, *sql.DB, *sqlc.Queries) {
 
 	salesSlices := sales.NewSlices(db, q)
 	salesSlices.RegisterRoutes(v1, authSlices.Middleware)
+
+	preparationSlices := preparation.NewSlices(db, q)
+	preparationSlices.RegisterRoutes(v1, authSlices.Middleware)
 
 	return e, db, q
 }
@@ -264,7 +270,7 @@ func TestSalesHTTPSerializesEmptyCollectionsAsArrays(t *testing.T) {
 	assert.Equal(t, shiftID, session.SalesShiftID)
 }
 
-// salesRoutes enumerates all fourteen operations for the denial tests. Bodies
+// salesRoutes enumerates all fifteen operations for the denial tests. Bodies
 // are well-formed; the denial happens in the middleware chain before any
 // handler logic runs, but valid requests keep the test honest about what is
 // being denied.
@@ -311,6 +317,15 @@ func salesRoutes() []struct {
 			map[string]any{"request_id": uuid.New()}},
 		{"set check target", http.MethodPut, sessionPath + "/draft/check-target",
 			map[string]any{"request_id": uuid.New(), "check_target": "NEW_CHECK"}},
+		{"comp waste", http.MethodPost, "/api/v1/sales/wastes/" + uuid.NewString() + "/comp",
+			map[string]any{
+				"request_id": uuid.New(),
+				"reason":     "CAFE_ERROR",
+				"manager_approval": map[string]any{
+					"approver_login_code": "MGR001",
+					"manager_pin":         "1234",
+				},
+			}},
 	}
 }
 

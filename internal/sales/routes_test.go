@@ -47,6 +47,7 @@ func TestRouteRegistration(t *testing.T) {
 		"POST /api/v1/sales/checks/:check_id/payments/manual-qr":                         true,
 		"POST /api/v1/sales/checks/:check_id/split":                                      true,
 		"POST /api/v1/sales/checks/merge":                                                true,
+		"POST /api/v1/sales/wastes/:waste_id/comp":                                       true,
 	}
 
 	got := make(map[string]bool)
@@ -98,8 +99,8 @@ func TestCommitRoutesRequireSalesOperate(t *testing.T) {
 	}
 }
 
-func TestSalesExposesTwentyTwoOperations(t *testing.T) {
-	require.Len(t, registeredSalesRoutes(t), 22)
+func TestSalesExposesTwentyThreeOperations(t *testing.T) {
+	require.Len(t, registeredSalesRoutes(t), 23)
 }
 
 func TestPhase5CRoutesAreRegistered(t *testing.T) {
@@ -108,7 +109,7 @@ func TestPhase5CRoutesAreRegistered(t *testing.T) {
 	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/payments/manual-qr")
 	require.Contains(t, routes, "POST /api/v1/sales/checks/:check_id/split")
 	require.Contains(t, routes, "POST /api/v1/sales/checks/merge")
-	require.Len(t, routes, 22, "the Sales surface has grown to twenty-two operations by Phase 5D")
+	require.Len(t, routes, 23, "the Sales surface has grown to twenty-three operations by Phase 6C")
 }
 
 func TestPhase5DRoutesAreRegistered(t *testing.T) {
@@ -117,5 +118,10 @@ func TestPhase5DRoutesAreRegistered(t *testing.T) {
 	require.Contains(t, routes, "POST /api/v1/sales/service-sessions/:id/close")
 	require.Contains(t, routes, "GET /api/v1/sales/completed-sales/:id")
 	require.Contains(t, routes, "GET /api/v1/sales/service-sessions/:id/completed-sale")
-	require.Len(t, routes, 22, "Phase 5D brings the Sales surface to twenty-two operations")
+	require.Len(t, routes, 23, "Phase 6C brings the Sales surface to twenty-three operations")
+}
+
+func TestPhase6CCompRouteIsRegistered(t *testing.T) {
+	routes := registeredSalesRoutes(t)
+	require.Contains(t, routes, "POST /api/v1/sales/wastes/:waste_id/comp")
 }

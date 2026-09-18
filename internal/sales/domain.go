@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
@@ -387,4 +388,124 @@ func IsTerminalUnitState(state string) bool {
 // Payment -> Submit are valid service.
 func ModeRequiresSettlementBeforeSubmit(mode string) bool {
 	return mode == ModeTakeaway
+}
+
+// --- Phase 6C: Comp ---
+
+// OpCompWaste is the idempotency action name, stored in
+// idempotency_keys.action (VARCHAR(50)).
+const OpCompWaste = "sales.comp_waste"
+
+// Correction scopes. A LIVE_CHECK adjustment changes the active Session's
+// Check charge; a POST_SALE adjustment links to a Completed Sale and never
+// rewrites its snapshot (spec §2, §6.3).
+const (
+	CompScopeLiveCheck = "LIVE_CHECK"
+	CompScopePostSale  = "POST_SALE"
+)
+
+// ChargeAdjustmentKindComp is the one Charge Adjustment kind this package
+// writes. ADR-041 makes charge reduction append-only: the adjustment names its
+// immutable source and never edits it.
+const ChargeAdjustmentKindComp = "COMP"
+
+// Comp reason catalog (spec §2). Every operation keeps its own allowlist; the
+// migration 000014 constraint enforces the same set at the database boundary.
+const (
+	CompReasonCafeError       = "CAFE_ERROR"
+	CompReasonQualityFailure  = "QUALITY_FAILURE"
+	CompReasonServiceRecovery = "SERVICE_RECOVERY"
+	CompReasonOther           = "OTHER"
+)
+
+var compReasons = []string{
+	CompReasonCafeError, CompReasonQualityFailure, CompReasonServiceRecovery, CompReasonOther,
+}
+
+// MaxCorrectionNoteRunes is the inclusive upper bound for a present correction
+// note, counted in Unicode code points so Go agrees with the database
+// char_length check.
+const MaxCorrectionNoteRunes = 500
+
+// Phase 6C business audit event types (spec §15). CHECK_SETTLED already exists
+// above: the settlement fact is the same event whichever command produced it.
+const (
+	EventCheckChargeAdjusted = "CHECK_CHARGE_ADJUSTED"
+	EventSalesCompRecorded   = "SALES_COMP_RECORDED"
+)
+
+// NormalizeCompNote trims surrounding whitespace from an optional Comp note
+// and collapses a blank note to nil. Callers normalize BEFORE validating and
+// BEFORE building the fingerprint, so replays of differently padded input stay
+// equal.
+func NormalizeCompNote(note *string) *string {
+	if note == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*note)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+// ValidateCompReason checks a Comp reason against the Comp catalog.
+func ValidateCompReason(reason string) error {
+	for _, allowed := range compReasons {
+		if reason == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %q is not a valid comp reason", response.ErrInvalid, reason)
+}
+
+// ValidateCompNote validates an already-normalized optional note: a present
+// note is 1 through MaxCorrectionNoteRunes code points, and the OTHER reason
+// requires one.
+func ValidateCompNote(reason string, note *string) error {
+	if note != nil {
+		runes := utf8.RuneCountInString(*note)
+		if runes < 1 || runes > MaxCorrectionNoteRunes {
+			return fmt.Errorf("%w: a note must be 1 through %d characters",
+				response.ErrInvalid, MaxCorrectionNoteRunes)
+		}
+		return nil
+	}
+	if reason == CompReasonOther {
+		return fmt.Errorf("%w: the %s reason requires a note", response.ErrInvalid, CompReasonOther)
+	}
+	return nil
+}
+
+// ValidateManagerApprovalInput checks the shape of one inline Manager Approval
+// before any request id is consumed. Meaning failures — a wrong PIN, a
+// disabled identity, a missing role or capability — stay inside the executor's
+// transaction and collapse to one client-visible denial.
+func ValidateManagerApprovalInput(in ManagerApprovalInput) error {
+	if auth.NormalizeLoginCode(in.ApproverLoginCode) == "" {
+		return fmt.Errorf("%w: approver_login_code is required", response.ErrInvalid)
+	}
+	if err := auth.ValidatePinFormat(in.ManagerPIN); err != nil {
+		return fmt.Errorf("%w: manager_pin %s", response.ErrInvalid, err.Error())
+	}
+	return nil
+}
+
+// ValidateCompWasteCommand validates a Comp at the boundary, before any
+// transaction and before the credential values are copied into the executor's
+// ApprovalSpec. The note arrives already normalized.
+func ValidateCompWasteCommand(cmd CompWasteCommand, note *string) error {
+	if cmd.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	if cmd.WasteID == uuid.Nil {
+		return fmt.Errorf("%w: waste_id is required", response.ErrInvalid)
+	}
+	if err := ValidateCompReason(cmd.Reason); err != nil {
+		return err
+	}
+	if err := ValidateCompNote(cmd.Reason, note); err != nil {
+		return err
+	}
+	return ValidateManagerApprovalInput(cmd.ManagerApproval)
 }

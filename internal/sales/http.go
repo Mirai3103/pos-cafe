@@ -928,3 +928,48 @@ func (s *Slices) handleMergeChecks(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleCompWaste godoc
+//
+//	@Summary		Comp a charged Waste
+//	@Description	Waives the charge of one charged Wasted standard unit through one Manager-approved append-only correction. An active Service Session's Comp writes a LIVE_CHECK Charge Adjustment, updates the Check charge, settles the Check when the corrected balance reaches zero, and returns the updated Service Session. A closed Session's Comp writes a POST_SALE adjustment linked to its Completed Sale without rewriting the closed Check or sale, and returns the Completed Sale id, the outstanding post-sale correction amount, and the additive correction history. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately. A Wasted Remake is uncharged and rejected.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			waste_id	path	string			true	"Preparation Waste ID"
+//	@Param			request		body	CompWasteCommand	true	"Comp request"
+//	@Success		201			{object}	response.APIResponse{data=CompResult}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		422			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/sales/wastes/{waste_id}/comp [post]
+func (s *Slices) handleCompWaste(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	wasteID, err := parseUUIDParam(c, "waste_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[CompWasteCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// WasteID is json:"-": it comes from the path, never the body.
+	body.WasteID = wasteID
+
+	status, result, err := s.CompWaste.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
