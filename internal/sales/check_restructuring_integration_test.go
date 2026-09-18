@@ -231,3 +231,165 @@ func TestMergeChecks(t *testing.T) {
 		require.ErrorIs(t, err, sales.ErrCheckNotFound)
 	})
 }
+
+// restructuringSnapshot captures every Check and Charge Allocation row of one
+// Session, so a rejected Split or Merge can be proved to have rewritten none
+// of them.
+type restructuringSnapshot struct {
+	Checks      []restructuringCheckRow
+	Allocations []restructuringAllocationRow
+}
+
+type restructuringCheckRow struct {
+	ID                uuid.UUID
+	State             string
+	ChargeVND         int64
+	MergedIntoCheckID string
+}
+
+type restructuringAllocationRow struct {
+	ID              uuid.UUID
+	CheckID         uuid.UUID
+	CommittedItemID uuid.UUID
+	Quantity        int32
+	UnitPriceVND    int64
+}
+
+func snapshotRestructuringRows(t *testing.T, env *salesEnv, sessionID uuid.UUID) restructuringSnapshot {
+	t.Helper()
+	var snapshot restructuringSnapshot
+
+	checkRows, err := env.DB.Query(`
+		SELECT id, state, charge_vnd, coalesce(merged_into_check_id::text, '')
+		FROM checks
+		WHERE service_session_id = $1
+		ORDER BY id`, sessionID)
+	require.NoError(t, err)
+	defer checkRows.Close()
+	for checkRows.Next() {
+		var row restructuringCheckRow
+		require.NoError(t, checkRows.Scan(
+			&row.ID, &row.State, &row.ChargeVND, &row.MergedIntoCheckID))
+		snapshot.Checks = append(snapshot.Checks, row)
+	}
+	require.NoError(t, checkRows.Err())
+
+	allocationRows, err := env.DB.Query(`
+		SELECT ca.id, ca.check_id, ca.committed_item_id, ca.quantity, ci.unit_price_vnd
+		FROM charge_allocations ca
+		JOIN checks c ON c.id = ca.check_id
+		JOIN committed_items ci ON ci.id = ca.committed_item_id
+		WHERE c.service_session_id = $1
+		ORDER BY ca.id`, sessionID)
+	require.NoError(t, err)
+	defer allocationRows.Close()
+	for allocationRows.Next() {
+		var row restructuringAllocationRow
+		require.NoError(t, allocationRows.Scan(
+			&row.ID, &row.CheckID, &row.CommittedItemID, &row.Quantity, &row.UnitPriceVND))
+		snapshot.Allocations = append(snapshot.Allocations, row)
+	}
+	require.NoError(t, allocationRows.Err())
+
+	return snapshot
+}
+
+// adjustedRestructuringFixture is an otherwise eligible restructuring world:
+// one ACTIVE dine-in Session, split into two OPEN unpaid Checks, where the
+// source Check carries one live Charge Adjustment. The stored charge already
+// reflects the adjustment, so only the new guard stands between the handlers
+// and a valid Split or Merge.
+type adjustedRestructuringFixture struct {
+	env        *salesEnv
+	sessionID  uuid.UUID
+	adjustedID uuid.UUID
+	otherID    uuid.UUID
+	movedItem  sales.SplitItem
+}
+
+func newAdjustedRestructuringFixture(t *testing.T) adjustedRestructuringFixture {
+	t.Helper()
+	env := newSalesEnv(t)
+
+	// Four units let the split below move one whole unit and still leave the
+	// adjusted Check with a positive charge, so at RED the handlers would
+	// otherwise succeed.
+	committed := env.commitDineInDraftWithQuantity(t, 4)
+	submitted := env.Submit(t, committed.ID)
+	require.Len(t, submitted.PreparationUnits, 4)
+
+	adjustedID := env.soleCheckID(t, committed.ID)
+	allocation := env.checkAllocations(t, committed.ID, adjustedID)[0]
+	require.Equal(t, int32(4), allocation.AllocatedQuantity,
+		"the fixture commits one allocation of four units")
+
+	got, _, err := env.splitToNewCheck(t, adjustedID, []sales.SplitItem{
+		{CommittedItemID: allocation.CommittedItemID, Quantity: 1},
+	})
+	require.NoError(t, err)
+	otherID := env.otherCheckID(t, got, adjustedID)
+
+	var allocationID uuid.UUID
+	var unitPriceVND int64
+	require.NoError(t, env.DB.QueryRow(`
+		SELECT ca.id, ci.unit_price_vnd
+		FROM charge_allocations ca
+		JOIN committed_items ci ON ci.id = ca.committed_item_id
+		WHERE ca.check_id = $1`, adjustedID).Scan(&allocationID, &unitPriceVND))
+
+	// Seed the live adjustment a Cancellation would have written, and apply
+	// its charge consequence to the denormalized Check row (spec §6.1).
+	_, err = env.DB.Exec(`
+		INSERT INTO charge_adjustments (kind, scope, preparation_unit_id,
+			charge_allocation_id, check_id, sales_shift_id, amount_vnd)
+		VALUES ('CANCELLATION', 'LIVE_CHECK', $1, $2, $3, $4, $5)`,
+		submitted.PreparationUnits[0].ID, allocationID, adjustedID,
+		env.ShiftID, unitPriceVND)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(
+		`UPDATE checks SET charge_vnd = charge_vnd - $2 WHERE id = $1`,
+		adjustedID, unitPriceVND)
+	require.NoError(t, err)
+
+	return adjustedRestructuringFixture{
+		env:        env,
+		sessionID:  committed.ID,
+		adjustedID: adjustedID,
+		otherID:    otherID,
+		movedItem: sales.SplitItem{
+			CommittedItemID: allocation.CommittedItemID,
+			Quantity:        1,
+		},
+	}
+}
+
+// A live Charge Adjustment names the immutable Charge Allocation it reduced,
+// so a Split or Merge that rewrote or moved that allocation would strand the
+// adjustment. Both handlers reject with CHECK_HAS_CHARGE_ADJUSTMENT after the
+// Check locks and before any charge or allocation mutation, leaving every
+// Check and allocation row untouched (design section 6.2).
+func TestSplitAndMergeRejectLiveChargeAdjustment(t *testing.T) {
+	fixture := newAdjustedRestructuringFixture(t)
+	env := fixture.env
+
+	t.Run("split rejects a check carrying a live adjustment", func(t *testing.T) {
+		before := snapshotRestructuringRows(t, env, fixture.sessionID)
+
+		_, _, err := env.splitToNewCheck(t, fixture.adjustedID,
+			[]sales.SplitItem{fixture.movedItem})
+
+		require.ErrorIs(t, err, sales.ErrCheckHasChargeAdjustment)
+		require.Equal(t, before, snapshotRestructuringRows(t, env, fixture.sessionID),
+			"a rejected split must rewrite no Check or Charge Allocation row")
+	})
+
+	t.Run("merge rejects a check carrying a live adjustment", func(t *testing.T) {
+		before := snapshotRestructuringRows(t, env, fixture.sessionID)
+
+		_, _, err := env.mergeChecks(t, fixture.otherID, fixture.adjustedID)
+
+		require.ErrorIs(t, err, sales.ErrCheckHasChargeAdjustment)
+		require.Equal(t, before, snapshotRestructuringRows(t, env, fixture.sessionID),
+			"a rejected merge must rewrite no Check or Charge Allocation row")
+	})
+}

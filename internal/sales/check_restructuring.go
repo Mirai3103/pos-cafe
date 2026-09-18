@@ -105,6 +105,24 @@ func assertNoPayments(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) err
 	return nil
 }
 
+// assertNoLiveChargeAdjustments refuses to restructure a Check whose charge
+// has been reduced by a Cancellation or Comp.
+//
+// A live adjustment names the exact Charge Allocation it reduced, so a Split
+// or Merge that rewrote or moved that allocation would strand the adjustment
+// (design §6.2). The Check lock serializes the two commands: once a correction
+// commits, restructuring rejects here.
+func assertNoLiveChargeAdjustments(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) error {
+	n, err := q.CountLiveChargeAdjustmentsForChecks(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("count live charge adjustments: %w", err)
+	}
+	if n != 0 {
+		return ErrCheckHasChargeAdjustment
+	}
+	return nil
+}
+
 // ValidateSplitItems rejects a moved-item list that cannot describe a split.
 func ValidateSplitItems(items []SplitItem) error {
 	if len(items) == 0 {
@@ -217,6 +235,9 @@ func (h *SplitCheckHandler) Handle(ctx context.Context, actor Actor, cmd SplitCh
 			}
 			locked, err := lockChecks(ctx, q, ids)
 			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			if err := assertNoLiveChargeAdjustments(ctx, q, ids); err != nil {
 				return 0, zero, AuditRecord{}, err
 			}
 			if err := assertNoPayments(ctx, q, ids); err != nil {
@@ -440,6 +461,9 @@ func (h *MergeChecksHandler) Handle(ctx context.Context, actor Actor, cmd MergeC
 			ids := []uuid.UUID{cmd.SurvivingCheckID, cmd.AbsorbedCheckID}
 			locked, err := lockChecks(ctx, q, ids)
 			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			if err := assertNoLiveChargeAdjustments(ctx, q, ids); err != nil {
 				return 0, zero, AuditRecord{}, err
 			}
 			if err := assertNoPayments(ctx, q, ids); err != nil {

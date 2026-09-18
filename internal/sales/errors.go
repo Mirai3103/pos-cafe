@@ -77,10 +77,11 @@ var (
 	// surfaces as a 500 with the Check id logged.
 	ErrChargeInvariantViolated = errors.New("check charge does not match its allocations")
 
-	ErrCheckNotFound          = errors.New("check not found")
-	ErrCheckNotOpen           = errors.New("check is not open")
-	ErrCheckHasPayment        = errors.New("check already carries a payment")
-	ErrChecksDifferentSession = errors.New("checks belong to different service sessions")
+	ErrCheckNotFound            = errors.New("check not found")
+	ErrCheckNotOpen             = errors.New("check is not open")
+	ErrCheckHasPayment          = errors.New("check already carries a payment")
+	ErrCheckHasChargeAdjustment = errors.New("check carries a live charge adjustment")
+	ErrChecksDifferentSession   = errors.New("checks belong to different service sessions")
 
 	ErrPaymentExceedsBalance   = errors.New("payment exceeds the check balance")
 	ErrManualQRReceiptRequired = errors.New("the bank receipt must be confirmed before recording a manual QR payment")
@@ -278,6 +279,8 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "CHECK_NOT_OPEN", ErrCheckNotOpen)
 	case errors.Is(err, ErrCheckHasPayment):
 		return coded(http.StatusConflict, "CHECK_HAS_PAYMENT", ErrCheckHasPayment)
+	case errors.Is(err, ErrCheckHasChargeAdjustment):
+		return coded(http.StatusConflict, "CHECK_HAS_CHARGE_ADJUSTMENT", ErrCheckHasChargeAdjustment)
 	case errors.Is(err, ErrChecksDifferentSession):
 		return coded(http.StatusConflict, "CHECKS_DIFFERENT_SERVICE_SESSION", ErrChecksDifferentSession)
 	case errors.Is(err, ErrPaymentExceedsBalance):
