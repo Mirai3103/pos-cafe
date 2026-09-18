@@ -211,7 +211,7 @@ func applyRecordRefund(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 	if len(lockedPayments) != len(paymentIDs) {
 		return RefundResult{}, AuditRecord{}, fmt.Errorf(
-			"%w: a selected payment does not exist", ErrRefundAllocationInvalid)
+			"%w: a selected payment does not exist", ErrRefundSourceNotFound)
 	}
 	lockedAdjustments, err := q.LockChargeAdjustmentsForRefund(ctx, adjustmentIDs)
 	if err != nil {
@@ -219,7 +219,7 @@ func applyRecordRefund(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 	if len(lockedAdjustments) != len(adjustmentIDs) {
 		return RefundResult{}, AuditRecord{}, fmt.Errorf(
-			"%w: a selected charge adjustment does not exist", ErrRefundAllocationInvalid)
+			"%w: a selected charge adjustment does not exist", ErrRefundSourceNotFound)
 	}
 
 	// Revalidate the Payment sources: same Check, same method, not voided.

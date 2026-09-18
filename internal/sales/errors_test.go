@@ -228,6 +228,7 @@ func TestPhase6CRefundErrorMapping(t *testing.T) {
 		code   string
 	}{
 		{ErrRefundNotFound, http.StatusNotFound, "REFUND_NOT_FOUND"},
+		{ErrRefundSourceNotFound, http.StatusNotFound, "REFUND_SOURCE_NOT_FOUND"},
 		{ErrRefundAllocationInvalid, http.StatusBadRequest, "REFUND_ALLOCATION_INVALID"},
 		{ErrRefundExceedsAdjustmentCapacity, http.StatusConflict, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY"},
 		{ErrRefundExceedsPaymentCapacity, http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY"},

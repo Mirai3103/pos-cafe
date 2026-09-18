@@ -714,6 +714,32 @@ func TestRecordRefundSourceRejections(t *testing.T) {
 		_ = compA
 	})
 
+	t.Run("rejects a nonexistent payment as a missing source", func(t *testing.T) {
+		env := newRefundEnv(t)
+		_, _, wasteID, checkID := env.paidTakeawayWastedUnitWithMethod(t, sales.PaymentMethodCash)
+		comp := env.compOK(t, env.compCommand(t, wasteID, sales.CompReasonCafeError, nil))
+
+		status, _, err := env.refund(t, env.refundCommand(checkID, sales.RefundMethodCash,
+			uuid.New(), comp.Comp.ChargeAdjustmentID, 25000))
+		require.ErrorIs(t, err, sales.ErrRefundSourceNotFound,
+			"a payment id that resolves to no row is a missing source, not a malformed selection")
+		assert.Equal(t, http.StatusNotFound, status)
+		assert.Equal(t, 0, env.refundCount(t, checkID))
+	})
+
+	t.Run("rejects a nonexistent charge adjustment as a missing source", func(t *testing.T) {
+		env := newRefundEnv(t)
+		_, _, _, checkID := env.paidTakeawayWastedUnitWithMethod(t, sales.PaymentMethodCash)
+		paymentID := env.solePaymentIDForCheck(t, checkID)
+
+		status, _, err := env.refund(t, env.refundCommand(checkID, sales.RefundMethodCash,
+			paymentID, uuid.New(), 25000))
+		require.ErrorIs(t, err, sales.ErrRefundSourceNotFound,
+			"an adjustment id that resolves to no row is a missing source, not a malformed selection")
+		assert.Equal(t, http.StatusNotFound, status)
+		assert.Equal(t, 0, env.refundCount(t, checkID))
+	})
+
 	t.Run("rejects a payment of another method", func(t *testing.T) {
 		env := newRefundEnv(t)
 		_, _, wasteID, checkID := env.paidTakeawayWastedUnitWithMethod(t, sales.PaymentMethodCash)

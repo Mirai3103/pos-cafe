@@ -253,6 +253,76 @@ func TestProjectionPaymentVoidEvidence(t *testing.T) {
 	require.Equal(t, "WRONG_AMOUNT", check.Payments[0].Void.Reason)
 }
 
+// paymentByID selects one Payment projection by id, failing when it is absent.
+func paymentByID(t *testing.T, check sales.CheckResponse, paymentID uuid.UUID) sales.PaymentResponse {
+	t.Helper()
+	for _, payment := range check.Payments {
+		if payment.ID == paymentID {
+			return payment
+		}
+	}
+	require.FailNow(t, "payment is absent from the check projection", paymentID)
+	return sales.PaymentResponse{}
+}
+
+// A voided Payment cannot source a Refund, so it must not advertise refundable
+// capacity even though its applied amount stays in the immutable receipt. Its
+// non-voided peers keep their capacity, and both a pending and a completed
+// Refund allocation still consume that peer capacity exactly as before.
+func TestProjectionVoidedPaymentAdvertisesNoRefundableCapacity(t *testing.T) {
+	fixture := newCorrectionFixture(t)
+	env := fixture.Env
+
+	// A second Payment gives the Check a non-voided peer. The fixture's two
+	// live Comps removed the whole charge, so the Settled state is the evidence
+	// the read-path guard requires.
+	peerPaymentID := env.insertCashPayment(t, fixture.CheckID, 25_000)
+	_, err := insertPaymentVoid(t, env, fixture.PaymentID, 25_000, "WRONG_AMOUNT", nil)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(`
+		UPDATE checks SET charge_vnd = 0, state = 'SETTLED', settled_at = now(),
+		  settled_by_staff_identity_id = $2,
+		  settled_during_sales_shift_id = $3,
+		  settled_staff_access_session_id = $4
+		WHERE id = $1`,
+		fixture.CheckID, env.Actor.StaffID, env.ShiftID, env.Actor.SessionID)
+	require.NoError(t, err)
+
+	check := env.GetSessionOK(t, fixture.SessionID).Checks[0]
+	require.NotNil(t, paymentByID(t, check, fixture.PaymentID).Void)
+	require.Zero(t, paymentByID(t, check, fixture.PaymentID).RemainingRefundableVND,
+		"a voided Payment advertises no refundable capacity")
+	require.Equal(t, int64(25_000), paymentByID(t, check, peerPaymentID).RemainingRefundableVND,
+		"a non-voided peer keeps its capacity")
+
+	// The pending Manual QR Refund allocates equal sums from the peer Payment
+	// and one Adjustment, reserving both capacities before money moves.
+	refundID, err := insertRefund(t, env, fixture.CheckID, "MANUAL_QR", 10_000,
+		"CUSTOMER_REQUEST", nil)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(`
+		INSERT INTO refund_payment_allocations (refund_id, payment_id, amount_vnd)
+		VALUES ($1, $2, 10000)`, refundID, peerPaymentID)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(`
+		INSERT INTO refund_adjustment_allocations (refund_id, charge_adjustment_id, amount_vnd)
+		VALUES ($1, $2, 10000)`, refundID, fixture.AdjustmentIDs[0])
+	require.NoError(t, err)
+
+	check = env.GetSessionOK(t, fixture.SessionID).Checks[0]
+	require.Zero(t, paymentByID(t, check, fixture.PaymentID).RemainingRefundableVND)
+	require.Equal(t, int64(15_000), paymentByID(t, check, peerPaymentID).RemainingRefundableVND,
+		"a pending Manual QR Refund reserves peer capacity")
+
+	_, err = insertRefundCompletion(t, env, refundID, "FT-OUT-1")
+	require.NoError(t, err)
+
+	check = env.GetSessionOK(t, fixture.SessionID).Checks[0]
+	require.Zero(t, paymentByID(t, check, fixture.PaymentID).RemainingRefundableVND)
+	require.Equal(t, int64(15_000), paymentByID(t, check, peerPaymentID).RemainingRefundableVND,
+		"completing the Refund leaves the consumed peer capacity consumed")
+}
+
 // A live Comp reduces the stored charge; a pending Manual QR Refund then
 // reserves Payment and Adjustment capacity without reducing effective receipt.
 // Completing it is what removes money from the equation.

@@ -127,11 +127,14 @@ var (
 	ErrWasteAlreadyComped       = errors.New("the waste already carries a comp")
 	ErrChargeAdjustmentConflict = errors.New("the charge mapping changed concurrently")
 
-	// Phase 6C Refund conditions. An allocation whose source is missing, of
-	// another Check, of the wrong scope, or otherwise unusable is invalid; an
-	// allocation that exceeds either source's remaining capacity is a
-	// conflict; and a Refund already completed cannot be completed again.
+	// Phase 6C Refund conditions. A selected source id that resolves to no
+	// row is a not-found answer, so it stays distinguishable from a source
+	// that exists but belongs to another Check, carries the wrong scope, or is
+	// otherwise unusable — that is an invalid allocation. An allocation that
+	// exceeds either source's remaining capacity is a conflict, and a Refund
+	// already completed cannot be completed again.
 	ErrRefundNotFound                  = errors.New("refund not found")
+	ErrRefundSourceNotFound            = errors.New("refund source not found")
 	ErrRefundAllocationInvalid         = errors.New("refund allocation is invalid")
 	ErrRefundExceedsAdjustmentCapacity = errors.New("refund exceeds the charge adjustment's remaining capacity")
 	ErrRefundExceedsPaymentCapacity    = errors.New("refund exceeds the payment's remaining capacity")
@@ -366,6 +369,8 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "CHARGE_ADJUSTMENT_CONFLICT", ErrChargeAdjustmentConflict)
 	case errors.Is(err, ErrRefundNotFound):
 		return coded(http.StatusNotFound, "REFUND_NOT_FOUND", ErrRefundNotFound)
+	case errors.Is(err, ErrRefundSourceNotFound):
+		return coded(http.StatusNotFound, "REFUND_SOURCE_NOT_FOUND", ErrRefundSourceNotFound)
 	case errors.Is(err, ErrRefundAllocationInvalid):
 		return coded(http.StatusBadRequest, "REFUND_ALLOCATION_INVALID", ErrRefundAllocationInvalid)
 	case errors.Is(err, ErrRefundExceedsAdjustmentCapacity):

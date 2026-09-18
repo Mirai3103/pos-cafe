@@ -302,7 +302,9 @@ func loadCheckForSnapshot(ctx context.Context, q *sqlc.Queries, row sqlc.ListSes
 // loadCheckPayments returns one Check's Payments, their summed original applied
 // amount, and their summed voided amount, in (received_at, id) order. Void
 // evidence rides along so a client can present a reversed Payment without a
-// second read.
+// second read. A Payment carrying Void evidence reports zero remaining
+// refundable capacity: the reversal leaves the applied amount immutable, but
+// no Refund may allocate against it.
 func loadCheckPayments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
 	mode SnapshotMode,
 ) ([]PaymentResponse, int64, int64, error) {
@@ -330,6 +332,12 @@ func loadCheckPayments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
 		remainingVND, err := remainingRefundableVND(row.AppliedAmountVnd, allocated[row.ID], mode)
 		if err != nil {
 			return nil, 0, 0, fmt.Errorf("payment %s: %w", row.ID, err)
+		}
+		// A voided Payment can never source a Refund — Record Refund refuses
+		// an allocation against one — so it advertises zero remaining capacity
+		// even though its applied amount stays part of the immutable receipt.
+		if row.VoidID.Valid {
+			remainingVND = 0
 		}
 		payment := PaymentResponse{
 			ID:                     row.ID,

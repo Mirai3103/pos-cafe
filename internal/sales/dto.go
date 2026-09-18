@@ -294,7 +294,8 @@ type ChargeAllocationResponse struct {
 // Payment does not carry two null cash fields and a Cash Payment does not
 // carry a null bank reference. RemainingRefundableVND is the applied amount
 // less every Refund allocation against it, pending Manual QR intents included.
-// Void is nil while the Payment stands.
+// Void is nil while the Payment stands, and a voided Payment reports zero
+// remaining capacity because no Refund may allocate against it.
 type PaymentResponse struct {
 	ID                     uuid.UUID            `json:"id"`
 	Method                 string               `json:"method"`
