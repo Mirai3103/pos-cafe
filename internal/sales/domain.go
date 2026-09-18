@@ -509,3 +509,225 @@ func ValidateCompWasteCommand(cmd CompWasteCommand, note *string) error {
 	}
 	return ValidateManagerApprovalInput(cmd.ManagerApproval)
 }
+
+// --- Phase 6C: Refund ---
+
+// OpRecordRefund is the idempotency action name, stored in
+// idempotency_keys.action (VARCHAR(50)).
+const OpRecordRefund = "sales.record_refund"
+
+// Refund reason catalog (spec §2). Every operation keeps its own allowlist;
+// the migration 000014 constraint enforces the same set at the database
+// boundary. The literals intentionally duplicate the Comp catalog: a future
+// operation may admit a reason another does not.
+const (
+	RefundReasonCustomerRequest = "CUSTOMER_REQUEST"
+	RefundReasonItemUnavailable = "ITEM_UNAVAILABLE"
+	RefundReasonCafeError       = "CAFE_ERROR"
+	RefundReasonOther           = "OTHER"
+)
+
+var refundReasons = []string{
+	RefundReasonCustomerRequest, RefundReasonItemUnavailable,
+	RefundReasonCafeError, RefundReasonOther,
+}
+
+// Phase 6C Refund audit event types (spec §15). REFUND_COMPLETED is written in
+// the same transaction only when a Cash Refund's completion is inserted.
+const (
+	EventRefundRecorded  = "REFUND_RECORDED"
+	EventRefundCompleted = "REFUND_COMPLETED"
+)
+
+// NormalizeRefundNote trims surrounding whitespace from an optional Refund
+// note and collapses a blank note to nil. Callers normalize BEFORE validating
+// and BEFORE building the fingerprint, so replays of differently padded input
+// stay equal.
+func NormalizeRefundNote(note *string) *string {
+	if note == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*note)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+// ValidateRefundMethod checks a Refund method against the fixed allowlist. A
+// Payment source must carry the same method: Cash and Manual QR never mix in
+// one Refund.
+func ValidateRefundMethod(method string) error {
+	switch method {
+	case RefundMethodCash, RefundMethodManualQR:
+		return nil
+	default:
+		return fmt.Errorf("%w: method must be %s or %s",
+			response.ErrInvalid, RefundMethodCash, RefundMethodManualQR)
+	}
+}
+
+// ValidateRefundReason checks a Refund reason against the Refund catalog.
+func ValidateRefundReason(reason string) error {
+	for _, allowed := range refundReasons {
+		if reason == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %q is not a valid refund reason", response.ErrInvalid, reason)
+}
+
+// ValidateRefundNote validates an already-normalized optional note: a present
+// note is 1 through MaxCorrectionNoteRunes code points, and the OTHER reason
+// requires one.
+func ValidateRefundNote(reason string, note *string) error {
+	if note != nil {
+		runes := utf8.RuneCountInString(*note)
+		if runes < 1 || runes > MaxCorrectionNoteRunes {
+			return fmt.Errorf("%w: a note must be 1 through %d characters",
+				response.ErrInvalid, MaxCorrectionNoteRunes)
+		}
+		return nil
+	}
+	if reason == RefundReasonOther {
+		return fmt.Errorf("%w: the %s reason requires a note", response.ErrInvalid, RefundReasonOther)
+	}
+	return nil
+}
+
+// NormalizeRefundAllocations orders both allocation collections by source
+// UUID. The normalized order shapes the fingerprint, the selection handed to
+// the locking queries, and the response order, so a reordered but otherwise
+// identical request is the same request (spec §9.1). Caller slices are never
+// mutated, because request order is audit-relevant elsewhere.
+func NormalizeRefundAllocations(cmd RecordRefundCommand) RecordRefundCommand {
+	cmd.PaymentAllocations = sortedRefundPaymentAllocations(cmd.PaymentAllocations)
+	cmd.AdjustmentAllocations = sortedRefundAdjustmentAllocations(cmd.AdjustmentAllocations)
+	return cmd
+}
+
+func sortedRefundPaymentAllocations(in []RefundPaymentAllocationInput) []RefundPaymentAllocationInput {
+	if in == nil {
+		return nil
+	}
+	out := make([]RefundPaymentAllocationInput, len(in))
+	copy(out, in)
+	sort.Slice(out, func(i, j int) bool { return out[i].PaymentID.String() < out[j].PaymentID.String() })
+	return out
+}
+
+func sortedRefundAdjustmentAllocations(in []RefundAdjustmentAllocationInput) []RefundAdjustmentAllocationInput {
+	if in == nil {
+		return nil
+	}
+	out := make([]RefundAdjustmentAllocationInput, len(in))
+	copy(out, in)
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ChargeAdjustmentID.String() < out[j].ChargeAdjustmentID.String()
+	})
+	return out
+}
+
+// sumRefundPaymentAllocationAmounts totals the Payment allocations with the
+// guarded money arithmetic, so a request-sized overflow is a monetary range
+// failure rather than a silent wrap.
+func sumRefundPaymentAllocationAmounts(allocs []RefundPaymentAllocationInput) (int64, error) {
+	var totalVND int64
+	for _, allocation := range allocs {
+		next, err := AddCharge(totalVND, allocation.AmountVND)
+		if err != nil {
+			return 0, err
+		}
+		totalVND = next
+	}
+	return totalVND, nil
+}
+
+// sumRefundAdjustmentAllocationAmounts is the Charge Adjustment counterpart.
+func sumRefundAdjustmentAllocationAmounts(allocs []RefundAdjustmentAllocationInput) (int64, error) {
+	var totalVND int64
+	for _, allocation := range allocs {
+		next, err := AddCharge(totalVND, allocation.AmountVND)
+		if err != nil {
+			return 0, err
+		}
+		totalVND = next
+	}
+	return totalVND, nil
+}
+
+// ValidateRecordRefundCommand validates a Refund at the boundary, before any
+// transaction and before the request id is consumed. Both allocation
+// collections are required — a Refund sourced from Payments alone, or from
+// Adjustments alone, can never satisfy the dual-capacity invariant — and their
+// sums must agree. The note arrives already normalized.
+func ValidateRecordRefundCommand(cmd RecordRefundCommand, note *string) error {
+	if cmd.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	if cmd.CheckID == uuid.Nil {
+		return fmt.Errorf("%w: check_id is required", response.ErrInvalid)
+	}
+	if err := ValidateRefundMethod(cmd.Method); err != nil {
+		return err
+	}
+	if err := ValidateRefundReason(cmd.Reason); err != nil {
+		return err
+	}
+	if err := ValidateRefundNote(cmd.Reason, note); err != nil {
+		return err
+	}
+	if err := ValidateManagerApprovalInput(cmd.ManagerApproval); err != nil {
+		return err
+	}
+
+	if len(cmd.PaymentAllocations) == 0 {
+		return fmt.Errorf("%w: at least one payment allocation is required", response.ErrInvalid)
+	}
+	if len(cmd.AdjustmentAllocations) == 0 {
+		return fmt.Errorf("%w: at least one adjustment allocation is required", response.ErrInvalid)
+	}
+
+	paymentIDs := make([]uuid.UUID, 0, len(cmd.PaymentAllocations))
+	for _, allocation := range cmd.PaymentAllocations {
+		if allocation.PaymentID == uuid.Nil {
+			return fmt.Errorf("%w: payment_id is required", response.ErrInvalid)
+		}
+		if allocation.AmountVND <= 0 {
+			return fmt.Errorf("%w: a payment allocation amount must be positive", response.ErrInvalid)
+		}
+		paymentIDs = append(paymentIDs, allocation.PaymentID)
+	}
+	if HasDuplicateUUIDs(paymentIDs) {
+		return fmt.Errorf("%w: the same payment was selected twice", response.ErrInvalid)
+	}
+
+	adjustmentIDs := make([]uuid.UUID, 0, len(cmd.AdjustmentAllocations))
+	for _, allocation := range cmd.AdjustmentAllocations {
+		if allocation.ChargeAdjustmentID == uuid.Nil {
+			return fmt.Errorf("%w: charge_adjustment_id is required", response.ErrInvalid)
+		}
+		if allocation.AmountVND <= 0 {
+			return fmt.Errorf("%w: an adjustment allocation amount must be positive", response.ErrInvalid)
+		}
+		adjustmentIDs = append(adjustmentIDs, allocation.ChargeAdjustmentID)
+	}
+	if HasDuplicateUUIDs(adjustmentIDs) {
+		return fmt.Errorf("%w: the same charge adjustment was selected twice", response.ErrInvalid)
+	}
+
+	paymentVND, err := sumRefundPaymentAllocationAmounts(cmd.PaymentAllocations)
+	if err != nil {
+		return err
+	}
+	adjustmentVND, err := sumRefundAdjustmentAllocationAmounts(cmd.AdjustmentAllocations)
+	if err != nil {
+		return err
+	}
+	if paymentVND != adjustmentVND {
+		return fmt.Errorf(
+			"%w: payment allocations sum to %d but adjustment allocations sum to %d",
+			response.ErrInvalid, paymentVND, adjustmentVND)
+	}
+	return nil
+}

@@ -973,3 +973,41 @@ func (s *Slices) handleCompWaste(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleRecordRefund godoc
+//
+//	@Summary		Record a Refund
+//	@Description	Returns real money through the original Payment method while consuming both corrected Charge Adjustment capacity and original Payment refundable capacity in equal sums. A live Refund resolves the active Service Session's pending Refund and returns the updated Service Session. A post-sale Refund consumes a POST_SALE correction of the Completed Sale, links to it, and returns its additive correction history without rewriting any closed row. A CASH Refund completes in the same transaction; a MANUAL_QR Refund stays PENDING until staff confirm the outbound transfer. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			request	body	RecordRefundCommand	true	"Refund request"
+//	@Success		201		{object}	response.APIResponse{data=RefundResult}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		422		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/sales/refunds [post]
+func (s *Slices) handleRecordRefund(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[RecordRefundCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+
+	status, result, err := s.RecordRefund.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

@@ -326,6 +326,23 @@ func salesRoutes() []struct {
 					"manager_pin":         "1234",
 				},
 			}},
+		{"record refund", http.MethodPost, "/api/v1/sales/refunds",
+			map[string]any{
+				"request_id": uuid.New(),
+				"check_id":   uuid.New(),
+				"method":     "CASH",
+				"adjustment_allocations": []map[string]any{
+					{"charge_adjustment_id": uuid.New(), "amount_vnd": 1000},
+				},
+				"payment_allocations": []map[string]any{
+					{"payment_id": uuid.New(), "amount_vnd": 1000},
+				},
+				"reason": "CUSTOMER_REQUEST",
+				"manager_approval": map[string]any{
+					"approver_login_code": "MGR001",
+					"manager_pin":         "1234",
+				},
+			}},
 	}
 }
 

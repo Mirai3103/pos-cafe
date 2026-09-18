@@ -125,6 +125,17 @@ var (
 	ErrCompSourceNotCharged     = errors.New("the comp source is not a charged standard unit")
 	ErrWasteAlreadyComped       = errors.New("the waste already carries a comp")
 	ErrChargeAdjustmentConflict = errors.New("the charge mapping changed concurrently")
+
+	// Phase 6C Refund conditions. An allocation whose source is missing, of
+	// another Check, of the wrong scope, or otherwise unusable is invalid; an
+	// allocation that exceeds either source's remaining capacity is a
+	// conflict; and a Refund already completed cannot be completed again.
+	ErrRefundNotFound                  = errors.New("refund not found")
+	ErrRefundAllocationInvalid         = errors.New("refund allocation is invalid")
+	ErrRefundExceedsAdjustmentCapacity = errors.New("refund exceeds the charge adjustment's remaining capacity")
+	ErrRefundExceedsPaymentCapacity    = errors.New("refund exceeds the payment's remaining capacity")
+	ErrRefundMethodMismatch            = errors.New("refund method does not match the payment method")
+	ErrRefundAlreadyCompleted          = errors.New("refund is already completed")
 )
 
 // serviceSessionSalesShiftFK is the auto-generated name of the only foreign
@@ -338,6 +349,20 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "WASTE_ALREADY_COMPED", ErrWasteAlreadyComped)
 	case errors.Is(err, ErrChargeAdjustmentConflict):
 		return coded(http.StatusConflict, "CHARGE_ADJUSTMENT_CONFLICT", ErrChargeAdjustmentConflict)
+	case errors.Is(err, ErrRefundNotFound):
+		return coded(http.StatusNotFound, "REFUND_NOT_FOUND", ErrRefundNotFound)
+	case errors.Is(err, ErrRefundAllocationInvalid):
+		return coded(http.StatusBadRequest, "REFUND_ALLOCATION_INVALID", ErrRefundAllocationInvalid)
+	case errors.Is(err, ErrRefundExceedsAdjustmentCapacity):
+		return coded(http.StatusConflict, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY",
+			ErrRefundExceedsAdjustmentCapacity)
+	case errors.Is(err, ErrRefundExceedsPaymentCapacity):
+		return coded(http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY",
+			ErrRefundExceedsPaymentCapacity)
+	case errors.Is(err, ErrRefundMethodMismatch):
+		return coded(http.StatusConflict, "REFUND_METHOD_MISMATCH", ErrRefundMethodMismatch)
+	case errors.Is(err, ErrRefundAlreadyCompleted):
+		return coded(http.StatusConflict, "REFUND_ALREADY_COMPLETED", ErrRefundAlreadyCompleted)
 	default:
 		return err
 	}

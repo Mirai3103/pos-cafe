@@ -582,3 +582,49 @@ type CompResult struct {
 	OutstandingPostSaleRefundVND *int64                       `json:"outstanding_post_sale_refund_vnd,omitempty"`
 	PostSaleCorrections          []PostSaleCorrectionResponse `json:"post_sale_corrections,omitempty"`
 }
+
+// ---------- Phase 6C: Refund ----------
+
+// RefundPaymentAllocationInput names one Payment the refunded value came in
+// through and the amount allocated against it.
+type RefundPaymentAllocationInput struct {
+	PaymentID uuid.UUID `json:"payment_id"`
+	AmountVND int64     `json:"amount_vnd"`
+}
+
+// RefundAdjustmentAllocationInput names one Charge Adjustment whose corrected
+// value is being refunded and the amount allocated against it.
+type RefundAdjustmentAllocationInput struct {
+	ChargeAdjustmentID uuid.UUID `json:"charge_adjustment_id"`
+	AmountVND          int64     `json:"amount_vnd"`
+}
+
+// RecordRefundCommand returns real money through the original Payment method
+// while consuming both corrected refundable capacity and original Payment
+// refundable capacity. Both allocation collections are required and must sum
+// to the same positive amount. ManagerApproval carries request-only
+// credentials; the executor verifies them inline, and no credential ever
+// reaches a fingerprint, stored result, business fact, audit detail, or log
+// (spec §9.1).
+type RecordRefundCommand struct {
+	RequestID             uuid.UUID                         `json:"request_id"`
+	CheckID               uuid.UUID                         `json:"check_id"`
+	Method                string                            `json:"method"`
+	AdjustmentAllocations []RefundAdjustmentAllocationInput `json:"adjustment_allocations"`
+	PaymentAllocations    []RefundPaymentAllocationInput    `json:"payment_allocations"`
+	Reason                string                            `json:"reason"`
+	Note                  *string                           `json:"note"`
+	ManagerApproval       ManagerApprovalInput              `json:"manager_approval"`
+}
+
+// RefundResult is the discriminated Refund result. Exactly one branch is
+// present: a live Refund carries the updated Service Session, while a
+// post-sale Refund carries the Completed Sale id and its additive correction
+// history and no mutable Session projection (spec §9.1, §12.3).
+type RefundResult struct {
+	Scope               string                       `json:"scope"`
+	Refund              RefundResponse               `json:"refund"`
+	ServiceSession      *ServiceSessionResponse      `json:"service_session,omitempty"`
+	CompletedSaleID     *uuid.UUID                   `json:"completed_sale_id,omitempty"`
+	PostSaleCorrections []PostSaleCorrectionResponse `json:"post_sale_corrections,omitempty"`
+}
