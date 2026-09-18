@@ -124,10 +124,16 @@ func TestPhase5DRoutesAreRegistered(t *testing.T) {
 	require.Len(t, routes, 26, "Phase 6C brings the Sales surface to twenty-six operations")
 }
 
-func TestPhase6CCompRouteIsRegistered(t *testing.T) {
+// TestRoutesPhase6CFinancialCorrectionsAreRegistered pins the four Phase 6C
+// Sales operations inside the same route inventory TestRouteRegistration
+// pins: comp, refund, refund confirmation, and payment void. The preparation
+// package's swagger suite completes the five-route contract with
+// POST /preparation/units/cancel, which this package does not mount.
+func TestRoutesPhase6CFinancialCorrectionsAreRegistered(t *testing.T) {
 	routes := registeredSalesRoutes(t)
 	require.Contains(t, routes, "POST /api/v1/sales/wastes/:waste_id/comp")
 	require.Contains(t, routes, "POST /api/v1/sales/refunds")
 	require.Contains(t, routes, "POST /api/v1/sales/refunds/:refund_id/confirm")
 	require.Contains(t, routes, "POST /api/v1/sales/payments/:payment_id/void")
+	require.Len(t, routes, 26, "the Sales surface has grown to twenty-six operations by Phase 6C")
 }

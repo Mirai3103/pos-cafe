@@ -443,6 +443,58 @@ func TestSalesHTTPValidation(t *testing.T) {
 	})
 }
 
+// TestSalesHTTPPhase6CMalformedPathAndBody pins the boundary contract of the
+// Phase 6C routes whose ids come from the path: a non-UUID id and a malformed
+// JSON body both answer 400 INVALID_INPUT before any handler logic runs.
+func TestSalesHTTPPhase6CMalformedPathAndBody(t *testing.T) {
+	e, _, q := newTestServer(t)
+	token := signIn(t, e, q, []string{"CASHIER"}, "2468")
+	_ = openShiftOverHTTP(t, e, token)
+
+	compBody, _ := json.Marshal(map[string]any{
+		"request_id": uuid.New(),
+		"reason":     "CAFE_ERROR",
+		"manager_approval": map[string]any{
+			"approver_login_code": "MGR001",
+			"manager_pin":         "1234",
+		},
+	})
+	voidBody, _ := json.Marshal(map[string]any{
+		"request_id": uuid.New(),
+		"reason":     "WRONG_AMOUNT",
+		"manager_approval": map[string]any{
+			"approver_login_code": "MGR001",
+			"manager_pin":         "1234",
+		},
+	})
+
+	for _, tc := range []struct {
+		name string
+		path string
+		body []byte
+	}{
+		{"comp waste malformed waste id",
+			"/api/v1/sales/wastes/not-a-uuid/comp", compBody},
+		{"confirm refund malformed refund id",
+			"/api/v1/sales/refunds/not-a-uuid/confirm",
+			[]byte(`{"request_id":"` + uuid.NewString() + `"}`)},
+		{"void payment malformed payment id",
+			"/api/v1/sales/payments/not-a-uuid/void", voidBody},
+		{"record refund malformed body",
+			"/api/v1/sales/refunds", []byte(`{"request_id": not json`)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doRequest(t, e, http.MethodPost, tc.path, token, tc.body)
+			require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+
+			var env envelope
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+			require.NotNil(t, env.Error)
+			assert.Equal(t, "INVALID_INPUT", env.Error.Code)
+		})
+	}
+}
+
 func TestSalesHTTPModifierOptionIDsAbsentVersusEmpty(t *testing.T) {
 	e, db, q := newTestServer(t)
 	token := signIn(t, e, q, []string{"CASHIER"}, "2468")

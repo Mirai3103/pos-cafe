@@ -166,6 +166,8 @@ The source project is already cleanly structured around domain boundaries. We ma
 *Approved 6A Design Spec:* [`docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md`](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md)
 *Approved 6B Design Spec:* [`docs/superpowers/specs/2026-09-17-preparation-corrections-design.md`](docs/superpowers/specs/2026-09-17-preparation-corrections-design.md)
 *Approved 6B Implementation Plan:* [`docs/superpowers/plans/2026-09-17-preparation-corrections.md`](docs/superpowers/plans/2026-09-17-preparation-corrections.md)
+*Approved 6C Design Spec:* [`docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md`](docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md)
+*Approved 6C Implementation Plan:* [`docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md`](docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md)
 
 > The sketch checklist at the bottom of this section predates Phase 5D, which already created Preparation Units synchronously at Submit and introduced the single-unit advance command; it is kept only as a record of the original sketch, and the sub-phase checklists below are authoritative. Phase 6 is delivered as ordered sub-phases (ADR-032) so Cancellation can be designed with its unfinished Refund/Comp and closure dependencies instead of weakening those boundaries. Synchronous Submit remains the queue-creation boundary: `order.submitted` is neither published nor consumed through Watermill for queue creation, per ADR-033.
 
@@ -173,7 +175,7 @@ The source project is already cleanly structured around domain boundaries. We ma
 | :--- | :--- | :---: |
 | **6A** — Preparation Queue reads and bulk transitions | [spec](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md) | ✅ COMPLETED (2026-09-16) |
 | **6B** — Alerts, Waste, Remake, priority, and state correction | [spec](docs/superpowers/specs/2026-09-17-preparation-corrections-design.md) / [plan](docs/superpowers/plans/2026-09-17-preparation-corrections.md) | ✅ COMPLETED (2026-09-17) |
-| **6C** — Cancellation/change and financial correction integration | Pending design | ⏳ PENDING |
+| **6C** — Cancellation/change and financial correction integration | [spec](docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md) / [plan](docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md) | ✅ COMPLETED (2026-09-18) |
 
 **6A — Preparation Queue reads and bulk transitions (✅ COMPLETED 2026-09-16):**
 
@@ -198,14 +200,17 @@ The source project is already cleanly structured around domain boundaries. We ma
 - [x] **6B.8 HTTP Routes & Swagger:** correction routes with capability authorization, uniform error mapping, and OpenAPI 2.0 documentation; `manager_pin` exists only in the request binding and executor input.
 - [x] **6B.9 Testing:** unit and PostgreSQL integration suites under `-race`, the ten-suite focused concurrency matrix (unit-level races, correction/remake versus closure), exact-replay and PIN rotation/revocation coverage, and the three end-to-end recovery workflows through real handlers on both sides of the ADR-024 boundary.
 
-**6C — Cancellation/change and financial correction integration (⏳ PENDING):**
+**6C — Cancellation/change and financial correction integration (✅ COMPLETED 2026-09-18):**
 
-- [ ] Cancellation/change commands (writing the reserved `CANCELLED` state and `CANCELLATION`/`CHANGE` alert kinds — no 6B command writes them).
-- [ ] Refund integration.
-- [ ] Comp integration.
-- [ ] Payment Void.
-- [ ] Charge adjustment.
-- [ ] Pending-Refund closure policy (restores the branch ADR-029 omitted).
+- [x] **6C.1 Database Schema Migration:** `000014_add_preparation_financial_corrections.sql` — append-only `charge_adjustments`, `preparation_cancellations`, `sales_comps`, `payment_voids`, `refunds`, `refund_payment_allocations`, `refund_adjustment_allocations`, and `refund_completions`, with kind/source/scope pairing, positive-amount, one-correction-per-source, and derived-state constraints, and the reserved `QUEUED -> CANCELLED` transition pair.
+- [x] **6C.2 SQL Queries (`sql/queries/preparation.sql`, `sql/queries/sales.sql`, `sql/queries/shift.sql`):** cancellation/comp/refund/void lock-and-write queries, the corrected Check financials and pending-Refund derivations, and Shift reconciliation terms derived by `internal/shift` through its own queries; idempotency through the shared `idempotency_keys` queries (ADR-007), all sqlc generated.
+- [x] **6C.3 Cancellation/Change:** Cashier/Manager-only cross-slice command cancelling 1–50 queued units atomically with one terminal state, typed transition, Cancellation/Change alert, audit evidence, and an append-only live Charge Adjustment for each charged original unit; Change requires an already-submitted later replacement Order in the same active Service Session, and the batch is all-or-nothing on the common Check-before-Session lock protocol (ADR-040).
+- [x] **6C.4 Comp:** one Manager-approved Comp per charged Wasted standard unit, with a live adjustment and Check settlement when the corrected balance reaches zero on an active Session and a `POST_SALE` adjustment linked to the Completed Sale on a closed one; the Completed Sale snapshot is never rewritten (ADR-041).
+- [x] **6C.5 Refund:** one Manager-approved command allocates equal positive totals against both explicit source Charge Adjustments and non-voided source Payments of one method and Check, including post-sale correction capacity; Cash completes in the recording transaction while Manual QR stays pending until explicit confirmation without a second approval or repeat Manager Approval (ADR-042, ADR-043).
+- [x] **6C.6 Payment Void:** whole, append-only, Manager-approved reversal of one Payment against an active Service Session and its still-open original Shift, rejecting any Payment carrying a Refund allocation, reopening a Check only when remaining valid coverage no longer covers the charge (ADR-045).
+- [x] **6C.7 Projections, Closure, And Shift Reconciliation:** Check projections carry the adjustment/refund equations, Service Session closure rejects pending Refund through `PENDING_REFUND_FOR_CLOSURE` with the documented precedence, Completed Sale exposes additive post-sale correction history, the Preparation Queue stays free of financial leakage, and the current-Shift read adds non-voided Cash Payments and completed Cash Refunds (with pending Refund and unresolved post-sale correction visibility) without implementing Shift Close (ADR-044, ADR-046).
+- [x] **6C.8 HTTP Routes & Swagger:** the five operation routes with capability authorization, uniform typed error mapping, deterministic replay/conflict behavior, and OpenAPI 2.0 documentation; credentials exist only in the request binding and executor input, never in persistence, responses, audits, or logs.
+- [x] **6C.9 Testing:** unit, PostgreSQL migration/integration, HTTP authorization/replay/privacy, failure-injection, and focused concurrency suites under `-race`, including the deterministic Cancellation and Sales correction race matrices in which only a Submit pairing may surface the retryable `40P01` abort, plus full Sales/Preparation/Shift regression.
 
 The original sketch below is superseded by the sub-phase checklists above.
 - [ ] **6.1 Database Schema Migration:**

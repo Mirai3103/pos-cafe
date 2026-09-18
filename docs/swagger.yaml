@@ -790,6 +790,51 @@ definitions:
       target_state:
         type: string
     type: object
+  preparation.CancelUnitsCommand:
+    properties:
+      kind:
+        type: string
+      note:
+        type: string
+      preparation_unit_ids:
+        items:
+          type: string
+        type: array
+      reason:
+        type: string
+      replacement_order_id:
+        type: string
+      request_id:
+        type: string
+    type: object
+  preparation.CancelUnitsResponse:
+    properties:
+      alerts:
+        items:
+          $ref: '#/definitions/preparation.QueueAlertResponse'
+        type: array
+      outcomes:
+        items:
+          $ref: '#/definitions/preparation.CancellationOutcome'
+        type: array
+    type: object
+  preparation.CancellationOutcome:
+    properties:
+      cancellation_id:
+        type: string
+      charge_adjustment_id:
+        type: string
+      charge_removed_vnd:
+        type: integer
+      occurred_at:
+        type: string
+      preparation_unit_id:
+        type: string
+      prior_state:
+        type: string
+      resulting_state:
+        type: string
+    type: object
   preparation.CorrectStateCommand:
     properties:
       manager_pin:
@@ -1070,6 +1115,31 @@ definitions:
       size_id:
         type: string
     type: object
+  sales.ChargeAdjustmentResponse:
+    properties:
+      amount_vnd:
+        type: integer
+      charge_allocation_id:
+        type: string
+      completed_sale_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      kind:
+        type: string
+      preparation_unit_id:
+        type: string
+      preparation_waste_id:
+        type: string
+      remaining_refundable_vnd:
+        type: integer
+      sales_shift_id:
+        type: string
+      scope:
+        type: string
+    type: object
   sales.ChargeAllocationResponse:
     properties:
       allocated_quantity:
@@ -1111,10 +1181,18 @@ definitions:
         type: array
       balance_vnd:
         type: integer
+      base_charge_vnd:
+        type: integer
+      charge_adjustments:
+        items:
+          $ref: '#/definitions/sales.ChargeAdjustmentResponse'
+        type: array
       charge_vnd:
         type: integer
       created_at:
         type: string
+      effective_received_vnd:
+        type: integer
       id:
         type: string
       merged_into_check_id:
@@ -1123,9 +1201,19 @@ definitions:
         items:
           $ref: '#/definitions/sales.PaymentResponse'
         type: array
+      pending_refund_vnd:
+        type: integer
+      refunds:
+        items:
+          $ref: '#/definitions/sales.RefundResponse'
+        type: array
       state:
         type: string
       total_applied_vnd:
+        type: integer
+      total_refunded_vnd:
+        type: integer
+      total_voided_vnd:
         type: integer
     type: object
   sales.CloseServiceSessionCommand:
@@ -1153,6 +1241,57 @@ definitions:
       surcharge_vnd:
         type: integer
     type: object
+  sales.CompResponse:
+    properties:
+      actor_staff_identity_id:
+        type: string
+      amount_vnd:
+        type: integer
+      approved_by_staff_identity_id:
+        type: string
+      charge_adjustment_id:
+        type: string
+      id:
+        type: string
+      note:
+        type: string
+      occurred_at:
+        type: string
+      preparation_unit_id:
+        type: string
+      reason:
+        type: string
+      waste_id:
+        type: string
+    type: object
+  sales.CompResult:
+    properties:
+      comp:
+        $ref: '#/definitions/sales.CompResponse'
+      completed_sale_id:
+        type: string
+      outstanding_post_sale_refund_vnd:
+        type: integer
+      post_sale_corrections:
+        items:
+          $ref: '#/definitions/sales.PostSaleCorrectionResponse'
+        type: array
+      scope:
+        type: string
+      service_session:
+        $ref: '#/definitions/sales.ServiceSessionResponse'
+    type: object
+  sales.CompWasteCommand:
+    properties:
+      manager_approval:
+        $ref: '#/definitions/sales.ManagerApprovalInput'
+      note:
+        type: string
+      reason:
+        type: string
+      request_id:
+        type: string
+    type: object
   sales.CompletedSaleCheckResponse:
     properties:
       allocations:
@@ -1161,7 +1300,15 @@ definitions:
         type: array
       balance_vnd:
         type: integer
+      base_charge_vnd:
+        type: integer
+      charge_adjustments:
+        items:
+          $ref: '#/definitions/sales.ChargeAdjustmentResponse'
+        type: array
       charge_vnd:
+        type: integer
+      effective_received_vnd:
         type: integer
       id:
         type: string
@@ -1169,9 +1316,19 @@ definitions:
         items:
           $ref: '#/definitions/sales.PaymentResponse'
         type: array
+      pending_refund_vnd:
+        type: integer
+      refunds:
+        items:
+          $ref: '#/definitions/sales.RefundResponse'
+        type: array
       state:
         type: string
       total_applied_vnd:
+        type: integer
+      total_refunded_vnd:
+        type: integer
+      total_voided_vnd:
         type: integer
     type: object
   sales.CompletedSaleResponse:
@@ -1194,6 +1351,10 @@ definitions:
         items:
           $ref: '#/definitions/sales.OrderResponse'
         type: array
+      post_sale_corrections:
+        items:
+          $ref: '#/definitions/sales.PostSaleCorrectionResponse'
+        type: array
       preparation_history:
         items:
           $ref: '#/definitions/sales.PreparationTransitionResponse'
@@ -1213,6 +1374,13 @@ definitions:
       service_session_state:
         type: string
       state:
+        type: string
+    type: object
+  sales.ConfirmManualQRRefundCommand:
+    properties:
+      request_id:
+        type: string
+      transaction_reference:
         type: string
     type: object
   sales.DraftItemResponse:
@@ -1238,6 +1406,13 @@ definitions:
       size_id:
         type: string
       size_name:
+        type: string
+    type: object
+  sales.ManagerApprovalInput:
+    properties:
+      approver_login_code:
+        type: string
+      manager_pin:
         type: string
     type: object
   sales.MergeChecksCommand:
@@ -1320,10 +1495,44 @@ definitions:
         type: string
       received_at:
         type: string
+      remaining_refundable_vnd:
+        type: integer
       sales_shift_id:
         type: string
       transaction_reference:
         type: string
+      void:
+        $ref: '#/definitions/sales.PaymentVoidResponse'
+    type: object
+  sales.PaymentVoidResponse:
+    properties:
+      actor_staff_identity_id:
+        type: string
+      amount_vnd:
+        type: integer
+      approved_by_staff_identity_id:
+        type: string
+      id:
+        type: string
+      note:
+        type: string
+      occurred_at:
+        type: string
+      reason:
+        type: string
+    type: object
+  sales.PostSaleCorrectionResponse:
+    properties:
+      adjustment:
+        $ref: '#/definitions/sales.ChargeAdjustmentResponse'
+      comp:
+        $ref: '#/definitions/sales.CompResponse'
+      outstanding_refund_vnd:
+        type: integer
+      refunds:
+        items:
+          $ref: '#/definitions/sales.RefundResponse'
+        type: array
     type: object
   sales.PreparationTransitionResponse:
     properties:
@@ -1375,6 +1584,115 @@ definitions:
         type: string
       unit_number:
         type: integer
+    type: object
+  sales.RecordRefundCommand:
+    properties:
+      adjustment_allocations:
+        items:
+          $ref: '#/definitions/sales.RefundAdjustmentAllocationInput'
+        type: array
+      check_id:
+        type: string
+      manager_approval:
+        $ref: '#/definitions/sales.ManagerApprovalInput'
+      method:
+        type: string
+      note:
+        type: string
+      payment_allocations:
+        items:
+          $ref: '#/definitions/sales.RefundPaymentAllocationInput'
+        type: array
+      reason:
+        type: string
+      request_id:
+        type: string
+    type: object
+  sales.RefundAdjustmentAllocationInput:
+    properties:
+      amount_vnd:
+        type: integer
+      charge_adjustment_id:
+        type: string
+    type: object
+  sales.RefundAllocationResponse:
+    properties:
+      amount_vnd:
+        type: integer
+      id:
+        type: string
+    type: object
+  sales.RefundCompletionResponse:
+    properties:
+      completed_at:
+        type: string
+      completed_by_staff_identity_id:
+        type: string
+      completed_staff_access_session_id:
+        type: string
+      id:
+        type: string
+      transaction_reference:
+        type: string
+    type: object
+  sales.RefundPaymentAllocationInput:
+    properties:
+      amount_vnd:
+        type: integer
+      payment_id:
+        type: string
+    type: object
+  sales.RefundResponse:
+    properties:
+      actor_staff_identity_id:
+        type: string
+      adjustment_allocations:
+        items:
+          $ref: '#/definitions/sales.RefundAllocationResponse'
+        type: array
+      amount_vnd:
+        type: integer
+      approved_by_staff_identity_id:
+        type: string
+      check_id:
+        type: string
+      completed_sale_id:
+        type: string
+      completion:
+        $ref: '#/definitions/sales.RefundCompletionResponse'
+      created_at:
+        type: string
+      id:
+        type: string
+      method:
+        type: string
+      note:
+        type: string
+      payment_allocations:
+        items:
+          $ref: '#/definitions/sales.RefundAllocationResponse'
+        type: array
+      reason:
+        type: string
+      sales_shift_id:
+        type: string
+      state:
+        type: string
+    type: object
+  sales.RefundResult:
+    properties:
+      completed_sale_id:
+        type: string
+      post_sale_corrections:
+        items:
+          $ref: '#/definitions/sales.PostSaleCorrectionResponse'
+        type: array
+      refund:
+        $ref: '#/definitions/sales.RefundResponse'
+      scope:
+        type: string
+      service_session:
+        $ref: '#/definitions/sales.ServiceSessionResponse'
     type: object
   sales.RemoveDraftItemCommand:
     properties:
@@ -1543,6 +1861,17 @@ definitions:
       option_name:
         type: string
     type: object
+  sales.VoidPaymentCommand:
+    properties:
+      manager_approval:
+        $ref: '#/definitions/sales.ManagerApprovalInput'
+      note:
+        type: string
+      reason:
+        type: string
+      request_id:
+        type: string
+    type: object
   shift.CashMovementResponse:
     properties:
       amount_vnd:
@@ -1577,18 +1906,40 @@ definitions:
         items:
           $ref: '#/definitions/shift.CashMovementResponse'
         type: array
+      cash_payment_vnd:
+        type: integer
+      cash_payment_void_vnd:
+        type: integer
+      cash_refund_vnd:
+        type: integer
       expected_cash_vnd:
         type: integer
       id:
         type: string
+      manual_qr_payment_vnd:
+        type: integer
+      manual_qr_payment_void_vnd:
+        type: integer
+      manual_qr_refund_vnd:
+        type: integer
       opened_at:
         type: string
       opener:
         $ref: '#/definitions/shift.StaffSummary'
       opening_float_vnd:
         type: integer
+      pending_manual_qr_refund_vnd:
+        type: integer
+      pending_refund_vnd:
+        type: integer
+      refunds:
+        items:
+          $ref: '#/definitions/shift.RefundSummaryResponse'
+        type: array
       state:
         type: string
+      unresolved_post_sale_adjustment_vnd:
+        type: integer
     type: object
   shift.OpenShiftCommand:
     properties:
@@ -1612,6 +1963,25 @@ definitions:
       reason:
         type: string
       request_id:
+        type: string
+    type: object
+  shift.RefundSummaryResponse:
+    properties:
+      amount_vnd:
+        type: integer
+      check_id:
+        type: string
+      completed_at:
+        type: string
+      completed_sale_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      method:
+        type: string
+      state:
         type: string
     type: object
   shift.SalesShiftResponse:
@@ -3856,6 +4226,69 @@ paths:
       summary: Advance selected Preparation Units
       tags:
       - preparation
+  /preparation/units/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancels 1 through 50 queued units as one all-or-nothing batch.
+        Each unit becomes CANCELLED with its typed transition, Cancellation fact,
+        and CANCELLATION or CHANGE alert; each charged standard unit reduces its Check's
+        live charge by its immutable unit price and the Check settles when the corrected
+        balance reaches zero. A CHANGE links to an already-submitted later Order in
+        the same active Service Session. Requires sales.operate and no Manager approval.
+        The response carries no Check, Payment, or Refund data.
+      parameters:
+      - description: Cancellation request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/preparation.CancelUnitsCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/preparation.CancelUnitsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel or change queued Preparation Units
+      tags:
+      - preparation
   /preparation/units/correct-state:
     post:
       consumes:
@@ -4239,6 +4672,209 @@ paths:
       security:
       - BearerAuth: []
       summary: Get a Completed Sale
+      tags:
+      - sales
+  /sales/payments/{payment_id}/void:
+    post:
+      consumes:
+      - application/json
+      description: Declares one whole Payment incorrect while its original Sales Shift
+        is still open, appends an immutable reversal without editing or deleting the
+        source Payment, recomputes the Check's corrected financials, and reopens the
+        Check with all settlement evidence cleared when the remaining valid coverage
+        no longer covers its charge. Rejected for a merged Check, an already-voided
+        Payment, any Payment carrying a Refund allocation (pending or completed),
+        a closed Service Session, and a Payment whose original Shift is closed or
+        is no longer the currently open one. Requires the initiator's sales.operate
+        and one inline Manager Approval for sales.operate; self-approval is permitted
+        and initiator and approver are recorded separately. The Void is always for
+        the entire applied amount, and a replacement Payment is recorded through the
+        ordinary Cash or Manual QR command.
+      parameters:
+      - description: Payment ID
+        in: path
+        name: payment_id
+        required: true
+        type: string
+      - description: Void request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.VoidPaymentCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Void a whole Payment
+      tags:
+      - sales
+  /sales/refunds:
+    post:
+      consumes:
+      - application/json
+      description: Returns real money through the original Payment method while consuming
+        both corrected Charge Adjustment capacity and original Payment refundable
+        capacity in equal sums. A live Refund resolves the active Service Session's
+        pending Refund and returns the updated Service Session. A post-sale Refund
+        consumes a POST_SALE correction of the Completed Sale, links to it, and returns
+        its additive correction history without rewriting any closed row. A CASH Refund
+        completes in the same transaction; a MANUAL_QR Refund stays PENDING until
+        staff confirm the outbound transfer. Requires the initiator's sales.operate
+        and one inline Manager Approval for sales.operate; self-approval is permitted
+        and initiator and approver are recorded separately.
+      parameters:
+      - description: Refund request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.RecordRefundCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.RefundResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Record a Refund
+      tags:
+      - sales
+  /sales/refunds/{refund_id}/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Completes an approved Manual QR Refund once staff confirm the outbound
+        bank transfer. The Refund must exist, use MANUAL_QR, lack a completion, and
+        belong to the current open Shift. Confirmation re-derives the obligation under
+        the Check lock — the Check's pending Refund for a live Refund, the Completed
+        Sale's outstanding correction for a post-sale Refund — and refuses an amount
+        above it, so a completed Refund can never make a Check's balance positive.
+        It appends exactly one completion with the confirmer identity and session,
+        records an optional trimmed transaction_reference of at most 100 characters,
+        writes MANUAL_QR_REFUND_COMPLETED, and never edits the Refund row or its allocations.
+        Requires current sales.operate and no second Manager Approval. Exact replay
+        returns the stored result; another request id after completion answers REFUND_ALREADY_COMPLETED.
+      parameters:
+      - description: Refund ID
+        in: path
+        name: refund_id
+        required: true
+        type: string
+      - description: Confirmation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.ConfirmManualQRRefundCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.RefundResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Confirm a Manual QR Refund
       tags:
       - sales
   /sales/service-sessions:
@@ -5148,6 +5784,77 @@ paths:
       security:
       - BearerAuth: []
       summary: Open a Takeaway Service Session
+      tags:
+      - sales
+  /sales/wastes/{waste_id}/comp:
+    post:
+      consumes:
+      - application/json
+      description: Waives the charge of one charged Wasted standard unit through one
+        Manager-approved append-only correction. An active Service Session's Comp
+        writes a LIVE_CHECK Charge Adjustment, updates the Check charge, settles the
+        Check when the corrected balance reaches zero, and returns the updated Service
+        Session. A closed Session's Comp writes a POST_SALE adjustment linked to its
+        Completed Sale without rewriting the closed Check or sale, and returns the
+        Completed Sale id, the outstanding post-sale correction amount, and the additive
+        correction history. Requires the initiator's sales.operate and one inline
+        Manager Approval for sales.operate; self-approval is permitted and initiator
+        and approver are recorded separately. A Wasted Remake is uncharged and rejected.
+      parameters:
+      - description: Preparation Waste ID
+        in: path
+        name: waste_id
+        required: true
+        type: string
+      - description: Comp request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sales.CompWasteCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.CompResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Comp a charged Waste
       tags:
       - sales
   /shifts:

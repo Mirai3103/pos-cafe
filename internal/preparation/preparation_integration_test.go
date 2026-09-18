@@ -134,7 +134,6 @@ func TestPreparationHTTPAuthorization(t *testing.T) {
 	barista := signInPreparation(t, e, q, []string{"BARISTA"})
 	manager := signInPreparation(t, e, q, []string{"MANAGER"})
 	cashier := signInPreparation(t, e, q, []string{"CASHIER"})
-
 	// The bulk body names a unit that does not exist on purpose: an authorized
 	// request still completes with HTTP 200 and one UNIT_NOT_FOUND outcome, so
 	// the authorization matrix needs no fixtures.
@@ -169,6 +168,42 @@ func TestPreparationHTTPAuthorization(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
 		})
 	}
+}
+
+// TestPreparationHTTPCancelDenialInventory keeps the Phase 6C Cancellation
+// route in the same anonymous/Barista denial inventory as the other
+// Preparation routes. Its capability is sales.operate, not preparation.operate:
+// the Cashier and the Manager pass the middleware and then fail on the
+// fabricated unit id with the documented 404, while the Barista and an
+// anonymous caller are denied before any handler logic runs.
+func TestPreparationHTTPCancelDenialInventory(t *testing.T) {
+	e, q := newPreparationTestServer(t)
+	barista := signInPreparation(t, e, q, []string{"BARISTA"})
+	manager := signInPreparation(t, e, q, []string{"MANAGER"})
+	cashier := signInPreparation(t, e, q, []string{"CASHIER"})
+
+	const cancelPath = "/api/v1/preparation/units/cancel"
+	body := cancelUnitsBody(t, preparation.CancelUnitsCommand{
+		RequestID:          uuid.New(),
+		PreparationUnitIDs: []uuid.UUID{uuid.New()},
+		Kind:               preparation.CancelKindCancellation,
+		Reason:             preparation.ReasonCustomerRequest,
+	})
+
+	t.Run("anonymous is denied", func(t *testing.T) {
+		rec := doPreparationRequest(t, e, http.MethodPost, cancelPath, "", body)
+		assertPreparationError(t, rec, http.StatusUnauthorized, "UNAUTHORIZED")
+	})
+	t.Run("barista is denied", func(t *testing.T) {
+		rec := doPreparationRequest(t, e, http.MethodPost, cancelPath, barista, body)
+		assertPreparationError(t, rec, http.StatusForbidden, "FORBIDDEN")
+	})
+	t.Run("cashier and manager pass the capability gate", func(t *testing.T) {
+		for _, token := range []string{cashier, manager} {
+			rec := doPreparationRequest(t, e, http.MethodPost, cancelPath, token, body)
+			assertPreparationError(t, rec, http.StatusNotFound, "PREPARATION_UNIT_NOT_FOUND")
+		}
+	})
 }
 
 func TestPreparationHTTPBulkValidation(t *testing.T) {
