@@ -446,6 +446,11 @@ func TestCancelUnitsUnpaidChargedUnitSettles(t *testing.T) {
 	assert.Equal(t, 1, env.CountAuditEventsByTypeAndUnit(
 		t, preparation.EventCheckChargeAdjusted, unit.ID))
 	assert.Equal(t, 1, countCheckSettledAudits(t, env, check.ID))
+	settledDetails := checkSettledAuditDetails(t, env, check.ID)
+	assert.EqualValues(t, 25000, settledDetails["charge_before_vnd"])
+	assert.EqualValues(t, 0, settledDetails["charge_after_vnd"],
+		"the settlement audit records the real corrected charge, never a hardcoded zero")
+	assert.Equal(t, env.ShiftID.String(), settledDetails["sales_shift_id"])
 }
 
 // TestCancelUnitsFullyPaidCreatesPendingRefund cancels a charged unit of a
@@ -458,6 +463,10 @@ func TestCancelUnitsFullyPaidCreatesPendingRefund(t *testing.T) {
 	require.Equal(t, sales.CheckStateSettled, check.State)
 	settledAt := check.SettledAt
 	require.NotNil(t, settledAt)
+	// The Payment already emitted its own settlement event; Cancellation must
+	// not add a second one for an already settled Check.
+	settledAuditsBefore := countCheckSettledAudits(t, env, check.ID)
+	require.Equal(t, 1, settledAuditsBefore)
 
 	resp, status, err := env.Cancel(t, cancelCommand(
 		[]uuid.UUID{unit.ID}, preparation.CancelKindCancellation, preparation.ReasonItemUnavailable))
@@ -480,6 +489,11 @@ func TestCancelUnitsFullyPaidCreatesPendingRefund(t *testing.T) {
 	assert.EqualValues(t, 25000, projected.EffectiveReceivedVND)
 	assert.EqualValues(t, 0, projected.BalanceVND)
 	assert.EqualValues(t, 25000, projected.PendingRefundVND)
+
+	// The Check was already SETTLED by its Payment, so Cancellation settles
+	// nothing and emits no second settlement audit.
+	assert.Equal(t, settledAuditsBefore, countCheckSettledAudits(t, env, check.ID),
+		"an already settled Check emits no second settlement event")
 }
 
 // TestCancelUnitsPartialPaymentReducedToZero cancels one of two units on a
@@ -517,6 +531,14 @@ func TestCancelUnitsPartialPaymentReducedToZero(t *testing.T) {
 	assert.EqualValues(t, 0, projected.BalanceVND)
 	assert.EqualValues(t, 0, projected.PendingRefundVND)
 	assert.Equal(t, sales.CheckStateSettled, projected.State)
+
+	// The Check settled at a non-zero corrected charge, so the settlement
+	// audit must record that charge and its before image, not zero.
+	assert.Equal(t, 1, countCheckSettledAudits(t, env, check.ID))
+	settledDetails := checkSettledAuditDetails(t, env, check.ID)
+	assert.EqualValues(t, 50000, settledDetails["charge_before_vnd"])
+	assert.EqualValues(t, 25000, settledDetails["charge_after_vnd"])
+	assert.Equal(t, env.ShiftID.String(), settledDetails["sales_shift_id"])
 }
 
 // TestCancelUnitsChangeReplacement accepts a valid later replacement Order in
@@ -1169,4 +1191,24 @@ func countCheckSettledAudits(t *testing.T, env *cancelEnv, checkID uuid.UUID) in
 		  AND details->>'check_id' = $2`,
 		preparation.EventCheckSettled, checkID.String()).Scan(&n))
 	return n
+}
+
+// checkSettledAuditDetails reads the CHECK_SETTLED audit details of one Check;
+// the suite requires exactly one row to exist before calling.
+func checkSettledAuditDetails(t *testing.T, env *cancelEnv,
+	checkID uuid.UUID,
+) map[string]any {
+	t.Helper()
+	var raw []byte
+	require.NoError(t, env.DB.QueryRow(`
+		SELECT details
+		FROM audit_events
+		WHERE event_type = $1
+		  AND details->>'check_id' = $2
+		ORDER BY occurred_at ASC, id ASC
+		LIMIT 1`,
+		preparation.EventCheckSettled, checkID.String()).Scan(&raw))
+	details := map[string]any{}
+	require.NoError(t, json.Unmarshal(raw, &details))
+	return details
 }

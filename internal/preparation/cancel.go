@@ -548,12 +548,18 @@ func applyCancelUnits(ctx context.Context, q *sqlc.Queries, actor Actor,
 	audits := make([]AuditRecord, 0, len(cmd.PreparationUnitIDs)*3+len(checkIDs))
 	for _, checkID := range checkIDs {
 		if settledChecks[checkID] {
+			// The Check can settle at a non-zero corrected charge: a partial
+			// receipt covered by the reduced charge leaves no balance, so the
+			// audit records the real before/after financial meaning rather
+			// than a hardcoded zero (spec §15).
+			plan := plans[checkID]
 			audits = append(audits, AuditRecord{
 				EventType: EventCheckSettled,
 				Details: map[string]any{
-					"check_id":       checkID,
-					"sales_shift_id": shift.ID,
-					"charge_vnd":     int64(0),
+					"check_id":          checkID,
+					"sales_shift_id":    shift.ID,
+					"charge_before_vnd": plan.StoredChargeVND,
+					"charge_after_vnd":  plan.NewChargeVND,
 				},
 			})
 		}
