@@ -292,36 +292,119 @@ type ChargeAllocationResponse struct {
 //
 // The method-dependent fields are pointers with omitempty, so a Manual QR
 // Payment does not carry two null cash fields and a Cash Payment does not
-// carry a null bank reference.
+// carry a null bank reference. RemainingRefundableVND is the applied amount
+// less every Refund allocation against it, pending Manual QR intents included.
+// Void is nil while the Payment stands.
 type PaymentResponse struct {
-	ID                   uuid.UUID `json:"id"`
-	Method               string    `json:"method"`
-	AppliedAmountVND     int64     `json:"applied_amount_vnd"`
-	CashTenderedVND      *int64    `json:"cash_tendered_vnd,omitempty"`
-	ChangeDueVND         *int64    `json:"change_due_vnd,omitempty"`
-	TransactionReference *string   `json:"transaction_reference,omitempty"`
-	SalesShiftID         uuid.UUID `json:"sales_shift_id"`
-	ReceivedAt           time.Time `json:"received_at"`
+	ID                     uuid.UUID            `json:"id"`
+	Method                 string               `json:"method"`
+	AppliedAmountVND       int64                `json:"applied_amount_vnd"`
+	CashTenderedVND        *int64               `json:"cash_tendered_vnd,omitempty"`
+	ChangeDueVND           *int64               `json:"change_due_vnd,omitempty"`
+	TransactionReference   *string              `json:"transaction_reference,omitempty"`
+	SalesShiftID           uuid.UUID            `json:"sales_shift_id"`
+	ReceivedAt             time.Time            `json:"received_at"`
+	Void                   *PaymentVoidResponse `json:"void,omitempty"`
+	RemainingRefundableVND int64                `json:"remaining_refundable_vnd"`
+}
+
+// PaymentVoidResponse is the append-only reversal of one whole Payment. The
+// source Payment is never edited or deleted.
+type PaymentVoidResponse struct {
+	ID                        uuid.UUID `json:"id"`
+	AmountVND                 int64     `json:"amount_vnd"`
+	Reason                    string    `json:"reason"`
+	Note                      *string   `json:"note"`
+	ActorStaffIdentityID      uuid.UUID `json:"actor_staff_identity_id"`
+	ApprovedByStaffIdentityID uuid.UUID `json:"approved_by_staff_identity_id"`
+	OccurredAt                time.Time `json:"occurred_at"`
+}
+
+// ChargeAdjustmentResponse is one append-only reduction of customer charge
+// sourced by exactly one Cancellation or Comp. It never mutates the original
+// Charge Allocation it names. RemainingRefundableVND is the amount less every
+// Refund allocation against it.
+type ChargeAdjustmentResponse struct {
+	ID                     uuid.UUID  `json:"id"`
+	Kind                   string     `json:"kind"`
+	Scope                  string     `json:"scope"`
+	PreparationUnitID      uuid.UUID  `json:"preparation_unit_id"`
+	PreparationWasteID     *uuid.UUID `json:"preparation_waste_id"`
+	ChargeAllocationID     uuid.UUID  `json:"charge_allocation_id"`
+	CompletedSaleID        *uuid.UUID `json:"completed_sale_id,omitempty"`
+	SalesShiftID           uuid.UUID  `json:"sales_shift_id"`
+	AmountVND              int64      `json:"amount_vnd"`
+	RemainingRefundableVND int64      `json:"remaining_refundable_vnd"`
+	CreatedAt              time.Time  `json:"created_at"`
+}
+
+// RefundAllocationResponse is one source of refunded value: the Payment id or
+// the Charge Adjustment id, depending on which allocation collection carries
+// it, and the amount allocated.
+type RefundAllocationResponse struct {
+	ID        uuid.UUID `json:"id"`
+	AmountVND int64     `json:"amount_vnd"`
+}
+
+// RefundCompletionResponse is the append-only evidence that the Refund's money
+// actually moved. TransactionReference is present only on a completed Manual
+// QR Refund.
+type RefundCompletionResponse struct {
+	ID                            uuid.UUID `json:"id"`
+	TransactionReference          *string   `json:"transaction_reference,omitempty"`
+	CompletedByStaffIdentityID    uuid.UUID `json:"completed_by_staff_identity_id"`
+	CompletedStaffAccessSessionID uuid.UUID `json:"completed_staff_access_session_id"`
+	CompletedAt                   time.Time `json:"completed_at"`
+}
+
+// RefundResponse is one Refund with its derived state and both allocation
+// collections. Cash completes in the transaction that records it; Manual QR
+// stays PENDING until its completion is appended. No credential is projected.
+type RefundResponse struct {
+	ID                        uuid.UUID                  `json:"id"`
+	CheckID                   uuid.UUID                  `json:"check_id"`
+	CompletedSaleID           *uuid.UUID                 `json:"completed_sale_id,omitempty"`
+	SalesShiftID              uuid.UUID                  `json:"sales_shift_id"`
+	Method                    string                     `json:"method"`
+	AmountVND                 int64                      `json:"amount_vnd"`
+	State                     string                     `json:"state"`
+	Reason                    string                     `json:"reason"`
+	Note                      *string                    `json:"note"`
+	ActorStaffIdentityID      uuid.UUID                  `json:"actor_staff_identity_id"`
+	ApprovedByStaffIdentityID uuid.UUID                  `json:"approved_by_staff_identity_id"`
+	CreatedAt                 time.Time                  `json:"created_at"`
+	PaymentAllocations        []RefundAllocationResponse `json:"payment_allocations"`
+	AdjustmentAllocations     []RefundAllocationResponse `json:"adjustment_allocations"`
+	Completion                *RefundCompletionResponse  `json:"completion,omitempty"`
 }
 
 // CheckResponse is a grouping of charges awaiting settlement.
 //
-// TotalAppliedVND is the sum of the Check's Payments and BalanceVND is
-// ChargeVND minus it; both carry real values from 5C. MergedIntoCheckID is
-// present only on a MERGED Check — an open Check does not carry a field
-// pointing nowhere. PendingRefundVND is deliberately absent: Refund is
-// outside Phase 5 entirely, and a Payment can never exceed the balance.
+// ChargeVND is the live adjusted charge and BaseChargeVND is the original
+// allocation sum it derives from. TotalAppliedVND stays the immutable sum of
+// original Payments for historical clarity; Voids and completed Refunds are
+// subtracted explicitly through TotalVoidedVND, TotalRefundedVND, and
+// EffectiveReceivedVND rather than making that field change meaning.
+// BalanceVND is the customer amount still due and PendingRefundVND is money
+// owed back. MergedIntoCheckID is present only on a MERGED Check.
 type CheckResponse struct {
-	ID                uuid.UUID  `json:"id"`
-	State             string     `json:"state"`
-	ChargeVND         int64      `json:"charge_vnd"`
-	TotalAppliedVND   int64      `json:"total_applied_vnd"`
-	BalanceVND        int64      `json:"balance_vnd"`
-	MergedIntoCheckID *uuid.UUID `json:"merged_into_check_id,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
+	ID                   uuid.UUID  `json:"id"`
+	State                string     `json:"state"`
+	BaseChargeVND        int64      `json:"base_charge_vnd"`
+	ChargeVND            int64      `json:"charge_vnd"`
+	TotalAppliedVND      int64      `json:"total_applied_vnd"`
+	TotalVoidedVND       int64      `json:"total_voided_vnd"`
+	TotalRefundedVND     int64      `json:"total_refunded_vnd"`
+	EffectiveReceivedVND int64      `json:"effective_received_vnd"`
+	BalanceVND           int64      `json:"balance_vnd"`
+	PendingRefundVND     int64      `json:"pending_refund_vnd"`
+	MergedIntoCheckID    *uuid.UUID `json:"merged_into_check_id,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
 
-	Payments    []PaymentResponse          `json:"payments"`
-	Allocations []ChargeAllocationResponse `json:"allocations"`
+	Payments          []PaymentResponse          `json:"payments"`
+	Allocations       []ChargeAllocationResponse `json:"allocations"`
+	ChargeAdjustments []ChargeAdjustmentResponse `json:"charge_adjustments"`
+	Refunds           []RefundResponse           `json:"refunds"`
 }
 
 // OrderResponse is one submitted Order: the preparation boundary crossed once

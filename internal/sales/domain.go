@@ -271,6 +271,22 @@ const (
 	PaymentMethodManualQR = "MANUAL_QR"
 )
 
+// Refund methods. A Refund is returned through the original Payment's method,
+// so the two share their names but stay separate literals: a future method
+// could exist for one and not the other.
+const (
+	RefundMethodCash     = "CASH"
+	RefundMethodManualQR = "MANUAL_QR"
+)
+
+// Refund states are derived from completion evidence, never stored: a Refund
+// without a completion is PENDING, one with a completion is COMPLETED. A
+// Manual QR Refund stays PENDING until staff confirm the outbound transfer.
+const (
+	RefundStatePending   = "PENDING"
+	RefundStateCompleted = "COMPLETED"
+)
+
 // Split destinations.
 const (
 	SplitDestinationNewCheck      = "NEW_CHECK"
@@ -312,8 +328,10 @@ func ChangeDue(tenderedVND, appliedVND int64) (int64, error) {
 
 // SettlesCheck reports whether a resulting balance closes the Check.
 //
-// Refund and customer excess do not exist in Phase 5, so the canonical
-// three-input readiness policy reduces to exactly this. See ADR-017.
+// A Check settles when nothing is owed, including a zero-charge Check and one
+// that carries a pending Refund: state records whether customer debt is
+// covered, while money owed back is a separate obligation that closure, not
+// state, enforces. See ADR-017.
 func SettlesCheck(balanceVND int64) bool { return balanceVND == 0 }
 
 // ValidateTransactionReference trims a Manual QR bank reference and bounds it.

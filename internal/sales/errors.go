@@ -100,6 +100,14 @@ var (
 	// check_settlement_evidence_valid is the other half.
 	ErrSettlementInvariantViolated = errors.New("check state does not match its balance")
 
+	// ErrFinancialInvariantViolated reports that persisted correction facts
+	// cannot satisfy the live financial equation — a live adjustment larger
+	// than its base charge, a Void larger than its Payment, a completed Refund
+	// larger than the valid receipt, or allocations that disagree with their
+	// source. That is a defect, not a business state, so it is deliberately
+	// absent from MapHTTPError and surfaces as a 500 with the Check id logged.
+	ErrFinancialInvariantViolated = errors.New("check financials do not satisfy their invariant")
+
 	ErrNothingToSubmit                  = errors.New("no committed order draft awaits submission")
 	ErrCheckNotSettledForSubmission     = errors.New("every check must be settled before a takeaway order is submitted")
 	ErrCheckNotSettledForClosure        = errors.New("every check must be settled before the service session closes")

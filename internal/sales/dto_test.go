@@ -109,21 +109,29 @@ func TestManagerApprovalInputIsRequestOnlyCredentials(t *testing.T) {
 
 func TestCheckResponseSerialization(t *testing.T) {
 	check := CheckResponse{
-		ID:              uuid.New(),
-		State:           "OPEN",
-		ChargeVND:       85_000,
-		TotalAppliedVND: 0,
-		BalanceVND:      85_000,
-		Payments:        make([]PaymentResponse, 0),
-		Allocations:     make([]ChargeAllocationResponse, 0),
+		ID:                uuid.New(),
+		State:             "OPEN",
+		BaseChargeVND:     85_000,
+		ChargeVND:         85_000,
+		TotalAppliedVND:   0,
+		BalanceVND:        85_000,
+		Payments:          make([]PaymentResponse, 0),
+		Allocations:       make([]ChargeAllocationResponse, 0),
+		ChargeAdjustments: make([]ChargeAdjustmentResponse, 0),
+		Refunds:           make([]RefundResponse, 0),
 	}
 	b, err := json.Marshal(check)
 	require.NoError(t, err)
 	require.Contains(t, string(b), `"payments":[]`)
 	require.Contains(t, string(b), `"allocations":[]`)
+	require.Contains(t, string(b), `"charge_adjustments":[]`)
+	require.Contains(t, string(b), `"refunds":[]`)
+	require.Contains(t, string(b), `"base_charge_vnd":85000`)
 	require.Contains(t, string(b), `"total_applied_vnd":0`)
-	// pending_refund_vnd is omitted, not stubbed: Refund is outside Phase 5.
-	require.NotContains(t, string(b), "pending_refund_vnd")
+	require.Contains(t, string(b), `"total_voided_vnd":0`)
+	require.Contains(t, string(b), `"total_refunded_vnd":0`)
+	require.Contains(t, string(b), `"effective_received_vnd":0`)
+	require.Contains(t, string(b), `"pending_refund_vnd":0`)
 }
 
 func TestChargeAllocationSerializationMarksUnsubmitted(t *testing.T) {
@@ -194,7 +202,7 @@ func TestCheckResponseSerialization5C(t *testing.T) {
 		require.NoError(t, err)
 		require.NotContains(t, string(b), "merged_into_check_id")
 		require.Contains(t, string(b), `"payments":[]`)
-		require.NotContains(t, string(b), "pending_refund_vnd")
+		require.Contains(t, string(b), `"pending_refund_vnd":0`)
 	})
 
 	t.Run("a merged check carries merged_into_check_id", func(t *testing.T) {
@@ -206,6 +214,167 @@ func TestCheckResponseSerialization5C(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Contains(t, string(b), `"merged_into_check_id":"33333333-3333-3333-3333-333333333333"`)
+	})
+}
+
+// The Phase 6C Check contract adds four scalar totals and two non-null
+// collections. A Check with no corrections still serializes them, so a client
+// never has to branch on missing keys.
+func TestCorrectionDTOEmptyCheckCollections(t *testing.T) {
+	raw, err := json.Marshal(CheckResponse{
+		Payments:          make([]PaymentResponse, 0),
+		Allocations:       make([]ChargeAllocationResponse, 0),
+		ChargeAdjustments: make([]ChargeAdjustmentResponse, 0),
+		Refunds:           make([]RefundResponse, 0),
+	})
+	require.NoError(t, err)
+	body := string(raw)
+	for _, collection := range []string{"payments", "allocations", "charge_adjustments", "refunds"} {
+		require.Contains(t, body, `"`+collection+`":[]`,
+			"collection %s must be an empty array, never null", collection)
+	}
+	require.NotContains(t, body, "pin")
+	require.NotContains(t, body, "login_code")
+}
+
+func TestCorrectionDTOChargeAdjustment(t *testing.T) {
+	wasteID := uuid.New()
+	raw, err := json.Marshal(ChargeAdjustmentResponse{
+		ID:                     uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+		Kind:                   "COMP",
+		Scope:                  "LIVE_CHECK",
+		PreparationUnitID:      uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+		PreparationWasteID:     &wasteID,
+		ChargeAllocationID:     uuid.MustParse("33333333-3333-3333-3333-333333333333"),
+		SalesShiftID:           uuid.MustParse("44444444-4444-4444-4444-444444444444"),
+		AmountVND:              25_000,
+		RemainingRefundableVND: 15_000,
+		CreatedAt:              time.Unix(0, 0).UTC(),
+	})
+	require.NoError(t, err)
+
+	var decoded map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	for _, field := range []string{
+		"id", "kind", "scope", "preparation_unit_id", "preparation_waste_id",
+		"charge_allocation_id", "sales_shift_id", "amount_vnd",
+		"remaining_refundable_vnd", "created_at",
+	} {
+		require.Contains(t, decoded, field, "field %q must be in the adjustment contract", field)
+	}
+	require.JSONEq(t, `"`+wasteID.String()+`"`, string(decoded["preparation_waste_id"]))
+	require.NotContains(t, string(raw), "pin")
+	require.NotContains(t, string(raw), "login_code")
+
+	t.Run("a Cancellation carries a null waste id", func(t *testing.T) {
+		raw, err := json.Marshal(ChargeAdjustmentResponse{Kind: "CANCELLATION", Scope: "LIVE_CHECK"})
+		require.NoError(t, err)
+		require.Contains(t, string(raw), `"preparation_waste_id":null`)
+	})
+}
+
+func TestCorrectionDTOPaymentVoidEvidence(t *testing.T) {
+	t.Run("a standing payment omits void evidence", func(t *testing.T) {
+		raw, err := json.Marshal(PaymentResponse{ID: uuid.New(), Method: PaymentMethodCash})
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), `"void"`)
+		require.Contains(t, string(raw), `"remaining_refundable_vnd":0`)
+	})
+
+	t.Run("a voided payment carries the whole reversal", func(t *testing.T) {
+		note := "recorded twice"
+		raw, err := json.Marshal(PaymentResponse{
+			ID:                     uuid.MustParse("55555555-5555-5555-5555-555555555555"),
+			Method:                 PaymentMethodCash,
+			AppliedAmountVND:       25_000,
+			RemainingRefundableVND: 25_000,
+			Void: &PaymentVoidResponse{
+				ID:                        uuid.MustParse("66666666-6666-6666-6666-666666666666"),
+				AmountVND:                 25_000,
+				Reason:                    "DUPLICATE_PAYMENT",
+				Note:                      &note,
+				ActorStaffIdentityID:      uuid.MustParse("77777777-7777-7777-7777-777777777777"),
+				ApprovedByStaffIdentityID: uuid.MustParse("88888888-8888-8888-8888-888888888888"),
+				OccurredAt:                time.Unix(0, 0).UTC(),
+			},
+		})
+		require.NoError(t, err)
+
+		var decoded map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.Contains(t, decoded, "void")
+		body := string(raw)
+		require.Contains(t, body, `"amount_vnd":25000`)
+		require.Contains(t, body, `"reason":"DUPLICATE_PAYMENT"`)
+		require.Contains(t, body, `"note":"recorded twice"`)
+		require.NotContains(t, body, "pin")
+		require.NotContains(t, body, "login_code")
+	})
+}
+
+func TestCorrectionDTORefund(t *testing.T) {
+	t.Run("a pending Manual QR Refund carries empty allocations and no completion", func(t *testing.T) {
+		raw, err := json.Marshal(RefundResponse{
+			ID:                        uuid.New(),
+			CheckID:                   uuid.New(),
+			SalesShiftID:              uuid.New(),
+			Method:                    RefundMethodManualQR,
+			AmountVND:                 25_000,
+			State:                     RefundStatePending,
+			Reason:                    "CUSTOMER_REQUEST",
+			ActorStaffIdentityID:      uuid.New(),
+			ApprovedByStaffIdentityID: uuid.New(),
+			CreatedAt:                 time.Unix(0, 0).UTC(),
+			PaymentAllocations:        make([]RefundAllocationResponse, 0),
+			AdjustmentAllocations:     make([]RefundAllocationResponse, 0),
+		})
+		require.NoError(t, err)
+		body := string(raw)
+		require.Contains(t, body, `"state":"PENDING"`)
+		require.Contains(t, body, `"payment_allocations":[]`)
+		require.Contains(t, body, `"adjustment_allocations":[]`)
+		require.NotContains(t, body, "completion")
+		require.NotContains(t, body, "pin")
+		require.NotContains(t, body, "login_code")
+	})
+
+	t.Run("a completed refund carries both allocation sets and completion evidence", func(t *testing.T) {
+		reference := "FT-1"
+		paymentID, adjustmentID := uuid.New(), uuid.New()
+		raw, err := json.Marshal(RefundResponse{
+			ID:                        uuid.New(),
+			CheckID:                   uuid.New(),
+			SalesShiftID:              uuid.New(),
+			Method:                    RefundMethodCash,
+			AmountVND:                 25_000,
+			State:                     RefundStateCompleted,
+			Reason:                    "ITEM_UNAVAILABLE",
+			ActorStaffIdentityID:      uuid.New(),
+			ApprovedByStaffIdentityID: uuid.New(),
+			CreatedAt:                 time.Unix(0, 0).UTC(),
+			PaymentAllocations: []RefundAllocationResponse{
+				{ID: paymentID, AmountVND: 25_000},
+			},
+			AdjustmentAllocations: []RefundAllocationResponse{
+				{ID: adjustmentID, AmountVND: 25_000},
+			},
+			Completion: &RefundCompletionResponse{
+				ID:                            uuid.New(),
+				TransactionReference:          &reference,
+				CompletedByStaffIdentityID:    uuid.New(),
+				CompletedStaffAccessSessionID: uuid.New(),
+				CompletedAt:                   time.Unix(0, 0).UTC(),
+			},
+		})
+		require.NoError(t, err)
+		body := string(raw)
+		require.Contains(t, body, `"state":"COMPLETED"`)
+		require.Contains(t, body, `"completion":{`)
+		require.Contains(t, body, `"transaction_reference":"FT-1"`)
+		require.Contains(t, body, `"payment_allocations":[{"id":"`+paymentID.String()+`","amount_vnd":25000}]`)
+		require.Contains(t, body, `"adjustment_allocations":[{"id":"`+adjustmentID.String()+`","amount_vnd":25000}]`)
+		require.NotContains(t, body, "pin")
+		require.NotContains(t, body, "login_code")
 	})
 }
 

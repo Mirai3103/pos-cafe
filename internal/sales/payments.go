@@ -127,13 +127,14 @@ func lockCheckForMutation(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 }
 
 // assertChargeMatchesAllocations verifies a Check's stored charge against the
-// live sum of its allocations.
+// live invariant: base allocations less LIVE_CHECK adjustments.
 //
-// The comparison is 5B's invariant: stored charge_vnd is a denormalization, and
-// a disagreement is a defect rather than a business state, so it fails the
-// request with a logged 500. Every command that rewrites a charge runs this
-// first — a value that has drifted must not be built on, or the drift is
-// propagated into a second Check before the read path ever sees it.
+// The comparison is 5B's invariant, corrected by Phase 6C: stored charge_vnd is
+// a denormalization of the original allocations minus every live Charge
+// Adjustment, and a disagreement is a defect rather than a business state, so
+// it fails the request with a logged 500. Every command that rewrites a charge
+// runs this first — a value that has drifted must not be built on, or the drift
+// is propagated into a second Check before the read path ever sees it.
 func assertChargeMatchesAllocations(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
 	storedChargeVND int64,
 ) error {
@@ -141,13 +142,36 @@ func assertChargeMatchesAllocations(ctx context.Context, q *sqlc.Queries, checkI
 	if err != nil {
 		return fmt.Errorf("sum check allocated charge: %w", err)
 	}
-	if allocatedVND != storedChargeVND {
-		slog.Error("check charge does not match its allocations",
+	adjustmentRows, err := q.ListCheckChargeAdjustments(ctx, checkID)
+	if err != nil {
+		return fmt.Errorf("list check charge adjustments: %w", err)
+	}
+	var adjustmentVND int64
+	for _, row := range adjustmentRows {
+		adjustmentVND, err = AddCharge(adjustmentVND, row.AmountVnd)
+		if err != nil {
+			return fmt.Errorf("%w: check %s adjustments: %v",
+				ErrChargeInvariantViolated, checkID, err)
+		}
+	}
+
+	if adjustmentVND > allocatedVND {
+		slog.Error("check live adjustments exceed its allocations",
 			"check_id", checkID,
 			"stored_charge_vnd", storedChargeVND,
-			"allocated_vnd", allocatedVND)
-		return fmt.Errorf("%w: check %s stored %d, allocated %d",
-			ErrChargeInvariantViolated, checkID, storedChargeVND, allocatedVND)
+			"allocated_vnd", allocatedVND,
+			"live_adjustment_vnd", adjustmentVND)
+		return fmt.Errorf("%w: check %s stored %d, allocated %d, adjustments %d",
+			ErrChargeInvariantViolated, checkID, storedChargeVND, allocatedVND, adjustmentVND)
+	}
+	if expectedVND := allocatedVND - adjustmentVND; expectedVND != storedChargeVND {
+		slog.Error("check charge does not match its allocations and adjustments",
+			"check_id", checkID,
+			"stored_charge_vnd", storedChargeVND,
+			"allocated_vnd", allocatedVND,
+			"live_adjustment_vnd", adjustmentVND)
+		return fmt.Errorf("%w: check %s stored %d, allocated %d, adjustments %d",
+			ErrChargeInvariantViolated, checkID, storedChargeVND, allocatedVND, adjustmentVND)
 	}
 	return nil
 }
@@ -166,19 +190,47 @@ func assertChargesMatchAllocations(ctx context.Context, q *sqlc.Queries, ids []u
 	return nil
 }
 
-// checkBalance verifies the stored charge against the live allocation sum and
-// returns what is still owed.
+// checkBalance verifies the stored charge against the live allocation and
+// adjustment invariant, then derives what is still owed from the corrected
+// receipt: valid Payments less completed live Refunds.
 func checkBalance(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
 	storedChargeVND int64,
 ) (int64, error) {
 	if err := assertChargeMatchesAllocations(ctx, q, checkID, storedChargeVND); err != nil {
 		return 0, err
 	}
-	appliedVND, err := q.SumCheckPayments(ctx, checkID)
+
+	// The assertion above proved stored charge = base allocations - live
+	// adjustments, so the charge term is the stored value and only the receipt
+	// side still has to be derived.
+	paymentRows, err := q.ListCheckPayments(ctx, checkID)
 	if err != nil {
-		return 0, fmt.Errorf("sum check payments: %w", err)
+		return 0, fmt.Errorf("load check payments: %w", err)
 	}
-	return SubtractCharge(storedChargeVND, appliedVND)
+	originalVND, voidedVND, err := sumPaymentAmounts(paymentRows)
+	if err != nil {
+		return 0, fmt.Errorf("check %s: %w", checkID, err)
+	}
+	refundRows, err := q.ListCheckRefunds(ctx, checkID)
+	if err != nil {
+		return 0, fmt.Errorf("load check refunds: %w", err)
+	}
+	completedRefundVND, err := sumCompletedRefundsVND(refundRows)
+	if err != nil {
+		return 0, fmt.Errorf("check %s: %w", checkID, err)
+	}
+
+	financials, err := ComputeCheckFinancials(CheckFinancialInputs{
+		BaseChargeVND:      storedChargeVND,
+		LiveAdjustmentVND:  0,
+		OriginalPaymentVND: originalVND,
+		VoidedPaymentVND:   voidedVND,
+		CompletedRefundVND: completedRefundVND,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return financials.BalanceVND, nil
 }
 
 // paymentInput is the method-specific part of one Payment.
