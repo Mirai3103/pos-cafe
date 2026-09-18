@@ -691,14 +691,6 @@ type Querier interface {
 	StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error
 	StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error
 	SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) (SumCashMovementsRow, error)
-	// Expected Cash's Cash Payment term (ADR-020). The sum is over APPLIED
-	// amounts, not tendered amounts: CONTEXT.md defines a Cash Payment's net cash
-	// effect as the applied amount, because the change left the drawer at the same
-	// moment the tendered cash entered it.
-	//
-	// internal/shift reads the payments table through its own query rather than
-	// importing internal/sales, following ADR-012.
-	SumCashPaymentsForShift(ctx context.Context, salesShiftID uuid.UUID) (int64, error)
 	// The live sum that a Check's stored charge_vnd denormalizes, in one round trip
 	// rather than loading every allocation and its modifiers to add them up.
 	//

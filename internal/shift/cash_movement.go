@@ -129,13 +129,13 @@ func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd
 			if err != nil {
 				return 0, zero, AuditRecord{}, fmt.Errorf("sum cash movements: %w", err)
 			}
-			cashPaymentVND, err := mc.Queries.SumCashPaymentsForShift(ctx, openShift.ID)
+			totals, err := mc.Queries.GetShiftReconciliationTotals(ctx, openShift.ID)
 			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("sum cash payments for shift: %w", err)
+				return 0, zero, AuditRecord{}, fmt.Errorf("get shift reconciliation totals: %w", err)
 			}
 
-			expected, err := ComputeExpectedCash(openShift.OpeningFloatVnd, cashPaymentVND,
-				sums.PayInVnd, sums.PayOutVnd)
+			expected, err := ComputeExpectedCash(openShift.OpeningFloatVnd, totals.CashPaymentVnd,
+				totals.CashPaymentVoidVnd, totals.CashRefundVnd, sums.PayInVnd, sums.PayOutVnd)
 			if err != nil {
 				return 0, zero, AuditRecord{}, err
 			}

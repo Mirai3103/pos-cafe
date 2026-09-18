@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
@@ -295,6 +296,27 @@ func TestCashMovementFingerprintExcludesManagerPin(t *testing.T) {
 	require.NoError(t, f.DB.QueryRow(
 		`SELECT count(*) FROM cash_movements WHERE sales_shift_id = $1`, f.Shift.ID).Scan(&recorded))
 	assert.Equal(t, 1, recorded, "a PIN-insensitive replay must not record a second movement")
+}
+
+func TestCashMovementExpectedCashIncludesReconciliationTerms(t *testing.T) {
+	f := newShiftFixture(t)
+	ctx := context.Background()
+	checkID := seedShiftEnvCheck(t, f.DB, f.Shift.ID, f.Cashier.StaffID)
+
+	// A voided Cash Payment cancels out of Expected Cash, and a completed
+	// Cash Refund has left the drawer. The new movement lands on top.
+	voided := seedPayment(t, f.DB, checkID, f.Shift.ID, f.Cashier.StaffID, f.Cashier.SessionID,
+		"CASH", 100_000, 100_000)
+	seedPaymentVoid(t, f.DB, voided, f.Shift.ID, f.Cashier.StaffID, f.Cashier.SessionID)
+	completedAt := time.Now().UTC()
+	seedRefund(t, f.DB, checkID, f.Shift.ID, f.Cashier.StaffID, f.Cashier.SessionID,
+		"CASH", 10_000, nil, completedAt.Add(-time.Minute), &completedAt)
+
+	_, result, err := f.Movement.Handle(ctx, f.Cashier.actor(),
+		f.command(shift.MethodPayIn, shift.ReasonAddChangeFund, 50_000, nil))
+	require.NoError(t, err)
+	require.Equal(t, int64(540_000), result.ExpectedCashVND,
+		"500000 float - 10000 completed refund + 50000 pay in; the voided payment cancels out")
 }
 
 func TestCashMovementPinNeverPersisted(t *testing.T) {

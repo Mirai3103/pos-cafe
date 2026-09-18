@@ -83,19 +83,6 @@ SELECT
 FROM cash_movements
 WHERE sales_shift_id = $1;
 
--- name: SumCashPaymentsForShift :one
--- Expected Cash's Cash Payment term (ADR-020). The sum is over APPLIED
--- amounts, not tendered amounts: CONTEXT.md defines a Cash Payment's net cash
--- effect as the applied amount, because the change left the drawer at the same
--- moment the tendered cash entered it.
---
--- internal/shift reads the payments table through its own query rather than
--- importing internal/sales, following ADR-012.
-SELECT COALESCE(SUM(applied_amount_vnd) FILTER (WHERE method = 'CASH'), 0)::BIGINT
-    AS cash_payment_vnd
-FROM payments
-WHERE sales_shift_id = $1;
-
 -- -- Phase 6C: Payment Void, Refund & correction reconciliation --
 
 -- name: GetShiftReconciliationTotals :one

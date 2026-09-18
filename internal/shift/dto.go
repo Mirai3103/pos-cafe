@@ -65,16 +65,50 @@ type CashMovementResponse struct {
 	OccurredAt   time.Time    `json:"occurred_at"`
 }
 
+// Refund states in the Shift projection. A Refund's state is derived from the
+// existence of its completion evidence, never stored or copied, so a Refund
+// cannot report COMPLETED without a completion time.
+const (
+	RefundStatePending   = "PENDING"
+	RefundStateCompleted = "COMPLETED"
+)
+
+// RefundSummaryResponse is one Refund in the current-Shift read: the money
+// owed back or already returned, with its derived state. It carries no
+// credentials and no allocation detail, matching the Shift boundary's
+// least-disclosure rule.
+type RefundSummaryResponse struct {
+	ID              uuid.UUID  `json:"id"`
+	CheckID         uuid.UUID  `json:"check_id"`
+	CompletedSaleID *uuid.UUID `json:"completed_sale_id,omitempty"`
+	Method          string     `json:"method"`
+	AmountVND       int64      `json:"amount_vnd"`
+	State           string     `json:"state"`
+	CreatedAt       time.Time  `json:"created_at"`
+	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+}
+
 // CurrentSalesShiftResponse is the current-Shift read.
 //
-// ExpectedCashVND covers the Opening Float, Cash Payments, and Cash Movements;
-// only the Cash Refund term is still outstanding, because Refund is not
-// implemented. CashMovements is always an array and is serialized as [] when
-// empty, never as null.
+// ExpectedCashVND is the drawer figure from ComputeExpectedCash; the remaining
+// scalars are the Phase 6C reconciliation terms (ADR-046). pending_refund_vnd
+// is money owed back, and unresolved_post_sale_adjustment_vnd is the post-sale
+// correction amount not yet covered by completed Refunds. Both CashMovements
+// and Refunds are always arrays and serialize as [] when empty, never null.
 type CurrentSalesShiftResponse struct {
 	SalesShiftResponse
-	ExpectedCashVND int64                  `json:"expected_cash_vnd"`
-	CashMovements   []CashMovementResponse `json:"cash_movements"`
+	ExpectedCashVND                 int64                   `json:"expected_cash_vnd"`
+	CashPaymentVND                  int64                   `json:"cash_payment_vnd"`
+	CashPaymentVoidVND              int64                   `json:"cash_payment_void_vnd"`
+	CashRefundVND                   int64                   `json:"cash_refund_vnd"`
+	ManualQRPaymentVND              int64                   `json:"manual_qr_payment_vnd"`
+	ManualQRPaymentVoidVND          int64                   `json:"manual_qr_payment_void_vnd"`
+	ManualQRRefundVND               int64                   `json:"manual_qr_refund_vnd"`
+	PendingManualQRRefundVND        int64                   `json:"pending_manual_qr_refund_vnd"`
+	PendingRefundVND                int64                   `json:"pending_refund_vnd"`
+	UnresolvedPostSaleAdjustmentVND int64                   `json:"unresolved_post_sale_adjustment_vnd"`
+	CashMovements                   []CashMovementResponse  `json:"cash_movements"`
+	Refunds                         []RefundSummaryResponse `json:"refunds"`
 }
 
 // CashMovementResult is the Cash Movement command response. It returns the

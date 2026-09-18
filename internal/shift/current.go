@@ -17,16 +17,16 @@ func NewCurrentShiftHandler(runner *Runner) *CurrentShiftHandler {
 	return &CurrentShiftHandler{runner: runner}
 }
 
-// Handle returns the open Sales Shift with its Expected Cash and Cash
-// Movements, or nil when no Shift is open.
+// Handle returns the open Sales Shift with its Expected Cash, reconciliation
+// scalars, Cash Movements, and Refunds, or nil when no Shift is open.
 //
 // "No Shift is currently open" is a normal operating state that the cashier
 // screen renders directly, so it is a successful nil rather than a not-found
 // error.
 //
 // The read runs in a read-only repeatable-read transaction, so the capability
-// check, the Shift row, the movement list, and the Expected Cash aggregate all
-// observe one snapshot.
+// check, the Shift row, the movement list, the reconciliation aggregate, and
+// the Refund list all observe one snapshot.
 func (h *CurrentShiftHandler) Handle(ctx context.Context, actor Actor) (*CurrentSalesShiftResponse, error) {
 	return ExecuteRead(ctx, h.runner, actor, OpGetCurrentShift, CapSalesShiftOperate,
 		func(q *sqlc.Queries) (*CurrentSalesShiftResponse, error) {
@@ -80,14 +80,26 @@ func (h *CurrentShiftHandler) Handle(ctx context.Context, actor Actor) (*Current
 				})
 			}
 
-			cashPaymentVND, err := q.SumCashPaymentsForShift(ctx, row.ID)
+			totals, err := q.GetShiftReconciliationTotals(ctx, row.ID)
 			if err != nil {
-				return nil, fmt.Errorf("sum cash payments for shift: %w", err)
+				return nil, fmt.Errorf("get shift reconciliation totals: %w", err)
 			}
 
-			expected, err := ComputeExpectedCash(row.OpeningFloatVnd, cashPaymentVND, payInVND, payOutVND)
+			expected, err := ComputeExpectedCash(row.OpeningFloatVnd, totals.CashPaymentVnd,
+				totals.CashPaymentVoidVnd, totals.CashRefundVnd, payInVND, payOutVND)
 			if err != nil {
 				return nil, err
+			}
+
+			refundRows, err := q.ListShiftRefunds(ctx, row.ID)
+			if err != nil {
+				return nil, fmt.Errorf("list shift refunds: %w", err)
+			}
+
+			// Serialize an empty list as [] rather than null.
+			refunds := make([]RefundSummaryResponse, 0, len(refundRows))
+			for _, refund := range refundRows {
+				refunds = append(refunds, refundSummaryFromRow(refund))
 			}
 
 			return &CurrentSalesShiftResponse{
@@ -102,8 +114,44 @@ func (h *CurrentShiftHandler) Handle(ctx context.Context, actor Actor) (*Current
 						LoginCode:   row.OpenerLoginCode,
 					},
 				},
-				ExpectedCashVND: expected,
-				CashMovements:   movements,
+				ExpectedCashVND:                 expected,
+				CashPaymentVND:                  totals.CashPaymentVnd,
+				CashPaymentVoidVND:              totals.CashPaymentVoidVnd,
+				CashRefundVND:                   totals.CashRefundVnd,
+				ManualQRPaymentVND:              totals.ManualQrPaymentVnd,
+				ManualQRPaymentVoidVND:          totals.ManualQrPaymentVoidVnd,
+				ManualQRRefundVND:               totals.ManualQrRefundVnd,
+				PendingManualQRRefundVND:        totals.PendingManualQrRefundVnd,
+				PendingRefundVND:                totals.PendingRefundVnd,
+				UnresolvedPostSaleAdjustmentVND: totals.UnresolvedPostSaleAdjustmentVnd,
+				CashMovements:                   movements,
+				Refunds:                         refunds,
 			}, nil
 		})
+}
+
+// refundSummaryFromRow projects one Refund row. State is derived from the
+// query's completion evidence rather than copied from a stored column, so a
+// Refund cannot report COMPLETED without a completion time.
+func refundSummaryFromRow(row sqlc.ListShiftRefundsRow) RefundSummaryResponse {
+	summary := RefundSummaryResponse{
+		ID:        row.ID,
+		CheckID:   row.CheckID,
+		Method:    row.Method,
+		AmountVND: row.AmountVnd,
+		State:     RefundStatePending,
+		CreatedAt: row.CreatedAt,
+	}
+	if row.CompletedSaleID.Valid {
+		completedSaleID := row.CompletedSaleID.UUID
+		summary.CompletedSaleID = &completedSaleID
+	}
+	// State and completion time come from the same completion row, so a Refund
+	// can never report COMPLETED without its completion time.
+	if row.Completed && row.CompletedAt.Valid {
+		completedAt := row.CompletedAt.Time
+		summary.State = RefundStateCompleted
+		summary.CompletedAt = &completedAt
+	}
+	return summary
 }
