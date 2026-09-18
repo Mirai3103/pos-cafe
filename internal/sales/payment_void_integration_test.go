@@ -42,10 +42,10 @@ func (e *voidEnv) voidCommandWithRequestID(requestID, paymentID uuid.UUID, reaso
 	note *string,
 ) sales.VoidPaymentCommand {
 	return sales.VoidPaymentCommand{
-		RequestID:       requestID,
-		PaymentID:       paymentID,
-		Reason:          reason,
-		Note:            note,
+		RequestID: requestID,
+		PaymentID: paymentID,
+		Reason:    reason,
+		Note:      note,
 		ManagerApproval: sales.ManagerApprovalInput{
 			ApproverLoginCode: e.managerCode,
 			ManagerPIN:        "1234",

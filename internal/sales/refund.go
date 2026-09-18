@@ -1121,10 +1121,7 @@ type refundCompletedAudit struct {
 func refundPaymentAllocationAudits(allocs []RefundPaymentAllocationInput) []refundPaymentAllocationAudit {
 	out := make([]refundPaymentAllocationAudit, 0, len(allocs))
 	for _, allocation := range allocs {
-		out = append(out, refundPaymentAllocationAudit{
-			PaymentID: allocation.PaymentID,
-			AmountVND: allocation.AmountVND,
-		})
+		out = append(out, refundPaymentAllocationAudit(allocation))
 	}
 	return out
 }
@@ -1132,10 +1129,7 @@ func refundPaymentAllocationAudits(allocs []RefundPaymentAllocationInput) []refu
 func refundAdjustmentAllocationAudits(allocs []RefundAdjustmentAllocationInput) []refundAdjustmentAllocationAudit {
 	out := make([]refundAdjustmentAllocationAudit, 0, len(allocs))
 	for _, allocation := range allocs {
-		out = append(out, refundAdjustmentAllocationAudit{
-			ChargeAdjustmentID: allocation.ChargeAdjustmentID,
-			AmountVND:          allocation.AmountVND,
-		})
+		out = append(out, refundAdjustmentAllocationAudit(allocation))
 	}
 	return out
 }
