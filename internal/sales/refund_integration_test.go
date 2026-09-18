@@ -743,15 +743,31 @@ func TestRecordRefundSourceRejections(t *testing.T) {
 
 	t.Run("rejects a live adjustment in a post-sale refund", func(t *testing.T) {
 		env := newRefundEnv(t)
-		session, _, wasteID, checkID := env.paidTakeawayWastedUnitWithMethod(t,
-			sales.PaymentMethodCash)
-		comp := env.compOK(t, env.compCommand(t, wasteID, sales.CompReasonCafeError, nil))
+
+		// Two units at 25,000: a 25,000 receipt leaves the Check OPEN, then a
+		// 25,000 Comp corrects the charge to exactly what was received. The
+		// Check settles with no pending Refund, so the Session may close while
+		// the Comp's LIVE_CHECK adjustment still carries its full capacity.
+		// (Closing a Session that still owes money back is refused since
+		// pending Refunds block closure, so this path replaces the old fixture
+		// that comped a fully paid unit and closed with the Refund pending.)
+		session := env.commitDineInDraftWithQuantity(t, 2)
+		checkID := env.soleCheckID(t, session.ID)
+		_, status, err := env.payCash(t, checkID, 25000, 25000)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status)
+		session = env.Submit(t, session.ID)
+		require.Len(t, session.PreparationUnits, 2)
+		firstWasteID := env.wasteUnitAfterAdvance(t, session.PreparationUnits[0].ID)
+		env.wasteUnitAfterAdvance(t, session.PreparationUnits[1].ID)
+		comp := env.compOK(t, env.compCommand(t, firstWasteID,
+			sales.CompReasonCafeError, nil))
 		env.Close(t, session.ID)
 		paymentID := env.solePaymentIDForCheck(t, checkID)
 
 		// The Session is closed, so the Refund is post-sale and a LIVE_CHECK
 		// adjustment cannot source it.
-		status, _, err := env.refund(t, env.refundCommand(checkID, sales.RefundMethodCash,
+		status, _, err = env.refund(t, env.refundCommand(checkID, sales.RefundMethodCash,
 			paymentID, comp.Comp.ChargeAdjustmentID, 25000))
 		require.ErrorIs(t, err, sales.ErrRefundAllocationInvalid)
 		assert.Equal(t, http.StatusBadRequest, status)
