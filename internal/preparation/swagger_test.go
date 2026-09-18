@@ -11,14 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The generated-Swagger contract of the Phase 6B correction routes. The test
-// reads ../../docs/swagger.json — the file `swag init -g cmd/api/main.go -o
-// docs` generates — and asserts each route exposes its POST operation with
-// BearerAuth, the documented request body schema, the success status wired to
-// the exact response DTO, and the full 400|401|403|404|409|500 error set. It
-// then walks every definition reachable from those RESPONSES and proves no
-// response field anywhere carries a PIN: no manager_pin, no pin, no pin_hash.
-// The Manager PIN is request-only; this is the guard that keeps it that way.
+// The generated-Swagger contract of the Phase 6B and Phase 6C correction
+// routes. The test reads ../../docs/swagger.json — the file `swag init -g
+// cmd/api/main.go -o docs` generates — and asserts each route exposes its POST
+// operation with BearerAuth, the documented request body schema, the success
+// status wired to the exact response DTO, and the full
+// 400|401|403|404|409|500 error set. It then walks every definition reachable
+// from those RESPONSES and proves no response field anywhere carries a PIN: no
+// manager_pin, no pin, no pin_hash. The Manager PIN is request-only; this is
+// the guard that keeps it that way.
 //
 // The test runs without the integration tag: it reads a file, not a database.
 
@@ -159,9 +160,15 @@ func TestPreparationSwaggerCorrectionRoutes(t *testing.T) {
 			requestRef:    "preparation.CorrectStateCommand",
 			dataRef:       "preparation.CorrectStateResponse",
 		},
+		{
+			path:          "/preparation/units/cancel",
+			successStatus: "200",
+			requestRef:    "preparation.CancelUnitsCommand",
+			dataRef:       "preparation.CancelUnitsResponse",
+		},
 	}
 
-	// visited accumulates the response closure of all four routes for the
+	// visited accumulates the response closure of all five routes for the
 	// PIN sweep at the end.
 	visited := map[string]bool{}
 
@@ -252,6 +259,7 @@ func TestPreparationSwaggerCorrectionRoutes(t *testing.T) {
 func routeDataDefinitions() []string {
 	return []string{
 		"preparation.AlertResponse",
+		"preparation.CancelUnitsResponse",
 		"preparation.CorrectStateResponse",
 		"preparation.RemakeResponse",
 		"preparation.WasteResponse",

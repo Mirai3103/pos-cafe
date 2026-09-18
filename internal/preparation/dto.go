@@ -256,3 +256,43 @@ type QueueCorrectionResponse struct {
 	Note                    *string    `json:"note"`
 	OccurredAt              time.Time  `json:"occurred_at"`
 }
+
+// --- Phase 6C: Cancellation & Change contracts ---
+
+// CancelUnitsCommand cancels 1 through MaxCancellationUnits queued units with
+// one terminal Cancellation each. Kind selects whether the intended
+// replacement was already submitted (CHANGE); ReplacementOrderID is required
+// for a CHANGE and forbidden otherwise. Reason must be in the Cancellation
+// catalog and the optional note is normalized before validation (spec §7.1).
+type CancelUnitsCommand struct {
+	RequestID          uuid.UUID   `json:"request_id"`
+	PreparationUnitIDs []uuid.UUID `json:"preparation_unit_ids"`
+	Kind               string      `json:"kind"`
+	ReplacementOrderID *uuid.UUID  `json:"replacement_order_id"`
+	Reason             string      `json:"reason"`
+	Note               *string     `json:"note"`
+}
+
+// CancellationOutcome is one unit's Cancellation inside a batch, reported in
+// request order (spec §7.4). A charged standard unit carries the live Charge
+// Adjustment created for its immutable unit price; an uncharged Remake has a
+// nil adjustment and zero removed charge.
+type CancellationOutcome struct {
+	CancellationID     uuid.UUID  `json:"cancellation_id"`
+	PreparationUnitID  uuid.UUID  `json:"preparation_unit_id"`
+	PriorState         string     `json:"prior_state"`
+	ResultingState     string     `json:"resulting_state"`
+	ChargeAdjustmentID *uuid.UUID `json:"charge_adjustment_id"`
+	ChargeRemovedVND   int64      `json:"charge_removed_vnd"`
+	OccurredAt         time.Time  `json:"occurred_at"`
+}
+
+// CancelUnitsResponse is the result of one Cancellation/Change batch. Outcomes
+// and Alerts are allocated by the handler as non-nil slices sized to the
+// selection, so an empty collection serializes as [] not null; there is one
+// outcome and one alert per input unit in request order (spec §7.4). The
+// result contains no full Check, Payment, or Refund data.
+type CancelUnitsResponse struct {
+	Outcomes []CancellationOutcome `json:"outcomes"`
+	Alerts   []QueueAlertResponse  `json:"alerts"`
+}

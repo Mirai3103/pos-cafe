@@ -288,3 +288,123 @@ func ValidateCorrectStateCommand(cmd CorrectStateCommand) error {
 	}
 	return nil
 }
+
+// --- Phase 6C: Cancellation & Change ---
+
+// CapSalesOperate is the capability Cancel/Change requires. Cancellation is
+// initiated by Cashier work and changes customer charge, so it requires the
+// Sales operating capability rather than preparation.operate: a Barista alone
+// cannot cancel commercial work (spec §13). The constant is declared here so
+// the Preparation route can carry the middleware without importing
+// internal/sales across the ADR-024 boundary.
+const CapSalesOperate = "sales.operate"
+
+// OpCancelUnits is the idempotency action name, stored in
+// idempotency_keys.action (VARCHAR(50)).
+const OpCancelUnits = "preparation.cancel_units"
+
+// Phase 6C business audit event types (spec §15). CHECK_SETTLED is shared
+// with internal/sales: the settlement fact is the same event whichever
+// command produced it, and each slice names the literal independently.
+const (
+	EventPreparationUnitCancelled = "PREPARATION_UNIT_CANCELLED"
+	EventCheckChargeAdjusted      = "CHECK_CHARGE_ADJUSTED"
+	EventCheckSettled             = "CHECK_SETTLED"
+)
+
+// Cancellation kinds. A CHANGE is a Cancellation whose replacement Order was
+// already submitted; the kind selects the alert kind and the replacement
+// requirement (spec §2).
+const (
+	CancelKindCancellation = "CANCELLATION"
+	CancelKindChange       = "CHANGE"
+)
+
+// MaxCancellationUnits is the inclusive upper bound of one Cancellation
+// batch (spec §7.1).
+const MaxCancellationUnits = 50
+
+// Cancellation reason catalog (spec §2). The catalog shares
+// CUSTOMER_REQUEST and OTHER with the other operations; every operation keeps
+// its own allowlist.
+const (
+	ReasonOrderEntryError = "ORDER_ENTRY_ERROR"
+	ReasonItemUnavailable = "ITEM_UNAVAILABLE"
+)
+
+var cancelReasons = []string{
+	ReasonCustomerRequest, ReasonOrderEntryError, ReasonItemUnavailable, ReasonOther,
+}
+
+// ValidateCancelUnitsReason checks a Cancellation reason against the
+// Cancellation catalog.
+func ValidateCancelUnitsReason(reason string) error {
+	return validateReason(reason, cancelReasons)
+}
+
+// ValidateCancelUnitsSelection validates a Cancellation's unit selection:
+// 1 through MaxCancellationUnits non-zero, unique ids. Duplicates are
+// rejected rather than silently deduplicated, and the input is never
+// reordered or mutated — request order is preserved for the response, while
+// the fingerprint and every multi-row lock use separate sorted copies.
+func ValidateCancelUnitsSelection(ids []uuid.UUID) error {
+	if len(ids) < 1 || len(ids) > MaxCancellationUnits {
+		return fmt.Errorf("%w: preparation_unit_ids must contain 1 through %d ids",
+			ErrCancellationSelectionInvalid, MaxCancellationUnits)
+	}
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			return fmt.Errorf("%w: preparation_unit_ids must not contain a zero UUID",
+				ErrCancellationSelectionInvalid)
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return fmt.Errorf("%w: preparation_unit_ids must not repeat %s",
+				ErrCancellationSelectionInvalid, id)
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
+}
+
+// ValidateCancelUnitsCommand validates a Cancellation/Change at the boundary,
+// before any transaction. The note arrives already normalized. Boundary
+// failures carry their own condition sentinels so HTTP mapping never inspects
+// error strings; the request-id shape failure stays the generic invalid-input
+// condition, matching every other command.
+func ValidateCancelUnitsCommand(cmd CancelUnitsCommand, note *string) error {
+	if cmd.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	if err := ValidateCancelUnitsSelection(cmd.PreparationUnitIDs); err != nil {
+		return err
+	}
+	switch cmd.Kind {
+	case CancelKindCancellation:
+		if cmd.ReplacementOrderID != nil {
+			return fmt.Errorf(
+				"%w: %s forbids replacement_order_id",
+				ErrCancellationSelectionInvalid, CancelKindCancellation)
+		}
+	case CancelKindChange:
+		if cmd.ReplacementOrderID == nil {
+			return fmt.Errorf(
+				"%w: %s requires replacement_order_id",
+				ErrReplacementOrderRequired, CancelKindChange)
+		}
+		if *cmd.ReplacementOrderID == uuid.Nil {
+			return fmt.Errorf("%w: replacement_order_id must not be a zero UUID",
+				ErrReplacementOrderRequired)
+		}
+	default:
+		return fmt.Errorf("%w: kind must be %s or %s",
+			ErrCancellationSelectionInvalid, CancelKindCancellation, CancelKindChange)
+	}
+	if err := ValidateCancelUnitsReason(cmd.Reason); err != nil {
+		return err
+	}
+	if err := ValidateCorrectionNote(cmd.Reason, note); err != nil {
+		return err
+	}
+	return nil
+}
