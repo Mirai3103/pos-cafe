@@ -271,6 +271,49 @@ func TestRefundFingerprintExcludesCredentials(t *testing.T) {
 	assert.Contains(t, text, "trả món")
 }
 
+// TestNormalizeRefundReference pins the Manual QR confirmation reference
+// contract: trim surrounding whitespace, collapse a blank to absent, never
+// mutate the caller's value, and bound a present reference to 100 code points.
+func TestNormalizeRefundReference(t *testing.T) {
+	t.Run("treats nil as absent", func(t *testing.T) {
+		normalized, err := NormalizeRefundReference(nil)
+		require.NoError(t, err)
+		assert.Nil(t, normalized)
+	})
+
+	t.Run("collapses a blank reference to absent", func(t *testing.T) {
+		blank := "   "
+		normalized, err := NormalizeRefundReference(&blank)
+		require.NoError(t, err)
+		assert.Nil(t, normalized)
+	})
+
+	t.Run("trims a present reference without mutating the caller's value", func(t *testing.T) {
+		padded := "  FT-20260918-001  "
+		normalized, err := NormalizeRefundReference(&padded)
+		require.NoError(t, err)
+		require.NotNil(t, normalized)
+		assert.Equal(t, "FT-20260918-001", *normalized)
+		assert.Equal(t, "  FT-20260918-001  ", padded,
+			"normalization must not mutate the caller's value")
+	})
+
+	t.Run("accepts exactly 100 runes", func(t *testing.T) {
+		hundred := strings.Repeat("ế", MaxTransactionReferenceLength)
+		normalized, err := NormalizeRefundReference(&hundred)
+		require.NoError(t, err)
+		require.NotNil(t, normalized)
+		assert.Equal(t, hundred, *normalized)
+	})
+
+	t.Run("rejects more than 100 runes", func(t *testing.T) {
+		over := strings.Repeat("ế", MaxTransactionReferenceLength+1)
+		normalized, err := NormalizeRefundReference(&over)
+		assert.ErrorIs(t, err, response.ErrInvalid)
+		assert.Nil(t, normalized)
+	})
+}
+
 // TestRefundNoteNormalization mirrors the Comp note contract for the Refund
 // catalog: trim, collapse a blank to nil, and never mutate the caller's value.
 func TestRefundNoteNormalization(t *testing.T) {

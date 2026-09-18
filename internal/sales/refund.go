@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
 
@@ -407,6 +410,380 @@ func applyRecordRefund(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 
 	return result, audit, nil
+}
+
+// ---------- Phase 6C: Confirm Manual QR Refund ----------
+
+// OpConfirmQRRefund is the idempotency action name stored in
+// idempotency_keys.action (VARCHAR(50)).
+const OpConfirmQRRefund = "sales.confirm_qr_refund"
+
+// EventManualQRRefundCompleted records that staff confirmed the outbound
+// transfer of an approved Manual QR Refund (spec §15).
+const EventManualQRRefundCompleted = "MANUAL_QR_REFUND_COMPLETED"
+
+// ConfirmManualQRRefundCommand confirms that an approved Manual QR Refund's
+// outbound transfer occurred. RefundID is json:"-": it comes from the path,
+// never the body. TransactionReference is the optional outbound bank reference,
+// trimmed and bounded to MaxTransactionReferenceLength characters (spec §9.2).
+type ConfirmManualQRRefundCommand struct {
+	RequestID            uuid.UUID `json:"request_id"`
+	RefundID             uuid.UUID `json:"-"`
+	TransactionReference *string   `json:"transaction_reference"`
+}
+
+// NormalizeRefundReference trims surrounding whitespace from an optional
+// confirmation reference, collapses a blank reference to nil, and bounds a
+// present one to MaxTransactionReferenceLength code points. Callers normalize
+// BEFORE building the fingerprint, so replays of differently padded input stay
+// equal.
+func NormalizeRefundReference(ref *string) (*string, error) {
+	if ref == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*ref)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if runes := utf8.RuneCountInString(trimmed); runes > MaxTransactionReferenceLength {
+		return nil, fmt.Errorf(
+			"%w: transaction_reference is %d characters, maximum is %d",
+			response.ErrInvalid, runes, MaxTransactionReferenceLength)
+	}
+	return &trimmed, nil
+}
+
+// confirmManualQRRefundFingerprint is the credential-free idempotency input of
+// one confirmation: the Refund it attests and the normalized outbound
+// reference. Confirmation carries no Manager Approval, so no credential can
+// shape the hash.
+type confirmManualQRRefundFingerprint struct {
+	RefundID             uuid.UUID `json:"refund_id"`
+	TransactionReference *string   `json:"transaction_reference"`
+}
+
+func confirmManualQRRefundFingerprintFor(refundID uuid.UUID,
+	reference *string,
+) confirmManualQRRefundFingerprint {
+	return confirmManualQRRefundFingerprint{RefundID: refundID, TransactionReference: reference}
+}
+
+// ConfirmManualQRRefundHandler completes an approved Manual QR Refund once
+// staff confirm the outbound transfer. The Manager Approval that authorized the
+// Refund is not repeated: current sales.operate authority plus the recorded
+// intent are enough, because confirmation attests that the approved money
+// movement occurred rather than approving a new one (spec §9.2).
+type ConfirmManualQRRefundHandler struct{ runner *Runner }
+
+// NewConfirmManualQRRefundHandler creates a ConfirmManualQRRefundHandler.
+func NewConfirmManualQRRefundHandler(runner *Runner) *ConfirmManualQRRefundHandler {
+	return &ConfirmManualQRRefundHandler{runner: runner}
+}
+
+// Handle executes the confirmation.
+//
+// The command is validated and its reference normalized BEFORE the mutation
+// begins, so a malformed request never claims its idempotency key. The command
+// requires the initiator's current sales.operate and no second approval.
+// Success answers 200; the route layer maps domain errors through
+// ErrorResponse.
+func (h *ConfirmManualQRRefundHandler) Handle(ctx context.Context, actor Actor,
+	cmd ConfirmManualQRRefundCommand,
+) (int, RefundResult, error) {
+	if cmd.RequestID == uuid.Nil {
+		return 0, RefundResult{}, fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	if cmd.RefundID == uuid.Nil {
+		return 0, RefundResult{}, fmt.Errorf("%w: refund_id is required", response.ErrInvalid)
+	}
+	reference, err := NormalizeRefundReference(cmd.TransactionReference)
+	if err != nil {
+		return 0, RefundResult{}, err
+	}
+
+	spec := MutationSpec{
+		RequestID:   cmd.RequestID,
+		Operation:   OpConfirmQRRefund,
+		Fingerprint: confirmManualQRRefundFingerprintFor(cmd.RefundID, reference),
+		Required:    []string{CapSalesOperate},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec,
+		func(mc MutationContext) (int, RefundResult, AuditRecord, error) {
+			result, audit, err := applyConfirmManualQRRefund(ctx, h.runner, mc.Queries,
+				actor, cmd, reference)
+			if err != nil {
+				return 0, RefundResult{}, AuditRecord{}, err
+			}
+			return http.StatusOK, result, audit, nil
+		})
+}
+
+// resolveRefundCheckID resolves the Refund's Check before the mutation
+// transaction takes its locks. LockRefundForConfirmation is the generated
+// refund-by-id read and it takes the Refund row lock, so this pre-resolution
+// runs on the Runner's pooled handle outside the mutation: the statement's
+// implicit transaction releases that lock as soon as the row is scanned, and
+// the mutation transaction still acquires the Check first (spec §11.1). The
+// Refund row is append-only, so the resolved Check cannot go stale, and the
+// mutation re-locks the row under the Check lock and revalidates it.
+func resolveRefundCheckID(ctx context.Context, runner *Runner, refundID uuid.UUID) (uuid.UUID, error) {
+	row, err := runner.queries.LockRefundForConfirmation(ctx, refundID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return uuid.Nil, fmt.Errorf("%w: %s", ErrRefundNotFound, refundID)
+		}
+		return uuid.Nil, fmt.Errorf("resolve refund check: %w", err)
+	}
+	return row.CheckID, nil
+}
+
+// applyConfirmManualQRRefund is the mutation body. The lock order is the §11.1
+// protocol: the Check, then its Session, then the current open Shift, then the
+// Refund row itself. After the locks it re-derives the obligation the
+// completion is about to resolve, so a Refund recorded against an obligation
+// that later shrank — a concurrent Void or an out-of-band completion — cannot
+// move money it no longer has, and a completed Refund can never make a Check's
+// balance positive (spec §6.2). It never edits the Refund row or its
+// allocations.
+func applyConfirmManualQRRefund(ctx context.Context, runner *Runner, q *sqlc.Queries,
+	actor Actor, cmd ConfirmManualQRRefundCommand, reference *string,
+) (RefundResult, AuditRecord, error) {
+	checkID, err := resolveRefundCheckID(ctx, runner, cmd.RefundID)
+	if err != nil {
+		return RefundResult{}, AuditRecord{}, err
+	}
+
+	checkRow, err := q.LockCheckForPayment(ctx, checkID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return RefundResult{}, AuditRecord{}, fmt.Errorf(
+				"%w: refund %s references check %s",
+				ErrFinancialInvariantViolated, cmd.RefundID, checkID)
+		}
+		return RefundResult{}, AuditRecord{}, fmt.Errorf("lock confirmation check: %w", err)
+	}
+	if _, err := q.LockServiceSessionForUpdate(ctx, checkRow.ServiceSessionID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return RefundResult{}, AuditRecord{}, fmt.Errorf(
+				"%w: session %s", ErrServiceSessionNotFound, checkRow.ServiceSessionID)
+		}
+		return RefundResult{}, AuditRecord{}, fmt.Errorf("lock confirmation service session: %w", err)
+	}
+	shiftID, err := lockOpenSalesShift(ctx, q)
+	if err != nil {
+		return RefundResult{}, AuditRecord{}, err
+	}
+	if shiftID == uuid.Nil {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf("%w: no sales shift is open",
+			ErrOpenShiftRequired)
+	}
+	refundRow, err := q.LockRefundForConfirmation(ctx, cmd.RefundID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return RefundResult{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrRefundNotFound, cmd.RefundID)
+		}
+		return RefundResult{}, AuditRecord{}, fmt.Errorf("lock refund for confirmation: %w", err)
+	}
+
+	// Revalidate the locked Refund. The Check attribution is immutable, so a
+	// disagreement is a stored defect rather than a client condition.
+	if refundRow.CheckID != checkID {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf(
+			"%w: refund %s references check %s after locking %s",
+			ErrFinancialInvariantViolated, refundRow.ID, refundRow.CheckID, checkID)
+	}
+	if refundRow.Method != RefundMethodManualQR {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf(
+			"%w: refund %s is %s", ErrRefundMethodMismatch, refundRow.ID, refundRow.Method)
+	}
+	if refundRow.CompletionID.Valid {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf(
+			"%w: refund %s", ErrRefundAlreadyCompleted, refundRow.ID)
+	}
+	if refundRow.SalesShiftID != shiftID {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf(
+			"%w: refund %s was issued in shift %s, not the open shift %s",
+			ErrOpenShiftRequired, refundRow.ID, refundRow.SalesShiftID, shiftID)
+	}
+
+	// Re-derive the obligation under the Check lock before appending anything.
+	if err := assertRefundConfirmationHeadroom(ctx, q, refundRow, checkRow.ChargeVnd); err != nil {
+		return RefundResult{}, AuditRecord{}, err
+	}
+
+	completedAt, err := q.GetSalesOccurredAt(ctx)
+	if err != nil {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf("read confirmation time: %w", err)
+	}
+	completion, err := q.InsertRefundCompletion(ctx, sqlc.InsertRefundCompletionParams{
+		RefundID:                   refundRow.ID,
+		TransactionReference:       nullString(reference),
+		CompletedByStaffIdentityID: actor.StaffID,
+		StaffAccessSessionID:       actor.SessionID,
+		CompletedAt:                completedAt,
+	})
+	if err != nil {
+		return RefundResult{}, AuditRecord{}, fmt.Errorf("insert refund completion: %w", err)
+	}
+
+	refundResponse, err := loadConfirmedRefundResponse(ctx, q, refundRow, completion)
+	if err != nil {
+		return RefundResult{}, AuditRecord{}, err
+	}
+	result := RefundResult{Scope: CompScopeLiveCheck, Refund: refundResponse}
+	if refundRow.CompletedSaleID.Valid {
+		saleID := refundRow.CompletedSaleID.UUID
+		history, err := loadPostSaleCorrectionHistory(ctx, q, saleID, &refundResponse)
+		if err != nil {
+			return RefundResult{}, AuditRecord{}, err
+		}
+		result.Scope = CompScopePostSale
+		result.CompletedSaleID = &saleID
+		result.PostSaleCorrections = history
+	} else {
+		session, err := LoadServiceSession(ctx, q, checkRow.ServiceSessionID)
+		if err != nil {
+			return RefundResult{}, AuditRecord{}, err
+		}
+		result.ServiceSession = &session
+	}
+
+	audit := AuditRecord{
+		EventType: EventManualQRRefundCompleted,
+		Details: refundCompletedAudit{
+			RefundID:                      refundRow.ID,
+			CheckID:                       refundRow.CheckID,
+			CompletedSaleID:               nullUUIDPtr(refundRow.CompletedSaleID),
+			SalesShiftID:                  refundRow.SalesShiftID,
+			Method:                        refundRow.Method,
+			AmountVND:                     refundRow.AmountVnd,
+			CompletedByStaffIdentityID:    completion.CompletedByStaffIdentityID,
+			CompletedStaffAccessSessionID: completion.StaffAccessSessionID,
+			CompletedAt:                   completion.CompletedAt,
+		},
+	}
+	return result, audit, nil
+}
+
+// assertRefundConfirmationHeadroom re-derives, under the Check lock, the
+// obligation this completion is about to resolve, and refuses an amount above
+// it. The live branch uses the corrected Check financials with pending intents
+// still excluded; the post-sale branch uses the Completed Sale's outstanding
+// correction amount. A refund can therefore never promise more than its source
+// still owes back, even if a concurrent Void or completion shrank the
+// obligation after the Refund was recorded (spec §6.2).
+func assertRefundConfirmationHeadroom(ctx context.Context, q *sqlc.Queries,
+	refund sqlc.LockRefundForConfirmationRow, storedChargeVND int64,
+) error {
+	if refund.CompletedSaleID.Valid {
+		outstandingVND, err := loadOutstandingPostSaleRefundVND(ctx, q, refund.CompletedSaleID.UUID)
+		if err != nil {
+			return err
+		}
+		if refund.AmountVnd > outstandingVND {
+			return fmt.Errorf(
+				"%w: refund %s amount %d exceeds sale %s outstanding %d",
+				ErrRefundExceedsPendingRefund, refund.ID, refund.AmountVnd,
+				refund.CompletedSaleID.UUID, outstandingVND)
+		}
+		return nil
+	}
+
+	pendingVND, err := loadCheckPendingRefundVND(ctx, q, refund.CheckID, storedChargeVND)
+	if err != nil {
+		return err
+	}
+	if refund.AmountVnd > pendingVND {
+		return fmt.Errorf(
+			"%w: refund %s amount %d exceeds check %s pending refund %d",
+			ErrRefundExceedsPendingRefund, refund.ID, refund.AmountVnd, refund.CheckID, pendingVND)
+	}
+	return nil
+}
+
+// loadConfirmedRefundResponse rebuilds the response for the Refund the
+// confirmation just completed, from the locked Refund row and the completion it
+// appended. The Refund row's reason, note, and identities live on the source
+// scope's read — the live Check's Refunds or the Completed Sale's additive
+// history — so the response carries the same shape Record Refund returns, now
+// with derived state COMPLETED.
+func loadConfirmedRefundResponse(ctx context.Context, q *sqlc.Queries,
+	refund sqlc.LockRefundForConfirmationRow, completion sqlc.RefundCompletion,
+) (RefundResponse, error) {
+	fact := sqlc.Refund{
+		ID:              refund.ID,
+		CheckID:         refund.CheckID,
+		CompletedSaleID: refund.CompletedSaleID,
+		SalesShiftID:    refund.SalesShiftID,
+		Method:          refund.Method,
+		AmountVnd:       refund.AmountVnd,
+		CreatedAt:       refund.CreatedAt,
+	}
+
+	if refund.CompletedSaleID.Valid {
+		rows, err := q.ListCompletedSalePostSaleCorrections(ctx, refund.CompletedSaleID.UUID)
+		if err != nil {
+			return RefundResponse{}, fmt.Errorf("load post-sale corrections: %w", err)
+		}
+		found := false
+		for _, row := range rows {
+			if !row.EntryKind.Valid || row.EntryKind.String != postSaleEntryKindRefund ||
+				!row.RefundID.Valid || row.RefundID.UUID != refund.ID {
+				continue
+			}
+			if !row.Reason.Valid || !row.ActorStaffIdentityID.Valid ||
+				!row.ApprovedByStaffIdentityID.Valid {
+				return RefundResponse{}, fmt.Errorf(
+					"%w: post-sale refund %s is missing its recorded reason or identities",
+					ErrFinancialInvariantViolated, refund.ID)
+			}
+			fact.Reason = row.Reason.String
+			fact.Note = row.Note
+			fact.ActorStaffIdentityID = row.ActorStaffIdentityID.UUID
+			fact.ApprovedByStaffIdentityID = row.ApprovedByStaffIdentityID.UUID
+			found = true
+			break
+		}
+		if !found {
+			return RefundResponse{}, fmt.Errorf(
+				"%w: post-sale refund %s is absent from sale %s's history",
+				ErrFinancialInvariantViolated, refund.ID, refund.CompletedSaleID.UUID)
+		}
+	} else {
+		rows, err := q.ListCheckRefunds(ctx, refund.CheckID)
+		if err != nil {
+			return RefundResponse{}, fmt.Errorf("load check refunds: %w", err)
+		}
+		found := false
+		for _, row := range rows {
+			if row.ID != refund.ID {
+				continue
+			}
+			fact.Reason = row.Reason
+			fact.Note = row.Note
+			fact.ActorStaffIdentityID = row.ActorStaffIdentityID
+			fact.StaffAccessSessionID = row.StaffAccessSessionID
+			fact.ApprovedByStaffIdentityID = row.ApprovedByStaffIdentityID
+			found = true
+			break
+		}
+		if !found {
+			return RefundResponse{}, fmt.Errorf(
+				"%w: live refund %s is absent from check %s's refunds",
+				ErrFinancialInvariantViolated, refund.ID, refund.CheckID)
+		}
+	}
+
+	paymentRows, err := q.ListRefundPaymentAllocations(ctx, refund.ID)
+	if err != nil {
+		return RefundResponse{}, fmt.Errorf("load refund payment allocations: %w", err)
+	}
+	adjustmentRows, err := q.ListRefundAdjustmentAllocations(ctx, refund.ID)
+	if err != nil {
+		return RefundResponse{}, fmt.Errorf("load refund adjustment allocations: %w", err)
+	}
+	return refundResponseFromFact(fact, paymentRows, adjustmentRows, &completion), nil
 }
 
 // assertRefundCapacity sums every existing Refund allocation against each

@@ -343,6 +343,9 @@ func salesRoutes() []struct {
 					"manager_pin":         "1234",
 				},
 			}},
+		{"confirm refund", http.MethodPost,
+			"/api/v1/sales/refunds/" + uuid.NewString() + "/confirm",
+			map[string]any{"request_id": uuid.New()}},
 	}
 }
 

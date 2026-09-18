@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -245,6 +246,114 @@ func (e *refundEnv) voidPaymentDirect(t *testing.T, paymentID uuid.UUID, amountV
 		VALUES ($1, $2, $3, 'PAYMENT_RECORDED_IN_ERROR', $4, $5, $4)`,
 		paymentID, e.ShiftID, amountVND, e.Actor.StaffID, e.Actor.SessionID)
 	require.NoError(t, err)
+}
+
+// ---------- Confirmation helpers ----------
+
+// pendingManualQRRefund records a live pending Manual QR Refund against a
+// fully paid, comped Takeaway Check and returns the Session and the result.
+func (e *refundEnv) pendingManualQRRefund(t *testing.T) (
+	sales.ServiceSessionResponse, sales.RefundResult,
+) {
+	t.Helper()
+	session, _, wasteID, checkID := e.paidTakeawayWastedUnitWithMethod(t,
+		sales.PaymentMethodManualQR)
+	comp := e.compOK(t, e.compCommand(t, wasteID, sales.CompReasonCafeError, nil))
+	paymentID := e.solePaymentIDForCheck(t, checkID)
+	result := e.refundOK(t, e.refundCommand(checkID, sales.RefundMethodManualQR,
+		paymentID, comp.Comp.ChargeAdjustmentID, 25000))
+	require.Equal(t, sales.RefundStatePending, result.Refund.State)
+	return session, result
+}
+
+// confirmCommand builds a confirmation command for one Refund.
+func (e *refundEnv) confirmCommand(refundID uuid.UUID, reference *string,
+) sales.ConfirmManualQRRefundCommand {
+	return sales.ConfirmManualQRRefundCommand{
+		RequestID:            uuid.New(),
+		RefundID:             refundID,
+		TransactionReference: reference,
+	}
+}
+
+// confirm runs confirmation and returns the mapped HTTP status and raw error.
+func (e *refundEnv) confirm(t *testing.T, cmd sales.ConfirmManualQRRefundCommand) (
+	int, sales.RefundResult, error,
+) {
+	t.Helper()
+	status, result, err := sales.NewConfirmManualQRRefundHandler(e.Runner).
+		Handle(context.Background(), e.Actor, cmd)
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return status, result, err
+}
+
+// confirmAs runs confirmation as another actor, for authorization tests.
+func (e *refundEnv) confirmAs(t *testing.T, actor sales.Actor,
+	cmd sales.ConfirmManualQRRefundCommand,
+) (int, sales.RefundResult, error) {
+	t.Helper()
+	status, result, err := sales.NewConfirmManualQRRefundHandler(e.Runner).
+		Handle(context.Background(), actor, cmd)
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return status, result, err
+}
+
+// confirmOK runs confirmation and requires the 200 the route promises.
+func (e *refundEnv) confirmOK(t *testing.T, cmd sales.ConfirmManualQRRefundCommand) sales.RefundResult {
+	t.Helper()
+	status, result, err := e.confirm(t, cmd)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	return result
+}
+
+type refundCompletionFact struct {
+	ID                   uuid.UUID
+	TransactionReference sql.NullString
+	CompletedBy          uuid.UUID
+	SessionID            uuid.UUID
+	CompletedAt          time.Time
+}
+
+func (e *refundEnv) refundCompletionFactFor(t *testing.T, refundID uuid.UUID) refundCompletionFact {
+	t.Helper()
+	var row refundCompletionFact
+	require.NoError(t, e.DB.QueryRow(`
+		SELECT id, transaction_reference, completed_by_staff_identity_id,
+		       staff_access_session_id, completed_at
+		FROM refund_completions WHERE refund_id = $1`, refundID).Scan(
+		&row.ID, &row.TransactionReference, &row.CompletedBy,
+		&row.SessionID, &row.CompletedAt))
+	return row
+}
+
+// insertCompletedRefundDirect appends an out-of-band completed post-sale
+// Refund, so a test can move a Completed Sale's outstanding amount between
+// recording a pending intent and confirming it. It is a race fixture, not a
+// command path.
+func (e *refundEnv) insertCompletedRefundDirect(t *testing.T, checkID, saleID uuid.UUID,
+	amountVND int64,
+) uuid.UUID {
+	t.Helper()
+	var refundID uuid.UUID
+	require.NoError(t, e.DB.QueryRow(`
+		INSERT INTO refunds (check_id, completed_sale_id, sales_shift_id, method,
+		                     amount_vnd, reason, actor_staff_identity_id,
+		                     staff_access_session_id, approved_by_staff_identity_id)
+		VALUES ($1, $2, $3, 'CASH', $4, 'CUSTOMER_REQUEST', $5, $6, $5)
+		RETURNING id`,
+		checkID, saleID, e.ShiftID, amountVND, e.Actor.StaffID, e.Actor.SessionID,
+	).Scan(&refundID))
+	_, err := e.DB.Exec(`
+		INSERT INTO refund_completions (refund_id, completed_by_staff_identity_id,
+		                                staff_access_session_id)
+		VALUES ($1, $2, $3)`, refundID, e.Actor.StaffID, e.Actor.SessionID)
+	require.NoError(t, err)
+	return refundID
 }
 
 // ---------- Tests ----------
@@ -1086,6 +1195,406 @@ func TestRecordRefundInjectedFailures(t *testing.T) {
 	})
 }
 
+// ---------- Manual QR confirmation tests ----------
+
+// TestConfirmManualQRRefundCompletes confirms a pending Manual QR Refund: one
+// append-only completion with the confirmer identity, a database timestamp,
+// and the trimmed outbound reference; the Refund becomes COMPLETED and the
+// Check's effective receipt and pending refund move together.
+func TestConfirmManualQRRefundCompletes(t *testing.T) {
+	env := newRefundEnv(t)
+	session, pending := env.pendingManualQRRefund(t)
+	refundID := pending.Refund.ID
+	checkID := pending.Refund.CheckID
+
+	before := env.projectedCheck(t, session.ID, checkID)
+	require.EqualValues(t, 25000, before.PendingRefundVND)
+	require.EqualValues(t, 25000, before.EffectiveReceivedVND)
+	require.EqualValues(t, 0, before.TotalRefundedVND)
+
+	reference := "  FT-20260918-001  "
+	result := env.confirmOK(t, env.confirmCommand(refundID, &reference))
+
+	assert.Equal(t, sales.CompScopeLiveCheck, result.Scope)
+	assert.Nil(t, result.CompletedSaleID)
+	require.NotNil(t, result.ServiceSession,
+		"a live confirmation returns the updated Service Session")
+	refund := result.Refund
+	assert.Equal(t, refundID, refund.ID)
+	assert.Equal(t, sales.RefundStateCompleted, refund.State)
+	assert.Equal(t, sales.RefundMethodManualQR, refund.Method)
+	assert.EqualValues(t, 25000, refund.AmountVND)
+	require.NotNil(t, refund.Completion)
+	require.NotNil(t, refund.Completion.TransactionReference)
+	assert.Equal(t, "FT-20260918-001", *refund.Completion.TransactionReference)
+	assert.Equal(t, env.Actor.StaffID, refund.Completion.CompletedByStaffIdentityID)
+	assert.Equal(t, env.Actor.SessionID, refund.Completion.CompletedStaffAccessSessionID)
+	assert.False(t, refund.Completion.CompletedAt.IsZero())
+
+	fact := env.refundCompletionFactFor(t, refundID)
+	require.True(t, fact.TransactionReference.Valid)
+	assert.Equal(t, "FT-20260918-001", fact.TransactionReference.String)
+	assert.Equal(t, env.Actor.StaffID, fact.CompletedBy)
+	assert.Equal(t, env.Actor.SessionID, fact.SessionID)
+	assert.WithinDuration(t, time.Now(), fact.CompletedAt, time.Minute)
+
+	// The Refund fact and its allocation sets are never rewritten.
+	refundFact := env.refundFactFor(t, refundID)
+	assert.Equal(t, env.ShiftID, refundFact.SalesShiftID)
+	assert.EqualValues(t, 25000, refundFact.AmountVND)
+	paymentVND, adjustmentVND := env.refundAllocationSums(t, refundID)
+	assert.EqualValues(t, 25000, paymentVND)
+	assert.EqualValues(t, 25000, adjustmentVND)
+
+	assert.Equal(t, 1, env.refundCompletionCount(t, refundID))
+	assert.Equal(t, 1, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+	assert.Equal(t, 0, env.countAuditEvents(t, sales.EventRefundCompleted),
+		"the cash-only REFUND_COMPLETED event is not written by confirmation")
+
+	after := env.projectedCheck(t, session.ID, checkID)
+	assert.EqualValues(t, 25000, after.TotalRefundedVND)
+	assert.EqualValues(t, 0, after.EffectiveReceivedVND)
+	assert.EqualValues(t, 0, after.PendingRefundVND)
+	assert.EqualValues(t, 0, after.BalanceVND)
+	assert.Equal(t, sales.CheckStateSettled, after.State)
+	require.Len(t, after.Refunds, 1)
+	assert.Equal(t, sales.RefundStateCompleted, after.Refunds[0].State)
+}
+
+// TestConfirmManualQRRefundWithoutReference confirms that the outbound
+// reference is optional: a missing or blank one stores SQL NULL.
+func TestConfirmManualQRRefundWithoutReference(t *testing.T) {
+	env := newRefundEnv(t)
+	_, pending := env.pendingManualQRRefund(t)
+
+	result := env.confirmOK(t, env.confirmCommand(pending.Refund.ID, nil))
+	assert.Equal(t, sales.RefundStateCompleted, result.Refund.State)
+	require.NotNil(t, result.Refund.Completion)
+	assert.Nil(t, result.Refund.Completion.TransactionReference)
+
+	fact := env.refundCompletionFactFor(t, pending.Refund.ID)
+	assert.False(t, fact.TransactionReference.Valid)
+
+	blank := "   "
+	_, _, err := env.confirm(t, env.confirmCommand(pending.Refund.ID, &blank))
+	require.ErrorIs(t, err, sales.ErrRefundAlreadyCompleted)
+}
+
+// TestConfirmManualQRRefundRejectsCash refuses a Cash Refund: its money moved
+// in the recording transaction, so it has nothing left to confirm and its
+// method is not MANUAL_QR.
+func TestConfirmManualQRRefundRejectsCash(t *testing.T) {
+	env := newRefundEnv(t)
+	_, _, wasteID, checkID := env.paidTakeawayWastedUnitWithMethod(t,
+		sales.PaymentMethodCash)
+	comp := env.compOK(t, env.compCommand(t, wasteID, sales.CompReasonCafeError, nil))
+	paymentID := env.solePaymentIDForCheck(t, checkID)
+	cash := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash,
+		paymentID, comp.Comp.ChargeAdjustmentID, 25000))
+	require.Equal(t, sales.RefundStateCompleted, cash.Refund.State)
+
+	status, _, err := env.confirm(t, env.confirmCommand(cash.Refund.ID, nil))
+	require.ErrorIs(t, err, sales.ErrRefundMethodMismatch)
+	assert.Equal(t, http.StatusConflict, status)
+	assert.Equal(t, 1, env.refundCompletionCount(t, cash.Refund.ID),
+		"the cash completion remains the only one")
+	assert.Equal(t, 0, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+}
+
+// TestConfirmManualQRRefundRejectsNonCurrentShift proves a pending Refund can
+// only be confirmed while the Shift that recorded it is the current open one.
+func TestConfirmManualQRRefundRejectsNonCurrentShift(t *testing.T) {
+	t.Run("no shift is open", func(t *testing.T) {
+		env := newRefundEnv(t)
+		_, pending := env.pendingManualQRRefund(t)
+		env.CloseShift(t)
+
+		status, _, err := env.confirm(t, env.confirmCommand(pending.Refund.ID, nil))
+		require.ErrorIs(t, err, sales.ErrOpenShiftRequired)
+		assert.Equal(t, http.StatusConflict, status)
+		assert.Equal(t, 0, env.refundCompletionCount(t, pending.Refund.ID))
+	})
+
+	t.Run("the refund belongs to an earlier shift", func(t *testing.T) {
+		env := newRefundEnv(t)
+		_, pending := env.pendingManualQRRefund(t)
+		env.CloseShift(t)
+		env.ShiftID = seedOpenShift(t, env.Queries, env.Actor.StaffID)
+
+		status, _, err := env.confirm(t, env.confirmCommand(pending.Refund.ID, nil))
+		require.ErrorIs(t, err, sales.ErrOpenShiftRequired)
+		assert.Equal(t, http.StatusConflict, status)
+		assert.Equal(t, 0, env.refundCompletionCount(t, pending.Refund.ID))
+		assert.Equal(t, 0, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+	})
+}
+
+// TestConfirmManualQRRefundAlreadyCompleted refuses a second confirmation under
+// a fresh request id: one Refund admits exactly one completion.
+func TestConfirmManualQRRefundAlreadyCompleted(t *testing.T) {
+	env := newRefundEnv(t)
+	_, pending := env.pendingManualQRRefund(t)
+	env.confirmOK(t, env.confirmCommand(pending.Refund.ID, nil))
+
+	status, _, err := env.confirm(t, env.confirmCommand(pending.Refund.ID, nil))
+	require.ErrorIs(t, err, sales.ErrRefundAlreadyCompleted)
+	assert.Equal(t, http.StatusConflict, status)
+	assert.Equal(t, 1, env.refundCompletionCount(t, pending.Refund.ID))
+	assert.Equal(t, 1, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+}
+
+// TestConfirmManualQRRefundReplay proves an exact replay returns the stored
+// result with no duplicate completion or audit, while reusing the request id
+// for a different reference is a conflict.
+func TestConfirmManualQRRefundReplay(t *testing.T) {
+	env := newRefundEnv(t)
+	_, pending := env.pendingManualQRRefund(t)
+	reference := "FT-REPLAY"
+	cmd := env.confirmCommand(pending.Refund.ID, &reference)
+	first := env.confirmOK(t, cmd)
+
+	status, second, err := env.confirm(t, cmd)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	firstJSON, err := json.Marshal(first)
+	require.NoError(t, err)
+	secondJSON, err := json.Marshal(second)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(firstJSON), string(secondJSON),
+		"an exact replay returns the stored result")
+
+	assert.Equal(t, 1, env.refundCompletionCount(t, pending.Refund.ID))
+	assert.Equal(t, 1, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+	assert.Equal(t, 1, env.idempotencyClaimCount(t, env.Actor, cmd.RequestID))
+
+	stored := env.storedResultBody(t, env.Actor, cmd.RequestID)
+	assert.NotContains(t, stored, `"manager_pin"`)
+	assert.NotContains(t, stored, `"approver_login_code"`)
+
+	other := cmd
+	otherReference := "FT-OTHER"
+	other.TransactionReference = &otherReference
+	status, _, err = env.confirm(t, other)
+	require.ErrorIs(t, err, sales.ErrRequestConflict)
+	assert.Equal(t, http.StatusConflict, status)
+}
+
+// TestConfirmManualQRRefundAuthorization covers the current sales.operate
+// requirement, the absence of a second Manager Approval, and replay denial
+// after the initiator loses authority.
+func TestConfirmManualQRRefundAuthorization(t *testing.T) {
+	t.Run("denies an initiator without sales.operate", func(t *testing.T) {
+		env := newRefundEnv(t)
+		_, pending := env.pendingManualQRRefund(t)
+
+		status, _, err := env.confirmAs(t, env.BaristaActor(),
+			env.confirmCommand(pending.Refund.ID, nil))
+		require.ErrorIs(t, err, sales.ErrForbidden)
+		assert.Equal(t, http.StatusForbidden, status)
+		assert.Equal(t, 0, env.refundCompletionCount(t, pending.Refund.ID))
+		assert.Equal(t, 1, env.countAuditEvents(t, sales.EventAuthorizationDenied))
+		assert.Equal(t, 0, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+	})
+
+	t.Run("a cashier confirms without a second approval", func(t *testing.T) {
+		env := newRefundEnv(t)
+		_, pending := env.pendingManualQRRefund(t)
+		cashier := env.newCashierActor(t)
+
+		status, result, err := env.confirmAs(t, cashier,
+			env.confirmCommand(pending.Refund.ID, nil))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status)
+		require.NotNil(t, result.Refund.Completion)
+		assert.Equal(t, cashier.StaffID, result.Refund.Completion.CompletedByStaffIdentityID)
+		assert.Equal(t, cashier.SessionID, result.Refund.Completion.CompletedStaffAccessSessionID)
+		assert.Equal(t, 1, env.refundCompletionCount(t, pending.Refund.ID))
+	})
+
+	t.Run("replay is denied once the initiator is disabled", func(t *testing.T) {
+		env := newRefundEnv(t)
+		_, pending := env.pendingManualQRRefund(t)
+		cashier := env.newCashierActor(t)
+		cmd := env.confirmCommand(pending.Refund.ID, nil)
+
+		status, first, err := env.confirmAs(t, cashier, cmd)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status)
+
+		_, err = env.DB.Exec(
+			`UPDATE staff_identities SET enabled = false WHERE id = $1`, cashier.StaffID)
+		require.NoError(t, err)
+
+		status, _, err = env.confirmAs(t, cashier, cmd)
+		require.ErrorIs(t, err, sales.ErrForbidden)
+		assert.Equal(t, http.StatusForbidden, status)
+		assert.Equal(t, 1, env.refundCompletionCount(t, pending.Refund.ID))
+		assert.Equal(t, first.Refund.ID, pending.Refund.ID)
+	})
+}
+
+// TestConfirmManualQRRefundPostSale completes a post-sale Manual QR Refund:
+// the Completed Sale's outstanding correction drops to zero and the immutable
+// closed core rows stay untouched.
+func TestConfirmManualQRRefundPostSale(t *testing.T) {
+	env := newRefundEnv(t)
+	session, _, wasteID, checkID := env.paidTakeawayWastedUnitWithMethod(t,
+		sales.PaymentMethodManualQR)
+	sale := env.Close(t, session.ID)
+	comp := env.compOK(t, env.compCommand(t, wasteID, sales.CompReasonCafeError, nil))
+	require.Equal(t, sales.CompScopePostSale, comp.Scope)
+	paymentID := env.solePaymentIDForCheck(t, checkID)
+	pending := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+		paymentID, comp.Comp.ChargeAdjustmentID, 25000))
+	require.Equal(t, sales.RefundStatePending, pending.Refund.State)
+
+	before := env.compCheck(t, checkID)
+	reference := "FT-POST-SALE"
+	result := env.confirmOK(t, env.confirmCommand(pending.Refund.ID, &reference))
+
+	assert.Equal(t, sales.CompScopePostSale, result.Scope)
+	assert.Nil(t, result.ServiceSession, "a post-sale confirmation returns no mutable Service Session")
+	require.NotNil(t, result.CompletedSaleID)
+	assert.Equal(t, sale.ID, *result.CompletedSaleID)
+	assert.Equal(t, sales.RefundStateCompleted, result.Refund.State)
+	require.NotNil(t, result.Refund.Completion)
+	require.NotNil(t, result.Refund.Completion.TransactionReference)
+	assert.Equal(t, "FT-POST-SALE", *result.Refund.Completion.TransactionReference)
+
+	require.Len(t, result.PostSaleCorrections, 1)
+	entry := result.PostSaleCorrections[0]
+	assert.EqualValues(t, 0, entry.OutstandingRefundVND)
+	require.Len(t, entry.Refunds, 1)
+	assert.Equal(t, pending.Refund.ID, entry.Refunds[0].ID)
+	assert.Equal(t, sales.RefundStateCompleted, entry.Refunds[0].State)
+
+	after := env.compCheck(t, checkID)
+	assert.Equal(t, before.State, after.State)
+	assert.EqualValues(t, before.ChargeVND, after.ChargeVND)
+	assert.Equal(t, before.EvidenceCount, after.EvidenceCount)
+	assert.Equal(t, 1, env.refundCompletionCount(t, pending.Refund.ID))
+	assert.Equal(t, 1, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+}
+
+// TestConfirmManualQRRefundRejectsVoidedPaymentOvercommit proves confirmation
+// re-derives the live obligation under the Check lock: a Void that removes the
+// valid receipt after the intent was recorded leaves nothing to complete.
+func TestConfirmManualQRRefundRejectsVoidedPaymentOvercommit(t *testing.T) {
+	env := newRefundEnv(t)
+	session, pending := env.pendingManualQRRefund(t)
+	paymentID := env.solePaymentIDForCheck(t, pending.Refund.CheckID)
+	env.voidPaymentDirect(t, paymentID, 25000)
+
+	projected := env.projectedCheck(t, session.ID, pending.Refund.CheckID)
+	require.EqualValues(t, 0, projected.PendingRefundVND)
+	require.EqualValues(t, 0, projected.EffectiveReceivedVND)
+
+	status, _, err := env.confirm(t, env.confirmCommand(pending.Refund.ID, nil))
+	require.ErrorIs(t, err, sales.ErrRefundExceedsPendingRefund)
+	assert.Equal(t, http.StatusConflict, status)
+	assert.Equal(t, 0, env.refundCompletionCount(t, pending.Refund.ID))
+	assert.Equal(t, 0, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+
+	// The refusal leaves the intent exactly as it was.
+	refunded := env.projectedCheck(t, session.ID, pending.Refund.CheckID)
+	require.Len(t, refunded.Refunds, 1)
+	assert.Equal(t, sales.RefundStatePending, refunded.Refunds[0].State)
+}
+
+// TestConfirmManualQRRefundRejectsPostSaleOvercommit proves the post-sale
+// confirmation re-derives the Completed Sale's outstanding amount: once a
+// completed Refund reduces it below a pending intent, that intent cannot move.
+func TestConfirmManualQRRefundRejectsPostSaleOvercommit(t *testing.T) {
+	env := newRefundEnv(t)
+	session, _, wasteID, checkID := env.paidTakeawayWastedUnitWithMethod(t,
+		sales.PaymentMethodManualQR)
+	sale := env.Close(t, session.ID)
+	comp := env.compOK(t, env.compCommand(t, wasteID, sales.CompReasonCafeError, nil))
+	require.Equal(t, sales.CompScopePostSale, comp.Scope)
+	paymentID := env.solePaymentIDForCheck(t, checkID)
+	pending := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+		paymentID, comp.Comp.ChargeAdjustmentID, 10000))
+
+	// An out-of-band completed Refund reduces the 25,000 outstanding below the
+	// pending 10,000, as a concurrent completion outside the record gate would.
+	env.insertCompletedRefundDirect(t, checkID, sale.ID, 20000)
+
+	status, _, err := env.confirm(t, env.confirmCommand(pending.Refund.ID, nil))
+	require.ErrorIs(t, err, sales.ErrRefundExceedsPendingRefund)
+	assert.Equal(t, http.StatusConflict, status)
+	assert.Equal(t, 0, env.refundCompletionCount(t, pending.Refund.ID))
+	assert.Equal(t, 0, env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+}
+
+// TestConfirmManualQRRefundInjectedFailures proves every failure inside the
+// transaction — the completion and the executor's stored result — rolls back
+// the whole command, the idempotency claim included.
+func TestConfirmManualQRRefundInjectedFailures(t *testing.T) {
+	type fixture struct {
+		env      *refundEnv
+		refundID uuid.UUID
+		command  sales.ConfirmManualQRRefundCommand
+	}
+
+	newFixture := func(t *testing.T) fixture {
+		t.Helper()
+		env := newRefundEnv(t)
+		_, pending := env.pendingManualQRRefund(t)
+		return fixture{
+			env:      env,
+			refundID: pending.Refund.ID,
+			command:  env.confirmCommand(pending.Refund.ID, nil),
+		}
+	}
+	assertRolledBack := func(t *testing.T, f fixture) {
+		t.Helper()
+		assert.Equal(t, 0, f.env.refundCompletionCount(t, f.refundID))
+		assert.Equal(t, 0, f.env.countAuditEvents(t, sales.EventManualQRRefundCompleted))
+		assert.Equal(t, 0, f.env.idempotencyClaimCount(t, f.env.Actor, f.command.RequestID))
+	}
+
+	t.Run("completion insert failure", func(t *testing.T) {
+		f := newFixture(t)
+		installCompTrigger(t, f.env.compEnv, "fail_confirm_completion", `
+			CREATE FUNCTION fail_confirm_completion() RETURNS trigger AS $$
+			BEGIN
+			    RAISE EXCEPTION 'forced confirmation completion failure';
+			END;
+			$$ LANGUAGE plpgsql;
+			CREATE TRIGGER fail_confirm_completion
+			BEFORE INSERT ON refund_completions
+			FOR EACH ROW EXECUTE FUNCTION fail_confirm_completion();`,
+			"refund_completions")
+
+		status, _, err := f.env.confirm(t, f.command)
+		require.Error(t, err)
+		require.Equal(t, http.StatusInternalServerError, status)
+		assertRolledBack(t, f)
+	})
+
+	t.Run("result storage failure", func(t *testing.T) {
+		f := newFixture(t)
+		installCompTrigger(t, f.env.compEnv, "fail_confirm_result_store", `
+			CREATE FUNCTION fail_confirm_result_store() RETURNS trigger AS $$
+			BEGIN
+			    IF NEW.action = 'sales.confirm_qr_refund' AND NEW.response_code <> 0 THEN
+			        RAISE EXCEPTION 'forced confirmation result store failure';
+			    END IF;
+			    RETURN NEW;
+			END;
+			$$ LANGUAGE plpgsql;
+			CREATE TRIGGER fail_confirm_result_store
+			BEFORE UPDATE ON idempotency_keys
+			FOR EACH ROW EXECUTE FUNCTION fail_confirm_result_store();`,
+			"idempotency_keys")
+
+		status, _, err := f.env.confirm(t, f.command)
+		require.Error(t, err)
+		require.Equal(t, http.StatusInternalServerError, status)
+		assertRolledBack(t, f)
+	})
+}
+
 // ---------- HTTP route ----------
 
 // httpRefundFixture is a paid, comped Takeaway Session plus the ids a Refund
@@ -1343,5 +1852,225 @@ func TestSalesHTTPRefund(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
 		require.NotNil(t, env.Error)
 		assert.Equal(t, "REFUND_EXCEEDS_PENDING_REFUND", env.Error.Code)
+	})
+}
+
+// httpConfirmRefundFixture is a paid, comped Takeaway Session carrying one
+// pending Manual QR Refund, created entirely through the real routes.
+type httpConfirmRefundFixture struct {
+	e        *echo.Echo
+	token    string
+	checkID  uuid.UUID
+	refundID uuid.UUID
+}
+
+func setupHTTPConfirmRefundFixture(t *testing.T) *httpConfirmRefundFixture {
+	t.Helper()
+	e, db, q := newTestServer(t)
+	managerToken, managerCode := signInReturningLoginCode(t, e, q, []string{"MANAGER"}, "1357")
+	baristaToken, _ := signInReturningLoginCode(t, e, q, []string{"BARISTA"}, "2468")
+	_ = openShiftOverHTTP(t, e, managerToken)
+	tableID := seedTable(t, db, "Bàn Confirm")
+	itemID := seedMenuItem(t, db, "Cà phê confirm", 25000)
+
+	body, _ := json.Marshal(map[string]any{
+		"request_id": uuid.New(), "table_ids": []uuid.UUID{tableID},
+	})
+	rec := doRequest(t, e, http.MethodPost,
+		"/api/v1/sales/service-sessions/dine-in", managerToken, body)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	session := decodeSession(t, rec)
+
+	body, _ = json.Marshal(map[string]any{"request_id": uuid.New(), "menu_item_id": itemID})
+	rec = doRequest(t, e, http.MethodPost,
+		"/api/v1/sales/service-sessions/"+session.ID.String()+"/draft/items", managerToken, body)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	body, _ = json.Marshal(map[string]any{"request_id": uuid.New()})
+	rec = doRequest(t, e, http.MethodPost,
+		"/api/v1/sales/service-sessions/"+session.ID.String()+"/draft/commit", managerToken, body)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	session = decodeSession(t, rec)
+
+	var checkID uuid.UUID
+	require.NoError(t, db.QueryRow(
+		`SELECT id FROM checks WHERE service_session_id = $1`, session.ID).Scan(&checkID))
+
+	// A Manual QR Payment is the source a Manual QR Refund allocates against.
+	body, _ = json.Marshal(map[string]any{
+		"request_id": uuid.New(), "applied_amount_vnd": 25000,
+		"receipt_observed_in_bank_app": true,
+	})
+	rec = doRequest(t, e, http.MethodPost,
+		"/api/v1/sales/checks/"+checkID.String()+"/payments/manual-qr", managerToken, body)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	body, _ = json.Marshal(map[string]any{"request_id": uuid.New()})
+	rec = doRequest(t, e, http.MethodPost,
+		"/api/v1/sales/service-sessions/"+session.ID.String()+"/submit", managerToken, body)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	session = decodeSession(t, rec)
+	require.Len(t, session.PreparationUnits, 1)
+	unitID := session.PreparationUnits[0].ID
+
+	for _, target := range []string{"IN_PREPARATION", "READY"} {
+		body, _ = json.Marshal(map[string]any{
+			"request_id": uuid.New(), "target_state": target,
+		})
+		rec = doRequest(t, e, http.MethodPost,
+			"/api/v1/preparation/units/"+unitID.String()+"/advance", baristaToken, body)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{"request_id": uuid.New(), "reason": "QUALITY_FAILURE"})
+	rec = doRequest(t, e, http.MethodPost,
+		"/api/v1/preparation/units/"+unitID.String()+"/waste", baristaToken, body)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	var wasteEnvelope envelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &wasteEnvelope))
+	var waste struct {
+		ID uuid.UUID `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(wasteEnvelope.Data, &waste))
+
+	body, _ = json.Marshal(map[string]any{
+		"request_id": uuid.New(),
+		"reason":     "CAFE_ERROR",
+		"manager_approval": map[string]any{
+			"approver_login_code": managerCode,
+			"manager_pin":         "1357",
+		},
+	})
+	rec = doRequest(t, e, http.MethodPost,
+		"/api/v1/sales/wastes/"+waste.ID.String()+"/comp", managerToken, body)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	var compEnvelope envelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &compEnvelope))
+	var compResult sales.CompResult
+	require.NoError(t, json.Unmarshal(compEnvelope.Data, &compResult))
+
+	var paymentID uuid.UUID
+	require.NoError(t, db.QueryRow(
+		`SELECT id FROM payments WHERE check_id = $1`, checkID).Scan(&paymentID))
+
+	refundBody, _ := json.Marshal(map[string]any{
+		"request_id": uuid.New(),
+		"check_id":   checkID,
+		"method":     "MANUAL_QR",
+		"adjustment_allocations": []map[string]any{
+			{"charge_adjustment_id": compResult.Comp.ChargeAdjustmentID, "amount_vnd": 25000},
+		},
+		"payment_allocations": []map[string]any{
+			{"payment_id": paymentID, "amount_vnd": 25000},
+		},
+		"reason": "CUSTOMER_REQUEST",
+		"manager_approval": map[string]any{
+			"approver_login_code": managerCode,
+			"manager_pin":         "1357",
+		},
+	})
+	rec = doRequest(t, e, http.MethodPost, "/api/v1/sales/refunds", managerToken, refundBody)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	var refundEnvelope envelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &refundEnvelope))
+	var pending sales.RefundResult
+	require.NoError(t, json.Unmarshal(refundEnvelope.Data, &pending))
+	require.Equal(t, sales.RefundStatePending, pending.Refund.State)
+
+	return &httpConfirmRefundFixture{
+		e:        e,
+		token:    managerToken,
+		checkID:  checkID,
+		refundID: pending.Refund.ID,
+	}
+}
+
+// TestSalesHTTPConfirmRefund drives the confirmation route end to end and pins
+// its statuses, envelope, replay, and credential-free body.
+func TestSalesHTTPConfirmRefund(t *testing.T) {
+	fx := setupHTTPConfirmRefundFixture(t)
+	confirmPath := "/api/v1/sales/refunds/" + fx.refundID.String() + "/confirm"
+	confirmBody := func(requestID uuid.UUID, reference any) []byte {
+		body, _ := json.Marshal(map[string]any{
+			"request_id":            requestID,
+			"transaction_reference": reference,
+		})
+		return body
+	}
+	happyRequestID := uuid.New()
+
+	t.Run("confirms and returns 200", func(t *testing.T) {
+		rec := doRequest(t, fx.e, http.MethodPost, confirmPath, fx.token,
+			confirmBody(happyRequestID, "  FT-HTTP-1  "))
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var env envelope
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+		require.True(t, env.Success)
+		var result sales.RefundResult
+		require.NoError(t, json.Unmarshal(env.Data, &result))
+		assert.Equal(t, sales.CompScopeLiveCheck, result.Scope)
+		assert.Equal(t, sales.RefundStateCompleted, result.Refund.State)
+		require.NotNil(t, result.Refund.Completion)
+		require.NotNil(t, result.Refund.Completion.TransactionReference)
+		assert.Equal(t, "FT-HTTP-1", *result.Refund.Completion.TransactionReference,
+			"the reference is trimmed")
+		require.NotNil(t, result.ServiceSession)
+
+		raw := rec.Body.String()
+		assert.Contains(t, raw, `"state":"COMPLETED"`)
+		assert.NotContains(t, raw, `"manager_pin"`)
+		assert.NotContains(t, raw, `"approver_login_code"`)
+		assert.NotContains(t, raw, `"1357"`)
+	})
+
+	t.Run("exact replay returns the same result", func(t *testing.T) {
+		first := doRequest(t, fx.e, http.MethodPost, confirmPath, fx.token,
+			confirmBody(happyRequestID, "  FT-HTTP-1  "))
+		require.Equal(t, http.StatusOK, first.Code, first.Body.String())
+
+		second := doRequest(t, fx.e, http.MethodPost, confirmPath, fx.token,
+			confirmBody(happyRequestID, "  FT-HTTP-1  "))
+		require.Equal(t, http.StatusOK, second.Code, second.Body.String())
+		assert.JSONEq(t, first.Body.String(), second.Body.String())
+	})
+
+	t.Run("a new request id after completion answers 409", func(t *testing.T) {
+		rec := doRequest(t, fx.e, http.MethodPost, confirmPath, fx.token,
+			confirmBody(uuid.New(), "FT-HTTP-2"))
+		require.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+
+		var env envelope
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+		require.NotNil(t, env.Error)
+		assert.Equal(t, "REFUND_ALREADY_COMPLETED", env.Error.Code)
+	})
+
+	t.Run("a reference over 100 runes answers 400", func(t *testing.T) {
+		rec := doRequest(t, fx.e, http.MethodPost, confirmPath, fx.token,
+			confirmBody(uuid.New(), strings.Repeat("ế", 101)))
+		require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+
+		var env envelope
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+		require.NotNil(t, env.Error)
+		assert.Equal(t, "INVALID_INPUT", env.Error.Code)
+	})
+
+	t.Run("missing request id answers 400", func(t *testing.T) {
+		rec := doRequest(t, fx.e, http.MethodPost, confirmPath, fx.token,
+			[]byte(`{"transaction_reference":"FT"}`))
+		require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	})
+
+	t.Run("unknown refund answers 404", func(t *testing.T) {
+		rec := doRequest(t, fx.e, http.MethodPost,
+			"/api/v1/sales/refunds/"+uuid.NewString()+"/confirm", fx.token,
+			confirmBody(uuid.New(), nil))
+		require.Equal(t, http.StatusNotFound, rec.Code, rec.Body.String())
+
+		var env envelope
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+		require.NotNil(t, env.Error)
+		assert.Equal(t, "REFUND_NOT_FOUND", env.Error.Code)
 	})
 }

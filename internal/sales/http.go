@@ -1011,3 +1011,47 @@ func (s *Slices) handleRecordRefund(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleConfirmManualQRRefund godoc
+//
+//	@Summary		Confirm a Manual QR Refund
+//	@Description	Completes an approved Manual QR Refund once staff confirm the outbound bank transfer. The Refund must exist, use MANUAL_QR, lack a completion, and belong to the current open Shift. Confirmation re-derives the obligation under the Check lock — the Check's pending Refund for a live Refund, the Completed Sale's outstanding correction for a post-sale Refund — and refuses an amount above it, so a completed Refund can never make a Check's balance positive. It appends exactly one completion with the confirmer identity and session, records an optional trimmed transaction_reference of at most 100 characters, writes MANUAL_QR_REFUND_COMPLETED, and never edits the Refund row or its allocations. Requires current sales.operate and no second Manager Approval. Exact replay returns the stored result; another request id after completion answers REFUND_ALREADY_COMPLETED.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			refund_id	path		string							true	"Refund ID"
+//	@Param			request		body		ConfirmManualQRRefundCommand	true	"Confirmation request"
+//	@Success		200			{object}	response.APIResponse{data=RefundResult}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/sales/refunds/{refund_id}/confirm [post]
+func (s *Slices) handleConfirmManualQRRefund(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	refundID, err := parseUUIDParam(c, "refund_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[ConfirmManualQRRefundCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// RefundID is json:"-": it comes from the path, never the body.
+	body.RefundID = refundID
+
+	status, result, err := s.ConfirmManualQRRefund.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
