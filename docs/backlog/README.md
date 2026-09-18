@@ -21,6 +21,11 @@ system's behavior. Each ticket therefore carries an **Already present in Go**
 section naming what existing slices, migrations, and ADRs already satisfy. Read that
 section before estimating: several criteria are already met.
 
+Why a rule exists, as opposed to what it requires, is in
+[`docs/domain-rationale/`](../domain-rationale/) — the nine resolved design questions
+that produced `CONTEXT.md`. Several carry load-bearing detail that reached no ticket's
+acceptance criteria. Each ticket below names the ones worth reading first.
+
 ## Status
 
 | Status | Meaning |

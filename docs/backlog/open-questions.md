@@ -5,6 +5,10 @@ TypeScript Wayfinder map `cafe-pos/.scratch/opening-day-pos/`, where the nine
 resolved questions became `CONTEXT.md` and the specifications this system was built
 from. These are the ones that were never resolved.
 
+The nine resolved questions from the same map are copied verbatim to
+[`docs/domain-rationale/`](../domain-rationale/). Research ticket 05 there is the
+source of the fiscal conclusions cited below.
+
 Each entry records what is being asked, why it still matters here, who can answer it,
 and what it blocks. None of them blocks Phase 07 or Phase 08.
 

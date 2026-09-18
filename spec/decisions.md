@@ -661,6 +661,7 @@ CREATE TABLE idempotency_keys (
 * A future session must not treat the TypeScript repository as a specification source, and must not go looking for TypeScript code to port for any remaining phase.
 * The nine completed TypeScript effort directories are deliberately not imported. Their acceptance criteria name tRPC, Drizzle, and HeroUI, and the behavior that survived is already carried by the Go specifications, code, and tests. `cafe-pos` remains on disk for anyone needing the original wording.
 * The six remaining implementation tickets are renumbered onto Go phases 07 through 12 under `docs/backlog/`, each retaining a `Source:` line. They are marked `ready-for-design` rather than `ready-for-agent` because no approved Go design exists for any of them.
+* The nine resolved design questions from the `opening-day-pos` Wayfinder map are copied verbatim to `docs/domain-rationale/`. They are the reasoning that produced `CONTEXT.md`, they hold rules that reached no ticket's acceptance criteria, and ticket 06 is the direct design ancestor of Phases 07 through 09. They are historical reasoning, not authority: `CONTEXT.md` and this document win over them.
 * Unresolved design questions that gate launch - receipt and PDF boundary, opening-day readiness, cafe fiscal identity, and the fiscal invoice path - are preserved in `docs/backlog/open-questions.md`. The fiscal invoice path is covered by no phase; if the cafe needs registered e-invoices at opening, a phase must be added.
 
 ---

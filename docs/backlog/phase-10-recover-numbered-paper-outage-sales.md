@@ -67,6 +67,11 @@ available."
 The closure blocker in the sixth criterion interacts with the Phase 07 precedence
 list and must be added to it, not implemented separately.
 
+## Read first
+
+[`docs/domain-rationale/09-define-local-operations-and-recovery.md`](../domain-rationale/09-define-local-operations-and-recovery.md)
+bounded the numbered-paper outage recovery this phase implements.
+
 ## Open questions
 
 - [Receipt and PDF boundary](open-questions.md#receipt-and-pdf-boundary) — a

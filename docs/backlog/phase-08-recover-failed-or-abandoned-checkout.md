@@ -81,6 +81,14 @@ If Phase 07 lands first, this phase adds its blocker to the Shift closure preced
 list Phase 07 establishes. If this phase lands first, Phase 07 inherits the blocker.
 Either order works; neither may leave the precedence undocumented.
 
+## Read first
+
+[`docs/domain-rationale/06-define-payments-shifts-and-reconciliation.md`](../domain-rationale/06-define-payments-shifts-and-reconciliation.md)
+defines Awaiting Submission and Abandoned Checkout in their original form, including
+the rule that submitted work follows Cancellation or Waste rather than abandonment,
+and that a Session which had a submitted Order still closes through the normal
+Completed Sale lifecycle.
+
 ## Open questions
 
 None blocking.

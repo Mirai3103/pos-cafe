@@ -16,6 +16,7 @@ Phases **07** and **08** are unblocked and are the work to pick up next.
 | [`spec/decisions.md`](spec/decisions.md) | Architecture decisions, including every deviation from canonical behavior. Append-only. |
 | [`docs/superpowers/specs/`](docs/superpowers/specs/) | Per-phase approved designs. Frozen once approved. |
 | [`docs/backlog/`](docs/backlog/) | Work not yet designed. Superseded by a spec when its phase begins. |
+| [`docs/domain-rationale/`](docs/domain-rationale/) | Why `CONTEXT.md` says what it says. Historical reasoning, not authority. |
 | `ROADMAP.md` | This file. Current status. The only one updated as work lands. |
 | [`MIGRATE_PLAN.md`](MIGRATE_PLAN.md) | Historical record of the migration. Frozen. |
 

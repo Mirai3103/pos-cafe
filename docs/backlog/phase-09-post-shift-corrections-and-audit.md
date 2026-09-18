@@ -67,6 +67,16 @@ on the caller's role rather than only on authorization pass or fail. The
 specification must fix whether that is one projection with fields elided or distinct
 per-role projections, because a leak here is a privacy defect rather than a bug.
 
+## Read first
+
+[`docs/domain-rationale/06-define-payments-shifts-and-reconciliation.md`](../domain-rationale/06-define-payments-shifts-and-reconciliation.md)
+draws the boundary this phase implements: a real current-Shift Payment, Refund, or
+Cash Movement affects that Shift's reconciliation, while a bookkeeping-only
+post-Shift correction does not. It also places a later exceptional Refund in the
+currently open Shift while linking the Payment and Completed Sale from the earlier
+one. [`08-define-staff-permissions-and-audit.md`](../domain-rationale/08-define-staff-permissions-and-audit.md)
+covers the audit trail and per-role visibility.
+
 ## Open questions
 
 None blocking.

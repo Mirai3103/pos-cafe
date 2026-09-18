@@ -90,6 +90,15 @@ by the closing actor before the initial count is durably recorded. Where that
 sequencing is enforced — one command in two steps, or two commands sharing a
 closure draft — is the central design question of this phase.
 
+## Read first
+
+[`docs/domain-rationale/06-define-payments-shifts-and-reconciliation.md`](../domain-rationale/06-define-payments-shifts-and-reconciliation.md)
+is this phase's design ancestor. It carries reasoning the criteria above do not
+restate: why Expected Cash uses applied amount rather than tendered cash, the
+system-wide rule that an open Shift precedes every Session, Order, Payment, Refund,
+and correction, where a later exceptional Refund belongs, and why staff never add a
+balancing transaction to force agreement.
+
 ## Open questions
 
 None blocking. [Opening-day readiness](open-questions.md#opening-day-readiness)

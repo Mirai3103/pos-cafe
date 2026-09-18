@@ -78,6 +78,16 @@ deserves its own ADR.
 The restore drill is the criterion most likely to be skipped and the one that makes
 the rest meaningful. It should produce a dated artifact, not a passing test.
 
+## Read first
+
+[`docs/domain-rationale/09-define-local-operations-and-recovery.md`](../domain-rationale/09-define-local-operations-and-recovery.md)
+established the ownership roles and recovery bounds this phase implements.
+[`04-research-tanstack-start-on-premise.md`](../domain-rationale/04-research-tanstack-start-on-premise.md)
+is the most stack-dependent of the rationale documents: its Node specifics do not
+survive migration, but its conclusion does — boot, supervision, addressing, updates,
+and restore verification remain explicit appliance decisions rather than framework
+features.
+
 ## Open questions
 
 - [Opening-day readiness](open-questions.md#opening-day-readiness) — the Daily POS

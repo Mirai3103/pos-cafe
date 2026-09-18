@@ -43,6 +43,7 @@ The TypeScript project at `E:/Code/cafe-pos` holds these planning documents.
 | --- | --- | --- |
 | `CONTEXT.md` | 301 lines | Copied verbatim to `pos-cafe/CONTEXT.md` |
 | `.scratch/opening-day-pos-v0/issues/12..17` | 6 tickets | Rewritten as `docs/backlog/phase-07..12` |
+| `.scratch/opening-day-pos/issues/01..09` | 9 resolved design questions, 394 lines | Copied verbatim to `docs/domain-rationale/` |
 | `.scratch/opening-day-pos/issues/10,12,13,14` | 4 open fog tickets | Summarized into `docs/backlog/open-questions.md` |
 | `.scratch/opening-day-pos/issues/11` | 1 open fog ticket | Recorded as deferred to Phase 11 |
 | `.scratch/opening-day-pos/issues/15` | 1 open fog ticket | Recorded as resolved by existing Go ADRs |
@@ -179,6 +180,26 @@ Three additions distinguish these from their sources.
 - `deferred` — deliberately not scheduled; the entry records why.
 
 A phase is unblocked when every phase named in its `Blocked by` line is `completed`. `deferred` never satisfies a dependency.
+
+---
+
+## 6.4 Resolved Design Rationale
+
+The nine resolved questions from the Wayfinder map `opening-day-pos/issues/01..09`
+are copied verbatim to `docs/domain-rationale/`, with a README mapping each to the Go
+phases and ADRs it explains.
+
+`CONTEXT.md` is the compressed result of these nine answers; they hold the reasoning
+that produced it, including rules that reached no ticket's acceptance criteria. Ticket
+06 is the direct design ancestor of Phases 07, 08, and 09 — it carries the rationale
+behind ADR-046's Expected Cash formula, the system-wide open-Shift precondition, and
+the boundary between Payment Void and Post-Shift Payment Correction. Leaving it in
+`cafe-pos` would mean the next phase's brainstorm still had to read that repository,
+which is exactly what closure is supposed to end.
+
+These files are historical reasoning, not authority. The README states that
+`CONTEXT.md` and `spec/decisions.md` win over them, so they cannot become a competing
+source of truth.
 
 ---
 
