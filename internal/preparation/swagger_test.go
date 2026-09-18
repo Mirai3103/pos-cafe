@@ -11,14 +11,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The generated-Swagger contract of the Phase 6B correction routes. The test
-// reads ../../docs/swagger.json — the file `swag init -g cmd/api/main.go -o
-// docs` generates — and asserts each route exposes its POST operation with
-// BearerAuth, the documented request body schema, the success status wired to
-// the exact response DTO, and the full 400|401|403|404|409|500 error set. It
-// then walks every definition reachable from those RESPONSES and proves no
-// response field anywhere carries a PIN: no manager_pin, no pin, no pin_hash.
-// The Manager PIN is request-only; this is the guard that keeps it that way.
+// The generated-Swagger contract of the Phase 6B and Phase 6C correction
+// routes. The test reads ../../docs/swagger.json — the file `swag init -g
+// cmd/api/main.go -o docs` generates — and asserts each route exposes its POST
+// operation with BearerAuth, the documented request body schema, the success
+// status wired to the exact response DTO, and the full
+// 400|401|403|404|409|500 error set (plus the 422 guarded-range code where the
+// operation documents it). It covers the five Phase 6C operations across both
+// slices: the Preparation Cancellation route and the four Sales correction
+// routes. It then walks every definition reachable from those RESPONSES and
+// proves no response field anywhere carries a PIN: no manager_pin, no pin, no
+// pin_hash. The Manager PIN is request-only; this is the guard that keeps it
+// that way.
 //
 // The test runs without the integration tag: it reads a file, not a database.
 
@@ -62,12 +66,15 @@ type swaggerDoc struct {
 	Definitions map[string]json.RawMessage              `json:"definitions"`
 }
 
-// swaggerContractRoute is one Phase 6B route's expected generated contract.
+// swaggerContractRoute is one correction route's expected generated contract.
 type swaggerContractRoute struct {
 	path          string
 	successStatus string
 	requestRef    string
 	dataRef       string
+	// extraErrorStatuses are the additional non-2xx codes the operation
+	// documents beyond requiredErrorStatuses (the guarded monetary range, 422).
+	extraErrorStatuses []string
 }
 
 // requiredErrorStatuses is the error set every correction route must document.
@@ -126,7 +133,7 @@ func swaggerDefinitionFieldNames(value any, visit func(string)) {
 	}
 }
 
-func TestPreparationSwaggerCorrectionRoutes(t *testing.T) {
+func TestSwaggerCorrectionRouteContracts(t *testing.T) {
 	raw, err := os.ReadFile("../../docs/swagger.json")
 	require.NoError(t, err, "docs/swagger.json must exist; regenerate with `swag init -g cmd/api/main.go -o docs`")
 
@@ -159,10 +166,43 @@ func TestPreparationSwaggerCorrectionRoutes(t *testing.T) {
 			requestRef:    "preparation.CorrectStateCommand",
 			dataRef:       "preparation.CorrectStateResponse",
 		},
+		{
+			path:               "/preparation/units/cancel",
+			successStatus:      "200",
+			requestRef:         "preparation.CancelUnitsCommand",
+			dataRef:            "preparation.CancelUnitsResponse",
+			extraErrorStatuses: []string{"422"},
+		},
+		{
+			path:               "/sales/wastes/{waste_id}/comp",
+			successStatus:      "201",
+			requestRef:         "sales.CompWasteCommand",
+			dataRef:            "sales.CompResult",
+			extraErrorStatuses: []string{"422"},
+		},
+		{
+			path:               "/sales/refunds",
+			successStatus:      "201",
+			requestRef:         "sales.RecordRefundCommand",
+			dataRef:            "sales.RefundResult",
+			extraErrorStatuses: []string{"422"},
+		},
+		{
+			path:          "/sales/refunds/{refund_id}/confirm",
+			successStatus: "200",
+			requestRef:    "sales.ConfirmManualQRRefundCommand",
+			dataRef:       "sales.RefundResult",
+		},
+		{
+			path:          "/sales/payments/{payment_id}/void",
+			successStatus: "201",
+			requestRef:    "sales.VoidPaymentCommand",
+			dataRef:       "sales.ServiceSessionResponse",
+		},
 	}
 
-	// visited accumulates the response closure of all four routes for the
-	// PIN sweep at the end.
+	// visited accumulates the response closure of every route for the PIN
+	// sweep at the end.
 	visited := map[string]bool{}
 
 	for _, route := range routes {
@@ -198,8 +238,12 @@ func TestPreparationSwaggerCorrectionRoutes(t *testing.T) {
 			assert.Equal(t, "#/definitions/"+route.requestRef, bodyRefs[0],
 				"%s body schema must be %s", route.path, route.requestRef)
 
-			// Responses: the success status and the full error set.
-			for _, status := range append(requiredErrorStatuses, route.successStatus) {
+			// Responses: the success status and the full error set, plus each
+			// extra non-2xx code the operation documents.
+			documentedStatuses := append(append([]string{}, requiredErrorStatuses...),
+				route.successStatus)
+			documentedStatuses = append(documentedStatuses, route.extraErrorStatuses...)
+			for _, status := range documentedStatuses {
 				_, ok := operation.Responses[status]
 				assert.True(t, ok, "%s must document a %s response", route.path, status)
 			}
@@ -217,6 +261,11 @@ func TestPreparationSwaggerCorrectionRoutes(t *testing.T) {
 			// Collect this operation's response closure for the PIN sweep.
 			collectSwaggerResponseRefs(success.Schema, &doc, visited, t)
 			for _, status := range requiredErrorStatuses {
+				failure, ok := operation.Responses[status]
+				require.True(t, ok)
+				collectSwaggerResponseRefs(failure.Schema, &doc, visited, t)
+			}
+			for _, status := range route.extraErrorStatuses {
 				failure, ok := operation.Responses[status]
 				require.True(t, ok)
 				collectSwaggerResponseRefs(failure.Schema, &doc, visited, t)
@@ -248,13 +297,19 @@ func TestPreparationSwaggerCorrectionRoutes(t *testing.T) {
 }
 
 // routeDataDefinitions names the data DTOs the sweep must have visited, so a
-// silently dropped response schema cannot empty the closure and pass.
+// silently dropped response schema cannot empty the closure and pass. The
+// Phase 6C Sales correction DTOs are included because the five-operation
+// contract spans both slices.
 func routeDataDefinitions() []string {
 	return []string{
 		"preparation.AlertResponse",
+		"preparation.CancelUnitsResponse",
 		"preparation.CorrectStateResponse",
 		"preparation.RemakeResponse",
 		"preparation.WasteResponse",
 		"response.APIResponse",
+		"sales.CompResult",
+		"sales.RefundResult",
+		"sales.ServiceSessionResponse",
 	}
 }

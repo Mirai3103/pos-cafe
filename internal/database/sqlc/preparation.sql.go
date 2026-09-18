@@ -58,6 +58,55 @@ func (q *Queries) AcknowledgePreparationAlert(ctx context.Context, arg Acknowled
 	return i, err
 }
 
+const getCancellationReplacementOrder = `-- name: GetCancellationReplacementOrder :one
+SELECT o.id, o.service_session_id, o.submitted_at,
+       (o.service_session_id = $1::uuid) AS same_session,
+       NOT EXISTS (
+           SELECT 1
+           FROM unnest($2::uuid[]) AS source_order(id)
+           WHERE source_order.id = o.id
+       ) AS differs_from_source_orders,
+       o.submitted_at > (
+           SELECT COALESCE(MAX(src.submitted_at), '-infinity'::timestamptz)
+           FROM orders AS src
+           WHERE src.id = ANY($2::uuid[])
+       ) AS submitted_after_source_orders
+FROM orders AS o
+WHERE o.id = $3
+`
+
+type GetCancellationReplacementOrderParams struct {
+	ServiceSessionID   uuid.UUID   `json:"service_session_id"`
+	SourceOrderIds     []uuid.UUID `json:"source_order_ids"`
+	ReplacementOrderID uuid.UUID   `json:"replacement_order_id"`
+}
+
+type GetCancellationReplacementOrderRow struct {
+	ID                         uuid.UUID `json:"id"`
+	ServiceSessionID           uuid.UUID `json:"service_session_id"`
+	SubmittedAt                time.Time `json:"submitted_at"`
+	SameSession                bool      `json:"same_session"`
+	DiffersFromSourceOrders    bool      `json:"differs_from_source_orders"`
+	SubmittedAfterSourceOrders bool      `json:"submitted_after_source_orders"`
+}
+
+// Non-locking resolution for CHANGE. Returns no row when the replacement Order
+// does not exist at all; the three boolean columns let the handler reject a
+// cross-Session, source, or not-later Order with one typed error.
+func (q *Queries) GetCancellationReplacementOrder(ctx context.Context, arg GetCancellationReplacementOrderParams) (GetCancellationReplacementOrderRow, error) {
+	row := q.db.QueryRowContext(ctx, getCancellationReplacementOrder, arg.ServiceSessionID, pq.Array(arg.SourceOrderIds), arg.ReplacementOrderID)
+	var i GetCancellationReplacementOrderRow
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceSessionID,
+		&i.SubmittedAt,
+		&i.SameSession,
+		&i.DiffersFromSourceOrders,
+		&i.SubmittedAfterSourceOrders,
+	)
+	return i, err
+}
+
 const getNextPreparationUnitNumber = `-- name: GetNextPreparationUnitNumber :one
 SELECT (coalesce(max(unit_number), 0) + 1)::integer AS next_unit_number
 FROM preparation_units
@@ -71,6 +120,67 @@ func (q *Queries) GetNextPreparationUnitNumber(ctx context.Context, orderItemID 
 	var next_unit_number int32
 	err := row.Scan(&next_unit_number)
 	return next_unit_number, err
+}
+
+const getPreparationCheckFinancials = `-- name: GetPreparationCheckFinancials :one
+SELECT c.id, c.state, c.charge_vnd, c.service_session_id,
+       COALESCE((SELECT SUM(ca.quantity::BIGINT * ci.unit_price_vnd)
+                 FROM charge_allocations AS ca
+                 JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+                 WHERE ca.check_id = c.id), 0)::BIGINT AS base_charge_vnd,
+       COALESCE((SELECT SUM(ca.amount_vnd)
+                 FROM charge_adjustments AS ca
+                 WHERE ca.check_id = c.id
+                   AND ca.scope = 'LIVE_CHECK'), 0)::BIGINT AS live_adjustment_vnd,
+       COALESCE((SELECT SUM(p.applied_amount_vnd)
+                 FROM payments AS p
+                 WHERE p.check_id = c.id
+                   AND NOT EXISTS (SELECT 1
+                                   FROM payment_voids AS pv
+                                   WHERE pv.payment_id = p.id)), 0)::BIGINT
+           AS valid_payment_vnd,
+       COALESCE((SELECT SUM(r.amount_vnd)
+                 FROM refunds AS r
+                 JOIN refund_completions AS rc ON rc.refund_id = r.id
+                 WHERE r.check_id = c.id
+                   AND r.completed_sale_id IS NULL), 0)::BIGINT
+           AS completed_refund_vnd
+FROM checks AS c
+WHERE c.id = $1
+`
+
+type GetPreparationCheckFinancialsRow struct {
+	ID                 uuid.UUID `json:"id"`
+	State              string    `json:"state"`
+	ChargeVnd          int64     `json:"charge_vnd"`
+	ServiceSessionID   uuid.UUID `json:"service_session_id"`
+	BaseChargeVnd      int64     `json:"base_charge_vnd"`
+	LiveAdjustmentVnd  int64     `json:"live_adjustment_vnd"`
+	ValidPaymentVnd    int64     `json:"valid_payment_vnd"`
+	CompletedRefundVnd int64     `json:"completed_refund_vnd"`
+}
+
+// Financial evidence for a Cancellation's affected Check, read while the
+// caller holds the Check lock. base_charge_vnd is the live sum of original
+// Charge Allocations; live_adjustment_vnd is every committed LIVE_CHECK
+// adjustment; valid_payment_vnd excludes voided Payments; completed_refund_vnd
+// counts completed live Refunds. The handler verifies stored charge = base -
+// live adjustments, then recomputes settlement and pending Refund from these
+// terms.
+func (q *Queries) GetPreparationCheckFinancials(ctx context.Context, id uuid.UUID) (GetPreparationCheckFinancialsRow, error) {
+	row := q.db.QueryRowContext(ctx, getPreparationCheckFinancials, id)
+	var i GetPreparationCheckFinancialsRow
+	err := row.Scan(
+		&i.ID,
+		&i.State,
+		&i.ChargeVnd,
+		&i.ServiceSessionID,
+		&i.BaseChargeVnd,
+		&i.LiveAdjustmentVnd,
+		&i.ValidPaymentVnd,
+		&i.CompletedRefundVnd,
+	)
+	return i, err
 }
 
 const getPreparationCurrentTime = `-- name: GetPreparationCurrentTime :one
@@ -110,6 +220,60 @@ func (q *Queries) GetPreparationUnit(ctx context.Context, id uuid.UUID) (Prepara
 		&i.InPreparationAt,
 		&i.Priority,
 		&i.RemakeOfPreparationUnitID,
+	)
+	return i, err
+}
+
+const insertChargeAdjustment = `-- name: InsertChargeAdjustment :one
+INSERT INTO charge_adjustments (
+    kind, scope, preparation_unit_id, preparation_waste_id,
+    charge_allocation_id, check_id, completed_sale_id, sales_shift_id,
+    amount_vnd, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, kind, scope, preparation_unit_id, preparation_waste_id,
+          charge_allocation_id, check_id, completed_sale_id, sales_shift_id,
+          amount_vnd, created_at
+`
+
+type InsertChargeAdjustmentParams struct {
+	Kind               string        `json:"kind"`
+	Scope              string        `json:"scope"`
+	PreparationUnitID  uuid.UUID     `json:"preparation_unit_id"`
+	PreparationWasteID uuid.NullUUID `json:"preparation_waste_id"`
+	ChargeAllocationID uuid.UUID     `json:"charge_allocation_id"`
+	CheckID            uuid.UUID     `json:"check_id"`
+	CompletedSaleID    uuid.NullUUID `json:"completed_sale_id"`
+	SalesShiftID       uuid.UUID     `json:"sales_shift_id"`
+	AmountVnd          int64         `json:"amount_vnd"`
+	CreatedAt          time.Time     `json:"created_at"`
+}
+
+func (q *Queries) InsertChargeAdjustment(ctx context.Context, arg InsertChargeAdjustmentParams) (ChargeAdjustment, error) {
+	row := q.db.QueryRowContext(ctx, insertChargeAdjustment,
+		arg.Kind,
+		arg.Scope,
+		arg.PreparationUnitID,
+		arg.PreparationWasteID,
+		arg.ChargeAllocationID,
+		arg.CheckID,
+		arg.CompletedSaleID,
+		arg.SalesShiftID,
+		arg.AmountVnd,
+		arg.CreatedAt,
+	)
+	var i ChargeAdjustment
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Scope,
+		&i.PreparationUnitID,
+		&i.PreparationWasteID,
+		&i.ChargeAllocationID,
+		&i.CheckID,
+		&i.CompletedSaleID,
+		&i.SalesShiftID,
+		&i.AmountVnd,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -197,6 +361,56 @@ func (q *Queries) InsertPreparationAuditEventsBatch(ctx context.Context, arg Ins
 		pq.Array(arg.DetailsBatch),
 	)
 	return err
+}
+
+const insertPreparationCancellation = `-- name: InsertPreparationCancellation :one
+INSERT INTO preparation_cancellations (
+    preparation_unit_id, kind, charge_adjustment_id, replacement_order_id,
+    reason, note, actor_staff_identity_id, staff_access_session_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, preparation_unit_id, kind, charge_adjustment_id,
+          replacement_order_id, reason, note, actor_staff_identity_id,
+          staff_access_session_id, occurred_at
+`
+
+type InsertPreparationCancellationParams struct {
+	PreparationUnitID    uuid.UUID      `json:"preparation_unit_id"`
+	Kind                 string         `json:"kind"`
+	ChargeAdjustmentID   uuid.NullUUID  `json:"charge_adjustment_id"`
+	ReplacementOrderID   uuid.NullUUID  `json:"replacement_order_id"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	OccurredAt           time.Time      `json:"occurred_at"`
+}
+
+func (q *Queries) InsertPreparationCancellation(ctx context.Context, arg InsertPreparationCancellationParams) (PreparationCancellation, error) {
+	row := q.db.QueryRowContext(ctx, insertPreparationCancellation,
+		arg.PreparationUnitID,
+		arg.Kind,
+		arg.ChargeAdjustmentID,
+		arg.ReplacementOrderID,
+		arg.Reason,
+		arg.Note,
+		arg.ActorStaffIdentityID,
+		arg.StaffAccessSessionID,
+		arg.OccurredAt,
+	)
+	var i PreparationCancellation
+	err := row.Scan(
+		&i.ID,
+		&i.PreparationUnitID,
+		&i.Kind,
+		&i.ChargeAdjustmentID,
+		&i.ReplacementOrderID,
+		&i.Reason,
+		&i.Note,
+		&i.ActorStaffIdentityID,
+		&i.StaffAccessSessionID,
+		&i.OccurredAt,
+	)
+	return i, err
 }
 
 const insertPreparationRemake = `-- name: InsertPreparationRemake :one
@@ -645,6 +859,54 @@ func (q *Queries) ListCurrentPreparationTables(ctx context.Context, serviceSessi
 	return items, nil
 }
 
+const listPreparationUnitsByIDs = `-- name: ListPreparationUnitsByIDs :many
+SELECT id, order_item_id, unit_number, state, service_number, category_name,
+       item_name, size_name, modifiers, preparation_note, queued_at,
+       in_preparation_at, priority, remake_of_preparation_unit_id
+FROM preparation_units
+WHERE id = ANY($1::uuid[])
+`
+
+// Batched projection read for a set of ids already known to exist (e.g. a
+// cancellation batch), avoiding one GetPreparationUnit round trip per unit.
+func (q *Queries) ListPreparationUnitsByIDs(ctx context.Context, preparationUnitIds []uuid.UUID) ([]PreparationUnit, error) {
+	rows, err := q.db.QueryContext(ctx, listPreparationUnitsByIDs, pq.Array(preparationUnitIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PreparationUnit{}
+	for rows.Next() {
+		var i PreparationUnit
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrderItemID,
+			&i.UnitNumber,
+			&i.State,
+			&i.ServiceNumber,
+			&i.CategoryName,
+			&i.ItemName,
+			&i.SizeName,
+			&i.Modifiers,
+			&i.PreparationNote,
+			&i.QueuedAt,
+			&i.InPreparationAt,
+			&i.Priority,
+			&i.RemakeOfPreparationUnitID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPreparationUnitsForCorrection = `-- name: ListPreparationUnitsForCorrection :many
 SELECT pu.id, pu.state, pu.order_item_id, o.service_session_id
 FROM preparation_units AS pu
@@ -788,6 +1050,30 @@ func (q *Queries) ListRecentPreparationCorrections(ctx context.Context) ([]ListR
 	return items, nil
 }
 
+const lockOpenSalesShiftForCancellation = `-- name: LockOpenSalesShiftForCancellation :one
+SELECT id, state
+FROM sales_shifts
+WHERE state = 'OPEN'
+LIMIT 1
+FOR SHARE
+`
+
+type LockOpenSalesShiftForCancellationRow struct {
+	ID    uuid.UUID `json:"id"`
+	State string    `json:"state"`
+}
+
+// Step 3: the one open Sales Shift. FOR SHARE, because Cancellation only reads
+// the Shift for settlement evidence and never writes Shift state; Shift
+// closure takes FOR UPDATE and stays excluded for the whole transaction. No
+// row means no Shift is open.
+func (q *Queries) LockOpenSalesShiftForCancellation(ctx context.Context) (LockOpenSalesShiftForCancellationRow, error) {
+	row := q.db.QueryRowContext(ctx, lockOpenSalesShiftForCancellation)
+	var i LockOpenSalesShiftForCancellationRow
+	err := row.Scan(&i.ID, &i.State)
+	return i, err
+}
+
 const lockPreparationAlert = `-- name: LockPreparationAlert :one
 SELECT id, preparation_unit_id, kind, reason, note,
        created_by_staff_identity_id, created_staff_access_session_id,
@@ -817,6 +1103,51 @@ func (q *Queries) LockPreparationAlert(ctx context.Context, id uuid.UUID) (Prepa
 		&i.AcknowledgedAt,
 	)
 	return i, err
+}
+
+const lockPreparationChecksForCancellation = `-- name: LockPreparationChecksForCancellation :many
+SELECT id, state, charge_vnd, service_session_id
+FROM checks
+WHERE id = ANY($1::uuid[])
+ORDER BY id ASC
+FOR UPDATE
+`
+
+type LockPreparationChecksForCancellationRow struct {
+	ID               uuid.UUID `json:"id"`
+	State            string    `json:"state"`
+	ChargeVnd        int64     `json:"charge_vnd"`
+	ServiceSessionID uuid.UUID `json:"service_session_id"`
+}
+
+// Step 1 of the common correction lock order: every affected Check FOR UPDATE,
+// ordered by id so concurrent corrections take the rows in the same order.
+func (q *Queries) LockPreparationChecksForCancellation(ctx context.Context, checkIds []uuid.UUID) ([]LockPreparationChecksForCancellationRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockPreparationChecksForCancellation, pq.Array(checkIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockPreparationChecksForCancellationRow{}
+	for rows.Next() {
+		var i LockPreparationChecksForCancellationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.State,
+			&i.ChargeVnd,
+			&i.ServiceSessionID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockPreparationOrderItem = `-- name: LockPreparationOrderItem :one
@@ -888,6 +1219,45 @@ func (q *Queries) LockPreparationServiceSessions(ctx context.Context, serviceSes
 	return items, nil
 }
 
+const lockPreparationSessionsForCancellation = `-- name: LockPreparationSessionsForCancellation :many
+SELECT id, service_number, state
+FROM service_sessions
+WHERE id = ANY($1::uuid[])
+ORDER BY id ASC
+FOR UPDATE
+`
+
+type LockPreparationSessionsForCancellationRow struct {
+	ID            uuid.UUID `json:"id"`
+	ServiceNumber string    `json:"service_number"`
+	State         string    `json:"state"`
+}
+
+// Step 2: the owning Service Sessions, after their Checks and before the
+// current Shift and the work rows.
+func (q *Queries) LockPreparationSessionsForCancellation(ctx context.Context, serviceSessionIds []uuid.UUID) ([]LockPreparationSessionsForCancellationRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockPreparationSessionsForCancellation, pq.Array(serviceSessionIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockPreparationSessionsForCancellationRow{}
+	for rows.Next() {
+		var i LockPreparationSessionsForCancellationRow
+		if err := rows.Scan(&i.ID, &i.ServiceNumber, &i.State); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockPreparationUnit = `-- name: LockPreparationUnit :one
 
 SELECT id, order_item_id, unit_number, state, service_number, category_name,
@@ -923,6 +1293,54 @@ func (q *Queries) LockPreparationUnit(ctx context.Context, id uuid.UUID) (Prepar
 		&i.RemakeOfPreparationUnitID,
 	)
 	return i, err
+}
+
+const lockPreparationUnitsForCancellation = `-- name: LockPreparationUnitsForCancellation :many
+SELECT id, state, priority, unit_number, order_item_id
+FROM preparation_units
+WHERE id = ANY($1::uuid[])
+ORDER BY id ASC
+FOR UPDATE
+`
+
+type LockPreparationUnitsForCancellationRow struct {
+	ID          uuid.UUID `json:"id"`
+	State       string    `json:"state"`
+	Priority    string    `json:"priority"`
+	UnitNumber  int32     `json:"unit_number"`
+	OrderItemID uuid.UUID `json:"order_item_id"`
+}
+
+// Step 5: the selected Preparation Units, locked last in id order after their
+// Checks and Sessions. The caller revalidates QUEUED and re-resolves the
+// unit-to-allocation mapping against the committed rows.
+func (q *Queries) LockPreparationUnitsForCancellation(ctx context.Context, preparationUnitIds []uuid.UUID) ([]LockPreparationUnitsForCancellationRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockPreparationUnitsForCancellation, pq.Array(preparationUnitIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockPreparationUnitsForCancellationRow{}
+	for rows.Next() {
+		var i LockPreparationUnitsForCancellationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.State,
+			&i.Priority,
+			&i.UnitNumber,
+			&i.OrderItemID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockPreparationUnitsForCorrection = `-- name: LockPreparationUnitsForCorrection :many
@@ -1007,6 +1425,106 @@ func (q *Queries) LockPreparationWaste(ctx context.Context, id uuid.UUID) (LockP
 	return i, err
 }
 
+const resolveCancellationUnits = `-- name: ResolveCancellationUnits :many
+
+WITH selected AS (
+    SELECT pu.id, pu.state, pu.priority, pu.unit_number, pu.order_item_id,
+           oi.committed_item_id, o.service_session_id
+    FROM preparation_units AS pu
+    JOIN order_items AS oi ON oi.id = pu.order_item_id
+    JOIN orders AS o ON o.id = oi.order_id
+    WHERE pu.id = ANY($1::uuid[])
+),
+ranges AS (
+    SELECT ca.committed_item_id, ca.id AS charge_allocation_id, ca.check_id,
+           ci.unit_price_vnd,
+           COALESCE(SUM(ca.quantity) OVER (
+               PARTITION BY ca.committed_item_id
+               ORDER BY ca.created_at, ca.id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)::BIGINT
+               AS range_start,
+           COALESCE(SUM(ca.quantity) OVER (
+               PARTITION BY ca.committed_item_id
+               ORDER BY ca.created_at, ca.id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), 0)::BIGINT
+               AS range_end
+    FROM charge_allocations AS ca
+    JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+    WHERE ca.committed_item_id IN (SELECT committed_item_id FROM selected)
+)
+SELECT s.id, s.state, s.priority, s.unit_number, s.order_item_id,
+       s.committed_item_id, s.service_session_id,
+       r.charge_allocation_id, r.check_id, r.unit_price_vnd
+FROM selected AS s
+LEFT JOIN ranges AS r
+       ON r.committed_item_id = s.committed_item_id
+      AND s.priority = 'STANDARD'
+      AND s.unit_number > r.range_start
+      AND s.unit_number <= r.range_end
+ORDER BY s.id ASC
+`
+
+type ResolveCancellationUnitsRow struct {
+	ID                 uuid.UUID     `json:"id"`
+	State              string        `json:"state"`
+	Priority           string        `json:"priority"`
+	UnitNumber         int32         `json:"unit_number"`
+	OrderItemID        uuid.UUID     `json:"order_item_id"`
+	CommittedItemID    uuid.UUID     `json:"committed_item_id"`
+	ServiceSessionID   uuid.UUID     `json:"service_session_id"`
+	ChargeAllocationID uuid.NullUUID `json:"charge_allocation_id"`
+	CheckID            uuid.NullUUID `json:"check_id"`
+	UnitPriceVnd       sql.NullInt64 `json:"unit_price_vnd"`
+}
+
+// Phase 6C: Cancellation locks, resolution, and facts.
+//
+// Lock order is the concurrency contract (design section 11.1): resolve
+// ownership without locks, then lock Checks ascending by id, Service Sessions
+// ascending by id, the current open Sales Shift, and finally the selected
+// Preparation Units ascending by id. Restructuring locks Checks; closure locks
+// Sessions; Waste and State Correction lock Sessions before units but never
+// wait on a Check, so no lock cycle exists.
+// Non-locking resolution of a Cancellation selection. Each STANDARD unit maps
+// to the immutable per-unit price of its Committed Item and to the Charge
+// Allocation whose cumulative quantity range (allocations ordered by
+// created_at then id) covers its unit_number. A REMAKE unit, or a unit beyond
+// every allocation range, carries a null allocation, Check, and price because
+// it was never charged.
+func (q *Queries) ResolveCancellationUnits(ctx context.Context, preparationUnitIds []uuid.UUID) ([]ResolveCancellationUnitsRow, error) {
+	rows, err := q.db.QueryContext(ctx, resolveCancellationUnits, pq.Array(preparationUnitIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ResolveCancellationUnitsRow{}
+	for rows.Next() {
+		var i ResolveCancellationUnitsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.State,
+			&i.Priority,
+			&i.UnitNumber,
+			&i.OrderItemID,
+			&i.CommittedItemID,
+			&i.ServiceSessionID,
+			&i.ChargeAllocationID,
+			&i.CheckID,
+			&i.UnitPriceVnd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setPreparationUnitCorrectedState = `-- name: SetPreparationUnitCorrectedState :exec
 UPDATE preparation_units
 SET state = $1,
@@ -1050,5 +1568,57 @@ type SetPreparationUnitStateParams struct {
 
 func (q *Queries) SetPreparationUnitState(ctx context.Context, arg SetPreparationUnitStateParams) error {
 	_, err := q.db.ExecContext(ctx, setPreparationUnitState, arg.State, arg.OccurredAt, arg.ID)
+	return err
+}
+
+const settleAdjustedCheck = `-- name: SettleAdjustedCheck :exec
+UPDATE checks
+SET state = 'SETTLED',
+    settled_at = $1,
+    settled_by_staff_identity_id = $2,
+    settled_during_sales_shift_id = $3,
+    settled_staff_access_session_id = $4
+WHERE id = $5
+`
+
+type SettleAdjustedCheckParams struct {
+	SettledAt                   sql.NullTime  `json:"settled_at"`
+	SettledByStaffIdentityID    uuid.NullUUID `json:"settled_by_staff_identity_id"`
+	SettledDuringSalesShiftID   uuid.NullUUID `json:"settled_during_sales_shift_id"`
+	SettledStaffAccessSessionID uuid.NullUUID `json:"settled_staff_access_session_id"`
+	ID                          uuid.UUID     `json:"id"`
+}
+
+// The settlement consequence of a Cancellation or Comp that reduces a live
+// Check to zero balance. All four evidence columns are written together
+// because check_settlement_evidence_valid rejects any partial set; the
+// initiator and the current open Shift supply the evidence.
+func (q *Queries) SettleAdjustedCheck(ctx context.Context, arg SettleAdjustedCheckParams) error {
+	_, err := q.db.ExecContext(ctx, settleAdjustedCheck,
+		arg.SettledAt,
+		arg.SettledByStaffIdentityID,
+		arg.SettledDuringSalesShiftID,
+		arg.SettledStaffAccessSessionID,
+		arg.ID,
+	)
+	return err
+}
+
+const updateAdjustedCheckCharge = `-- name: UpdateAdjustedCheckCharge :exec
+UPDATE checks
+SET charge_vnd = $1
+WHERE id = $2
+`
+
+type UpdateAdjustedCheckChargeParams struct {
+	ChargeVnd int64     `json:"charge_vnd"`
+	ID        uuid.UUID `json:"id"`
+}
+
+// Writes the denormalized live charge after one Cancellation batch plans all
+// of its adjustments. The invariant is stored charge = base charge - live
+// adjustments; POST_SALE adjustments are excluded.
+func (q *Queries) UpdateAdjustedCheckCharge(ctx context.Context, arg UpdateAdjustedCheckChargeParams) error {
+	_, err := q.db.ExecContext(ctx, updateAdjustedCheckCharge, arg.ChargeVnd, arg.ID)
 	return err
 }

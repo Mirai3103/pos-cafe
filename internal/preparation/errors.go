@@ -32,6 +32,27 @@ var (
 	// missing or malformed PIN shape is instead a response.ErrInvalid
 	// boundary error raised before the transaction.
 	ErrInvalidManagerPIN = errors.New("manager PIN verification failed")
+
+	// Phase 6C (Preparation Cancellation & Change). Condition-based
+	// sentinels: each maps to one HTTP status in ErrorResponse, and HTTP
+	// mapping never inspects error strings (spec §14).
+	ErrCancellationSelectionInvalid = errors.New("invalid cancellation selection")
+	ErrReplacementOrderRequired     = errors.New("replacement_order_id is required for a change")
+	ErrReplacementOrderNotFound     = errors.New("replacement order not found")
+	ErrReplacementOrderInvalid      = errors.New("invalid replacement order")
+	ErrCancellationSourceNotQueued  = errors.New("cancellation source is not queued")
+	ErrCancellationSessionMismatch  = errors.New("cancellation units belong to different service sessions")
+	ErrChargeAdjustmentConflict     = errors.New("charge adjustment conflicts with an existing correction")
+	ErrOpenShiftRequired            = errors.New("an open sales shift is required")
+	// ErrCancellationChargeOutOfRange reports a guarded monetary range
+	// failure caused by the request's own size, so it is a client-shaped
+	// 422 rather than a defect (spec §14).
+	ErrCancellationChargeOutOfRange = errors.New("cancellation charge out of range")
+	// ErrChargeInvariantViolated reports that a Check's stored charge_vnd
+	// disagrees with base allocations less live adjustments. That is a
+	// defect, not a business state, so it is deliberately absent from
+	// ErrorResponse and surfaces as a logged 500 (spec §14).
+	ErrChargeInvariantViolated = errors.New("check charge does not match its allocations")
 )
 
 // ErrorResponse maps a Preparation domain error to its HTTP status and the
@@ -108,6 +129,34 @@ func ErrorResponse(err error) (int, response.APIResponse) {
 				Message: "not authorized",
 			},
 		}
+	// --- Phase 6C (Preparation Cancellation & Change) ---
+	case errors.Is(err, ErrCancellationSelectionInvalid):
+		return http.StatusBadRequest, coded(http.StatusBadRequest,
+			"CANCELLATION_SELECTION_INVALID", ErrCancellationSelectionInvalid)
+	case errors.Is(err, ErrReplacementOrderRequired):
+		return http.StatusBadRequest, coded(http.StatusBadRequest,
+			"REPLACEMENT_ORDER_REQUIRED", ErrReplacementOrderRequired)
+	case errors.Is(err, ErrReplacementOrderNotFound):
+		return http.StatusNotFound, coded(http.StatusNotFound,
+			"REPLACEMENT_ORDER_NOT_FOUND", ErrReplacementOrderNotFound)
+	case errors.Is(err, ErrReplacementOrderInvalid):
+		return http.StatusConflict, coded(http.StatusConflict,
+			"REPLACEMENT_ORDER_INVALID", ErrReplacementOrderInvalid)
+	case errors.Is(err, ErrCancellationSourceNotQueued):
+		return http.StatusConflict, coded(http.StatusConflict,
+			"CANCELLATION_SOURCE_NOT_QUEUED", ErrCancellationSourceNotQueued)
+	case errors.Is(err, ErrCancellationSessionMismatch):
+		return http.StatusConflict, coded(http.StatusConflict,
+			"CANCELLATION_SESSION_MISMATCH", ErrCancellationSessionMismatch)
+	case errors.Is(err, ErrChargeAdjustmentConflict):
+		return http.StatusConflict, coded(http.StatusConflict,
+			"CHARGE_ADJUSTMENT_CONFLICT", ErrChargeAdjustmentConflict)
+	case errors.Is(err, ErrOpenShiftRequired):
+		return http.StatusConflict, coded(http.StatusConflict,
+			"OPEN_SALES_SHIFT_REQUIRED", ErrOpenShiftRequired)
+	case errors.Is(err, ErrCancellationChargeOutOfRange):
+		return http.StatusUnprocessableEntity, coded(http.StatusUnprocessableEntity,
+			"CANCELLATION_CHARGE_OUT_OF_RANGE", ErrCancellationChargeOutOfRange)
 	case errors.Is(err, ErrUnauthorized), errors.Is(err, ErrSessionExpired), errors.Is(err, ErrSessionRevoked):
 		return http.StatusUnauthorized, response.APIResponse{
 			Success: false,

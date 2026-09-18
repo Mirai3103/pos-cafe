@@ -19,6 +19,15 @@ SELECT id, order_item_id, unit_number, state, service_number, category_name,
 FROM preparation_units
 WHERE id = $1;
 
+-- name: ListPreparationUnitsByIDs :many
+-- Batched projection read for a set of ids already known to exist (e.g. a
+-- cancellation batch), avoiding one GetPreparationUnit round trip per unit.
+SELECT id, order_item_id, unit_number, state, service_number, category_name,
+       item_name, size_name, modifiers, preparation_note, queued_at,
+       in_preparation_at, priority, remake_of_preparation_unit_id
+FROM preparation_units
+WHERE id = ANY(sqlc.arg(preparation_unit_ids)::uuid[]);
+
 -- name: SetPreparationUnitState :exec
 UPDATE preparation_units
 SET state = sqlc.arg(state),
@@ -323,3 +332,186 @@ JOIN service_sessions AS ss ON ss.id = o.service_session_id
 WHERE ss.state = 'ACTIVE'
 ORDER BY occurred_at DESC, fact_id DESC
 LIMIT 50;
+
+-- Phase 6C: Cancellation locks, resolution, and facts.
+--
+-- Lock order is the concurrency contract (design section 11.1): resolve
+-- ownership without locks, then lock Checks ascending by id, Service Sessions
+-- ascending by id, the current open Sales Shift, and finally the selected
+-- Preparation Units ascending by id. Restructuring locks Checks; closure locks
+-- Sessions; Waste and State Correction lock Sessions before units but never
+-- wait on a Check, so no lock cycle exists.
+
+-- name: ResolveCancellationUnits :many
+-- Non-locking resolution of a Cancellation selection. Each STANDARD unit maps
+-- to the immutable per-unit price of its Committed Item and to the Charge
+-- Allocation whose cumulative quantity range (allocations ordered by
+-- created_at then id) covers its unit_number. A REMAKE unit, or a unit beyond
+-- every allocation range, carries a null allocation, Check, and price because
+-- it was never charged.
+WITH selected AS (
+    SELECT pu.id, pu.state, pu.priority, pu.unit_number, pu.order_item_id,
+           oi.committed_item_id, o.service_session_id
+    FROM preparation_units AS pu
+    JOIN order_items AS oi ON oi.id = pu.order_item_id
+    JOIN orders AS o ON o.id = oi.order_id
+    WHERE pu.id = ANY(sqlc.arg(preparation_unit_ids)::uuid[])
+),
+ranges AS (
+    SELECT ca.committed_item_id, ca.id AS charge_allocation_id, ca.check_id,
+           ci.unit_price_vnd,
+           COALESCE(SUM(ca.quantity) OVER (
+               PARTITION BY ca.committed_item_id
+               ORDER BY ca.created_at, ca.id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)::BIGINT
+               AS range_start,
+           COALESCE(SUM(ca.quantity) OVER (
+               PARTITION BY ca.committed_item_id
+               ORDER BY ca.created_at, ca.id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), 0)::BIGINT
+               AS range_end
+    FROM charge_allocations AS ca
+    JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+    WHERE ca.committed_item_id IN (SELECT committed_item_id FROM selected)
+)
+SELECT s.id, s.state, s.priority, s.unit_number, s.order_item_id,
+       s.committed_item_id, s.service_session_id,
+       r.charge_allocation_id, r.check_id, r.unit_price_vnd
+FROM selected AS s
+LEFT JOIN ranges AS r
+       ON r.committed_item_id = s.committed_item_id
+      AND s.priority = 'STANDARD'
+      AND s.unit_number > r.range_start
+      AND s.unit_number <= r.range_end
+ORDER BY s.id ASC;
+
+-- name: LockPreparationChecksForCancellation :many
+-- Step 1 of the common correction lock order: every affected Check FOR UPDATE,
+-- ordered by id so concurrent corrections take the rows in the same order.
+SELECT id, state, charge_vnd, service_session_id
+FROM checks
+WHERE id = ANY(sqlc.arg(check_ids)::uuid[])
+ORDER BY id ASC
+FOR UPDATE;
+
+-- name: LockPreparationSessionsForCancellation :many
+-- Step 2: the owning Service Sessions, after their Checks and before the
+-- current Shift and the work rows.
+SELECT id, service_number, state
+FROM service_sessions
+WHERE id = ANY(sqlc.arg(service_session_ids)::uuid[])
+ORDER BY id ASC
+FOR UPDATE;
+
+-- name: LockOpenSalesShiftForCancellation :one
+-- Step 3: the one open Sales Shift. FOR SHARE, because Cancellation only reads
+-- the Shift for settlement evidence and never writes Shift state; Shift
+-- closure takes FOR UPDATE and stays excluded for the whole transaction. No
+-- row means no Shift is open.
+SELECT id, state
+FROM sales_shifts
+WHERE state = 'OPEN'
+LIMIT 1
+FOR SHARE;
+
+-- name: LockPreparationUnitsForCancellation :many
+-- Step 5: the selected Preparation Units, locked last in id order after their
+-- Checks and Sessions. The caller revalidates QUEUED and re-resolves the
+-- unit-to-allocation mapping against the committed rows.
+SELECT id, state, priority, unit_number, order_item_id
+FROM preparation_units
+WHERE id = ANY(sqlc.arg(preparation_unit_ids)::uuid[])
+ORDER BY id ASC
+FOR UPDATE;
+
+-- name: GetCancellationReplacementOrder :one
+-- Non-locking resolution for CHANGE. Returns no row when the replacement Order
+-- does not exist at all; the three boolean columns let the handler reject a
+-- cross-Session, source, or not-later Order with one typed error.
+SELECT o.id, o.service_session_id, o.submitted_at,
+       (o.service_session_id = sqlc.arg(service_session_id)::uuid) AS same_session,
+       NOT EXISTS (
+           SELECT 1
+           FROM unnest(sqlc.arg(source_order_ids)::uuid[]) AS source_order(id)
+           WHERE source_order.id = o.id
+       ) AS differs_from_source_orders,
+       o.submitted_at > (
+           SELECT COALESCE(MAX(src.submitted_at), '-infinity'::timestamptz)
+           FROM orders AS src
+           WHERE src.id = ANY(sqlc.arg(source_order_ids)::uuid[])
+       ) AS submitted_after_source_orders
+FROM orders AS o
+WHERE o.id = sqlc.arg(replacement_order_id);
+
+-- name: GetPreparationCheckFinancials :one
+-- Financial evidence for a Cancellation's affected Check, read while the
+-- caller holds the Check lock. base_charge_vnd is the live sum of original
+-- Charge Allocations; live_adjustment_vnd is every committed LIVE_CHECK
+-- adjustment; valid_payment_vnd excludes voided Payments; completed_refund_vnd
+-- counts completed live Refunds. The handler verifies stored charge = base -
+-- live adjustments, then recomputes settlement and pending Refund from these
+-- terms.
+SELECT c.id, c.state, c.charge_vnd, c.service_session_id,
+       COALESCE((SELECT SUM(ca.quantity::BIGINT * ci.unit_price_vnd)
+                 FROM charge_allocations AS ca
+                 JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+                 WHERE ca.check_id = c.id), 0)::BIGINT AS base_charge_vnd,
+       COALESCE((SELECT SUM(ca.amount_vnd)
+                 FROM charge_adjustments AS ca
+                 WHERE ca.check_id = c.id
+                   AND ca.scope = 'LIVE_CHECK'), 0)::BIGINT AS live_adjustment_vnd,
+       COALESCE((SELECT SUM(p.applied_amount_vnd)
+                 FROM payments AS p
+                 WHERE p.check_id = c.id
+                   AND NOT EXISTS (SELECT 1
+                                   FROM payment_voids AS pv
+                                   WHERE pv.payment_id = p.id)), 0)::BIGINT
+           AS valid_payment_vnd,
+       COALESCE((SELECT SUM(r.amount_vnd)
+                 FROM refunds AS r
+                 JOIN refund_completions AS rc ON rc.refund_id = r.id
+                 WHERE r.check_id = c.id
+                   AND r.completed_sale_id IS NULL), 0)::BIGINT
+           AS completed_refund_vnd
+FROM checks AS c
+WHERE c.id = $1;
+
+-- name: InsertChargeAdjustment :one
+INSERT INTO charge_adjustments (
+    kind, scope, preparation_unit_id, preparation_waste_id,
+    charge_allocation_id, check_id, completed_sale_id, sales_shift_id,
+    amount_vnd, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, kind, scope, preparation_unit_id, preparation_waste_id,
+          charge_allocation_id, check_id, completed_sale_id, sales_shift_id,
+          amount_vnd, created_at;
+
+-- name: UpdateAdjustedCheckCharge :exec
+-- Writes the denormalized live charge after one Cancellation batch plans all
+-- of its adjustments. The invariant is stored charge = base charge - live
+-- adjustments; POST_SALE adjustments are excluded.
+UPDATE checks
+SET charge_vnd = sqlc.arg(charge_vnd)
+WHERE id = sqlc.arg(id);
+
+-- name: InsertPreparationCancellation :one
+INSERT INTO preparation_cancellations (
+    preparation_unit_id, kind, charge_adjustment_id, replacement_order_id,
+    reason, note, actor_staff_identity_id, staff_access_session_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, preparation_unit_id, kind, charge_adjustment_id,
+          replacement_order_id, reason, note, actor_staff_identity_id,
+          staff_access_session_id, occurred_at;
+
+-- name: SettleAdjustedCheck :exec
+-- The settlement consequence of a Cancellation or Comp that reduces a live
+-- Check to zero balance. All four evidence columns are written together
+-- because check_settlement_evidence_valid rejects any partial set; the
+-- initiator and the current open Shift supply the evidence.
+UPDATE checks
+SET state = 'SETTLED',
+    settled_at = sqlc.arg(settled_at),
+    settled_by_staff_identity_id = sqlc.arg(settled_by_staff_identity_id),
+    settled_during_sales_shift_id = sqlc.arg(settled_during_sales_shift_id),
+    settled_staff_access_session_id = sqlc.arg(settled_staff_access_session_id)
+WHERE id = sqlc.arg(id);

@@ -81,6 +81,157 @@ func (q *Queries) GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) 
 	return i, err
 }
 
+const getShiftReconciliationTotals = `-- name: GetShiftReconciliationTotals :one
+
+WITH shift AS (
+    SELECT $1::uuid AS shift_id
+),
+live_check_obligations AS (
+    SELECT DISTINCT ca.check_id
+    FROM charge_adjustments AS ca, shift
+    WHERE ca.scope = 'LIVE_CHECK'
+      AND ca.sales_shift_id = shift.shift_id
+),
+live_check_financials AS (
+    SELECT lc.check_id,
+           COALESCE((SELECT SUM(ca.quantity::BIGINT * ci.unit_price_vnd)
+                     FROM charge_allocations AS ca
+                     JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+                     WHERE ca.check_id = lc.check_id), 0)::BIGINT
+               AS base_charge_vnd,
+           COALESCE((SELECT SUM(ca.amount_vnd)
+                     FROM charge_adjustments AS ca
+                     WHERE ca.check_id = lc.check_id
+                       AND ca.scope = 'LIVE_CHECK'), 0)::BIGINT
+               AS live_adjustment_vnd,
+           COALESCE((SELECT SUM(p.applied_amount_vnd)
+                     FROM payments AS p
+                     WHERE p.check_id = lc.check_id
+                       AND NOT EXISTS (SELECT 1
+                                       FROM payment_voids AS pv
+                                       WHERE pv.payment_id = p.id)), 0)::BIGINT
+               AS valid_payment_vnd,
+           COALESCE((SELECT SUM(r.amount_vnd)
+                     FROM refunds AS r
+                     JOIN refund_completions AS rc ON rc.refund_id = r.id
+                     WHERE r.check_id = lc.check_id
+                       AND r.completed_sale_id IS NULL), 0)::BIGINT
+               AS completed_live_refund_vnd
+    FROM live_check_obligations AS lc
+),
+post_sale AS (
+    SELECT (COALESCE((SELECT SUM(ca.amount_vnd)
+                      FROM charge_adjustments AS ca
+                      WHERE ca.sales_shift_id = (SELECT shift_id FROM shift)
+                        AND ca.scope = 'POST_SALE'), 0)
+            - COALESCE((SELECT SUM(raa.amount_vnd)
+                        FROM refund_adjustment_allocations AS raa
+                        JOIN refunds AS r ON r.id = raa.refund_id
+                        JOIN refund_completions AS rc ON rc.refund_id = r.id
+                        JOIN charge_adjustments AS ca2
+                          ON ca2.id = raa.charge_adjustment_id
+                        WHERE ca2.sales_shift_id = (SELECT shift_id FROM shift)
+                          AND ca2.scope = 'POST_SALE'), 0))::BIGINT
+               AS unresolved_post_sale_adjustment_vnd
+)
+SELECT
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p, shift
+     WHERE p.sales_shift_id = shift.shift_id
+       AND p.method = 'CASH') AS cash_payment_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     JOIN payment_voids AS pv ON pv.payment_id = p.id, shift
+     WHERE p.sales_shift_id = shift.shift_id
+       AND p.method = 'CASH') AS cash_payment_void_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     JOIN refund_completions AS rc ON rc.refund_id = r.id, shift
+     WHERE r.sales_shift_id = shift.shift_id
+       AND r.method = 'CASH') AS cash_refund_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p, shift
+     WHERE p.sales_shift_id = shift.shift_id
+       AND p.method = 'MANUAL_QR') AS manual_qr_payment_vnd,
+    (SELECT COALESCE(SUM(p.applied_amount_vnd), 0)::BIGINT
+     FROM payments AS p
+     JOIN payment_voids AS pv ON pv.payment_id = p.id, shift
+     WHERE p.sales_shift_id = shift.shift_id
+       AND p.method = 'MANUAL_QR') AS manual_qr_payment_void_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     JOIN refund_completions AS rc ON rc.refund_id = r.id, shift
+     WHERE r.sales_shift_id = shift.shift_id
+       AND r.method = 'MANUAL_QR') AS manual_qr_refund_vnd,
+    (SELECT COALESCE(SUM(r.amount_vnd), 0)::BIGINT
+     FROM refunds AS r
+     LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id, shift
+     WHERE r.sales_shift_id = shift.shift_id
+       AND r.method = 'MANUAL_QR'
+       AND rc.id IS NULL) AS pending_manual_qr_refund_vnd,
+    (((SELECT COALESCE(SUM(GREATEST(cf.valid_payment_vnd
+                                    - cf.completed_live_refund_vnd
+                                    - (cf.base_charge_vnd - cf.live_adjustment_vnd),
+                                    0)), 0)::BIGINT
+       FROM live_check_financials AS cf)
+      + (SELECT unresolved_post_sale_adjustment_vnd FROM post_sale)))::BIGINT
+         AS pending_refund_vnd,
+    (SELECT unresolved_post_sale_adjustment_vnd FROM post_sale)
+         AS unresolved_post_sale_adjustment_vnd
+`
+
+type GetShiftReconciliationTotalsRow struct {
+	CashPaymentVnd                  int64 `json:"cash_payment_vnd"`
+	CashPaymentVoidVnd              int64 `json:"cash_payment_void_vnd"`
+	CashRefundVnd                   int64 `json:"cash_refund_vnd"`
+	ManualQrPaymentVnd              int64 `json:"manual_qr_payment_vnd"`
+	ManualQrPaymentVoidVnd          int64 `json:"manual_qr_payment_void_vnd"`
+	ManualQrRefundVnd               int64 `json:"manual_qr_refund_vnd"`
+	PendingManualQrRefundVnd        int64 `json:"pending_manual_qr_refund_vnd"`
+	PendingRefundVnd                int64 `json:"pending_refund_vnd"`
+	UnresolvedPostSaleAdjustmentVnd int64 `json:"unresolved_post_sale_adjustment_vnd"`
+}
+
+// -- Phase 6C: Payment Void, Refund & correction reconciliation --
+// Every Phase 6C reconciliation term for one Shift in one read (ADR-046).
+// Cash and Manual QR Payment terms count original applied amounts; a Payment
+// Void removes its source's whole amount; completed Refunds count money out;
+// a pending Manual QR Refund has not moved money yet.
+//
+// pending_refund_vnd is money owed back, matching the Check equation in spec
+// 6.1. For every distinct Check carrying a LIVE_CHECK Charge Adjustment
+// attributed to this Shift it sums
+//
+//	greatest(valid_payments - completed_live_refunds - corrected_charge, 0)
+//
+// where corrected_charge = base allocations - all LIVE_CHECK adjustments on
+// that Check (from every shift, because they all shape its current charge),
+// valid_payments excludes voided Payments, and completed_live_refunds counts
+// only completed Refunds without a Completed Sale. A Check touched by more
+// than one shift reports its whole live obligation in each affected shift's
+// read; a single shift read is the authoritative view of its own obligations
+// and never over-reports from adjustment capacity. unresolved_post_sale_
+// adjustment_vnd keeps its capacity-based meaning (the POST_SALE adjustment
+// amount not yet covered by completed Refunds) and is included in
+// pending_refund_vnd. internal/shift owns this SQL and imports neither sales
+// nor preparation.
+func (q *Queries) GetShiftReconciliationTotals(ctx context.Context, salesShiftID uuid.UUID) (GetShiftReconciliationTotalsRow, error) {
+	row := q.db.QueryRowContext(ctx, getShiftReconciliationTotals, salesShiftID)
+	var i GetShiftReconciliationTotalsRow
+	err := row.Scan(
+		&i.CashPaymentVnd,
+		&i.CashPaymentVoidVnd,
+		&i.CashRefundVnd,
+		&i.ManualQrPaymentVnd,
+		&i.ManualQrPaymentVoidVnd,
+		&i.ManualQrRefundVnd,
+		&i.PendingManualQrRefundVnd,
+		&i.PendingRefundVnd,
+		&i.UnresolvedPostSaleAdjustmentVnd,
+	)
+	return i, err
+}
+
 const getShiftSessionAuthority = `-- name: GetShiftSessionAuthority :one
 
 SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
@@ -308,6 +459,68 @@ func (q *Queries) ListCashMovements(ctx context.Context, salesShiftID uuid.UUID)
 	return items, nil
 }
 
+const listShiftRefunds = `-- name: ListShiftRefunds :many
+SELECT r.id, r.check_id, r.completed_sale_id, r.method, r.amount_vnd,
+       r.reason, r.note, r.created_at,
+       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS completed,
+       rc.completed_at, rc.transaction_reference
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.sales_shift_id = $1
+ORDER BY r.created_at ASC, r.id ASC
+`
+
+type ListShiftRefundsRow struct {
+	ID                   uuid.UUID      `json:"id"`
+	CheckID              uuid.UUID      `json:"check_id"`
+	CompletedSaleID      uuid.NullUUID  `json:"completed_sale_id"`
+	Method               string         `json:"method"`
+	AmountVnd            int64          `json:"amount_vnd"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	CreatedAt            time.Time      `json:"created_at"`
+	Completed            bool           `json:"completed"`
+	CompletedAt          sql.NullTime   `json:"completed_at"`
+	TransactionReference sql.NullString `json:"transaction_reference"`
+}
+
+// The Shift response's Refund summaries ordered by (created_at, id), each
+// carrying derived completion state and no credentials.
+func (q *Queries) ListShiftRefunds(ctx context.Context, salesShiftID uuid.UUID) ([]ListShiftRefundsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listShiftRefunds, salesShiftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShiftRefundsRow{}
+	for rows.Next() {
+		var i ListShiftRefundsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CheckID,
+			&i.CompletedSaleID,
+			&i.Method,
+			&i.AmountVnd,
+			&i.Reason,
+			&i.Note,
+			&i.CreatedAt,
+			&i.Completed,
+			&i.CompletedAt,
+			&i.TransactionReference,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const openSalesShift = `-- name: OpenSalesShift :one
 
 INSERT INTO sales_shifts (opened_by_staff_identity_id, opening_float_vnd)
@@ -361,25 +574,4 @@ func (q *Queries) SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) 
 	var i SumCashMovementsRow
 	err := row.Scan(&i.PayInVnd, &i.PayOutVnd)
 	return i, err
-}
-
-const sumCashPaymentsForShift = `-- name: SumCashPaymentsForShift :one
-SELECT COALESCE(SUM(applied_amount_vnd) FILTER (WHERE method = 'CASH'), 0)::BIGINT
-    AS cash_payment_vnd
-FROM payments
-WHERE sales_shift_id = $1
-`
-
-// Expected Cash's Cash Payment term (ADR-020). The sum is over APPLIED
-// amounts, not tendered amounts: CONTEXT.md defines a Cash Payment's net cash
-// effect as the applied amount, because the change left the drawer at the same
-// moment the tendered cash entered it.
-//
-// internal/shift reads the payments table through its own query rather than
-// importing internal/sales, following ADR-012.
-func (q *Queries) SumCashPaymentsForShift(ctx context.Context, salesShiftID uuid.UUID) (int64, error) {
-	row := q.db.QueryRowContext(ctx, sumCashPaymentsForShift, salesShiftID)
-	var cash_payment_vnd int64
-	err := row.Scan(&cash_payment_vnd)
-	return cash_payment_vnd, err
 }

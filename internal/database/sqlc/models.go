@@ -51,6 +51,20 @@ type CategoryModifierGroup struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+type ChargeAdjustment struct {
+	ID                 uuid.UUID     `json:"id"`
+	Kind               string        `json:"kind"`
+	Scope              string        `json:"scope"`
+	PreparationUnitID  uuid.UUID     `json:"preparation_unit_id"`
+	PreparationWasteID uuid.NullUUID `json:"preparation_waste_id"`
+	ChargeAllocationID uuid.UUID     `json:"charge_allocation_id"`
+	CheckID            uuid.UUID     `json:"check_id"`
+	CompletedSaleID    uuid.NullUUID `json:"completed_sale_id"`
+	SalesShiftID       uuid.UUID     `json:"sales_shift_id"`
+	AmountVnd          int64         `json:"amount_vnd"`
+	CreatedAt          time.Time     `json:"created_at"`
+}
+
 type ChargeAllocation struct {
 	ID              uuid.UUID `json:"id"`
 	CommittedItemID uuid.UUID `json:"committed_item_id"`
@@ -259,6 +273,19 @@ type Payment struct {
 	ReceivedAt           time.Time      `json:"received_at"`
 }
 
+type PaymentVoid struct {
+	ID                        uuid.UUID      `json:"id"`
+	PaymentID                 uuid.UUID      `json:"payment_id"`
+	SalesShiftID              uuid.UUID      `json:"sales_shift_id"`
+	AmountVnd                 int64          `json:"amount_vnd"`
+	Reason                    string         `json:"reason"`
+	Note                      sql.NullString `json:"note"`
+	ActorStaffIdentityID      uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID      uuid.UUID      `json:"staff_access_session_id"`
+	ApprovedByStaffIdentityID uuid.UUID      `json:"approved_by_staff_identity_id"`
+	OccurredAt                time.Time      `json:"occurred_at"`
+}
+
 type PreparationAlert struct {
 	ID                               uuid.UUID      `json:"id"`
 	PreparationUnitID                uuid.UUID      `json:"preparation_unit_id"`
@@ -271,6 +298,19 @@ type PreparationAlert struct {
 	AcknowledgedByStaffIdentityID    uuid.NullUUID  `json:"acknowledged_by_staff_identity_id"`
 	AcknowledgedStaffAccessSessionID uuid.NullUUID  `json:"acknowledged_staff_access_session_id"`
 	AcknowledgedAt                   sql.NullTime   `json:"acknowledged_at"`
+}
+
+type PreparationCancellation struct {
+	ID                   uuid.UUID      `json:"id"`
+	PreparationUnitID    uuid.UUID      `json:"preparation_unit_id"`
+	Kind                 string         `json:"kind"`
+	ChargeAdjustmentID   uuid.NullUUID  `json:"charge_adjustment_id"`
+	ReplacementOrderID   uuid.NullUUID  `json:"replacement_order_id"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	OccurredAt           time.Time      `json:"occurred_at"`
 }
 
 type PreparationRemake struct {
@@ -332,6 +372,56 @@ type PreparationWaste struct {
 	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
 	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
 	OccurredAt           time.Time      `json:"occurred_at"`
+}
+
+type Refund struct {
+	ID                        uuid.UUID      `json:"id"`
+	CheckID                   uuid.UUID      `json:"check_id"`
+	CompletedSaleID           uuid.NullUUID  `json:"completed_sale_id"`
+	SalesShiftID              uuid.UUID      `json:"sales_shift_id"`
+	Method                    string         `json:"method"`
+	AmountVnd                 int64          `json:"amount_vnd"`
+	Reason                    string         `json:"reason"`
+	Note                      sql.NullString `json:"note"`
+	ActorStaffIdentityID      uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID      uuid.UUID      `json:"staff_access_session_id"`
+	ApprovedByStaffIdentityID uuid.UUID      `json:"approved_by_staff_identity_id"`
+	CreatedAt                 time.Time      `json:"created_at"`
+}
+
+type RefundAdjustmentAllocation struct {
+	ID                 uuid.UUID `json:"id"`
+	RefundID           uuid.UUID `json:"refund_id"`
+	ChargeAdjustmentID uuid.UUID `json:"charge_adjustment_id"`
+	AmountVnd          int64     `json:"amount_vnd"`
+}
+
+type RefundCompletion struct {
+	ID                         uuid.UUID      `json:"id"`
+	RefundID                   uuid.UUID      `json:"refund_id"`
+	TransactionReference       sql.NullString `json:"transaction_reference"`
+	CompletedByStaffIdentityID uuid.UUID      `json:"completed_by_staff_identity_id"`
+	StaffAccessSessionID       uuid.UUID      `json:"staff_access_session_id"`
+	CompletedAt                time.Time      `json:"completed_at"`
+}
+
+type RefundPaymentAllocation struct {
+	ID        uuid.UUID `json:"id"`
+	RefundID  uuid.UUID `json:"refund_id"`
+	PaymentID uuid.UUID `json:"payment_id"`
+	AmountVnd int64     `json:"amount_vnd"`
+}
+
+type SalesComp struct {
+	ID                        uuid.UUID      `json:"id"`
+	PreparationWasteID        uuid.UUID      `json:"preparation_waste_id"`
+	ChargeAdjustmentID        uuid.UUID      `json:"charge_adjustment_id"`
+	Reason                    string         `json:"reason"`
+	Note                      sql.NullString `json:"note"`
+	ActorStaffIdentityID      uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID      uuid.UUID      `json:"staff_access_session_id"`
+	ApprovedByStaffIdentityID uuid.UUID      `json:"approved_by_staff_identity_id"`
+	OccurredAt                time.Time      `json:"occurred_at"`
 }
 
 // Owned by internal/shift (Phase 4). At most one row may be in OPEN state. Phase 4 ships no close operation; see the Non-Goals in the Phase 4 design spec.

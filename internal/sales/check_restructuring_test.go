@@ -1,6 +1,8 @@
 package sales_test
 
 import (
+	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/response"
@@ -64,4 +66,15 @@ func TestNormalizeSplitItemsSortsByCommittedItem(t *testing.T) {
 	})
 	require.Equal(t, forward, reversed)
 	require.Equal(t, a, forward[0].CommittedItemID)
+}
+
+// A Check carrying a live Charge Adjustment is a conflict for Split and Merge,
+// so the guard's sentinel must reach clients as a 409
+// CHECK_HAS_CHARGE_ADJUSTMENT like every other Check conflict.
+func TestMapHTTPErrorCheckHasChargeAdjustment(t *testing.T) {
+	var coded *response.CodedError
+	require.ErrorAs(t, sales.MapHTTPError(
+		fmt.Errorf("wrapped: %w", sales.ErrCheckHasChargeAdjustment)), &coded)
+	require.Equal(t, http.StatusConflict, coded.Status)
+	require.Equal(t, "CHECK_HAS_CHARGE_ADJUSTMENT", coded.Code)
 }

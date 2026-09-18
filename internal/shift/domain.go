@@ -138,17 +138,26 @@ func ValidateNote(note *string, reason string) error {
 
 // ComputeExpectedCash returns the Sales Shift's calculated cash responsibility.
 //
-// Opening Float plus Cash Payments and Pay Ins, less Pay Outs. The Cash Refund
-// term of the canonical formula has no data source: Refund is outside Phase 5
-// entirely, and this figure completes when Refund arrives. See ADR-020, which
-// supersedes ADR-008's claim that Phase 5 completes both terms.
+// Opening Float plus valid Cash Payments, less completed Cash Refunds, plus
+// Pay Ins, less Pay Outs (ADR-046). The Cash Payment term counts original
+// applied amounts and the Void term removes the source Payment's whole amount,
+// so their difference is the non-voided Cash Payments. A pending Refund is
+// absent from the formula because the money has not moved yet.
 //
 // The guard is symmetric because sustained Pay Outs can legitimately drive the
 // figure negative. A total outside the bound indicates corrupt data, not a
 // legitimate drawer balance.
-func ComputeExpectedCash(openingFloatVND, cashPaymentVND, payInVND, payOutVND int64) (int64, error) {
+func ComputeExpectedCash(
+	openingFloatVND, cashPaymentVND, cashPaymentVoidVND, cashRefundVND, payInVND, payOutVND int64,
+) (int64, error) {
 	total, err := addAmount(openingFloatVND, cashPaymentVND)
 	if err != nil {
+		return 0, err
+	}
+	if total, err = subtractAmount(total, cashPaymentVoidVND); err != nil {
+		return 0, err
+	}
+	if total, err = subtractAmount(total, cashRefundVND); err != nil {
 		return 0, err
 	}
 	if total, err = addAmount(total, payInVND); err != nil {

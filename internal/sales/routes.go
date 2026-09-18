@@ -34,6 +34,10 @@ type Slices struct {
 	PayManualQR               *PayManualQRHandler
 	SplitCheck                *SplitCheckHandler
 	MergeChecks               *MergeChecksHandler
+	CompWaste                 *CompWasteHandler
+	RecordRefund              *RecordRefundHandler
+	ConfirmManualQRRefund     *ConfirmManualQRRefundHandler
+	VoidPayment               *VoidPaymentHandler
 }
 
 // NewSlices wires every Sales handler onto a shared Runner.
@@ -63,6 +67,10 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		PayManualQR:               NewPayManualQRHandler(runner),
 		SplitCheck:                NewSplitCheckHandler(runner),
 		MergeChecks:               NewMergeChecksHandler(runner),
+		CompWaste:                 NewCompWasteHandler(runner),
+		RecordRefund:              NewRecordRefundHandler(runner),
+		ConfirmManualQRRefund:     NewConfirmManualQRRefundHandler(runner),
+		VoidPayment:               NewVoidPaymentHandler(runner),
 	}
 }
 
@@ -119,5 +127,13 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/sales/checks/:check_id/payments/manual-qr", s.handlePayManualQR,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/sales/checks/:check_id/split", s.handleSplitCheck,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/wastes/:waste_id/comp", s.handleCompWaste,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/refunds", s.handleRecordRefund,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/refunds/:refund_id/confirm", s.handleConfirmManualQRRefund,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/payments/:payment_id/void", s.handleVoidPayment,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 }

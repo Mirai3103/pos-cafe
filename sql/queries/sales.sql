@@ -486,12 +486,24 @@ WHERE service_session_id = $1
 ORDER BY created_at ASC, id ASC;
 
 -- name: ListCheckPayments :many
--- Ordered by (received_at, id), served directly by payment_check_index.
-SELECT id, method, applied_amount_vnd, cash_tendered_vnd, change_due_vnd,
-       transaction_reference, sales_shift_id, received_at
-FROM payments
-WHERE check_id = $1
-ORDER BY received_at ASC, id ASC;
+-- Ordered by (received_at, id), served directly by payment_check_index. The
+-- LEFT JOIN carries Phase 6C Payment Void evidence so the Check projection can
+-- present and subtract a voided Payment without a second read; void_id is null
+-- while the Payment stands.
+SELECT p.id, p.method, p.applied_amount_vnd, p.cash_tendered_vnd,
+       p.change_due_vnd, p.transaction_reference, p.sales_shift_id,
+       p.received_at,
+       pv.id AS void_id,
+       pv.amount_vnd AS void_amount_vnd,
+       pv.reason AS void_reason,
+       pv.note AS void_note,
+       pv.actor_staff_identity_id AS void_actor_staff_identity_id,
+       pv.approved_by_staff_identity_id AS void_approved_by_staff_identity_id,
+       pv.occurred_at AS void_occurred_at
+FROM payments AS p
+LEFT JOIN payment_voids AS pv ON pv.payment_id = p.id
+WHERE p.check_id = $1
+ORDER BY p.received_at ASC, p.id ASC;
 
 -- name: ListCheckAllocations :many
 SELECT ca.id, ca.quantity AS allocated_quantity, ca.created_at,
@@ -837,3 +849,384 @@ JOIN order_items oi ON oi.id = pu.order_item_id
 JOIN orders o ON o.id = oi.order_id
 WHERE o.service_session_id = $1
 ORDER BY put.occurred_at ASC, put.id ASC;
+
+-- Phase 6C: Comp, Refund, and Payment Void resolution, locks, and facts.
+--
+-- Lock order is the concurrency contract (design section 11.1): non-locking
+-- resolution first, then Checks ascending, Service Sessions ascending, the
+-- current or original Sales Shift, Payments and Charge Adjustments each
+-- ascending, and finally Preparation source facts and Units ascending.
+
+-- name: ResolveCompSource :one
+-- Non-locking ownership resolution for Comp. Resolves the Waste, its source
+-- unit, the owning Order Item and Service Session, the Completed Sale when the
+-- Session is already closed, and the original Charge Allocation whose
+-- cumulative quantity range (allocations ordered by created_at then id) covers
+-- the unit_number. A Wasted Remake maps to a null allocation and price because
+-- it was never charged.
+WITH source AS (
+    SELECT w.id AS waste_id, w.preparation_unit_id, w.prior_state,
+           pu.state AS unit_state, pu.priority, pu.unit_number,
+           oi.id AS order_item_id, oi.committed_item_id, o.service_session_id
+    FROM preparation_wastes AS w
+    JOIN preparation_units AS pu ON pu.id = w.preparation_unit_id
+    JOIN order_items AS oi ON oi.id = pu.order_item_id
+    JOIN orders AS o ON o.id = oi.order_id
+    WHERE w.id = $1
+),
+ranges AS (
+    SELECT ca.committed_item_id, ca.id AS charge_allocation_id, ca.check_id,
+           ci.unit_price_vnd,
+           COALESCE(SUM(ca.quantity) OVER (
+               PARTITION BY ca.committed_item_id
+               ORDER BY ca.created_at, ca.id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)::BIGINT
+               AS range_start,
+           COALESCE(SUM(ca.quantity) OVER (
+               PARTITION BY ca.committed_item_id
+               ORDER BY ca.created_at, ca.id
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), 0)::BIGINT
+               AS range_end
+    FROM charge_allocations AS ca
+    JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+    WHERE ca.committed_item_id = (SELECT committed_item_id FROM source)
+)
+SELECT s.waste_id, s.preparation_unit_id, s.prior_state, s.unit_state,
+       s.priority, s.unit_number, s.order_item_id, s.service_session_id,
+       ss.state AS service_session_state,
+       cs.id AS completed_sale_id,
+       r.charge_allocation_id, r.check_id, r.unit_price_vnd AS amount_vnd
+FROM source AS s
+JOIN service_sessions AS ss ON ss.id = s.service_session_id
+LEFT JOIN completed_sales AS cs ON cs.service_session_id = s.service_session_id
+LEFT JOIN ranges AS r
+       ON r.committed_item_id = s.committed_item_id
+      AND s.priority = 'STANDARD'
+      AND s.unit_number > r.range_start
+      AND s.unit_number <= r.range_end;
+
+-- name: LockWasteForComp :one
+-- Step 5: the Waste and its source Preparation Unit, locked after the Check,
+-- Session, and Shift resolved by ResolveCompSource. The unit lock serializes
+-- concurrent Comps of one Waste alongside the unique Waste reference.
+SELECT w.id, w.preparation_unit_id, w.prior_state, w.reason, w.note,
+       w.actor_staff_identity_id, w.staff_access_session_id, w.occurred_at,
+       pu.state AS unit_state, pu.priority, pu.unit_number, pu.order_item_id
+FROM preparation_wastes AS w
+JOIN preparation_units AS pu ON pu.id = w.preparation_unit_id
+WHERE w.id = $1
+FOR UPDATE OF w, pu;
+
+-- name: LockPaymentForVoid :one
+-- Locks one Payment for Void after its Check, Session, and Shift are locked.
+-- Refund allocations, if any, are read separately under this lock to reject a
+-- refunded Payment.
+SELECT id, check_id, sales_shift_id, method, applied_amount_vnd, received_at
+FROM payments
+WHERE id = $1
+FOR UPDATE;
+
+-- name: ReopenCheckAfterPaymentVoid :exec
+-- The settlement consequence of a whole Payment Void that leaves a positive
+-- balance: the Check moves back from SETTLED to OPEN. All four
+-- settlement-evidence columns are cleared in the same statement because
+-- check_settlement_evidence_valid rejects OPEN with any evidence set. The
+-- caller has already recomputed the positive balance under the Check lock.
+UPDATE checks
+SET state = 'OPEN',
+    settled_at = NULL,
+    settled_by_staff_identity_id = NULL,
+    settled_during_sales_shift_id = NULL,
+    settled_staff_access_session_id = NULL
+WHERE id = $1 AND state = 'SETTLED';
+
+-- name: LockPaymentsForRefund :many
+-- Steps 4: the selected Payments FOR UPDATE, each ascending UUID, so two
+-- overlapping Refunds cannot allocate the same capacity twice and cannot
+-- deadlock against each other.
+SELECT p.id, p.check_id, p.sales_shift_id, p.method, p.applied_amount_vnd
+FROM payments AS p
+WHERE p.id = ANY(sqlc.arg(payment_ids)::uuid[])
+ORDER BY p.id
+FOR UPDATE;
+
+-- name: LockChargeAdjustmentsForRefund :many
+-- Step 4: the selected Charge Adjustments FOR UPDATE, each ascending UUID,
+-- after the Payments so both refundable capacities are held in one order.
+SELECT ca.id, ca.scope, ca.check_id, ca.completed_sale_id, ca.amount_vnd
+FROM charge_adjustments AS ca
+WHERE ca.id = ANY(sqlc.arg(charge_adjustment_ids)::uuid[])
+ORDER BY ca.id
+FOR UPDATE;
+
+-- name: InsertSalesComp :one
+INSERT INTO sales_comps (
+    preparation_waste_id, charge_adjustment_id, reason, note,
+    actor_staff_identity_id, staff_access_session_id,
+    approved_by_staff_identity_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, preparation_waste_id, charge_adjustment_id, reason, note,
+          actor_staff_identity_id, staff_access_session_id,
+          approved_by_staff_identity_id, occurred_at;
+
+-- name: InsertPaymentVoid :one
+INSERT INTO payment_voids (
+    payment_id, sales_shift_id, amount_vnd, reason, note,
+    actor_staff_identity_id, staff_access_session_id,
+    approved_by_staff_identity_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, payment_id, sales_shift_id, amount_vnd, reason, note,
+          actor_staff_identity_id, staff_access_session_id,
+          approved_by_staff_identity_id, occurred_at;
+
+-- name: InsertRefund :one
+INSERT INTO refunds (
+    check_id, completed_sale_id, sales_shift_id, method, amount_vnd,
+    reason, note, actor_staff_identity_id, staff_access_session_id,
+    approved_by_staff_identity_id, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, check_id, completed_sale_id, sales_shift_id, method, amount_vnd,
+          reason, note, actor_staff_identity_id, staff_access_session_id,
+          approved_by_staff_identity_id, created_at;
+
+-- name: InsertRefundPaymentAllocations :exec
+-- Writes one Refund's whole Payment allocation set in one round trip. The two
+-- single-array unnests zip row-wise by ordinality, so row i is
+-- (payment_ids[i], amounts[i]); the caller validates equal lengths and
+-- positive amounts before calling, and the pair unique constraint rejects a
+-- duplicated source.
+INSERT INTO refund_payment_allocations (refund_id, payment_id, amount_vnd)
+SELECT sqlc.arg(refund_id)::uuid, p.payment_id, a.amount_vnd
+FROM unnest(sqlc.arg(payment_ids)::uuid[]) WITH ORDINALITY AS p(payment_id, ord)
+JOIN unnest(sqlc.arg(amounts)::bigint[]) WITH ORDINALITY AS a(amount_vnd, ord)
+  ON a.ord = p.ord;
+
+-- name: InsertRefundAdjustmentAllocations :exec
+-- The Charge Adjustment counterpart of InsertRefundPaymentAllocations.
+INSERT INTO refund_adjustment_allocations (refund_id, charge_adjustment_id, amount_vnd)
+SELECT sqlc.arg(refund_id)::uuid, ca.charge_adjustment_id, a.amount_vnd
+FROM unnest(sqlc.arg(charge_adjustment_ids)::uuid[]) WITH ORDINALITY
+     AS ca(charge_adjustment_id, ord)
+JOIN unnest(sqlc.arg(amounts)::bigint[]) WITH ORDINALITY AS a(amount_vnd, ord)
+  ON a.ord = ca.ord;
+
+-- name: InsertRefundCompletion :one
+INSERT INTO refund_completions (
+    refund_id, transaction_reference, completed_by_staff_identity_id,
+    staff_access_session_id, completed_at
+) VALUES ($1, $2, $3, $4, $5)
+RETURNING id, refund_id, transaction_reference,
+          completed_by_staff_identity_id, staff_access_session_id, completed_at;
+
+-- name: LockRefundForConfirmation :one
+-- Locks one Refund for Manual QR confirmation, after its Check, Session, and
+-- Shift are locked, and returns the completion evidence that decides replay.
+SELECT r.id, r.check_id, r.completed_sale_id, r.sales_shift_id, r.method,
+       r.amount_vnd, r.created_at,
+       rc.id AS completion_id, rc.completed_at
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.id = $1
+FOR UPDATE OF r;
+
+-- name: ListCheckChargeAdjustments :many
+-- The live Check projection's append-only charge reductions, ordered by
+-- occurrence then id. POST_SALE adjustments are excluded: they correct a
+-- closed sale and are read through ListCompletedSalePostSaleCorrections.
+SELECT id, kind, scope, preparation_unit_id, preparation_waste_id,
+       charge_allocation_id, completed_sale_id, sales_shift_id, amount_vnd,
+       created_at
+FROM charge_adjustments
+WHERE check_id = $1 AND scope = 'LIVE_CHECK'
+ORDER BY created_at ASC, id ASC;
+
+-- name: ListCheckRefunds :many
+-- The live Check projection's Refunds, each with nullable completion evidence
+-- so the caller derives PENDING or COMPLETED without a mutable state column.
+-- Post-sale Refunds are excluded; they are read through
+-- ListCompletedSalePostSaleCorrections.
+SELECT r.id, r.check_id, r.completed_sale_id, r.sales_shift_id, r.method,
+       r.amount_vnd, r.reason, r.note, r.actor_staff_identity_id,
+       r.staff_access_session_id, r.approved_by_staff_identity_id,
+       r.created_at,
+       rc.id AS completion_id, rc.transaction_reference,
+       rc.completed_by_staff_identity_id,
+       rc.staff_access_session_id AS completed_staff_access_session_id,
+       rc.completed_at
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.check_id = $1 AND r.completed_sale_id IS NULL
+ORDER BY r.created_at ASC, r.id ASC;
+
+-- name: ListRefundPaymentAllocations :many
+-- One Refund's Payment allocations, ordered by Payment id, for the Refund
+-- result and the Completed Sale history.
+SELECT refund_id, payment_id, amount_vnd
+FROM refund_payment_allocations
+WHERE refund_id = $1
+ORDER BY payment_id ASC;
+
+-- name: ListRefundAdjustmentAllocations :many
+-- One Refund's Charge Adjustment allocations, ordered by Adjustment id.
+SELECT refund_id, charge_adjustment_id, amount_vnd
+FROM refund_adjustment_allocations
+WHERE refund_id = $1
+ORDER BY charge_adjustment_id ASC;
+
+-- name: ListRefundPaymentAllocationsByRefundIDs :many
+-- Every Payment allocation for the given Refunds, for a Check's batched
+-- Refund projection: one round trip replaces one ListRefundPaymentAllocations
+-- call per Refund.
+SELECT refund_id, payment_id, amount_vnd
+FROM refund_payment_allocations
+WHERE refund_id = ANY(sqlc.arg(refund_ids)::uuid[])
+ORDER BY refund_id ASC, payment_id ASC;
+
+-- name: ListRefundAdjustmentAllocationsByRefundIDs :many
+-- Every Charge Adjustment allocation for the given Refunds, for a Check's
+-- batched Refund projection: one round trip replaces one
+-- ListRefundAdjustmentAllocations call per Refund.
+SELECT refund_id, charge_adjustment_id, amount_vnd
+FROM refund_adjustment_allocations
+WHERE refund_id = ANY(sqlc.arg(refund_ids)::uuid[])
+ORDER BY refund_id ASC, charge_adjustment_id ASC;
+
+-- name: ListPaymentRefundAllocations :many
+-- Every Refund allocation against the given Payments, with the owning Refund's
+-- scope and completion evidence, so the Check projection can derive each
+-- Payment's remaining_refundable_vnd. Pending Manual QR intents appear too:
+-- they reserve capacity before money moves. The caller applies the structural
+-- snapshot rule (a post-sale allocation belongs to history, not the live
+-- capacity) through refund_completed_sale_id.
+SELECT rpa.refund_id, rpa.payment_id, rpa.amount_vnd,
+       r.completed_sale_id AS refund_completed_sale_id,
+       r.method AS refund_method,
+       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS refund_completed
+FROM refund_payment_allocations AS rpa
+JOIN refunds AS r ON r.id = rpa.refund_id
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE rpa.payment_id = ANY(sqlc.arg(payment_ids)::uuid[])
+ORDER BY rpa.payment_id ASC, rpa.refund_id ASC;
+
+-- name: ListAdjustmentRefundAllocations :many
+-- Every Refund allocation against the given Charge Adjustments, with the
+-- owning Refund's scope and completion evidence, so the Check projection can
+-- derive each Adjustment's remaining corrected capacity. Pending Manual QR
+-- intents reserve capacity here too.
+SELECT raa.refund_id, raa.charge_adjustment_id, raa.amount_vnd,
+       r.completed_sale_id AS refund_completed_sale_id,
+       r.method AS refund_method,
+       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS refund_completed
+FROM refund_adjustment_allocations AS raa
+JOIN refunds AS r ON r.id = raa.refund_id
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE raa.charge_adjustment_id = ANY(sqlc.arg(charge_adjustment_ids)::uuid[])
+ORDER BY raa.charge_adjustment_id ASC, raa.refund_id ASC;
+
+-- name: ListCompletedSalePostSaleCorrections :many
+-- Additive post-sale correction history for one Completed Sale: every
+-- POST_SALE charge reduction (with its Comp fact) and every post-sale Refund,
+-- ordered by occurrence then id. entry_kind discriminates the two row shapes;
+-- each shape fills only its own columns. The leading WHERE false header exists
+-- so the generated row type carries every column as nullable; a real row
+-- always fills its own shape. Each row carries every column a full
+-- PostSaleCorrectionResponse needs, so the shared loader never fabricates a
+-- zero placeholder. The immutable sale snapshot itself is never rebuilt from
+-- these rows.
+SELECT NULL::text AS entry_kind,
+       NULL::uuid AS charge_adjustment_id,
+       NULL::text AS adjustment_kind,
+       NULL::uuid AS preparation_unit_id,
+       NULL::uuid AS preparation_waste_id,
+       NULL::uuid AS sales_comp_id,
+       NULL::uuid AS refund_id,
+       NULL::uuid AS check_id,
+       NULL::text AS scope,
+       NULL::uuid AS charge_allocation_id,
+       NULL::uuid AS sales_shift_id,
+       NULL::uuid AS completed_sale_id,
+       NULL::bigint AS amount_vnd,
+       NULL::text AS reason,
+       NULL::text AS note,
+       NULL::uuid AS actor_staff_identity_id,
+       NULL::uuid AS approved_by_staff_identity_id,
+       NULL::text AS refund_method,
+       NULL::uuid AS refund_completion_id,
+       NULL::text AS transaction_reference,
+       NULL::uuid AS completed_by_staff_identity_id,
+       NULL::uuid AS completed_staff_access_session_id,
+       NULL::timestamptz AS completed_at,
+       NULL::timestamptz AS created_at,
+       NULL::timestamptz AS occurred_at
+WHERE false
+UNION ALL
+SELECT 'COMP' AS entry_kind,
+       ca.id AS charge_adjustment_id,
+       ca.kind AS adjustment_kind,
+       ca.preparation_unit_id,
+       ca.preparation_waste_id,
+       sc.id AS sales_comp_id,
+       NULL::uuid AS refund_id,
+       ca.check_id,
+       ca.scope,
+       ca.charge_allocation_id,
+       ca.sales_shift_id,
+       ca.completed_sale_id,
+       ca.amount_vnd,
+       sc.reason,
+       sc.note,
+       sc.actor_staff_identity_id,
+       sc.approved_by_staff_identity_id,
+       NULL::text AS refund_method,
+       NULL::uuid AS refund_completion_id,
+       NULL::text AS transaction_reference,
+       NULL::uuid AS completed_by_staff_identity_id,
+       NULL::uuid AS completed_staff_access_session_id,
+       NULL::timestamptz AS completed_at,
+       ca.created_at,
+       sc.occurred_at
+FROM charge_adjustments AS ca
+JOIN sales_comps AS sc ON sc.charge_adjustment_id = ca.id
+WHERE ca.scope = 'POST_SALE'
+  AND ca.completed_sale_id = sqlc.arg(completed_sale_id)::uuid
+UNION ALL
+SELECT 'REFUND' AS entry_kind,
+       NULL::uuid AS charge_adjustment_id,
+       NULL::text AS adjustment_kind,
+       NULL::uuid AS preparation_unit_id,
+       NULL::uuid AS preparation_waste_id,
+       NULL::uuid AS sales_comp_id,
+       r.id AS refund_id,
+       r.check_id,
+       NULL::text AS scope,
+       NULL::uuid AS charge_allocation_id,
+       r.sales_shift_id,
+       r.completed_sale_id,
+       r.amount_vnd,
+       r.reason,
+       r.note,
+       r.actor_staff_identity_id,
+       r.approved_by_staff_identity_id,
+       r.method AS refund_method,
+       rc.id AS refund_completion_id,
+       rc.transaction_reference,
+       rc.completed_by_staff_identity_id,
+       rc.staff_access_session_id AS completed_staff_access_session_id,
+       rc.completed_at,
+       r.created_at,
+       r.created_at AS occurred_at
+FROM refunds AS r
+LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
+WHERE r.completed_sale_id = sqlc.arg(completed_sale_id)::uuid
+ORDER BY occurred_at ASC,
+         charge_adjustment_id ASC NULLS LAST,
+         refund_id ASC NULLS LAST;
+
+-- name: CountLiveChargeAdjustmentsForChecks :one
+-- Split and Merge rejection evidence (design section 6.2): the number of the
+-- given Checks that carry at least one LIVE_CHECK Charge Adjustment. The
+-- caller rejects with CHECK_HAS_CHARGE_ADJUSTMENT when this is non-zero.
+SELECT count(*)::BIGINT AS live_adjustment_count
+FROM charge_adjustments
+WHERE check_id = ANY(sqlc.arg(check_ids)::uuid[])
+  AND scope = 'LIVE_CHECK';

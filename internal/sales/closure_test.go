@@ -1,8 +1,11 @@
 package sales_test
 
 import (
+	"fmt"
+	"net/http"
 	"testing"
 
+	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -65,6 +68,70 @@ func TestEvaluateClosureReadinessNoChecks(t *testing.T) {
 	got := sales.EvaluateClosureReadiness(s)
 	require.False(t, got.Eligible)
 	require.ErrorIs(t, got.Err(), sales.ErrCheckNotSettledForClosure)
+}
+
+func TestClosureReadinessPendingRefund(t *testing.T) {
+	// A fully settled Check that still owes money back must hold the Session
+	// open: Check state records covered customer debt, while the pending Refund
+	// is a separate obligation. The Check id travels with the verdict so the
+	// API can say which Check holds the Session.
+	s := eligible()
+	s.Checks[0].PendingRefundVND = 25_000
+
+	got := sales.EvaluateClosureReadiness(s)
+	require.False(t, got.Eligible, "money owed back must block closure")
+	require.False(t, got.AllRefundsResolved)
+	require.Equal(t, []uuid.UUID{s.Checks[0].ID}, got.PendingRefundCheckIDs)
+	require.ErrorIs(t, got.Err(), sales.ErrPendingRefundForClosure)
+}
+
+func TestClosureReadinessNoPendingRefundIsEmpty(t *testing.T) {
+	got := sales.EvaluateClosureReadiness(eligible())
+	require.True(t, got.AllRefundsResolved)
+	require.NotNil(t, got.PendingRefundCheckIDs, "the collection must be non-null")
+	require.Empty(t, got.PendingRefundCheckIDs)
+}
+
+func TestClosurePendingRefundErrorMapping(t *testing.T) {
+	var coded *response.CodedError
+	require.ErrorAs(t, sales.MapHTTPError(
+		fmt.Errorf("wrapped: %w", sales.ErrPendingRefundForClosure)), &coded)
+	require.Equal(t, http.StatusConflict, coded.Status)
+	require.Equal(t, "PENDING_REFUND_FOR_CLOSURE", coded.Code)
+}
+
+func TestClosureReadinessPrecedence(t *testing.T) {
+	// Staff fix what they are told about first, so the order decides which of
+	// several outstanding problems they are sent to resolve: unsettled money,
+	// then money owed back, then unsubmitted work, then the missing Order,
+	// then the bar.
+	s := eligible()
+	s.Checks[0].State = sales.CheckStateOpen
+	s.Checks[0].PendingRefundVND = 25_000
+	s.Checks[0].Allocations[0].Submitted = false
+	s.Orders = nil
+	s.PreparationUnits[0].State = sales.UnitStateQueued
+
+	got := sales.EvaluateClosureReadiness(s)
+	require.ErrorIs(t, got.Err(), sales.ErrCheckNotSettledForClosure)
+	require.Len(t, got.UnsettledCheckIDs, 1)
+	require.Equal(t, []uuid.UUID{s.Checks[0].ID}, got.PendingRefundCheckIDs,
+		"a pending Refund is still reported even while an unsettled Check outranks it")
+
+	s.Checks[0].State = sales.CheckStateSettled
+	require.ErrorIs(t, sales.EvaluateClosureReadiness(s).Err(), sales.ErrPendingRefundForClosure)
+
+	s.Checks[0].PendingRefundVND = 0
+	require.ErrorIs(t, sales.EvaluateClosureReadiness(s).Err(), sales.ErrUnsubmittedWorkForClosure)
+
+	s.Checks[0].Allocations[0].Submitted = true
+	require.ErrorIs(t, sales.EvaluateClosureReadiness(s).Err(), sales.ErrOrderRequiredForClosure)
+
+	s.Orders = []sales.OrderResponse{{ID: uuid.New()}}
+	require.ErrorIs(t, sales.EvaluateClosureReadiness(s).Err(), sales.ErrUnfulfilledPreparationForClosure)
+
+	s.PreparationUnits[0].State = sales.UnitStateFulfilled
+	require.NoError(t, sales.EvaluateClosureReadiness(s).Err(), "a fully resolved Session may close")
 }
 
 func TestEvaluateClosureReadinessUnsubmittedWork(t *testing.T) {

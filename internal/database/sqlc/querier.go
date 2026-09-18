@@ -23,6 +23,10 @@ type Querier interface {
 	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
 	CloseServiceSession(ctx context.Context, id uuid.UUID) error
 	CountActiveManagers(ctx context.Context) (int64, error)
+	// Split and Merge rejection evidence (design section 6.2): the number of the
+	// given Checks that carry at least one LIVE_CHECK Charge Adjustment. The
+	// caller rejects with CHECK_HAS_CHARGE_ADJUSTMENT when this is non-zero.
+	CountLiveChargeAdjustmentsForChecks(ctx context.Context, checkIds []uuid.UUID) (int64, error)
 	CountManagers(ctx context.Context) (int64, error)
 	CountPaymentsForChecks(ctx context.Context, dollar_1 []uuid.UUID) (int64, error)
 	CreateCategoryModifierGroup(ctx context.Context, arg CreateCategoryModifierGroupParams) error
@@ -72,6 +76,10 @@ type Querier interface {
 	// never matches itself. A separate query rather than a nullable exclusion
 	// parameter keeps the add path's query untouched.
 	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
+	// Non-locking resolution for CHANGE. Returns no row when the replacement Order
+	// does not exist at all; the three boolean columns let the handler reject a
+	// cross-Session, source, or not-later Order with one typed error.
+	GetCancellationReplacementOrder(ctx context.Context, arg GetCancellationReplacementOrderParams) (GetCancellationReplacementOrderRow, error)
 	GetCatalogMutationRequest(ctx context.Context, arg GetCatalogMutationRequestParams) (CatalogMutationRequest, error)
 	// Catalog sqlc queries
 	// Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
@@ -111,6 +119,14 @@ type Querier interface {
 	// importing internal/shift, per ADR-006's precedent.
 	GetOpenSalesShiftID(ctx context.Context) (uuid.UUID, error)
 	GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (string, error)
+	// Financial evidence for a Cancellation's affected Check, read while the
+	// caller holds the Check lock. base_charge_vnd is the live sum of original
+	// Charge Allocations; live_adjustment_vnd is every committed LIVE_CHECK
+	// adjustment; valid_payment_vnd excludes voided Payments; completed_refund_vnd
+	// counts completed live Refunds. The handler verifies stored charge = base -
+	// live adjustments, then recomputes settlement and pending Refund from these
+	// terms.
+	GetPreparationCheckFinancials(ctx context.Context, id uuid.UUID) (GetPreparationCheckFinancialsRow, error)
 	GetPreparationCurrentTime(ctx context.Context) (time.Time, error)
 	GetPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
 	GetSalesOccurredAt(ctx context.Context) (time.Time, error)
@@ -123,6 +139,28 @@ type Querier interface {
 	GetSalesShiftStateByID(ctx context.Context, id uuid.UUID) (string, error)
 	GetServiceSession(ctx context.Context, id uuid.UUID) (GetServiceSessionRow, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
+	// -- Phase 6C: Payment Void, Refund & correction reconciliation --
+	// Every Phase 6C reconciliation term for one Shift in one read (ADR-046).
+	// Cash and Manual QR Payment terms count original applied amounts; a Payment
+	// Void removes its source's whole amount; completed Refunds count money out;
+	// a pending Manual QR Refund has not moved money yet.
+	//
+	// pending_refund_vnd is money owed back, matching the Check equation in spec
+	// 6.1. For every distinct Check carrying a LIVE_CHECK Charge Adjustment
+	// attributed to this Shift it sums
+	//     greatest(valid_payments - completed_live_refunds - corrected_charge, 0)
+	// where corrected_charge = base allocations - all LIVE_CHECK adjustments on
+	// that Check (from every shift, because they all shape its current charge),
+	// valid_payments excludes voided Payments, and completed_live_refunds counts
+	// only completed Refunds without a Completed Sale. A Check touched by more
+	// than one shift reports its whole live obligation in each affected shift's
+	// read; a single shift read is the authoritative view of its own obligations
+	// and never over-reports from adjustment capacity. unresolved_post_sale_
+	// adjustment_vnd keeps its capacity-based meaning (the POST_SALE adjustment
+	// amount not yet covered by completed Refunds) and is included in
+	// pending_refund_vnd. internal/shift owns this SQL and imports neither sales
+	// nor preparation.
+	GetShiftReconciliationTotals(ctx context.Context, salesShiftID uuid.UUID) (GetShiftReconciliationTotalsRow, error)
 	// -- Authority --
 	// Names are prefixed because sqlc query names are global across the package.
 	GetShiftSessionAuthority(ctx context.Context, arg GetShiftSessionAuthorityParams) (GetShiftSessionAuthorityRow, error)
@@ -158,6 +196,7 @@ type Querier interface {
 	InsertAuditEventsBatch(ctx context.Context, arg InsertAuditEventsBatchParams) error
 	// -- Cash Movements --
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
+	InsertChargeAdjustment(ctx context.Context, arg InsertChargeAdjustmentParams) (ChargeAdjustment, error)
 	InsertChargeAllocation(ctx context.Context, arg InsertChargeAllocationParams) error
 	// The batched counterpart of InsertChargeAllocation, for a Split's destination
 	// side. charge_allocation_item_check_unique allows at most one allocation per
@@ -176,6 +215,7 @@ type Querier interface {
 	InsertOrderDraftForSession(ctx context.Context, arg InsertOrderDraftForSessionParams) (InsertOrderDraftForSessionRow, error)
 	InsertOrderItem(ctx context.Context, arg InsertOrderItemParams) (uuid.UUID, error)
 	InsertPayment(ctx context.Context, arg InsertPaymentParams) (uuid.UUID, error)
+	InsertPaymentVoid(ctx context.Context, arg InsertPaymentVoidParams) (PaymentVoid, error)
 	InsertPreparationAlert(ctx context.Context, arg InsertPreparationAlertParams) (PreparationAlert, error)
 	// Batches audit events of differing types into one round trip. event_types
 	// and details_batch must be equal length; the parallel unnests zip row-wise
@@ -185,6 +225,7 @@ type Querier interface {
 	// reason the Catalog batch query records. Callers validate equal non-zero
 	// lengths in Go before calling.
 	InsertPreparationAuditEventsBatch(ctx context.Context, arg InsertPreparationAuditEventsBatchParams) error
+	InsertPreparationCancellation(ctx context.Context, arg InsertPreparationCancellationParams) (PreparationCancellation, error)
 	InsertPreparationRemake(ctx context.Context, arg InsertPreparationRemakeParams) (PreparationRemake, error)
 	// Creates the linked replacement unit: the source unit's immutable
 	// preparation snapshot under the next unit number, QUEUED at REMAKE
@@ -194,6 +235,17 @@ type Querier interface {
 	InsertPreparationUnit(ctx context.Context, arg InsertPreparationUnitParams) error
 	InsertPreparationUnitTransition(ctx context.Context, arg InsertPreparationUnitTransitionParams) error
 	InsertPreparationWaste(ctx context.Context, arg InsertPreparationWasteParams) (PreparationWaste, error)
+	InsertRefund(ctx context.Context, arg InsertRefundParams) (Refund, error)
+	// The Charge Adjustment counterpart of InsertRefundPaymentAllocations.
+	InsertRefundAdjustmentAllocations(ctx context.Context, arg InsertRefundAdjustmentAllocationsParams) error
+	InsertRefundCompletion(ctx context.Context, arg InsertRefundCompletionParams) (RefundCompletion, error)
+	// Writes one Refund's whole Payment allocation set in one round trip. The two
+	// single-array unnests zip row-wise by ordinality, so row i is
+	// (payment_ids[i], amounts[i]); the caller validates equal lengths and
+	// positive amounts before calling, and the pair unique constraint rejects a
+	// duplicated source.
+	InsertRefundPaymentAllocations(ctx context.Context, arg InsertRefundPaymentAllocationsParams) error
+	InsertSalesComp(ctx context.Context, arg InsertSalesCompParams) (SalesComp, error)
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
 	// Batches assignTables' per-Table insert loop into one round trip. Two
 	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
@@ -218,6 +270,11 @@ type Querier interface {
 	// the cost tracks the small active-queue result set on this polled read.
 	ListActivePreparationUnits(ctx context.Context) ([]ListActivePreparationUnitsRow, error)
 	ListActiveServiceSessions(ctx context.Context) ([]ListActiveServiceSessionsRow, error)
+	// Every Refund allocation against the given Charge Adjustments, with the
+	// owning Refund's scope and completion evidence, so the Check projection can
+	// derive each Adjustment's remaining corrected capacity. Pending Manual QR
+	// intents reserve capacity here too.
+	ListAdjustmentRefundAllocations(ctx context.Context, chargeAdjustmentIds []uuid.UUID) ([]ListAdjustmentRefundAllocationsRow, error)
 	ListAllCategoryModifierGroups(ctx context.Context) ([]ListAllCategoryModifierGroupsRow, error)
 	ListAllItemModifierGroupExclusions(ctx context.Context) ([]ListAllItemModifierGroupExclusionsRow, error)
 	ListAllItemModifierGroups(ctx context.Context) ([]ListAllItemModifierGroupsRow, error)
@@ -243,10 +300,32 @@ type Querier interface {
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	ListCheckAllocationQuantities(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationQuantitiesRow, error)
 	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
-	// Ordered by (received_at, id), served directly by payment_check_index.
+	// The live Check projection's append-only charge reductions, ordered by
+	// occurrence then id. POST_SALE adjustments are excluded: they correct a
+	// closed sale and are read through ListCompletedSalePostSaleCorrections.
+	ListCheckChargeAdjustments(ctx context.Context, checkID uuid.UUID) ([]ListCheckChargeAdjustmentsRow, error)
+	// Ordered by (received_at, id), served directly by payment_check_index. The
+	// LEFT JOIN carries Phase 6C Payment Void evidence so the Check projection can
+	// present and subtract a voided Payment without a second read; void_id is null
+	// while the Payment stands.
 	ListCheckPayments(ctx context.Context, checkID uuid.UUID) ([]ListCheckPaymentsRow, error)
+	// The live Check projection's Refunds, each with nullable completion evidence
+	// so the caller derives PENDING or COMPLETED without a mutable state column.
+	// Post-sale Refunds are excluded; they are read through
+	// ListCompletedSalePostSaleCorrections.
+	ListCheckRefunds(ctx context.Context, checkID uuid.UUID) ([]ListCheckRefundsRow, error)
 	ListCommittedItemModifiers(ctx context.Context, committedItemIds []uuid.UUID) ([]ListCommittedItemModifiersRow, error)
 	ListCommittedItemsForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]ListCommittedItemsForSubmissionRow, error)
+	// Additive post-sale correction history for one Completed Sale: every
+	// POST_SALE charge reduction (with its Comp fact) and every post-sale Refund,
+	// ordered by occurrence then id. entry_kind discriminates the two row shapes;
+	// each shape fills only its own columns. The leading WHERE false header exists
+	// so the generated row type carries every column as nullable; a real row
+	// always fills its own shape. Each row carries every column a full
+	// PostSaleCorrectionResponse needs, so the shared loader never fabricates a
+	// zero placeholder. The immutable sale snapshot itself is never rebuilt from
+	// these rows.
+	ListCompletedSalePostSaleCorrections(ctx context.Context, completedSaleID uuid.UUID) ([]ListCompletedSalePostSaleCorrectionsRow, error)
 	ListCurrentPreparationTables(ctx context.Context, serviceSessionIds []uuid.UUID) ([]ListCurrentPreparationTablesRow, error)
 	// -- Occupancy (read-only view of Sales-owned tables) --
 	ListCurrentTableOccupants(ctx context.Context) ([]ListCurrentTableOccupantsRow, error)
@@ -303,6 +382,16 @@ type Querier interface {
 	ListModifierOptionsByGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]ModifierOption, error)
 	ListModifierOptionsForValidation(ctx context.Context, optionIds []uuid.UUID) ([]ListModifierOptionsForValidationRow, error)
 	ListOrderItems(ctx context.Context, orderIds []uuid.UUID) ([]OrderItem, error)
+	// Every Refund allocation against the given Payments, with the owning Refund's
+	// scope and completion evidence, so the Check projection can derive each
+	// Payment's remaining_refundable_vnd. Pending Manual QR intents appear too:
+	// they reserve capacity before money moves. The caller applies the structural
+	// snapshot rule (a post-sale allocation belongs to history, not the live
+	// capacity) through refund_completed_sale_id.
+	ListPaymentRefundAllocations(ctx context.Context, paymentIds []uuid.UUID) ([]ListPaymentRefundAllocationsRow, error)
+	// Batched projection read for a set of ids already known to exist (e.g. a
+	// cancellation batch), avoiding one GetPreparationUnit round trip per unit.
+	ListPreparationUnitsByIDs(ctx context.Context, preparationUnitIds []uuid.UUID) ([]PreparationUnit, error)
 	// Resolves the selected units and their owning Sessions without locks, so a
 	// correction can reject missing ids before taking any.
 	ListPreparationUnitsForCorrection(ctx context.Context, preparationUnitIds []uuid.UUID) ([]ListPreparationUnitsForCorrectionRow, error)
@@ -310,6 +399,19 @@ type Querier interface {
 	// UNION ALL, newest first, capped at 50. entry_kind discriminates the two
 	// row shapes; the nullable columns carry what each shape needs.
 	ListRecentPreparationCorrections(ctx context.Context) ([]ListRecentPreparationCorrectionsRow, error)
+	// One Refund's Charge Adjustment allocations, ordered by Adjustment id.
+	ListRefundAdjustmentAllocations(ctx context.Context, refundID uuid.UUID) ([]ListRefundAdjustmentAllocationsRow, error)
+	// Every Charge Adjustment allocation for the given Refunds, for a Check's
+	// batched Refund projection: one round trip replaces one
+	// ListRefundAdjustmentAllocations call per Refund.
+	ListRefundAdjustmentAllocationsByRefundIDs(ctx context.Context, refundIds []uuid.UUID) ([]ListRefundAdjustmentAllocationsByRefundIDsRow, error)
+	// One Refund's Payment allocations, ordered by Payment id, for the Refund
+	// result and the Completed Sale history.
+	ListRefundPaymentAllocations(ctx context.Context, refundID uuid.UUID) ([]ListRefundPaymentAllocationsRow, error)
+	// Every Payment allocation for the given Refunds, for a Check's batched
+	// Refund projection: one round trip replaces one ListRefundPaymentAllocations
+	// call per Refund.
+	ListRefundPaymentAllocationsByRefundIDs(ctx context.Context, refundIds []uuid.UUID) ([]ListRefundPaymentAllocationsByRefundIDsRow, error)
 	// Current assignments only. Released rows are history, not occupancy.
 	ListServiceSessionTables(ctx context.Context, serviceSessionID uuid.UUID) ([]ListServiceSessionTablesRow, error)
 	ListSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionChecksRow, error)
@@ -319,11 +421,17 @@ type Querier interface {
 	// projections. priority and remake_of_preparation_unit_id carry the Phase 6B
 	// Remake metadata; original units are STANDARD with a null link.
 	ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionPreparationUnitsRow, error)
+	// The Shift response's Refund summaries ordered by (created_at, id), each
+	// carrying derived completion state and no credentials.
+	ListShiftRefunds(ctx context.Context, salesShiftID uuid.UUID) ([]ListShiftRefundsRow, error)
 	// The `submitted` flag on a Charge Allocation is derived, not stored: there is
 	// no submitted column anywhere in the schema, and therefore no flag that can
 	// fall out of step with the Order that defines it.
 	ListSubmittedCommittedItems(ctx context.Context, committedItemIds []uuid.UUID) ([]uuid.UUID, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	// Step 4: the selected Charge Adjustments FOR UPDATE, each ascending UUID,
+	// after the Payments so both refundable capacities are held in one order.
+	LockChargeAdjustmentsForRefund(ctx context.Context, chargeAdjustmentIds []uuid.UUID) ([]LockChargeAdjustmentsForRefundRow, error)
 	// The 5C lock protocol (ADR-016 as amended by ADR-030), first half: the Check
 	// row FOR UPDATE. SQL does not guarantee that one statement's FOR UPDATE OF c, s
 	// acquires the two relations' tuple locks in OF-list order, so the Session lock
@@ -404,6 +512,11 @@ type Querier interface {
 	// busiest path in the system, for no correctness gain. internal/catalog's
 	// mutations take FOR UPDATE and are still excluded. See ADR-015.
 	LockMenuItemSizesForCommit(ctx context.Context, sizeIds []uuid.UUID) ([]LockMenuItemSizesForCommitRow, error)
+	// Step 3: the one open Sales Shift. FOR SHARE, because Cancellation only reads
+	// the Shift for settlement evidence and never writes Shift state; Shift
+	// closure takes FOR UPDATE and stays excluded for the whole transaction. No
+	// row means no Shift is open.
+	LockOpenSalesShiftForCancellation(ctx context.Context) (LockOpenSalesShiftForCancellationRow, error)
 	// The Sales Shift open right now, locked FOR SHARE. Only one Shift can be open
 	// at a time, enforced by sales_shift_only_one_open_unique, so no ordering or
 	// disambiguation is needed.
@@ -419,9 +532,20 @@ type Querier interface {
 	//
 	// No row means no Shift is open.
 	LockOpenSalesShiftForShare(ctx context.Context) (uuid.UUID, error)
+	// Locks one Payment for Void after its Check, Session, and Shift are locked.
+	// Refund allocations, if any, are read separately under this lock to reject a
+	// refunded Payment.
+	LockPaymentForVoid(ctx context.Context, id uuid.UUID) (LockPaymentForVoidRow, error)
+	// Steps 4: the selected Payments FOR UPDATE, each ascending UUID, so two
+	// overlapping Refunds cannot allocate the same capacity twice and cannot
+	// deadlock against each other.
+	LockPaymentsForRefund(ctx context.Context, paymentIds []uuid.UUID) ([]LockPaymentsForRefundRow, error)
 	// Locks one alert for acknowledgment, returning its creation and
 	// acknowledgment evidence.
 	LockPreparationAlert(ctx context.Context, id uuid.UUID) (PreparationAlert, error)
+	// Step 1 of the common correction lock order: every affected Check FOR UPDATE,
+	// ordered by id so concurrent corrections take the rows in the same order.
+	LockPreparationChecksForCancellation(ctx context.Context, checkIds []uuid.UUID) ([]LockPreparationChecksForCancellationRow, error)
 	// Locks the Order Item so Remake's max(unit_number) + 1 allocation
 	// serializes across concurrent Wastes of the same item, and returns the
 	// owning Session the caller locked first.
@@ -434,17 +558,27 @@ type Querier interface {
 	// Locks the owning Service Sessions before correction work. Callers pass
 	// unique ids; ORDER BY id makes the multi-Session lock order deterministic.
 	LockPreparationServiceSessions(ctx context.Context, serviceSessionIds []uuid.UUID) ([]LockPreparationServiceSessionsRow, error)
+	// Step 2: the owning Service Sessions, after their Checks and before the
+	// current Shift and the work rows.
+	LockPreparationSessionsForCancellation(ctx context.Context, serviceSessionIds []uuid.UUID) ([]LockPreparationSessionsForCancellationRow, error)
 	// Preparation slice queries.
 	//
 	// Boundary (ADR-024): nothing here writes orders, order_items, or
 	// completed_sales. internal/sales creates Preparation Units at Submit and
 	// reads their state during closure; this package owns every transition.
 	LockPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
+	// Step 5: the selected Preparation Units, locked last in id order after their
+	// Checks and Sessions. The caller revalidates QUEUED and re-resolves the
+	// unit-to-allocation mapping against the committed rows.
+	LockPreparationUnitsForCancellation(ctx context.Context, preparationUnitIds []uuid.UUID) ([]LockPreparationUnitsForCancellationRow, error)
 	// Locks the correction batch in unit-id order after its Sessions are locked.
 	LockPreparationUnitsForCorrection(ctx context.Context, preparationUnitIds []uuid.UUID) ([]LockPreparationUnitsForCorrectionRow, error)
 	// Locks the Waste and its source Preparation Unit, and resolves the owning
 	// Order Item and Service Session ids the caller has already locked.
 	LockPreparationWaste(ctx context.Context, id uuid.UUID) (LockPreparationWasteRow, error)
+	// Locks one Refund for Manual QR confirmation, after its Check, Session, and
+	// Shift are locked, and returns the completion evidence that decides replay.
+	LockRefundForConfirmation(ctx context.Context, id uuid.UUID) (LockRefundForConfirmationRow, error)
 	LockServiceSessionForClosure(ctx context.Context, id uuid.UUID) (LockServiceSessionForClosureRow, error)
 	// The Submit source's Service Session, locked first. The state is returned
 	// rather than filtered so an unknown Session and a closed one map to their own
@@ -471,6 +605,10 @@ type Querier interface {
 	// overlapping sets cannot deadlock against each other. The caller must sort
 	// the ids before calling.
 	LockTablesForAssignment(ctx context.Context, tableIds []uuid.UUID) ([]LockTablesForAssignmentRow, error)
+	// Step 5: the Waste and its source Preparation Unit, locked after the Check,
+	// Session, and Shift resolved by ResolveCompSource. The unit lock serializes
+	// concurrent Comps of one Waste alongside the unique Waste reference.
+	LockWasteForComp(ctx context.Context, id uuid.UUID) (LockWasteForCompRow, error)
 	// The absorbed Check keeps no charge and points at the survivor, which is
 	// what the MERGED branch of check_settlement_evidence_valid requires.
 	MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error
@@ -489,9 +627,43 @@ type Querier interface {
 	RenameModifierGroup(ctx context.Context, arg RenameModifierGroupParams) (ModifierGroup, error)
 	RenameModifierOption(ctx context.Context, arg RenameModifierOptionParams) (ModifierOption, error)
 	RenameTable(ctx context.Context, arg RenameTableParams) (Table, error)
+	// The settlement consequence of a whole Payment Void that leaves a positive
+	// balance: the Check moves back from SETTLED to OPEN. All four
+	// settlement-evidence columns are cleared in the same statement because
+	// check_settlement_evidence_valid rejects OPEN with any evidence set. The
+	// caller has already recomputed the positive balance under the Check lock.
+	ReopenCheckAfterPaymentVoid(ctx context.Context, id uuid.UUID) error
 	RepriceMenuItem(ctx context.Context, arg RepriceMenuItemParams) (MenuItem, error)
 	RepriceMenuItemSize(ctx context.Context, arg RepriceMenuItemSizeParams) (MenuItemSize, error)
 	RepriceModifierOption(ctx context.Context, arg RepriceModifierOptionParams) (ModifierOption, error)
+	// Phase 6C: Cancellation locks, resolution, and facts.
+	//
+	// Lock order is the concurrency contract (design section 11.1): resolve
+	// ownership without locks, then lock Checks ascending by id, Service Sessions
+	// ascending by id, the current open Sales Shift, and finally the selected
+	// Preparation Units ascending by id. Restructuring locks Checks; closure locks
+	// Sessions; Waste and State Correction lock Sessions before units but never
+	// wait on a Check, so no lock cycle exists.
+	// Non-locking resolution of a Cancellation selection. Each STANDARD unit maps
+	// to the immutable per-unit price of its Committed Item and to the Charge
+	// Allocation whose cumulative quantity range (allocations ordered by
+	// created_at then id) covers its unit_number. A REMAKE unit, or a unit beyond
+	// every allocation range, carries a null allocation, Check, and price because
+	// it was never charged.
+	ResolveCancellationUnits(ctx context.Context, preparationUnitIds []uuid.UUID) ([]ResolveCancellationUnitsRow, error)
+	// Phase 6C: Comp, Refund, and Payment Void resolution, locks, and facts.
+	//
+	// Lock order is the concurrency contract (design section 11.1): non-locking
+	// resolution first, then Checks ascending, Service Sessions ascending, the
+	// current or original Sales Shift, Payments and Charge Adjustments each
+	// ascending, and finally Preparation source facts and Units ascending.
+	// Non-locking ownership resolution for Comp. Resolves the Waste, its source
+	// unit, the owning Order Item and Service Session, the Completed Sale when the
+	// Session is already closed, and the original Charge Allocation whose
+	// cumulative quantity range (allocations ordered by created_at then id) covers
+	// the unit_number. A Wasted Remake maps to a null allocation and price because
+	// it was never charged.
+	ResolveCompSource(ctx context.Context, id uuid.UUID) (ResolveCompSourceRow, error)
 	RetireMenuCategory(ctx context.Context, arg RetireMenuCategoryParams) (MenuCategory, error)
 	RetireMenuItem(ctx context.Context, arg RetireMenuItemParams) (MenuItem, error)
 	RetireMenuItemSize(ctx context.Context, arg RetireMenuItemSizeParams) (MenuItemSize, error)
@@ -518,6 +690,11 @@ type Querier interface {
 	SetPreparationUnitState(ctx context.Context, arg SetPreparationUnitStateParams) error
 	SetStaffEnabled(ctx context.Context, arg SetStaffEnabledParams) (SetStaffEnabledRow, error)
 	SetTableAvailability(ctx context.Context, arg SetTableAvailabilityParams) (Table, error)
+	// The settlement consequence of a Cancellation or Comp that reduces a live
+	// Check to zero balance. All four evidence columns are written together
+	// because check_settlement_evidence_valid rejects any partial set; the
+	// initiator and the current open Shift supply the evidence.
+	SettleAdjustedCheck(ctx context.Context, arg SettleAdjustedCheckParams) error
 	// Writes all four evidence columns together, because the composite constraint
 	// check_settlement_evidence_valid rejects any partial set.
 	SettleCheck(ctx context.Context, arg SettleCheckParams) error
@@ -525,14 +702,6 @@ type Querier interface {
 	StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error
 	StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error
 	SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) (SumCashMovementsRow, error)
-	// Expected Cash's Cash Payment term (ADR-020). The sum is over APPLIED
-	// amounts, not tendered amounts: CONTEXT.md defines a Cash Payment's net cash
-	// effect as the applied amount, because the change left the drawer at the same
-	// moment the tendered cash entered it.
-	//
-	// internal/shift reads the payments table through its own query rather than
-	// importing internal/sales, following ADR-012.
-	SumCashPaymentsForShift(ctx context.Context, salesShiftID uuid.UUID) (int64, error)
 	// The live sum that a Check's stored charge_vnd denormalizes, in one round trip
 	// rather than loading every allocation and its modifiers to add them up.
 	//
@@ -542,6 +711,10 @@ type Querier interface {
 	SumCheckAllocatedCharge(ctx context.Context, checkID uuid.UUID) (int64, error)
 	SumCheckPayments(ctx context.Context, checkID uuid.UUID) (int64, error)
 	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	// Writes the denormalized live charge after one Cancellation batch plans all
+	// of its adjustments. The invariant is stored charge = base charge - live
+	// adjustments; POST_SALE adjustments are excluded.
+	UpdateAdjustedCheckCharge(ctx context.Context, arg UpdateAdjustedCheckChargeParams) error
 	// size_key and note_key are generated columns, so they follow the write.
 	UpdateDraftItemComposition(ctx context.Context, arg UpdateDraftItemCompositionParams) error
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error

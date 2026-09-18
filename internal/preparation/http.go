@@ -425,3 +425,38 @@ func (s *Slices) handleCorrectState(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleCancelUnits godoc
+//
+//	@Summary		Cancel or change queued Preparation Units
+//	@Description	Cancels 1 through 50 queued units as one all-or-nothing batch. Each unit becomes CANCELLED with its typed transition, Cancellation fact, and CANCELLATION or CHANGE alert; each charged standard unit reduces its Check's live charge by its immutable unit price and the Check settles when the corrected balance reaches zero. A CHANGE links to an already-submitted later Order in the same active Service Session. Requires sales.operate and no Manager approval. The response carries no Check, Payment, or Refund data.
+//	@Tags			preparation
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			body	body		CancelUnitsCommand	true	"Cancellation request"
+//	@Success		200		{object}	response.APIResponse{data=CancelUnitsResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		422		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/preparation/units/cancel [post]
+func (s *Slices) handleCancelUnits(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[CancelUnitsCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+
+	status, result, err := s.CancelUnits.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

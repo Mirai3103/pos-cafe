@@ -1,6 +1,7 @@
 package shift_test
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -85,49 +86,77 @@ func TestValidateNote(t *testing.T) {
 }
 
 func TestComputeExpectedCash(t *testing.T) {
-	got, err := shift.ComputeExpectedCash(500000, 0, 100000, 150000)
+	// opening + cash payments - cash voids - completed cash refunds
+	// + pay ins - pay outs (ADR-046).
+	got, err := shift.ComputeExpectedCash(500_000, 850_000, 100_000, 50_000, 100_000, 150_000)
 	require.NoError(t, err)
-	assert.Equal(t, int64(450000), got)
+	assert.Equal(t, int64(1_150_000), got)
 
-	// No movements or payments yet: Expected Cash is the Opening Float.
-	got, err = shift.ComputeExpectedCash(500000, 0, 0, 0)
+	// No payments, voids, refunds, or movements yet: the Opening Float.
+	got, err = shift.ComputeExpectedCash(500_000, 0, 0, 0, 0, 0)
 	require.NoError(t, err)
-	assert.Equal(t, int64(500000), got)
+	assert.Equal(t, int64(500_000), got)
+
+	// A Cash Payment Void removes exactly its source's amount from the drawer.
+	got, err = shift.ComputeExpectedCash(500_000, 850_000, 850_000, 0, 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, int64(500_000), got)
+
+	// Completed Cash Refunds have left the drawer.
+	got, err = shift.ComputeExpectedCash(500_000, 850_000, 0, 100_000, 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1_250_000), got)
+
+	// Cash Movements still apply on top of the payment terms.
+	got, err = shift.ComputeExpectedCash(500_000, 0, 0, 0, 100_000, 150_000)
+	require.NoError(t, err)
+	assert.Equal(t, int64(450_000), got)
 
 	// Sustained Pay Outs can legitimately drive the figure negative, so the
 	// guard is symmetric rather than one-sided.
-	got, err = shift.ComputeExpectedCash(0, 0, 0, 1000)
+	got, err = shift.ComputeExpectedCash(100_000, 0, 0, 0, 0, 500_000)
 	require.NoError(t, err)
-	assert.Equal(t, int64(-1000), got)
-
-	_, err = shift.ComputeExpectedCash(shift.MaxAmountVND, 0, 1, 0)
-	assert.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
-
-	_, err = shift.ComputeExpectedCash(0, 0, 0, shift.MaxAmountVND+1)
-	assert.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
+	assert.Equal(t, int64(-400_000), got)
 }
 
-func TestComputeExpectedCashIncludesCashPayments(t *testing.T) {
-	t.Run("cash payments raise the figure", func(t *testing.T) {
-		got, err := shift.ComputeExpectedCash(500_000, 850_000, 100_000, 50_000)
-		require.NoError(t, err)
-		require.Equal(t, int64(1_400_000), got)
-	})
+func TestComputeExpectedCashRejectsTotalsOutsideTheBound(t *testing.T) {
+	// A total outside the canonical bound is corrupt data even when the
+	// arithmetic does not wrap. Both directions are failures.
+	_, err := shift.ComputeExpectedCash(shift.MaxAmountVND, shift.MaxAmountVND, 0, 0, 0, 0)
+	require.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
 
-	t.Run("with no payments the Phase 4 figure is unchanged", func(t *testing.T) {
-		got, err := shift.ComputeExpectedCash(500_000, 0, 100_000, 50_000)
-		require.NoError(t, err)
-		require.Equal(t, int64(550_000), got)
-	})
+	_, err = shift.ComputeExpectedCash(0, 0, 0, 0, 0, shift.MaxAmountVND+1)
+	require.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
+}
 
-	t.Run("sustained pay outs may still drive it negative", func(t *testing.T) {
-		got, err := shift.ComputeExpectedCash(100_000, 0, 0, 500_000)
-		require.NoError(t, err)
-		require.Equal(t, int64(-400_000), got)
-	})
-
-	t.Run("a total outside the bound is rejected", func(t *testing.T) {
-		_, err := shift.ComputeExpectedCash(shift.MaxAmountVND, shift.MaxAmountVND, 0, 0)
-		require.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
-	})
+func TestComputeExpectedCashGuardsEveryArithmeticEdge(t *testing.T) {
+	// Go int64 arithmetic wraps silently, so the guards must reject a wrapped
+	// intermediate before the final bound check can be fooled by it.
+	cases := []struct {
+		name        string
+		opening     int64
+		cashPayment int64
+		void        int64
+		refund      int64
+		payIn       int64
+		payOut      int64
+	}{
+		{"opening plus cash payment overflows", math.MaxInt64, 1, 0, 0, 0, 0},
+		{"opening plus cash payment underflows", math.MinInt64, -1, 0, 0, 0, 0},
+		{"cash payment void underflows", 0, math.MinInt64, 1, 0, 0, 0},
+		{"cash payment void overflows", 0, math.MaxInt64, -1, 0, 0, 0},
+		{"cash refund underflows", 0, math.MinInt64, 0, 1, 0, 0},
+		{"cash refund overflows", 0, math.MaxInt64, 0, -1, 0, 0},
+		{"pay in overflows", math.MaxInt64 - 5, 5, 0, 0, 1, 0},
+		{"pay in underflows", math.MinInt64 + 5, -5, 0, 0, -1, 0},
+		{"pay out underflows", math.MinInt64 + 5, -5, 0, 0, 0, 1},
+		{"pay out overflows", math.MaxInt64 - 5, 5, 0, 0, 0, -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := shift.ComputeExpectedCash(
+				tc.opening, tc.cashPayment, tc.void, tc.refund, tc.payIn, tc.payOut)
+			require.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
+		})
+	}
 }

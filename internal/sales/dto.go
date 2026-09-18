@@ -8,6 +8,16 @@ import (
 
 // ---------- Commands ----------
 
+// ManagerApprovalInput is one inline Manager Approval: a second identity's
+// login code and PIN, supplied with the request that needs one. It is
+// request-only credentials. The executor copies the values into ApprovalSpec,
+// and neither value ever reaches a fingerprint, stored result, business fact,
+// audit detail, or log.
+type ManagerApprovalInput struct {
+	ApproverLoginCode string `json:"approver_login_code"`
+	ManagerPIN        string `json:"manager_pin"`
+}
+
 // StartTakeawaySessionCommand opens an anonymous Takeaway Service Session.
 type StartTakeawaySessionCommand struct {
 	RequestID uuid.UUID `json:"request_id"`
@@ -282,36 +292,120 @@ type ChargeAllocationResponse struct {
 //
 // The method-dependent fields are pointers with omitempty, so a Manual QR
 // Payment does not carry two null cash fields and a Cash Payment does not
-// carry a null bank reference.
+// carry a null bank reference. RemainingRefundableVND is the applied amount
+// less every Refund allocation against it, pending Manual QR intents included.
+// Void is nil while the Payment stands, and a voided Payment reports zero
+// remaining capacity because no Refund may allocate against it.
 type PaymentResponse struct {
-	ID                   uuid.UUID `json:"id"`
-	Method               string    `json:"method"`
-	AppliedAmountVND     int64     `json:"applied_amount_vnd"`
-	CashTenderedVND      *int64    `json:"cash_tendered_vnd,omitempty"`
-	ChangeDueVND         *int64    `json:"change_due_vnd,omitempty"`
-	TransactionReference *string   `json:"transaction_reference,omitempty"`
-	SalesShiftID         uuid.UUID `json:"sales_shift_id"`
-	ReceivedAt           time.Time `json:"received_at"`
+	ID                     uuid.UUID            `json:"id"`
+	Method                 string               `json:"method"`
+	AppliedAmountVND       int64                `json:"applied_amount_vnd"`
+	CashTenderedVND        *int64               `json:"cash_tendered_vnd,omitempty"`
+	ChangeDueVND           *int64               `json:"change_due_vnd,omitempty"`
+	TransactionReference   *string              `json:"transaction_reference,omitempty"`
+	SalesShiftID           uuid.UUID            `json:"sales_shift_id"`
+	ReceivedAt             time.Time            `json:"received_at"`
+	Void                   *PaymentVoidResponse `json:"void,omitempty"`
+	RemainingRefundableVND int64                `json:"remaining_refundable_vnd"`
+}
+
+// PaymentVoidResponse is the append-only reversal of one whole Payment. The
+// source Payment is never edited or deleted.
+type PaymentVoidResponse struct {
+	ID                        uuid.UUID `json:"id"`
+	AmountVND                 int64     `json:"amount_vnd"`
+	Reason                    string    `json:"reason"`
+	Note                      *string   `json:"note"`
+	ActorStaffIdentityID      uuid.UUID `json:"actor_staff_identity_id"`
+	ApprovedByStaffIdentityID uuid.UUID `json:"approved_by_staff_identity_id"`
+	OccurredAt                time.Time `json:"occurred_at"`
+}
+
+// ChargeAdjustmentResponse is one append-only reduction of customer charge
+// sourced by exactly one Cancellation or Comp. It never mutates the original
+// Charge Allocation it names. RemainingRefundableVND is the amount less every
+// Refund allocation against it.
+type ChargeAdjustmentResponse struct {
+	ID                     uuid.UUID  `json:"id"`
+	Kind                   string     `json:"kind"`
+	Scope                  string     `json:"scope"`
+	PreparationUnitID      uuid.UUID  `json:"preparation_unit_id"`
+	PreparationWasteID     *uuid.UUID `json:"preparation_waste_id"`
+	ChargeAllocationID     uuid.UUID  `json:"charge_allocation_id"`
+	CompletedSaleID        *uuid.UUID `json:"completed_sale_id,omitempty"`
+	SalesShiftID           uuid.UUID  `json:"sales_shift_id"`
+	AmountVND              int64      `json:"amount_vnd"`
+	RemainingRefundableVND int64      `json:"remaining_refundable_vnd"`
+	CreatedAt              time.Time  `json:"created_at"`
+}
+
+// RefundAllocationResponse is one source of refunded value: the Payment id or
+// the Charge Adjustment id, depending on which allocation collection carries
+// it, and the amount allocated.
+type RefundAllocationResponse struct {
+	ID        uuid.UUID `json:"id"`
+	AmountVND int64     `json:"amount_vnd"`
+}
+
+// RefundCompletionResponse is the append-only evidence that the Refund's money
+// actually moved. TransactionReference is present only on a completed Manual
+// QR Refund.
+type RefundCompletionResponse struct {
+	ID                            uuid.UUID `json:"id"`
+	TransactionReference          *string   `json:"transaction_reference,omitempty"`
+	CompletedByStaffIdentityID    uuid.UUID `json:"completed_by_staff_identity_id"`
+	CompletedStaffAccessSessionID uuid.UUID `json:"completed_staff_access_session_id"`
+	CompletedAt                   time.Time `json:"completed_at"`
+}
+
+// RefundResponse is one Refund with its derived state and both allocation
+// collections. Cash completes in the transaction that records it; Manual QR
+// stays PENDING until its completion is appended. No credential is projected.
+type RefundResponse struct {
+	ID                        uuid.UUID                  `json:"id"`
+	CheckID                   uuid.UUID                  `json:"check_id"`
+	CompletedSaleID           *uuid.UUID                 `json:"completed_sale_id,omitempty"`
+	SalesShiftID              uuid.UUID                  `json:"sales_shift_id"`
+	Method                    string                     `json:"method"`
+	AmountVND                 int64                      `json:"amount_vnd"`
+	State                     string                     `json:"state"`
+	Reason                    string                     `json:"reason"`
+	Note                      *string                    `json:"note"`
+	ActorStaffIdentityID      uuid.UUID                  `json:"actor_staff_identity_id"`
+	ApprovedByStaffIdentityID uuid.UUID                  `json:"approved_by_staff_identity_id"`
+	CreatedAt                 time.Time                  `json:"created_at"`
+	PaymentAllocations        []RefundAllocationResponse `json:"payment_allocations"`
+	AdjustmentAllocations     []RefundAllocationResponse `json:"adjustment_allocations"`
+	Completion                *RefundCompletionResponse  `json:"completion,omitempty"`
 }
 
 // CheckResponse is a grouping of charges awaiting settlement.
 //
-// TotalAppliedVND is the sum of the Check's Payments and BalanceVND is
-// ChargeVND minus it; both carry real values from 5C. MergedIntoCheckID is
-// present only on a MERGED Check — an open Check does not carry a field
-// pointing nowhere. PendingRefundVND is deliberately absent: Refund is
-// outside Phase 5 entirely, and a Payment can never exceed the balance.
+// ChargeVND is the live adjusted charge and BaseChargeVND is the original
+// allocation sum it derives from. TotalAppliedVND stays the immutable sum of
+// original Payments for historical clarity; Voids and completed Refunds are
+// subtracted explicitly through TotalVoidedVND, TotalRefundedVND, and
+// EffectiveReceivedVND rather than making that field change meaning.
+// BalanceVND is the customer amount still due and PendingRefundVND is money
+// owed back. MergedIntoCheckID is present only on a MERGED Check.
 type CheckResponse struct {
-	ID                uuid.UUID  `json:"id"`
-	State             string     `json:"state"`
-	ChargeVND         int64      `json:"charge_vnd"`
-	TotalAppliedVND   int64      `json:"total_applied_vnd"`
-	BalanceVND        int64      `json:"balance_vnd"`
-	MergedIntoCheckID *uuid.UUID `json:"merged_into_check_id,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
+	ID                   uuid.UUID  `json:"id"`
+	State                string     `json:"state"`
+	BaseChargeVND        int64      `json:"base_charge_vnd"`
+	ChargeVND            int64      `json:"charge_vnd"`
+	TotalAppliedVND      int64      `json:"total_applied_vnd"`
+	TotalVoidedVND       int64      `json:"total_voided_vnd"`
+	TotalRefundedVND     int64      `json:"total_refunded_vnd"`
+	EffectiveReceivedVND int64      `json:"effective_received_vnd"`
+	BalanceVND           int64      `json:"balance_vnd"`
+	PendingRefundVND     int64      `json:"pending_refund_vnd"`
+	MergedIntoCheckID    *uuid.UUID `json:"merged_into_check_id,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
 
-	Payments    []PaymentResponse          `json:"payments"`
-	Allocations []ChargeAllocationResponse `json:"allocations"`
+	Payments          []PaymentResponse          `json:"payments"`
+	Allocations       []ChargeAllocationResponse `json:"allocations"`
+	ChargeAdjustments []ChargeAdjustmentResponse `json:"charge_adjustments"`
+	Refunds           []RefundResponse           `json:"refunds"`
 }
 
 // OrderResponse is one submitted Order: the preparation boundary crossed once
@@ -382,15 +476,25 @@ type CloseServiceSessionCommand struct {
 }
 
 // CompletedSaleCheckResponse is one Check as it stood at closure: settled,
-// with a zero balance, carrying its Payments and Charge Allocations.
+// with a zero balance, carrying its Payments, Charge Allocations, the live
+// Charge Adjustments and Refunds that existed before closure, and the complete
+// Phase 6C financial equation. It is the immutable core: post-sale corrections
+// appear only in CompletedSaleResponse.PostSaleCorrections.
 type CompletedSaleCheckResponse struct {
-	ID              uuid.UUID                  `json:"id"`
-	State           string                     `json:"state"`
-	ChargeVND       int64                      `json:"charge_vnd"`
-	TotalAppliedVND int64                      `json:"total_applied_vnd"`
-	BalanceVND      int64                      `json:"balance_vnd"`
-	Payments        []PaymentResponse          `json:"payments"`
-	Allocations     []ChargeAllocationResponse `json:"allocations"`
+	ID                   uuid.UUID                  `json:"id"`
+	State                string                     `json:"state"`
+	BaseChargeVND        int64                      `json:"base_charge_vnd"`
+	ChargeVND            int64                      `json:"charge_vnd"`
+	TotalAppliedVND      int64                      `json:"total_applied_vnd"`
+	TotalVoidedVND       int64                      `json:"total_voided_vnd"`
+	TotalRefundedVND     int64                      `json:"total_refunded_vnd"`
+	EffectiveReceivedVND int64                      `json:"effective_received_vnd"`
+	BalanceVND           int64                      `json:"balance_vnd"`
+	PendingRefundVND     int64                      `json:"pending_refund_vnd"`
+	Payments             []PaymentResponse          `json:"payments"`
+	Allocations          []ChargeAllocationResponse `json:"allocations"`
+	ChargeAdjustments    []ChargeAdjustmentResponse `json:"charge_adjustments"`
+	Refunds              []RefundResponse           `json:"refunds"`
 }
 
 // PreparationTransitionResponse is one recorded move of a Preparation Unit.
@@ -409,6 +513,8 @@ type PreparationTransitionResponse struct {
 }
 
 // CompletedSaleResponse is the immutable outcome of a closed Service Session.
+// PostSaleCorrections is the sole field that may change after closure: the
+// sale's additive Comp and Refund history, never null.
 type CompletedSaleResponse struct {
 	ID                     uuid.UUID                       `json:"id"`
 	State                  string                          `json:"state"`
@@ -425,9 +531,129 @@ type CompletedSaleResponse struct {
 	Orders                 []OrderResponse                 `json:"orders"`
 	PreparationUnits       []PreparationUnitResponse       `json:"preparation_units"`
 	PreparationHistory     []PreparationTransitionResponse `json:"preparation_history"`
+	PostSaleCorrections    []PostSaleCorrectionResponse    `json:"post_sale_corrections"`
 }
 
 // CompletedSaleStateCompleted is the only state a Completed Sale has. It is a
 // literal in the contract so a client can branch on it exactly as it branches
 // on a Check's or a Session's state.
 const CompletedSaleStateCompleted = "COMPLETED"
+
+// ---------- Phase 6C: Comp ----------
+
+// CompWasteCommand waives the charge of one charged Wasted unit. WasteID is
+// json:"-": it comes from the path, never the body. ManagerApproval carries
+// request-only credentials; the executor verifies them inline, and no
+// credential ever reaches a fingerprint, stored result, business fact, audit
+// detail, or log (spec §8.1).
+type CompWasteCommand struct {
+	RequestID       uuid.UUID            `json:"request_id"`
+	WasteID         uuid.UUID            `json:"-"`
+	Reason          string               `json:"reason"`
+	Note            *string              `json:"note"`
+	ManagerApproval ManagerApprovalInput `json:"manager_approval"`
+}
+
+// CompResponse is one recorded Comp: the append-only fact a client reads back.
+// AmountVND is the immutable per-unit price the Comp waives; the Manager
+// approver is recorded separately from the initiator, so a self-approved
+// command stays distinguishable in the audit trail.
+type CompResponse struct {
+	ID                        uuid.UUID `json:"id"`
+	WasteID                   uuid.UUID `json:"waste_id"`
+	PreparationUnitID         uuid.UUID `json:"preparation_unit_id"`
+	ChargeAdjustmentID        uuid.UUID `json:"charge_adjustment_id"`
+	AmountVND                 int64     `json:"amount_vnd"`
+	Reason                    string    `json:"reason"`
+	Note                      *string   `json:"note"`
+	ActorStaffIdentityID      uuid.UUID `json:"actor_staff_identity_id"`
+	ApprovedByStaffIdentityID uuid.UUID `json:"approved_by_staff_identity_id"`
+	OccurredAt                time.Time `json:"occurred_at"`
+}
+
+// PostSaleCorrectionResponse is one post-sale Comp correction in a closed
+// sale's additive history: its POST_SALE Charge Adjustment, the Comp fact,
+// the Refunds that have consumed that adjustment's corrected capacity
+// (non-null, empty until the Refund command records one), and the amount of
+// the correction still owed back.
+type PostSaleCorrectionResponse struct {
+	Adjustment           ChargeAdjustmentResponse `json:"adjustment"`
+	Comp                 CompResponse             `json:"comp"`
+	Refunds              []RefundResponse         `json:"refunds"`
+	OutstandingRefundVND int64                    `json:"outstanding_refund_vnd"`
+}
+
+// CompResult is the discriminated Comp result. Exactly one branch is present:
+// a live Comp carries the updated Service Session, while a post-sale Comp
+// carries the Completed Sale id, the outstanding post-sale correction amount,
+// and the additive correction history, and no mutable Session projection
+// (spec §8.3, §12.3).
+type CompResult struct {
+	Scope                        string                       `json:"scope"`
+	Comp                         CompResponse                 `json:"comp"`
+	ServiceSession               *ServiceSessionResponse      `json:"service_session,omitempty"`
+	CompletedSaleID              *uuid.UUID                   `json:"completed_sale_id,omitempty"`
+	OutstandingPostSaleRefundVND *int64                       `json:"outstanding_post_sale_refund_vnd,omitempty"`
+	PostSaleCorrections          []PostSaleCorrectionResponse `json:"post_sale_corrections,omitempty"`
+}
+
+// ---------- Phase 6C: Refund ----------
+
+// RefundPaymentAllocationInput names one Payment the refunded value came in
+// through and the amount allocated against it.
+type RefundPaymentAllocationInput struct {
+	PaymentID uuid.UUID `json:"payment_id"`
+	AmountVND int64     `json:"amount_vnd"`
+}
+
+// RefundAdjustmentAllocationInput names one Charge Adjustment whose corrected
+// value is being refunded and the amount allocated against it.
+type RefundAdjustmentAllocationInput struct {
+	ChargeAdjustmentID uuid.UUID `json:"charge_adjustment_id"`
+	AmountVND          int64     `json:"amount_vnd"`
+}
+
+// RecordRefundCommand returns real money through the original Payment method
+// while consuming both corrected refundable capacity and original Payment
+// refundable capacity. Both allocation collections are required and must sum
+// to the same positive amount. ManagerApproval carries request-only
+// credentials; the executor verifies them inline, and no credential ever
+// reaches a fingerprint, stored result, business fact, audit detail, or log
+// (spec §9.1).
+type RecordRefundCommand struct {
+	RequestID             uuid.UUID                         `json:"request_id"`
+	CheckID               uuid.UUID                         `json:"check_id"`
+	Method                string                            `json:"method"`
+	AdjustmentAllocations []RefundAdjustmentAllocationInput `json:"adjustment_allocations"`
+	PaymentAllocations    []RefundPaymentAllocationInput    `json:"payment_allocations"`
+	Reason                string                            `json:"reason"`
+	Note                  *string                           `json:"note"`
+	ManagerApproval       ManagerApprovalInput              `json:"manager_approval"`
+}
+
+// RefundResult is the discriminated Refund result. Exactly one branch is
+// present: a live Refund carries the updated Service Session, while a
+// post-sale Refund carries the Completed Sale id and its additive correction
+// history and no mutable Session projection (spec §9.1, §12.3).
+type RefundResult struct {
+	Scope               string                       `json:"scope"`
+	Refund              RefundResponse               `json:"refund"`
+	ServiceSession      *ServiceSessionResponse      `json:"service_session,omitempty"`
+	CompletedSaleID     *uuid.UUID                   `json:"completed_sale_id,omitempty"`
+	PostSaleCorrections []PostSaleCorrectionResponse `json:"post_sale_corrections,omitempty"`
+}
+
+// ---------- Phase 6C: Payment Void ----------
+
+// VoidPaymentCommand declares one whole Payment incorrect. PaymentID is
+// json:"-": it comes from the path, never the body. ManagerApproval carries
+// request-only credentials; the executor verifies them inline, and no
+// credential ever reaches a fingerprint, stored result, business fact, audit
+// detail, or log (spec §10).
+type VoidPaymentCommand struct {
+	RequestID       uuid.UUID            `json:"request_id"`
+	PaymentID       uuid.UUID            `json:"-"`
+	Reason          string               `json:"reason"`
+	Note            *string              `json:"note"`
+	ManagerApproval ManagerApprovalInput `json:"manager_approval"`
+}

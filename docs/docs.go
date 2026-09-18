@@ -3301,6 +3301,99 @@ const docTemplate = `{
                 }
             }
         },
+        "/preparation/units/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cancels 1 through 50 queued units as one all-or-nothing batch. Each unit becomes CANCELLED with its typed transition, Cancellation fact, and CANCELLATION or CHANGE alert; each charged standard unit reduces its Check's live charge by its immutable unit price and the Check settles when the corrected balance reaches zero. A CHANGE links to an already-submitted later Order in the same active Service Session. Requires sales.operate and no Manager approval. The response carries no Check, Payment, or Refund data.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preparation"
+                ],
+                "summary": "Cancel or change queued Preparation Units",
+                "parameters": [
+                    {
+                        "description": "Cancellation request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/preparation.CancelUnitsCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/preparation.CancelUnitsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/preparation/units/correct-state": {
             "post": {
                 "security": [
@@ -4072,6 +4165,287 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/payments/{payment_id}/void": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Declares one whole Payment incorrect while its original Sales Shift is still open, appends an immutable reversal without editing or deleting the source Payment, recomputes the Check's corrected financials, and reopens the Check with all settlement evidence cleared when the remaining valid coverage no longer covers its charge. Rejected for a merged Check, an already-voided Payment, any Payment carrying a Refund allocation (pending or completed), a closed Service Session, and a Payment whose original Shift is closed or is no longer the currently open one. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately. The Void is always for the entire applied amount, and a replacement Payment is recorded through the ordinary Cash or Manual QR command.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Void a whole Payment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Payment ID",
+                        "name": "payment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Void request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.VoidPaymentCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/refunds": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns real money through the original Payment method while consuming both corrected Charge Adjustment capacity and original Payment refundable capacity in equal sums. A live Refund resolves the active Service Session's pending Refund and returns the updated Service Session. A post-sale Refund consumes a POST_SALE correction of the Completed Sale, links to it, and returns its additive correction history without rewriting any closed row. A CASH Refund completes in the same transaction; a MANUAL_QR Refund stays PENDING until staff confirm the outbound transfer. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Record a Refund",
+                "parameters": [
+                    {
+                        "description": "Refund request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.RecordRefundCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.RefundResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/refunds/{refund_id}/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Completes an approved Manual QR Refund once staff confirm the outbound bank transfer. The Refund must exist, use MANUAL_QR, lack a completion, and belong to the current open Shift. Confirmation re-derives the obligation under the Check lock — the Check's pending Refund for a live Refund, the Completed Sale's outstanding correction for a post-sale Refund — and refuses an amount above it, so a completed Refund can never make a Check's balance positive. It appends exactly one completion with the confirmer identity and session, records an optional trimmed transaction_reference of at most 100 characters, writes MANUAL_QR_REFUND_COMPLETED, and never edits the Refund row or its allocations. Requires current sales.operate and no second Manager Approval. Exact replay returns the stored result; another request id after completion answers REFUND_ALREADY_COMPLETED.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Confirm a Manual QR Refund",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Refund ID",
+                        "name": "refund_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Confirmation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.ConfirmManualQRRefundCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.RefundResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -5474,6 +5848,106 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/wastes/{waste_id}/comp": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Waives the charge of one charged Wasted standard unit through one Manager-approved append-only correction. An active Service Session's Comp writes a LIVE_CHECK Charge Adjustment, updates the Check charge, settles the Check when the corrected balance reaches zero, and returns the updated Service Session. A closed Session's Comp writes a POST_SALE adjustment linked to its Completed Sale without rewriting the closed Check or sale, and returns the Completed Sale id, the outstanding post-sale correction amount, and the additive correction history. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately. A Wasted Remake is uncharged and rejected.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Comp a charged Waste",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Preparation Waste ID",
+                        "name": "waste_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Comp request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.CompWasteCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.CompResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -7642,6 +8116,75 @@ const docTemplate = `{
                 }
             }
         },
+        "preparation.CancelUnitsCommand": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "preparation_unit_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "replacement_order_id": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "preparation.CancelUnitsResponse": {
+            "type": "object",
+            "properties": {
+                "alerts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.QueueAlertResponse"
+                    }
+                },
+                "outcomes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/preparation.CancellationOutcome"
+                    }
+                }
+            }
+        },
+        "preparation.CancellationOutcome": {
+            "type": "object",
+            "properties": {
+                "cancellation_id": {
+                    "type": "string"
+                },
+                "charge_adjustment_id": {
+                    "type": "string"
+                },
+                "charge_removed_vnd": {
+                    "type": "integer"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "prior_state": {
+                    "type": "string"
+                },
+                "resulting_state": {
+                    "type": "string"
+                }
+            }
+        },
         "preparation.CorrectStateCommand": {
             "type": "object",
             "properties": {
@@ -8059,6 +8602,44 @@ const docTemplate = `{
                 }
             }
         },
+        "sales.ChargeAdjustmentResponse": {
+            "type": "object",
+            "properties": {
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "charge_allocation_id": {
+                    "type": "string"
+                },
+                "completed_sale_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "preparation_waste_id": {
+                    "type": "string"
+                },
+                "remaining_refundable_vnd": {
+                    "type": "integer"
+                },
+                "sales_shift_id": {
+                    "type": "string"
+                },
+                "scope": {
+                    "type": "string"
+                }
+            }
+        },
         "sales.ChargeAllocationResponse": {
             "type": "object",
             "properties": {
@@ -8121,11 +8702,23 @@ const docTemplate = `{
                 "balance_vnd": {
                     "type": "integer"
                 },
+                "base_charge_vnd": {
+                    "type": "integer"
+                },
+                "charge_adjustments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.ChargeAdjustmentResponse"
+                    }
+                },
                 "charge_vnd": {
                     "type": "integer"
                 },
                 "created_at": {
                     "type": "string"
+                },
+                "effective_received_vnd": {
+                    "type": "integer"
                 },
                 "id": {
                     "type": "string"
@@ -8139,10 +8732,25 @@ const docTemplate = `{
                         "$ref": "#/definitions/sales.PaymentResponse"
                     }
                 },
+                "pending_refund_vnd": {
+                    "type": "integer"
+                },
+                "refunds": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.RefundResponse"
+                    }
+                },
                 "state": {
                     "type": "string"
                 },
                 "total_applied_vnd": {
+                    "type": "integer"
+                },
+                "total_refunded_vnd": {
+                    "type": "integer"
+                },
+                "total_voided_vnd": {
                     "type": "integer"
                 }
             }
@@ -8186,6 +8794,84 @@ const docTemplate = `{
                 }
             }
         },
+        "sales.CompResponse": {
+            "type": "object",
+            "properties": {
+                "actor_staff_identity_id": {
+                    "type": "string"
+                },
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "approved_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "charge_adjustment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "preparation_unit_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "waste_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.CompResult": {
+            "type": "object",
+            "properties": {
+                "comp": {
+                    "$ref": "#/definitions/sales.CompResponse"
+                },
+                "completed_sale_id": {
+                    "type": "string"
+                },
+                "outstanding_post_sale_refund_vnd": {
+                    "type": "integer"
+                },
+                "post_sale_corrections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.PostSaleCorrectionResponse"
+                    }
+                },
+                "scope": {
+                    "type": "string"
+                },
+                "service_session": {
+                    "$ref": "#/definitions/sales.ServiceSessionResponse"
+                }
+            }
+        },
+        "sales.CompWasteCommand": {
+            "type": "object",
+            "properties": {
+                "manager_approval": {
+                    "$ref": "#/definitions/sales.ManagerApprovalInput"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
         "sales.CompletedSaleCheckResponse": {
             "type": "object",
             "properties": {
@@ -8198,7 +8884,19 @@ const docTemplate = `{
                 "balance_vnd": {
                     "type": "integer"
                 },
+                "base_charge_vnd": {
+                    "type": "integer"
+                },
+                "charge_adjustments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.ChargeAdjustmentResponse"
+                    }
+                },
                 "charge_vnd": {
+                    "type": "integer"
+                },
+                "effective_received_vnd": {
                     "type": "integer"
                 },
                 "id": {
@@ -8210,10 +8908,25 @@ const docTemplate = `{
                         "$ref": "#/definitions/sales.PaymentResponse"
                     }
                 },
+                "pending_refund_vnd": {
+                    "type": "integer"
+                },
+                "refunds": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.RefundResponse"
+                    }
+                },
                 "state": {
                     "type": "string"
                 },
                 "total_applied_vnd": {
+                    "type": "integer"
+                },
+                "total_refunded_vnd": {
+                    "type": "integer"
+                },
+                "total_voided_vnd": {
                     "type": "integer"
                 }
             }
@@ -8248,6 +8961,12 @@ const docTemplate = `{
                         "$ref": "#/definitions/sales.OrderResponse"
                     }
                 },
+                "post_sale_corrections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.PostSaleCorrectionResponse"
+                    }
+                },
                 "preparation_history": {
                     "type": "array",
                     "items": {
@@ -8276,6 +8995,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.ConfirmManualQRRefundCommand": {
+            "type": "object",
+            "properties": {
+                "request_id": {
+                    "type": "string"
+                },
+                "transaction_reference": {
                     "type": "string"
                 }
             }
@@ -8314,6 +9044,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "size_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.ManagerApprovalInput": {
+            "type": "object",
+            "properties": {
+                "approver_login_code": {
+                    "type": "string"
+                },
+                "manager_pin": {
                     "type": "string"
                 }
             }
@@ -8441,11 +9182,63 @@ const docTemplate = `{
                 "received_at": {
                     "type": "string"
                 },
+                "remaining_refundable_vnd": {
+                    "type": "integer"
+                },
                 "sales_shift_id": {
                     "type": "string"
                 },
                 "transaction_reference": {
                     "type": "string"
+                },
+                "void": {
+                    "$ref": "#/definitions/sales.PaymentVoidResponse"
+                }
+            }
+        },
+        "sales.PaymentVoidResponse": {
+            "type": "object",
+            "properties": {
+                "actor_staff_identity_id": {
+                    "type": "string"
+                },
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "approved_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.PostSaleCorrectionResponse": {
+            "type": "object",
+            "properties": {
+                "adjustment": {
+                    "$ref": "#/definitions/sales.ChargeAdjustmentResponse"
+                },
+                "comp": {
+                    "$ref": "#/definitions/sales.CompResponse"
+                },
+                "outstanding_refund_vnd": {
+                    "type": "integer"
+                },
+                "refunds": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.RefundResponse"
+                    }
                 }
             }
         },
@@ -8520,6 +9313,173 @@ const docTemplate = `{
                 },
                 "unit_number": {
                     "type": "integer"
+                }
+            }
+        },
+        "sales.RecordRefundCommand": {
+            "type": "object",
+            "properties": {
+                "adjustment_allocations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.RefundAdjustmentAllocationInput"
+                    }
+                },
+                "check_id": {
+                    "type": "string"
+                },
+                "manager_approval": {
+                    "$ref": "#/definitions/sales.ManagerApprovalInput"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "payment_allocations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.RefundPaymentAllocationInput"
+                    }
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.RefundAdjustmentAllocationInput": {
+            "type": "object",
+            "properties": {
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "charge_adjustment_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.RefundAllocationResponse": {
+            "type": "object",
+            "properties": {
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.RefundCompletionResponse": {
+            "type": "object",
+            "properties": {
+                "completed_at": {
+                    "type": "string"
+                },
+                "completed_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "completed_staff_access_session_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "transaction_reference": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.RefundPaymentAllocationInput": {
+            "type": "object",
+            "properties": {
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "payment_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.RefundResponse": {
+            "type": "object",
+            "properties": {
+                "actor_staff_identity_id": {
+                    "type": "string"
+                },
+                "adjustment_allocations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.RefundAllocationResponse"
+                    }
+                },
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "approved_by_staff_identity_id": {
+                    "type": "string"
+                },
+                "check_id": {
+                    "type": "string"
+                },
+                "completed_sale_id": {
+                    "type": "string"
+                },
+                "completion": {
+                    "$ref": "#/definitions/sales.RefundCompletionResponse"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "payment_allocations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.RefundAllocationResponse"
+                    }
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "sales_shift_id": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "sales.RefundResult": {
+            "type": "object",
+            "properties": {
+                "completed_sale_id": {
+                    "type": "string"
+                },
+                "post_sale_corrections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sales.PostSaleCorrectionResponse"
+                    }
+                },
+                "refund": {
+                    "$ref": "#/definitions/sales.RefundResponse"
+                },
+                "scope": {
+                    "type": "string"
+                },
+                "service_session": {
+                    "$ref": "#/definitions/sales.ServiceSessionResponse"
                 }
             }
         },
@@ -8781,6 +9741,23 @@ const docTemplate = `{
                 }
             }
         },
+        "sales.VoidPaymentCommand": {
+            "type": "object",
+            "properties": {
+                "manager_approval": {
+                    "$ref": "#/definitions/sales.ManagerApprovalInput"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
         "shift.CashMovementResponse": {
             "type": "object",
             "properties": {
@@ -8833,11 +9810,29 @@ const docTemplate = `{
                         "$ref": "#/definitions/shift.CashMovementResponse"
                     }
                 },
+                "cash_payment_vnd": {
+                    "type": "integer"
+                },
+                "cash_payment_void_vnd": {
+                    "type": "integer"
+                },
+                "cash_refund_vnd": {
+                    "type": "integer"
+                },
                 "expected_cash_vnd": {
                     "type": "integer"
                 },
                 "id": {
                     "type": "string"
+                },
+                "manual_qr_payment_vnd": {
+                    "type": "integer"
+                },
+                "manual_qr_payment_void_vnd": {
+                    "type": "integer"
+                },
+                "manual_qr_refund_vnd": {
+                    "type": "integer"
                 },
                 "opened_at": {
                     "type": "string"
@@ -8848,8 +9843,23 @@ const docTemplate = `{
                 "opening_float_vnd": {
                     "type": "integer"
                 },
+                "pending_manual_qr_refund_vnd": {
+                    "type": "integer"
+                },
+                "pending_refund_vnd": {
+                    "type": "integer"
+                },
+                "refunds": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/shift.RefundSummaryResponse"
+                    }
+                },
                 "state": {
                     "type": "string"
+                },
+                "unresolved_post_sale_adjustment_vnd": {
+                    "type": "integer"
                 }
             }
         },
@@ -8886,6 +9896,35 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "shift.RefundSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "amount_vnd": {
+                    "type": "integer"
+                },
+                "check_id": {
+                    "type": "string"
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "completed_sale_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "state": {
                     "type": "string"
                 }
             }

@@ -75,7 +75,10 @@ func TestSalesPackageUsesSharedDatabase(t *testing.T) {
 func truncateSalesTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.Exec(`
-		TRUNCATE charge_allocations, committed_item_modifier_options, committed_items,
+		TRUNCATE refund_completions, refund_adjustment_allocations,
+		         refund_payment_allocations, refunds, payment_voids, sales_comps,
+		         preparation_cancellations, charge_adjustments,
+		         charge_allocations, committed_item_modifier_options, committed_items,
 		         checks, order_draft_item_modifier_options, order_draft_items,
 		         order_drafts, table_assignments, service_sessions, cash_movements,
 		         sales_shifts, tables, modifier_group_default_options,

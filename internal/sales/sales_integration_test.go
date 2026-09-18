@@ -15,6 +15,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
+	"github.com/Mirai3103/pos-cafe/internal/preparation"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/Mirai3103/pos-cafe/internal/shift"
 	"github.com/google/uuid"
@@ -32,9 +33,11 @@ type envelope struct {
 	} `json:"error"`
 }
 
-// newTestServer builds an Echo server with auth, shift, and sales routes
-// mounted the same way cmd/api/main.go mounts them. Shift is included because
-// a Session can only open against a Shift opened through the Shift API.
+// newTestServer builds an Echo server with auth, shift, sales, and
+// preparation routes mounted the same way cmd/api/main.go mounts them. Shift
+// is included because a Session can only open against a Shift opened through
+// the Shift API; preparation is included because a Waste must be recorded
+// through its real route before Comp can consume it.
 func newTestServer(t *testing.T) (*echo.Echo, *sql.DB, *sqlc.Queries) {
 	t.Helper()
 	db, q := openSalesTestDB(t)
@@ -52,6 +55,9 @@ func newTestServer(t *testing.T) (*echo.Echo, *sql.DB, *sqlc.Queries) {
 
 	salesSlices := sales.NewSlices(db, q)
 	salesSlices.RegisterRoutes(v1, authSlices.Middleware)
+
+	preparationSlices := preparation.NewSlices(db, q)
+	preparationSlices.RegisterRoutes(v1, authSlices.Middleware)
 
 	return e, db, q
 }
@@ -264,7 +270,7 @@ func TestSalesHTTPSerializesEmptyCollectionsAsArrays(t *testing.T) {
 	assert.Equal(t, shiftID, session.SalesShiftID)
 }
 
-// salesRoutes enumerates all fourteen operations for the denial tests. Bodies
+// salesRoutes enumerates every Sales operation for the denial tests. Bodies
 // are well-formed; the denial happens in the middleware chain before any
 // handler logic runs, but valid requests keep the test honest about what is
 // being denied.
@@ -311,6 +317,45 @@ func salesRoutes() []struct {
 			map[string]any{"request_id": uuid.New()}},
 		{"set check target", http.MethodPut, sessionPath + "/draft/check-target",
 			map[string]any{"request_id": uuid.New(), "check_target": "NEW_CHECK"}},
+		{"comp waste", http.MethodPost, "/api/v1/sales/wastes/" + uuid.NewString() + "/comp",
+			map[string]any{
+				"request_id": uuid.New(),
+				"reason":     "CAFE_ERROR",
+				"manager_approval": map[string]any{
+					"approver_login_code": "MGR001",
+					"manager_pin":         "1234",
+				},
+			}},
+		{"record refund", http.MethodPost, "/api/v1/sales/refunds",
+			map[string]any{
+				"request_id": uuid.New(),
+				"check_id":   uuid.New(),
+				"method":     "CASH",
+				"adjustment_allocations": []map[string]any{
+					{"charge_adjustment_id": uuid.New(), "amount_vnd": 1000},
+				},
+				"payment_allocations": []map[string]any{
+					{"payment_id": uuid.New(), "amount_vnd": 1000},
+				},
+				"reason": "CUSTOMER_REQUEST",
+				"manager_approval": map[string]any{
+					"approver_login_code": "MGR001",
+					"manager_pin":         "1234",
+				},
+			}},
+		{"confirm refund", http.MethodPost,
+			"/api/v1/sales/refunds/" + uuid.NewString() + "/confirm",
+			map[string]any{"request_id": uuid.New()}},
+		{"void payment", http.MethodPost,
+			"/api/v1/sales/payments/" + uuid.NewString() + "/void",
+			map[string]any{
+				"request_id": uuid.New(),
+				"reason":     "WRONG_AMOUNT",
+				"manager_approval": map[string]any{
+					"approver_login_code": "MGR001",
+					"manager_pin":         "1234",
+				},
+			}},
 	}
 }
 
@@ -396,6 +441,58 @@ func TestSalesHTTPValidation(t *testing.T) {
 		require.NotNil(t, env.Error)
 		assert.Equal(t, "INVALID_INPUT", env.Error.Code)
 	})
+}
+
+// TestSalesHTTPPhase6CMalformedPathAndBody pins the boundary contract of the
+// Phase 6C routes whose ids come from the path: a non-UUID id and a malformed
+// JSON body both answer 400 INVALID_INPUT before any handler logic runs.
+func TestSalesHTTPPhase6CMalformedPathAndBody(t *testing.T) {
+	e, _, q := newTestServer(t)
+	token := signIn(t, e, q, []string{"CASHIER"}, "2468")
+	_ = openShiftOverHTTP(t, e, token)
+
+	compBody, _ := json.Marshal(map[string]any{
+		"request_id": uuid.New(),
+		"reason":     "CAFE_ERROR",
+		"manager_approval": map[string]any{
+			"approver_login_code": "MGR001",
+			"manager_pin":         "1234",
+		},
+	})
+	voidBody, _ := json.Marshal(map[string]any{
+		"request_id": uuid.New(),
+		"reason":     "WRONG_AMOUNT",
+		"manager_approval": map[string]any{
+			"approver_login_code": "MGR001",
+			"manager_pin":         "1234",
+		},
+	})
+
+	for _, tc := range []struct {
+		name string
+		path string
+		body []byte
+	}{
+		{"comp waste malformed waste id",
+			"/api/v1/sales/wastes/not-a-uuid/comp", compBody},
+		{"confirm refund malformed refund id",
+			"/api/v1/sales/refunds/not-a-uuid/confirm",
+			[]byte(`{"request_id":"` + uuid.NewString() + `"}`)},
+		{"void payment malformed payment id",
+			"/api/v1/sales/payments/not-a-uuid/void", voidBody},
+		{"record refund malformed body",
+			"/api/v1/sales/refunds", []byte(`{"request_id": not json`)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doRequest(t, e, http.MethodPost, tc.path, token, tc.body)
+			require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+
+			var env envelope
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+			require.NotNil(t, env.Error)
+			assert.Equal(t, "INVALID_INPUT", env.Error.Code)
+		})
+	}
 }
 
 func TestSalesHTTPModifierOptionIDsAbsentVersusEmpty(t *testing.T) {

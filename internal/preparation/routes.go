@@ -21,6 +21,9 @@ type Slices struct {
 	RemakeUnit       *RemakeUnitHandler
 	AcknowledgeAlert *AcknowledgeAlertHandler
 	CorrectState     *CorrectStateHandler
+
+	// Phase 6C: Cancellation & Change.
+	CancelUnits *CancelUnitsHandler
 }
 
 // NewSlices wires every Preparation handler onto a shared Runner.
@@ -35,6 +38,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		RemakeUnit:       NewRemakeUnitHandler(runner),
 		AcknowledgeAlert: NewAcknowledgeAlertHandler(runner),
 		CorrectState:     NewCorrectStateHandler(runner),
+		CancelUnits:      NewCancelUnitsHandler(runner),
 	}
 }
 
@@ -49,6 +53,10 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
 	v1.POST("/preparation/units/advance-many", s.handleBulkAdvance,
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
+	// Phase 6C registers its static path before the parameterized unit routes,
+	// so /units/cancel can never be read as a unit id.
+	v1.POST("/preparation/units/cancel", s.handleCancelUnits,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/preparation/units/:unit_id/advance", s.handleAdvanceUnit,
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
 

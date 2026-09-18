@@ -177,16 +177,26 @@ func loadDraftItems(ctx context.Context, q *sqlc.Queries, draftID uuid.UUID) (
 }
 
 // loadChecks assembles every Check of a Service Session with its allocations.
-//
-// The Check's stored charge_vnd is a denormalization of the sum over its
-// allocations, in the same spirit as 5A's modifier_key: derived, never
-// authoritative. It is stored rather than always derived because 5C freezes
-// the charge of a settled or merged Check, at which point the live sum stops
-// being the right answer. Every read therefore recomputes and compares, and a
-// mismatch fails the read rather than serving a wrong total.
+// It is the live projection's compatibility wrapper around
+// loadChecksForSnapshot; callers that must serve the immutable Completed Sale
+// core pass SnapshotCompletedSaleCore instead.
 func loadChecks(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 	[]CheckResponse, error,
 ) {
+	return loadChecksForSnapshot(ctx, q, sessionID, SnapshotLive)
+}
+
+// loadChecksForSnapshot assembles every Check of a Service Session with its
+// Charge Allocations, Charge Adjustments, Payments, and Refunds.
+//
+// The Check's stored charge_vnd is a denormalization of base allocations less
+// live adjustments, in the same spirit as 5A's modifier_key: derived, never
+// authoritative. Every read recomputes the full live financial equation and
+// compares the resulting charge, and a mismatch fails the read rather than
+// serving a wrong total. See the design, sections 6.1 and 12.3.
+func loadChecksForSnapshot(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID,
+	mode SnapshotMode,
+) ([]CheckResponse, error) {
 	checkRows, err := q.ListSessionChecks(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("load session checks: %w", err)
@@ -194,81 +204,148 @@ func loadChecks(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 
 	out := make([]CheckResponse, 0, len(checkRows))
 	for _, row := range checkRows {
-		allocations, allocatedVND, err := loadCheckAllocations(ctx, q, row.ID)
+		check, err := loadCheckForSnapshot(ctx, q, row, mode)
 		if err != nil {
 			return nil, err
-		}
-		if allocatedVND != row.ChargeVnd {
-			slog.Error("check charge does not match its allocations",
-				"check_id", row.ID,
-				"stored_charge_vnd", row.ChargeVnd,
-				"allocated_vnd", allocatedVND)
-			return nil, fmt.Errorf("%w: check %s", ErrChargeInvariantViolated, row.ID)
-		}
-
-		payments, totalAppliedVND, err := loadCheckPayments(ctx, q, row.ID)
-		if err != nil {
-			return nil, err
-		}
-		balanceVND, err := SubtractCharge(row.ChargeVnd, totalAppliedVND)
-		if err != nil {
-			return nil, fmt.Errorf("check %s balance: %w", row.ID, err)
-		}
-
-		// The read-path half of the settlement guard. The database constraint
-		// guarantees that a SETTLED Check carries complete evidence; this
-		// guarantees that its state matches the money. A MERGED Check is
-		// exempt: its charge and allocations moved to the survivor, and
-		// check_settlement_evidence_valid already requires it to point at one.
-		if row.State != CheckStateMerged &&
-			(row.State == CheckStateSettled) != SettlesCheck(balanceVND) {
-			slog.Error("check state does not match its balance",
-				"check_id", row.ID, "state", row.State, "balance_vnd", balanceVND)
-			return nil, fmt.Errorf("%w: check %s", ErrSettlementInvariantViolated, row.ID)
-		}
-
-		check := CheckResponse{
-			ID:              row.ID,
-			State:           row.State,
-			ChargeVND:       row.ChargeVnd,
-			TotalAppliedVND: totalAppliedVND,
-			BalanceVND:      balanceVND,
-			CreatedAt:       row.CreatedAt,
-			Payments:        payments,
-			Allocations:     allocations,
-		}
-		if row.MergedIntoCheckID.Valid {
-			into := row.MergedIntoCheckID.UUID
-			check.MergedIntoCheckID = &into
 		}
 		out = append(out, check)
 	}
 	return out, nil
 }
 
-// loadCheckPayments returns one Check's Payments and their summed applied
-// amount, in (received_at, id) order.
-func loadCheckPayments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID) (
-	[]PaymentResponse, int64, error,
-) {
+// loadCheckForSnapshot derives one Check's projection from its append-only
+// facts and verifies the invariants the database cannot express: the stored
+// charge equals base allocations less live adjustments, and the Check's state
+// matches its balance. A MERGED Check is exempt from the settlement half only:
+// its charge and allocations moved to the survivor, and
+// check_settlement_evidence_valid already requires it to point at one.
+func loadCheckForSnapshot(ctx context.Context, q *sqlc.Queries, row sqlc.ListSessionChecksRow,
+	mode SnapshotMode,
+) (CheckResponse, error) {
+	allocations, baseChargeVND, err := loadCheckAllocations(ctx, q, row.ID)
+	if err != nil {
+		return CheckResponse{}, err
+	}
+
+	adjustments, liveAdjustmentVND, err := loadCheckAdjustments(ctx, q, row.ID, mode)
+	if err != nil {
+		return CheckResponse{}, err
+	}
+
+	payments, originalPaymentVND, voidedPaymentVND, err := loadCheckPayments(ctx, q, row.ID, mode)
+	if err != nil {
+		return CheckResponse{}, err
+	}
+
+	refunds, completedRefundVND, err := loadCheckRefunds(ctx, q, row.ID)
+	if err != nil {
+		return CheckResponse{}, err
+	}
+
+	financials, err := ComputeCheckFinancials(CheckFinancialInputs{
+		BaseChargeVND:      baseChargeVND,
+		LiveAdjustmentVND:  liveAdjustmentVND,
+		OriginalPaymentVND: originalPaymentVND,
+		VoidedPaymentVND:   voidedPaymentVND,
+		CompletedRefundVND: completedRefundVND,
+	})
+	if err != nil {
+		return CheckResponse{}, fmt.Errorf("check %s: %w", row.ID, err)
+	}
+
+	if financials.ChargeVND != row.ChargeVnd {
+		slog.Error("check charge does not match its allocations and adjustments",
+			"check_id", row.ID,
+			"stored_charge_vnd", row.ChargeVnd,
+			"computed_charge_vnd", financials.ChargeVND,
+			"base_charge_vnd", baseChargeVND,
+			"live_adjustment_vnd", liveAdjustmentVND)
+		return CheckResponse{}, fmt.Errorf("%w: check %s stored %d, computed %d",
+			ErrChargeInvariantViolated, row.ID, row.ChargeVnd, financials.ChargeVND)
+	}
+
+	// The read-path half of the settlement guard. The database constraint
+	// guarantees that a SETTLED Check carries complete evidence; this
+	// guarantees that its state matches the money. A SETTLED Check carrying a
+	// pending Refund still has a zero balance, so it stays settled.
+	if row.State != CheckStateMerged &&
+		(row.State == CheckStateSettled) != SettlesCheck(financials.BalanceVND) {
+		slog.Error("check state does not match its balance",
+			"check_id", row.ID, "state", row.State, "balance_vnd", financials.BalanceVND)
+		return CheckResponse{}, fmt.Errorf("%w: check %s", ErrSettlementInvariantViolated, row.ID)
+	}
+
+	check := CheckResponse{
+		ID:                   row.ID,
+		State:                row.State,
+		BaseChargeVND:        baseChargeVND,
+		ChargeVND:            financials.ChargeVND,
+		TotalAppliedVND:      originalPaymentVND,
+		TotalVoidedVND:       voidedPaymentVND,
+		TotalRefundedVND:     completedRefundVND,
+		EffectiveReceivedVND: financials.EffectiveReceivedVND,
+		BalanceVND:           financials.BalanceVND,
+		PendingRefundVND:     financials.PendingRefundVND,
+		CreatedAt:            row.CreatedAt,
+		Payments:             payments,
+		Allocations:          allocations,
+		ChargeAdjustments:    adjustments,
+		Refunds:              refunds,
+	}
+	if row.MergedIntoCheckID.Valid {
+		into := row.MergedIntoCheckID.UUID
+		check.MergedIntoCheckID = &into
+	}
+	return check, nil
+}
+
+// loadCheckPayments returns one Check's Payments, their summed original applied
+// amount, and their summed voided amount, in (received_at, id) order. Void
+// evidence rides along so a client can present a reversed Payment without a
+// second read. A Payment carrying Void evidence reports zero remaining
+// refundable capacity: the reversal leaves the applied amount immutable, but
+// no Refund may allocate against it.
+func loadCheckPayments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
+	mode SnapshotMode,
+) ([]PaymentResponse, int64, int64, error) {
 	rows, err := q.ListCheckPayments(ctx, checkID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("load check payments: %w", err)
+		return nil, 0, 0, fmt.Errorf("load check payments: %w", err)
+	}
+
+	originalVND, voidedVND, err := sumPaymentAmounts(rows)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("check %s: %w", checkID, err)
+	}
+
+	paymentIDs := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		paymentIDs = append(paymentIDs, row.ID)
+	}
+	allocated, err := loadPaymentRefundAllocations(ctx, q, paymentIDs)
+	if err != nil {
+		return nil, 0, 0, err
 	}
 
 	out := make([]PaymentResponse, 0, len(rows))
-	var totalAppliedVND int64
 	for _, row := range rows {
-		totalAppliedVND, err = AddCharge(totalAppliedVND, row.AppliedAmountVnd)
+		remainingVND, err := remainingRefundableVND(row.AppliedAmountVnd, allocated[row.ID], mode)
 		if err != nil {
-			return nil, 0, fmt.Errorf("sum payments of check %s: %w", checkID, err)
+			return nil, 0, 0, fmt.Errorf("payment %s: %w", row.ID, err)
+		}
+		// A voided Payment can never source a Refund — Record Refund refuses
+		// an allocation against one — so it advertises zero remaining capacity
+		// even though its applied amount stays part of the immutable receipt.
+		if row.VoidID.Valid {
+			remainingVND = 0
 		}
 		payment := PaymentResponse{
-			ID:               row.ID,
-			Method:           row.Method,
-			AppliedAmountVND: row.AppliedAmountVnd,
-			SalesShiftID:     row.SalesShiftID,
-			ReceivedAt:       row.ReceivedAt,
+			ID:                     row.ID,
+			Method:                 row.Method,
+			AppliedAmountVND:       row.AppliedAmountVnd,
+			SalesShiftID:           row.SalesShiftID,
+			ReceivedAt:             row.ReceivedAt,
+			RemainingRefundableVND: remainingVND,
 		}
 		if row.CashTenderedVnd.Valid {
 			v := row.CashTenderedVnd.Int64
@@ -282,9 +359,304 @@ func loadCheckPayments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID) 
 			v := row.TransactionReference.String
 			payment.TransactionReference = &v
 		}
+		if row.VoidID.Valid {
+			payment.Void = &PaymentVoidResponse{
+				ID:                        row.VoidID.UUID,
+				AmountVND:                 row.VoidAmountVnd.Int64,
+				Reason:                    row.VoidReason.String,
+				Note:                      nullStringPtr(row.VoidNote),
+				ActorStaffIdentityID:      row.VoidActorStaffIdentityID.UUID,
+				ApprovedByStaffIdentityID: row.VoidApprovedByStaffIdentityID.UUID,
+				OccurredAt:                row.VoidOccurredAt.Time,
+			}
+		}
 		out = append(out, payment)
 	}
-	return out, totalAppliedVND, nil
+	return out, originalVND, voidedVND, nil
+}
+
+// sumPaymentAmounts totals one Check's Payments and their Voids, enforcing the
+// whole-Void rule on the persisted facts.
+func sumPaymentAmounts(rows []sqlc.ListCheckPaymentsRow) (int64, int64, error) {
+	var originalVND, voidedVND int64
+	for _, row := range rows {
+		next, err := AddCharge(originalVND, row.AppliedAmountVnd)
+		if err != nil {
+			return 0, 0, fmt.Errorf("%w: payment amounts: %v",
+				ErrFinancialInvariantViolated, err)
+		}
+		originalVND = next
+		if !row.VoidID.Valid {
+			continue
+		}
+		if row.VoidAmountVnd.Int64 != row.AppliedAmountVnd {
+			return 0, 0, fmt.Errorf(
+				"%w: payment %s void amount %d differs from applied %d",
+				ErrFinancialInvariantViolated, row.ID,
+				row.VoidAmountVnd.Int64, row.AppliedAmountVnd)
+		}
+		voidedVND, err = AddCharge(voidedVND, row.VoidAmountVnd.Int64)
+		if err != nil {
+			return 0, 0, fmt.Errorf("%w: void amounts: %v",
+				ErrFinancialInvariantViolated, err)
+		}
+	}
+	return originalVND, voidedVND, nil
+}
+
+// loadCheckAdjustments returns one Check's live Charge Adjustments and their
+// summed amount. The query excludes POST_SALE adjustments structurally, so a
+// closed sale's later history never rewrites this projection.
+func loadCheckAdjustments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID,
+	mode SnapshotMode,
+) ([]ChargeAdjustmentResponse, int64, error) {
+	rows, err := q.ListCheckChargeAdjustments(ctx, checkID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("load check charge adjustments: %w", err)
+	}
+
+	adjustmentIDs := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		adjustmentIDs = append(adjustmentIDs, row.ID)
+	}
+	allocated, err := loadAdjustmentRefundAllocations(ctx, q, adjustmentIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	out := make([]ChargeAdjustmentResponse, 0, len(rows))
+	var totalVND int64
+	for _, row := range rows {
+		totalVND, err = AddCharge(totalVND, row.AmountVnd)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%w: check %s adjustments: %v",
+				ErrFinancialInvariantViolated, checkID, err)
+		}
+		remainingVND, err := remainingRefundableVND(row.AmountVnd, allocated[row.ID], mode)
+		if err != nil {
+			return nil, 0, fmt.Errorf("adjustment %s: %w", row.ID, err)
+		}
+		out = append(out, ChargeAdjustmentResponse{
+			ID:                     row.ID,
+			Kind:                   row.Kind,
+			Scope:                  row.Scope,
+			PreparationUnitID:      row.PreparationUnitID,
+			PreparationWasteID:     nullUUIDPtr(row.PreparationWasteID),
+			ChargeAllocationID:     row.ChargeAllocationID,
+			CompletedSaleID:        nullUUIDPtr(row.CompletedSaleID),
+			SalesShiftID:           row.SalesShiftID,
+			AmountVND:              row.AmountVnd,
+			RemainingRefundableVND: remainingVND,
+			CreatedAt:              row.CreatedAt,
+		})
+	}
+	return out, totalVND, nil
+}
+
+// loadCheckRefunds returns one Check's live Refunds with their derived state
+// and both allocation collections, and the summed amount money has actually
+// left. The query excludes post-sale Refunds structurally. Every Refund's
+// amount must equal each of its allocation sums.
+func loadCheckRefunds(ctx context.Context, q *sqlc.Queries, checkID uuid.UUID) (
+	[]RefundResponse, int64, error,
+) {
+	rows, err := q.ListCheckRefunds(ctx, checkID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("load check refunds: %w", err)
+	}
+	completedVND, err := sumCompletedRefundsVND(rows)
+	if err != nil {
+		return nil, 0, fmt.Errorf("check %s: %w", checkID, err)
+	}
+
+	refundIDs := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		refundIDs[i] = row.ID
+	}
+	paymentsByRefund, adjustmentsByRefund, err := loadRefundAllocationsByRefundIDs(ctx, q, refundIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	out := make([]RefundResponse, 0, len(rows))
+	for _, row := range rows {
+		paymentRows := paymentsByRefund[row.ID]
+		adjustmentRows := adjustmentsByRefund[row.ID]
+		if err := assertRefundAllocationSums(row, paymentRows, adjustmentRows); err != nil {
+			return nil, 0, err
+		}
+
+		refund := RefundResponse{
+			ID:                        row.ID,
+			CheckID:                   row.CheckID,
+			CompletedSaleID:           nullUUIDPtr(row.CompletedSaleID),
+			SalesShiftID:              row.SalesShiftID,
+			Method:                    row.Method,
+			AmountVND:                 row.AmountVnd,
+			State:                     RefundStatePending,
+			Reason:                    row.Reason,
+			Note:                      nullStringPtr(row.Note),
+			ActorStaffIdentityID:      row.ActorStaffIdentityID,
+			ApprovedByStaffIdentityID: row.ApprovedByStaffIdentityID,
+			CreatedAt:                 row.CreatedAt,
+			PaymentAllocations:        make([]RefundAllocationResponse, 0, len(paymentRows)),
+			AdjustmentAllocations:     make([]RefundAllocationResponse, 0, len(adjustmentRows)),
+		}
+		for _, allocation := range paymentRows {
+			refund.PaymentAllocations = append(refund.PaymentAllocations,
+				RefundAllocationResponse{ID: allocation.PaymentID, AmountVND: allocation.AmountVnd})
+		}
+		for _, allocation := range adjustmentRows {
+			refund.AdjustmentAllocations = append(refund.AdjustmentAllocations,
+				RefundAllocationResponse{
+					ID:        allocation.ChargeAdjustmentID,
+					AmountVND: allocation.AmountVnd,
+				})
+		}
+		if row.CompletionID.Valid {
+			refund.State = RefundStateCompleted
+			refund.Completion = &RefundCompletionResponse{
+				ID:                            row.CompletionID.UUID,
+				TransactionReference:          nullStringPtr(row.TransactionReference),
+				CompletedByStaffIdentityID:    row.CompletedByStaffIdentityID.UUID,
+				CompletedStaffAccessSessionID: row.CompletedStaffAccessSessionID.UUID,
+				CompletedAt:                   row.CompletedAt.Time,
+			}
+		}
+		out = append(out, refund)
+	}
+	return out, completedVND, nil
+}
+
+// sumCompletedRefundsVND totals the Refunds whose money has actually left.
+// Pending Manual QR intents contribute nothing until their completion exists.
+func sumCompletedRefundsVND(rows []sqlc.ListCheckRefundsRow) (int64, error) {
+	var completedVND int64
+	for _, row := range rows {
+		if !row.CompletionID.Valid {
+			continue
+		}
+		next, err := AddCharge(completedVND, row.AmountVnd)
+		if err != nil {
+			return 0, fmt.Errorf("%w: completed refunds: %v",
+				ErrFinancialInvariantViolated, err)
+		}
+		completedVND = next
+	}
+	return completedVND, nil
+}
+
+// loadRefundAllocationsByRefundIDs batch-loads the Payment and Charge
+// Adjustment allocations of several Refunds in two round trips, grouped by
+// Refund id, replacing the two per-Refund round trips a loop would otherwise
+// make for each of the given ids.
+func loadRefundAllocationsByRefundIDs(ctx context.Context, q *sqlc.Queries,
+	refundIDs []uuid.UUID,
+) (
+	map[uuid.UUID][]sqlc.ListRefundPaymentAllocationsByRefundIDsRow,
+	map[uuid.UUID][]sqlc.ListRefundAdjustmentAllocationsByRefundIDsRow,
+	error,
+) {
+	paymentsByRefund := make(map[uuid.UUID][]sqlc.ListRefundPaymentAllocationsByRefundIDsRow, len(refundIDs))
+	adjustmentsByRefund := make(map[uuid.UUID][]sqlc.ListRefundAdjustmentAllocationsByRefundIDsRow, len(refundIDs))
+	if len(refundIDs) == 0 {
+		return paymentsByRefund, adjustmentsByRefund, nil
+	}
+
+	paymentRows, err := q.ListRefundPaymentAllocationsByRefundIDs(ctx, refundIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load refund payment allocations: %w", err)
+	}
+	for _, row := range paymentRows {
+		paymentsByRefund[row.RefundID] = append(paymentsByRefund[row.RefundID], row)
+	}
+
+	adjustmentRows, err := q.ListRefundAdjustmentAllocationsByRefundIDs(ctx, refundIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load refund adjustment allocations: %w", err)
+	}
+	for _, row := range adjustmentRows {
+		adjustmentsByRefund[row.RefundID] = append(adjustmentsByRefund[row.RefundID], row)
+	}
+
+	return paymentsByRefund, adjustmentsByRefund, nil
+}
+
+// assertRefundAllocationSums enforces refund.amount_vnd = sum(payment
+// allocations) = sum(adjustment allocations) on the persisted facts.
+func assertRefundAllocationSums(row sqlc.ListCheckRefundsRow,
+	paymentRows []sqlc.ListRefundPaymentAllocationsByRefundIDsRow,
+	adjustmentRows []sqlc.ListRefundAdjustmentAllocationsByRefundIDsRow,
+) error {
+	var paymentVND, adjustmentVND int64
+	var err error
+	for _, allocation := range paymentRows {
+		paymentVND, err = AddCharge(paymentVND, allocation.AmountVnd)
+		if err != nil {
+			return fmt.Errorf("%w: refund %s payment allocations: %v",
+				ErrFinancialInvariantViolated, row.ID, err)
+		}
+	}
+	for _, allocation := range adjustmentRows {
+		adjustmentVND, err = AddCharge(adjustmentVND, allocation.AmountVnd)
+		if err != nil {
+			return fmt.Errorf("%w: refund %s adjustment allocations: %v",
+				ErrFinancialInvariantViolated, row.ID, err)
+		}
+	}
+	if paymentVND != row.AmountVnd || adjustmentVND != row.AmountVnd {
+		return fmt.Errorf(
+			"%w: refund %s amount %d, payment allocations %d, adjustment allocations %d",
+			ErrFinancialInvariantViolated, row.ID, row.AmountVnd, paymentVND, adjustmentVND)
+	}
+	return nil
+}
+
+// loadPaymentRefundAllocations groups every Refund allocation against the given
+// Payments by Payment, including pending Manual QR intents: they reserve
+// capacity before money moves. The caller applies the structural snapshot rule
+// through the SnapshotMode.
+func loadPaymentRefundAllocations(ctx context.Context, q *sqlc.Queries, paymentIDs []uuid.UUID) (
+	map[uuid.UUID][]sourceAllocation, error,
+) {
+	byID := make(map[uuid.UUID][]sourceAllocation, len(paymentIDs))
+	if len(paymentIDs) == 0 {
+		return byID, nil
+	}
+	rows, err := q.ListPaymentRefundAllocations(ctx, paymentIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load payment refund allocations: %w", err)
+	}
+	for _, row := range rows {
+		byID[row.PaymentID] = append(byID[row.PaymentID], sourceAllocation{
+			AmountVND:             row.AmountVnd,
+			RefundCompletedSaleID: row.RefundCompletedSaleID,
+		})
+	}
+	return byID, nil
+}
+
+// loadAdjustmentRefundAllocations groups every Refund allocation against the
+// given Charge Adjustments by Adjustment, with the same capacity-reservation
+// rule as Payments.
+func loadAdjustmentRefundAllocations(ctx context.Context, q *sqlc.Queries,
+	adjustmentIDs []uuid.UUID,
+) (map[uuid.UUID][]sourceAllocation, error) {
+	byID := make(map[uuid.UUID][]sourceAllocation, len(adjustmentIDs))
+	if len(adjustmentIDs) == 0 {
+		return byID, nil
+	}
+	rows, err := q.ListAdjustmentRefundAllocations(ctx, adjustmentIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load adjustment refund allocations: %w", err)
+	}
+	for _, row := range rows {
+		byID[row.ChargeAdjustmentID] = append(byID[row.ChargeAdjustmentID], sourceAllocation{
+			AmountVND:             row.AmountVnd,
+			RefundCompletedSaleID: row.RefundCompletedSaleID,
+		})
+	}
+	return byID, nil
 }
 
 // loadCheckAllocations returns one Check's allocations and their summed amount.

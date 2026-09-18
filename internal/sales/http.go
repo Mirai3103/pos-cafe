@@ -928,3 +928,174 @@ func (s *Slices) handleMergeChecks(c echo.Context) error {
 	}
 	return sendResult(c, status, result)
 }
+
+// handleCompWaste godoc
+//
+//	@Summary		Comp a charged Waste
+//	@Description	Waives the charge of one charged Wasted standard unit through one Manager-approved append-only correction. An active Service Session's Comp writes a LIVE_CHECK Charge Adjustment, updates the Check charge, settles the Check when the corrected balance reaches zero, and returns the updated Service Session. A closed Session's Comp writes a POST_SALE adjustment linked to its Completed Sale without rewriting the closed Check or sale, and returns the Completed Sale id, the outstanding post-sale correction amount, and the additive correction history. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately. A Wasted Remake is uncharged and rejected.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			waste_id	path	string			true	"Preparation Waste ID"
+//	@Param			request		body	CompWasteCommand	true	"Comp request"
+//	@Success		201			{object}	response.APIResponse{data=CompResult}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		422			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/sales/wastes/{waste_id}/comp [post]
+func (s *Slices) handleCompWaste(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	wasteID, err := parseUUIDParam(c, "waste_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[CompWasteCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// WasteID is json:"-": it comes from the path, never the body.
+	body.WasteID = wasteID
+
+	status, result, err := s.CompWaste.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleRecordRefund godoc
+//
+//	@Summary		Record a Refund
+//	@Description	Returns real money through the original Payment method while consuming both corrected Charge Adjustment capacity and original Payment refundable capacity in equal sums. A live Refund resolves the active Service Session's pending Refund and returns the updated Service Session. A post-sale Refund consumes a POST_SALE correction of the Completed Sale, links to it, and returns its additive correction history without rewriting any closed row. A CASH Refund completes in the same transaction; a MANUAL_QR Refund stays PENDING until staff confirm the outbound transfer. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			request	body	RecordRefundCommand	true	"Refund request"
+//	@Success		201		{object}	response.APIResponse{data=RefundResult}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		422		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/sales/refunds [post]
+func (s *Slices) handleRecordRefund(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[RecordRefundCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+
+	status, result, err := s.RecordRefund.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleConfirmManualQRRefund godoc
+//
+//	@Summary		Confirm a Manual QR Refund
+//	@Description	Completes an approved Manual QR Refund once staff confirm the outbound bank transfer. The Refund must exist, use MANUAL_QR, lack a completion, and belong to the current open Shift. Confirmation re-derives the obligation under the Check lock — the Check's pending Refund for a live Refund, the Completed Sale's outstanding correction for a post-sale Refund — and refuses an amount above it, so a completed Refund can never make a Check's balance positive. It appends exactly one completion with the confirmer identity and session, records an optional trimmed transaction_reference of at most 100 characters, writes MANUAL_QR_REFUND_COMPLETED, and never edits the Refund row or its allocations. Requires current sales.operate and no second Manager Approval. Exact replay returns the stored result; another request id after completion answers REFUND_ALREADY_COMPLETED.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			refund_id	path		string							true	"Refund ID"
+//	@Param			request		body		ConfirmManualQRRefundCommand	true	"Confirmation request"
+//	@Success		200			{object}	response.APIResponse{data=RefundResult}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/sales/refunds/{refund_id}/confirm [post]
+func (s *Slices) handleConfirmManualQRRefund(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	refundID, err := parseUUIDParam(c, "refund_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[ConfirmManualQRRefundCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// RefundID is json:"-": it comes from the path, never the body.
+	body.RefundID = refundID
+
+	status, result, err := s.ConfirmManualQRRefund.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleVoidPayment godoc
+//
+//	@Summary		Void a whole Payment
+//	@Description	Declares one whole Payment incorrect while its original Sales Shift is still open, appends an immutable reversal without editing or deleting the source Payment, recomputes the Check's corrected financials, and reopens the Check with all settlement evidence cleared when the remaining valid coverage no longer covers its charge. Rejected for a merged Check, an already-voided Payment, any Payment carrying a Refund allocation (pending or completed), a closed Service Session, and a Payment whose original Shift is closed or is no longer the currently open one. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately. The Void is always for the entire applied amount, and a replacement Payment is recorded through the ordinary Cash or Manual QR command.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			payment_id	path		string				true	"Payment ID"
+//	@Param			request		body		VoidPaymentCommand	true	"Void request"
+//	@Success		201			{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/sales/payments/{payment_id}/void [post]
+func (s *Slices) handleVoidPayment(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	paymentID, err := parseUUIDParam(c, "payment_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[VoidPaymentCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// PaymentID is json:"-": it comes from the path, never the body.
+	body.PaymentID = paymentID
+
+	status, result, err := s.VoidPayment.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}

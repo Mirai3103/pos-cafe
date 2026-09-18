@@ -152,7 +152,7 @@ func TestShiftHTTPHappyPath(t *testing.T) {
 	assert.Equal(t, result.Movement.ID, current.CashMovements[0].ID)
 }
 
-func TestShiftHTTPSerializesEmptyMovementsAsArray(t *testing.T) {
+func TestShiftHTTPSerializesEmptyListsAsArrays(t *testing.T) {
 	e, q := newTestServer(t)
 	token, _ := signIn(t, e, q, []string{"CASHIER"}, "2468")
 
@@ -166,6 +166,8 @@ func TestShiftHTTPSerializesEmptyMovementsAsArray(t *testing.T) {
 	// Assert on the raw JSON: an empty list must be [] and never null.
 	assert.Contains(t, rec.Body.String(), `"cash_movements":[]`)
 	assert.NotContains(t, rec.Body.String(), `"cash_movements":null`)
+	assert.Contains(t, rec.Body.String(), `"refunds":[]`)
+	assert.NotContains(t, rec.Body.String(), `"refunds":null`)
 }
 
 func TestShiftHTTPAuthorization(t *testing.T) {

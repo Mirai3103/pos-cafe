@@ -9,11 +9,13 @@ type ClosureReadiness struct {
 	Eligible bool
 
 	AllChecksSettled   bool
+	AllRefundsResolved bool
 	AllWorkSubmitted   bool
 	HasOrder           bool
 	AllPreparationDone bool
 
 	UnsettledCheckIDs           []uuid.UUID
+	PendingRefundCheckIDs       []uuid.UUID
 	UnsubmittedCommittedItemIDs []uuid.UUID
 	NonterminalUnitIDs          []uuid.UUID
 }
@@ -23,13 +25,14 @@ type ClosureReadiness struct {
 // it needs already travels in the Service Session projection, which is why 5D
 // exposes no readiness endpoint.
 //
-// The canonical function also reports Checks carrying a pending Refund. That
-// branch is not migrated (ADR-029): Refund is outside Phase 5, the column it
-// reads is absent from the contract, and a check with no data source behind it
-// is a check that always passes.
+// A Check carrying a positive PendingRefundVND is settled debt plus money the
+// system still owes back. Check state records only the debt side (ADR-044), so
+// closure is what enforces resolution: the Session may not close while any
+// Check still owes the customer.
 func EvaluateClosureReadiness(session ServiceSessionResponse) ClosureReadiness {
 	out := ClosureReadiness{
 		UnsettledCheckIDs:           make([]uuid.UUID, 0),
+		PendingRefundCheckIDs:       make([]uuid.UUID, 0),
 		UnsubmittedCommittedItemIDs: make([]uuid.UUID, 0),
 		NonterminalUnitIDs:          make([]uuid.UUID, 0),
 	}
@@ -41,6 +44,9 @@ func EvaluateClosureReadiness(session ServiceSessionResponse) ClosureReadiness {
 		}
 		if check.State != CheckStateSettled && check.State != CheckStateMerged {
 			out.UnsettledCheckIDs = append(out.UnsettledCheckIDs, check.ID)
+		}
+		if check.PendingRefundVND > 0 {
+			out.PendingRefundCheckIDs = append(out.PendingRefundCheckIDs, check.ID)
 		}
 		for _, allocation := range check.Allocations {
 			if !allocation.Submitted {
@@ -59,10 +65,12 @@ func EvaluateClosureReadiness(session ServiceSessionResponse) ClosureReadiness {
 	// merged away has no surviving Check and has settled nothing, even though
 	// no Check is OPEN.
 	out.AllChecksSettled = survivingCheck && len(out.UnsettledCheckIDs) == 0
+	out.AllRefundsResolved = len(out.PendingRefundCheckIDs) == 0
 	out.HasOrder = len(session.Orders) > 0
 	out.AllWorkSubmitted = out.HasOrder && len(out.UnsubmittedCommittedItemIDs) == 0
 	out.AllPreparationDone = out.HasOrder && len(out.NonterminalUnitIDs) == 0
-	out.Eligible = out.AllChecksSettled && out.AllWorkSubmitted && out.AllPreparationDone
+	out.Eligible = out.AllChecksSettled && out.AllRefundsResolved &&
+		out.AllWorkSubmitted && out.AllPreparationDone
 
 	return out
 }
@@ -70,11 +78,14 @@ func EvaluateClosureReadiness(session ServiceSessionResponse) ClosureReadiness {
 // Err returns the first unmet condition as a domain error, or nil when the
 // Session may close. The order is load-bearing: staff fix what they are told
 // about first, so it decides which of several outstanding problems they are
-// sent to resolve — money before work, and work before the bar.
+// sent to resolve — unsettled money, then money owed back, then work, then the
+// missing Order, then the bar.
 func (r ClosureReadiness) Err() error {
 	switch {
 	case !r.AllChecksSettled:
 		return ErrCheckNotSettledForClosure
+	case !r.AllRefundsResolved:
+		return ErrPendingRefundForClosure
 	case len(r.UnsubmittedCommittedItemIDs) > 0:
 		return ErrUnsubmittedWorkForClosure
 	case !r.HasOrder:

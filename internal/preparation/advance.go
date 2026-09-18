@@ -126,6 +126,29 @@ func loadUnit(ctx context.Context, q *sqlc.Queries, unitID uuid.UUID) (UnitRespo
 		}
 		return UnitResponse{}, fmt.Errorf("load preparation unit: %w", err)
 	}
+	return unitResponseFromRow(row)
+}
+
+// loadUnits batch-reads several Preparation Units in one round trip, keyed by
+// id, for callers that would otherwise call loadUnit once per unit in a loop.
+func loadUnits(ctx context.Context, q *sqlc.Queries, unitIDs []uuid.UUID,
+) (map[uuid.UUID]UnitResponse, error) {
+	rows, err := q.ListPreparationUnitsByIDs(ctx, unitIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load preparation units: %w", err)
+	}
+	byID := make(map[uuid.UUID]UnitResponse, len(rows))
+	for _, row := range rows {
+		unit, err := unitResponseFromRow(row)
+		if err != nil {
+			return nil, err
+		}
+		byID[row.ID] = unit
+	}
+	return byID, nil
+}
+
+func unitResponseFromRow(row sqlc.PreparationUnit) (UnitResponse, error) {
 	mods, err := decodeModifiers(row.Modifiers)
 	if err != nil {
 		return UnitResponse{}, err

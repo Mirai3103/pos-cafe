@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
@@ -271,6 +272,22 @@ const (
 	PaymentMethodManualQR = "MANUAL_QR"
 )
 
+// Refund methods. A Refund is returned through the original Payment's method,
+// so the two share their names but stay separate literals: a future method
+// could exist for one and not the other.
+const (
+	RefundMethodCash     = "CASH"
+	RefundMethodManualQR = "MANUAL_QR"
+)
+
+// Refund states are derived from completion evidence, never stored: a Refund
+// without a completion is PENDING, one with a completion is COMPLETED. A
+// Manual QR Refund stays PENDING until staff confirm the outbound transfer.
+const (
+	RefundStatePending   = "PENDING"
+	RefundStateCompleted = "COMPLETED"
+)
+
 // Split destinations.
 const (
 	SplitDestinationNewCheck      = "NEW_CHECK"
@@ -312,8 +329,10 @@ func ChangeDue(tenderedVND, appliedVND int64) (int64, error) {
 
 // SettlesCheck reports whether a resulting balance closes the Check.
 //
-// Refund and customer excess do not exist in Phase 5, so the canonical
-// three-input readiness policy reduces to exactly this. See ADR-017.
+// A Check settles when nothing is owed, including a zero-charge Check and one
+// that carries a pending Refund: state records whether customer debt is
+// covered, while money owed back is a separate obligation that closure, not
+// state, enforces. See ADR-017.
 func SettlesCheck(balanceVND int64) bool { return balanceVND == 0 }
 
 // ValidateTransactionReference trims a Manual QR bank reference and bounds it.
@@ -369,4 +388,419 @@ func IsTerminalUnitState(state string) bool {
 // Payment -> Submit are valid service.
 func ModeRequiresSettlementBeforeSubmit(mode string) bool {
 	return mode == ModeTakeaway
+}
+
+// --- Phase 6C: Comp ---
+
+// OpCompWaste is the idempotency action name, stored in
+// idempotency_keys.action (VARCHAR(50)).
+const OpCompWaste = "sales.comp_waste"
+
+// Correction scopes. A LIVE_CHECK adjustment changes the active Session's
+// Check charge; a POST_SALE adjustment links to a Completed Sale and never
+// rewrites its snapshot (spec §2, §6.3).
+const (
+	CompScopeLiveCheck = "LIVE_CHECK"
+	CompScopePostSale  = "POST_SALE"
+)
+
+// ChargeAdjustmentKindComp is the one Charge Adjustment kind this package
+// writes. ADR-041 makes charge reduction append-only: the adjustment names its
+// immutable source and never edits it.
+const ChargeAdjustmentKindComp = "COMP"
+
+// Comp reason catalog (spec §2). Every operation keeps its own allowlist; the
+// migration 000014 constraint enforces the same set at the database boundary.
+const (
+	CompReasonCafeError       = "CAFE_ERROR"
+	CompReasonQualityFailure  = "QUALITY_FAILURE"
+	CompReasonServiceRecovery = "SERVICE_RECOVERY"
+	CompReasonOther           = "OTHER"
+)
+
+var compReasons = []string{
+	CompReasonCafeError, CompReasonQualityFailure, CompReasonServiceRecovery, CompReasonOther,
+}
+
+// MaxCorrectionNoteRunes is the inclusive upper bound for a present correction
+// note, counted in Unicode code points so Go agrees with the database
+// char_length check.
+const MaxCorrectionNoteRunes = 500
+
+// Phase 6C business audit event types (spec §15). CHECK_SETTLED already exists
+// above: the settlement fact is the same event whichever command produced it.
+const (
+	EventCheckChargeAdjusted = "CHECK_CHARGE_ADJUSTED"
+	EventSalesCompRecorded   = "SALES_COMP_RECORDED"
+)
+
+// normalizeCorrectionNote trims surrounding whitespace from an optional note
+// and collapses a blank note to nil. Callers normalize BEFORE validating and
+// BEFORE building the fingerprint, so replays of differently padded input stay
+// equal. Shared by every financial-correction note (Comp, Refund, Payment
+// Void).
+func normalizeCorrectionNote(note *string) *string {
+	if note == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*note)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+// validateCorrectionNote validates an already-normalized optional note: a
+// present note is 1 through MaxCorrectionNoteRunes code points, and the given
+// otherReason requires one. Shared by every financial-correction note (Comp,
+// Refund, Payment Void).
+func validateCorrectionNote(reason, otherReason string, note *string) error {
+	if note != nil {
+		runes := utf8.RuneCountInString(*note)
+		if runes < 1 || runes > MaxCorrectionNoteRunes {
+			return fmt.Errorf("%w: a note must be 1 through %d characters",
+				response.ErrInvalid, MaxCorrectionNoteRunes)
+		}
+		return nil
+	}
+	if reason == otherReason {
+		return fmt.Errorf("%w: the %s reason requires a note", response.ErrInvalid, otherReason)
+	}
+	return nil
+}
+
+// NormalizeCompNote trims surrounding whitespace from an optional Comp note
+// and collapses a blank note to nil. Callers normalize BEFORE validating and
+// BEFORE building the fingerprint, so replays of differently padded input stay
+// equal.
+func NormalizeCompNote(note *string) *string {
+	return normalizeCorrectionNote(note)
+}
+
+// ValidateCompReason checks a Comp reason against the Comp catalog.
+func ValidateCompReason(reason string) error {
+	for _, allowed := range compReasons {
+		if reason == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %q is not a valid comp reason", response.ErrInvalid, reason)
+}
+
+// ValidateCompNote validates an already-normalized optional note: a present
+// note is 1 through MaxCorrectionNoteRunes code points, and the OTHER reason
+// requires one.
+func ValidateCompNote(reason string, note *string) error {
+	return validateCorrectionNote(reason, CompReasonOther, note)
+}
+
+// ValidateManagerApprovalInput checks the shape of one inline Manager Approval
+// before any request id is consumed. Meaning failures — a wrong PIN, a
+// disabled identity, a missing role or capability — stay inside the executor's
+// transaction and collapse to one client-visible denial.
+func ValidateManagerApprovalInput(in ManagerApprovalInput) error {
+	if auth.NormalizeLoginCode(in.ApproverLoginCode) == "" {
+		return fmt.Errorf("%w: approver_login_code is required", response.ErrInvalid)
+	}
+	if err := auth.ValidatePinFormat(in.ManagerPIN); err != nil {
+		return fmt.Errorf("%w: manager_pin %s", response.ErrInvalid, err.Error())
+	}
+	return nil
+}
+
+// ValidateCompWasteCommand validates a Comp at the boundary, before any
+// transaction and before the credential values are copied into the executor's
+// ApprovalSpec. The note arrives already normalized.
+func ValidateCompWasteCommand(cmd CompWasteCommand, note *string) error {
+	if cmd.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	if cmd.WasteID == uuid.Nil {
+		return fmt.Errorf("%w: waste_id is required", response.ErrInvalid)
+	}
+	if err := ValidateCompReason(cmd.Reason); err != nil {
+		return err
+	}
+	if err := ValidateCompNote(cmd.Reason, note); err != nil {
+		return err
+	}
+	return ValidateManagerApprovalInput(cmd.ManagerApproval)
+}
+
+// --- Phase 6C: Refund ---
+
+// OpRecordRefund is the idempotency action name, stored in
+// idempotency_keys.action (VARCHAR(50)).
+const OpRecordRefund = "sales.record_refund"
+
+// Refund reason catalog (spec §2). Every operation keeps its own allowlist;
+// the migration 000014 constraint enforces the same set at the database
+// boundary. The literals intentionally duplicate the Comp catalog: a future
+// operation may admit a reason another does not.
+const (
+	RefundReasonCustomerRequest = "CUSTOMER_REQUEST"
+	RefundReasonItemUnavailable = "ITEM_UNAVAILABLE"
+	RefundReasonCafeError       = "CAFE_ERROR"
+	RefundReasonOther           = "OTHER"
+)
+
+var refundReasons = []string{
+	RefundReasonCustomerRequest, RefundReasonItemUnavailable,
+	RefundReasonCafeError, RefundReasonOther,
+}
+
+// Phase 6C Refund audit event types (spec §15). REFUND_COMPLETED is written in
+// the same transaction only when a Cash Refund's completion is inserted.
+const (
+	EventRefundRecorded  = "REFUND_RECORDED"
+	EventRefundCompleted = "REFUND_COMPLETED"
+)
+
+// NormalizeRefundNote trims surrounding whitespace from an optional Refund
+// note and collapses a blank note to nil. Callers normalize BEFORE validating
+// and BEFORE building the fingerprint, so replays of differently padded input
+// stay equal.
+func NormalizeRefundNote(note *string) *string {
+	return normalizeCorrectionNote(note)
+}
+
+// ValidateRefundMethod checks a Refund method against the fixed allowlist. A
+// Payment source must carry the same method: Cash and Manual QR never mix in
+// one Refund.
+func ValidateRefundMethod(method string) error {
+	switch method {
+	case RefundMethodCash, RefundMethodManualQR:
+		return nil
+	default:
+		return fmt.Errorf("%w: method must be %s or %s",
+			response.ErrInvalid, RefundMethodCash, RefundMethodManualQR)
+	}
+}
+
+// ValidateRefundReason checks a Refund reason against the Refund catalog.
+func ValidateRefundReason(reason string) error {
+	for _, allowed := range refundReasons {
+		if reason == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %q is not a valid refund reason", response.ErrInvalid, reason)
+}
+
+// ValidateRefundNote validates an already-normalized optional note: a present
+// note is 1 through MaxCorrectionNoteRunes code points, and the OTHER reason
+// requires one.
+func ValidateRefundNote(reason string, note *string) error {
+	return validateCorrectionNote(reason, RefundReasonOther, note)
+}
+
+// NormalizeRefundAllocations orders both allocation collections by source
+// UUID. The normalized order shapes the fingerprint, the selection handed to
+// the locking queries, and the response order, so a reordered but otherwise
+// identical request is the same request (spec §9.1). Caller slices are never
+// mutated, because request order is audit-relevant elsewhere.
+func NormalizeRefundAllocations(cmd RecordRefundCommand) RecordRefundCommand {
+	cmd.PaymentAllocations = sortedRefundPaymentAllocations(cmd.PaymentAllocations)
+	cmd.AdjustmentAllocations = sortedRefundAdjustmentAllocations(cmd.AdjustmentAllocations)
+	return cmd
+}
+
+func sortedRefundPaymentAllocations(in []RefundPaymentAllocationInput) []RefundPaymentAllocationInput {
+	if in == nil {
+		return nil
+	}
+	out := make([]RefundPaymentAllocationInput, len(in))
+	copy(out, in)
+	sort.Slice(out, func(i, j int) bool { return out[i].PaymentID.String() < out[j].PaymentID.String() })
+	return out
+}
+
+func sortedRefundAdjustmentAllocations(in []RefundAdjustmentAllocationInput) []RefundAdjustmentAllocationInput {
+	if in == nil {
+		return nil
+	}
+	out := make([]RefundAdjustmentAllocationInput, len(in))
+	copy(out, in)
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ChargeAdjustmentID.String() < out[j].ChargeAdjustmentID.String()
+	})
+	return out
+}
+
+// sumRefundPaymentAllocationAmounts totals the Payment allocations with the
+// guarded money arithmetic, so a request-sized overflow is a monetary range
+// failure rather than a silent wrap.
+func sumRefundPaymentAllocationAmounts(allocs []RefundPaymentAllocationInput) (int64, error) {
+	var totalVND int64
+	for _, allocation := range allocs {
+		next, err := AddCharge(totalVND, allocation.AmountVND)
+		if err != nil {
+			return 0, err
+		}
+		totalVND = next
+	}
+	return totalVND, nil
+}
+
+// sumRefundAdjustmentAllocationAmounts is the Charge Adjustment counterpart.
+func sumRefundAdjustmentAllocationAmounts(allocs []RefundAdjustmentAllocationInput) (int64, error) {
+	var totalVND int64
+	for _, allocation := range allocs {
+		next, err := AddCharge(totalVND, allocation.AmountVND)
+		if err != nil {
+			return 0, err
+		}
+		totalVND = next
+	}
+	return totalVND, nil
+}
+
+// ValidateRecordRefundCommand validates a Refund at the boundary, before any
+// transaction and before the request id is consumed. Both allocation
+// collections are required — a Refund sourced from Payments alone, or from
+// Adjustments alone, can never satisfy the dual-capacity invariant — and their
+// sums must agree. The note arrives already normalized.
+func ValidateRecordRefundCommand(cmd RecordRefundCommand, note *string) error {
+	if cmd.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	if cmd.CheckID == uuid.Nil {
+		return fmt.Errorf("%w: check_id is required", response.ErrInvalid)
+	}
+	if err := ValidateRefundMethod(cmd.Method); err != nil {
+		return err
+	}
+	if err := ValidateRefundReason(cmd.Reason); err != nil {
+		return err
+	}
+	if err := ValidateRefundNote(cmd.Reason, note); err != nil {
+		return err
+	}
+	if err := ValidateManagerApprovalInput(cmd.ManagerApproval); err != nil {
+		return err
+	}
+
+	if len(cmd.PaymentAllocations) == 0 {
+		return fmt.Errorf("%w: at least one payment allocation is required", response.ErrInvalid)
+	}
+	if len(cmd.AdjustmentAllocations) == 0 {
+		return fmt.Errorf("%w: at least one adjustment allocation is required", response.ErrInvalid)
+	}
+
+	paymentIDs := make([]uuid.UUID, 0, len(cmd.PaymentAllocations))
+	for _, allocation := range cmd.PaymentAllocations {
+		if allocation.PaymentID == uuid.Nil {
+			return fmt.Errorf("%w: payment_id is required", response.ErrInvalid)
+		}
+		if allocation.AmountVND <= 0 {
+			return fmt.Errorf("%w: a payment allocation amount must be positive", response.ErrInvalid)
+		}
+		paymentIDs = append(paymentIDs, allocation.PaymentID)
+	}
+	if HasDuplicateUUIDs(paymentIDs) {
+		return fmt.Errorf("%w: the same payment was selected twice", response.ErrInvalid)
+	}
+
+	adjustmentIDs := make([]uuid.UUID, 0, len(cmd.AdjustmentAllocations))
+	for _, allocation := range cmd.AdjustmentAllocations {
+		if allocation.ChargeAdjustmentID == uuid.Nil {
+			return fmt.Errorf("%w: charge_adjustment_id is required", response.ErrInvalid)
+		}
+		if allocation.AmountVND <= 0 {
+			return fmt.Errorf("%w: an adjustment allocation amount must be positive", response.ErrInvalid)
+		}
+		adjustmentIDs = append(adjustmentIDs, allocation.ChargeAdjustmentID)
+	}
+	if HasDuplicateUUIDs(adjustmentIDs) {
+		return fmt.Errorf("%w: the same charge adjustment was selected twice", response.ErrInvalid)
+	}
+
+	paymentVND, err := sumRefundPaymentAllocationAmounts(cmd.PaymentAllocations)
+	if err != nil {
+		return err
+	}
+	adjustmentVND, err := sumRefundAdjustmentAllocationAmounts(cmd.AdjustmentAllocations)
+	if err != nil {
+		return err
+	}
+	if paymentVND != adjustmentVND {
+		return fmt.Errorf(
+			"%w: payment allocations sum to %d but adjustment allocations sum to %d",
+			response.ErrInvalid, paymentVND, adjustmentVND)
+	}
+	return nil
+}
+
+// --- Phase 6C: Payment Void ---
+
+// OpVoidPayment is the idempotency action name, stored in
+// idempotency_keys.action (VARCHAR(50)).
+const OpVoidPayment = "sales.void_payment"
+
+// Payment Void reason catalog (spec §2). Every operation keeps its own
+// allowlist; the migration 000014 constraint enforces the same set at the
+// database boundary.
+const (
+	VoidReasonDuplicatePayment       = "DUPLICATE_PAYMENT"
+	VoidReasonWrongAmount            = "WRONG_AMOUNT"
+	VoidReasonWrongMethod            = "WRONG_METHOD"
+	VoidReasonPaymentRecordedInError = "PAYMENT_RECORDED_IN_ERROR"
+	VoidReasonOther                  = "OTHER"
+)
+
+var voidPaymentReasons = []string{
+	VoidReasonDuplicatePayment, VoidReasonWrongAmount, VoidReasonWrongMethod,
+	VoidReasonPaymentRecordedInError, VoidReasonOther,
+}
+
+// Phase 6C Payment Void audit event types (spec §15). The reopening event is
+// written only when the Void leaves a positive balance behind.
+const (
+	EventPaymentVoided                 = "PAYMENT_VOIDED"
+	EventCheckReopenedAfterPaymentVoid = "CHECK_REOPENED_AFTER_PAYMENT_VOID"
+)
+
+// NormalizeVoidPaymentNote trims surrounding whitespace from an optional
+// Payment Void note and collapses a blank note to nil. Callers normalize
+// BEFORE validating and BEFORE building the fingerprint, so replays of
+// differently padded input stay equal.
+func NormalizeVoidPaymentNote(note *string) *string {
+	return normalizeCorrectionNote(note)
+}
+
+// ValidateVoidPaymentReason checks a Payment Void reason against the Void
+// catalog.
+func ValidateVoidPaymentReason(reason string) error {
+	for _, allowed := range voidPaymentReasons {
+		if reason == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %q is not a valid payment void reason", response.ErrInvalid, reason)
+}
+
+// ValidateVoidPaymentNote validates an already-normalized optional note: a
+// present note is 1 through MaxCorrectionNoteRunes code points, and the OTHER
+// reason requires one.
+func ValidateVoidPaymentNote(reason string, note *string) error {
+	return validateCorrectionNote(reason, VoidReasonOther, note)
+}
+
+// ValidateVoidPaymentCommand validates a Payment Void at the boundary, before
+// any transaction and before the credential values are copied into the
+// executor's ApprovalSpec. The note arrives already normalized.
+func ValidateVoidPaymentCommand(cmd VoidPaymentCommand, note *string) error {
+	if cmd.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	if cmd.PaymentID == uuid.Nil {
+		return fmt.Errorf("%w: payment_id is required", response.ErrInvalid)
+	}
+	if err := ValidateVoidPaymentReason(cmd.Reason); err != nil {
+		return err
+	}
+	if err := ValidateVoidPaymentNote(cmd.Reason, note); err != nil {
+		return err
+	}
+	return ValidateManagerApprovalInput(cmd.ManagerApproval)
 }

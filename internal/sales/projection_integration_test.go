@@ -4,6 +4,8 @@ package sales_test
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/preparation"
@@ -194,6 +196,228 @@ func TestProjectionOrdersAndUnitsStartEmpty(t *testing.T) {
 	for _, allocation := range got.Checks[0].Allocations {
 		require.False(t, allocation.Submitted, "nothing is submitted before Submit exists")
 	}
+}
+
+// A Check with no corrections still projects the complete Phase 6C financial
+// contract: the base charge, zero correction totals, and two empty arrays
+// rather than nulls, so a client can iterate without a nil check.
+func TestProjectionCorrectionCollectionsAreArrays(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.commitTakeawayDraft(t, 1)
+
+	got := env.GetSessionOK(t, session.ID)
+	require.Len(t, got.Checks, 1)
+	check := got.Checks[0]
+	require.Equal(t, check.ChargeVND, check.BaseChargeVND)
+	require.Zero(t, check.TotalVoidedVND)
+	require.Zero(t, check.TotalRefundedVND)
+	require.Equal(t, check.TotalAppliedVND, check.EffectiveReceivedVND)
+	require.Zero(t, check.PendingRefundVND)
+	require.NotNil(t, check.ChargeAdjustments)
+	require.Empty(t, check.ChargeAdjustments)
+	require.NotNil(t, check.Refunds)
+	require.Empty(t, check.Refunds)
+
+	raw, err := json.Marshal(got)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), `"charge_adjustments":[]`)
+	require.Contains(t, string(raw), `"refunds":[]`)
+}
+
+// A voided Payment stays in TotalAppliedVND and its whole reversal appears as
+// Void evidence and TotalVoidedVND; effective receipt and the balance follow
+// the corrected equation.
+func TestProjectionPaymentVoidEvidence(t *testing.T) {
+	env := newSalesEnv(t)
+	session := env.commitTakeawayDraft(t, 1)
+	checkID := env.soleCheckID(t, session.ID)
+	paymentID := env.insertCashPayment(t, checkID, 10_000)
+
+	voidID, err := insertPaymentVoid(t, env, paymentID, 10_000, "WRONG_AMOUNT", nil)
+	require.NoError(t, err)
+
+	got := env.GetSessionOK(t, session.ID)
+	require.Len(t, got.Checks, 1)
+	check := got.Checks[0]
+	require.Equal(t, sales.CheckStateOpen, check.State)
+	require.Equal(t, int64(10_000), check.TotalAppliedVND,
+		"the original Payment sum is immutable")
+	require.Equal(t, int64(10_000), check.TotalVoidedVND)
+	require.Zero(t, check.EffectiveReceivedVND)
+	require.Equal(t, check.ChargeVND, check.BalanceVND,
+		"the whole Payment no longer covers any charge")
+	require.Len(t, check.Payments, 1)
+	require.NotNil(t, check.Payments[0].Void)
+	require.Equal(t, voidID, check.Payments[0].Void.ID)
+	require.Equal(t, int64(10_000), check.Payments[0].Void.AmountVND)
+	require.Equal(t, "WRONG_AMOUNT", check.Payments[0].Void.Reason)
+}
+
+// paymentByID selects one Payment projection by id, failing when it is absent.
+func paymentByID(t *testing.T, check sales.CheckResponse, paymentID uuid.UUID) sales.PaymentResponse {
+	t.Helper()
+	for _, payment := range check.Payments {
+		if payment.ID == paymentID {
+			return payment
+		}
+	}
+	require.FailNow(t, "payment is absent from the check projection", paymentID)
+	return sales.PaymentResponse{}
+}
+
+// A voided Payment cannot source a Refund, so it must not advertise refundable
+// capacity even though its applied amount stays in the immutable receipt. Its
+// non-voided peers keep their capacity, and both a pending and a completed
+// Refund allocation still consume that peer capacity exactly as before.
+func TestProjectionVoidedPaymentAdvertisesNoRefundableCapacity(t *testing.T) {
+	fixture := newCorrectionFixture(t)
+	env := fixture.Env
+
+	// A second Payment gives the Check a non-voided peer. The fixture's two
+	// live Comps removed the whole charge, so the Settled state is the evidence
+	// the read-path guard requires.
+	peerPaymentID := env.insertCashPayment(t, fixture.CheckID, 25_000)
+	_, err := insertPaymentVoid(t, env, fixture.PaymentID, 25_000, "WRONG_AMOUNT", nil)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(`
+		UPDATE checks SET charge_vnd = 0, state = 'SETTLED', settled_at = now(),
+		  settled_by_staff_identity_id = $2,
+		  settled_during_sales_shift_id = $3,
+		  settled_staff_access_session_id = $4
+		WHERE id = $1`,
+		fixture.CheckID, env.Actor.StaffID, env.ShiftID, env.Actor.SessionID)
+	require.NoError(t, err)
+
+	check := env.GetSessionOK(t, fixture.SessionID).Checks[0]
+	require.NotNil(t, paymentByID(t, check, fixture.PaymentID).Void)
+	require.Zero(t, paymentByID(t, check, fixture.PaymentID).RemainingRefundableVND,
+		"a voided Payment advertises no refundable capacity")
+	require.Equal(t, int64(25_000), paymentByID(t, check, peerPaymentID).RemainingRefundableVND,
+		"a non-voided peer keeps its capacity")
+
+	// The pending Manual QR Refund allocates equal sums from the peer Payment
+	// and one Adjustment, reserving both capacities before money moves.
+	refundID, err := insertRefund(t, env, fixture.CheckID, "MANUAL_QR", 10_000,
+		"CUSTOMER_REQUEST", nil)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(`
+		INSERT INTO refund_payment_allocations (refund_id, payment_id, amount_vnd)
+		VALUES ($1, $2, 10000)`, refundID, peerPaymentID)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(`
+		INSERT INTO refund_adjustment_allocations (refund_id, charge_adjustment_id, amount_vnd)
+		VALUES ($1, $2, 10000)`, refundID, fixture.AdjustmentIDs[0])
+	require.NoError(t, err)
+
+	check = env.GetSessionOK(t, fixture.SessionID).Checks[0]
+	require.Zero(t, paymentByID(t, check, fixture.PaymentID).RemainingRefundableVND)
+	require.Equal(t, int64(15_000), paymentByID(t, check, peerPaymentID).RemainingRefundableVND,
+		"a pending Manual QR Refund reserves peer capacity")
+
+	_, err = insertRefundCompletion(t, env, refundID, "FT-OUT-1")
+	require.NoError(t, err)
+
+	check = env.GetSessionOK(t, fixture.SessionID).Checks[0]
+	require.Zero(t, paymentByID(t, check, fixture.PaymentID).RemainingRefundableVND)
+	require.Equal(t, int64(15_000), paymentByID(t, check, peerPaymentID).RemainingRefundableVND,
+		"completing the Refund leaves the consumed peer capacity consumed")
+}
+
+// A live Comp reduces the stored charge; a pending Manual QR Refund then
+// reserves Payment and Adjustment capacity without reducing effective receipt.
+// Completing it is what removes money from the equation.
+func TestProjectionCorrectedCheckFinancials(t *testing.T) {
+	fixture := newCorrectionFixture(t)
+	env := fixture.Env
+
+	// The two live Comps removed the whole charge. Settle the Check with the
+	// evidence the database and the read-path guard both require.
+	_, err := env.DB.Exec(`
+		UPDATE checks SET charge_vnd = 0, state = 'SETTLED', settled_at = now(),
+		  settled_by_staff_identity_id = $2,
+		  settled_during_sales_shift_id = $3,
+		  settled_staff_access_session_id = $4
+		WHERE id = $1`,
+		fixture.CheckID, env.Actor.StaffID, env.ShiftID, env.Actor.SessionID)
+	require.NoError(t, err)
+
+	refundID, err := insertRefund(t, env, fixture.CheckID, "MANUAL_QR", 25_000,
+		"CUSTOMER_REQUEST", nil)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(`
+		INSERT INTO refund_payment_allocations (refund_id, payment_id, amount_vnd)
+		VALUES ($1, $2, 25000)`, refundID, fixture.PaymentID)
+	require.NoError(t, err)
+	_, err = env.DB.Exec(`
+		INSERT INTO refund_adjustment_allocations (refund_id, charge_adjustment_id, amount_vnd)
+		VALUES ($1, $2, 25000)`, refundID, fixture.AdjustmentIDs[0])
+	require.NoError(t, err)
+
+	t.Run("a pending Manual QR Refund is owed back, not received", func(t *testing.T) {
+		got := env.GetSessionOK(t, fixture.SessionID)
+		require.Len(t, got.Checks, 1)
+		check := got.Checks[0]
+
+		require.Equal(t, int64(50_000), check.BaseChargeVND)
+		require.Equal(t, int64(0), check.ChargeVND)
+		require.Equal(t, int64(25_000), check.TotalAppliedVND)
+		require.Zero(t, check.TotalVoidedVND)
+		require.Zero(t, check.TotalRefundedVND,
+			"a pending Refund has not moved money")
+		require.Equal(t, int64(25_000), check.EffectiveReceivedVND)
+		require.Zero(t, check.BalanceVND)
+		require.Equal(t, int64(25_000), check.PendingRefundVND)
+		require.Equal(t, sales.CheckStateSettled, check.State)
+
+		require.Len(t, check.ChargeAdjustments, 2)
+		for _, adjustment := range check.ChargeAdjustments {
+			require.Equal(t, "COMP", adjustment.Kind)
+			require.Equal(t, "LIVE_CHECK", adjustment.Scope)
+			require.Equal(t, int64(25_000), adjustment.AmountVND)
+			require.NotNil(t, adjustment.PreparationWasteID)
+		}
+		require.Zero(t, check.ChargeAdjustments[0].RemainingRefundableVND,
+			"the pending Refund reserved the first Adjustment's whole amount")
+		require.Equal(t, int64(25_000), check.ChargeAdjustments[1].RemainingRefundableVND,
+			"the second Adjustment is untouched")
+
+		require.Len(t, check.Payments, 1)
+		require.Zero(t, check.Payments[0].RemainingRefundableVND,
+			"the pending Refund reserved the Payment's whole amount")
+		require.Nil(t, check.Payments[0].Void)
+
+		require.Len(t, check.Refunds, 1)
+		refund := check.Refunds[0]
+		require.Equal(t, refundID, refund.ID)
+		require.Equal(t, sales.RefundMethodManualQR, refund.Method)
+		require.Equal(t, sales.RefundStatePending, refund.State)
+		require.Equal(t, int64(25_000), refund.AmountVND)
+		require.Nil(t, refund.Completion)
+		require.Len(t, refund.PaymentAllocations, 1)
+		require.Equal(t, fixture.PaymentID, refund.PaymentAllocations[0].ID)
+		require.Len(t, refund.AdjustmentAllocations, 1)
+		require.Equal(t, fixture.AdjustmentIDs[0], refund.AdjustmentAllocations[0].ID)
+	})
+
+	t.Run("completing the Refund removes the money from effective receipt", func(t *testing.T) {
+		_, err := insertRefundCompletion(t, env, refundID, "FT-OUT-1")
+		require.NoError(t, err)
+
+		got := env.GetSessionOK(t, fixture.SessionID)
+		require.Len(t, got.Checks, 1)
+		check := got.Checks[0]
+
+		require.Equal(t, int64(25_000), check.TotalRefundedVND)
+		require.Zero(t, check.EffectiveReceivedVND)
+		require.Zero(t, check.BalanceVND)
+		require.Zero(t, check.PendingRefundVND)
+
+		require.Len(t, check.Refunds, 1)
+		require.Equal(t, sales.RefundStateCompleted, check.Refunds[0].State)
+		require.NotNil(t, check.Refunds[0].Completion)
+		require.NotNil(t, check.Refunds[0].Completion.TransactionReference)
+		require.Equal(t, "FT-OUT-1", *check.Refunds[0].Completion.TransactionReference)
+	})
 }
 
 // --- Phase 6B: Remake projection (cross-slice arrangements) ---
@@ -488,4 +712,94 @@ func TestCompletedSalePreparationRecoveryHistory(t *testing.T) {
 				"transition %d must not precede its predecessor", i)
 		}
 	})
+}
+
+// TestCompletedSaleCoreExcludesPostSaleCorrections proves the structural
+// snapshot boundary directly: after a post-sale Comp and Refund, the core
+// Check still projects only the LIVE_CHECK adjustments and live Refunds that
+// existed at closure, and its historical Payment refundable capacity ignores
+// the allocation the post-sale Refund consumed. Only post_sale_corrections
+// carries the later facts. No timestamp comparison is involved.
+func TestCompletedSaleCoreExcludesPostSaleCorrections(t *testing.T) {
+	env := newRefundEnv(t)
+
+	session := env.commitDineInDraftWithQuantity(t, 2)
+	checkID := env.soleCheckID(t, session.ID)
+	for range 2 {
+		_, status, err := env.payCash(t, checkID, 25000, 25000)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status)
+	}
+	session = env.Submit(t, session.ID)
+	require.Len(t, session.PreparationUnits, 2)
+
+	wasteIDs := make([]uuid.UUID, 0, 2)
+	for _, unit := range session.PreparationUnits {
+		wasteIDs = append(wasteIDs, env.wasteUnitAfterAdvance(t, unit.ID))
+	}
+	payments := env.paymentIDsForCheck(t, checkID)
+	require.Len(t, payments, 2)
+
+	preCloseComp := env.compOK(t, env.compCommand(t, wasteIDs[0], sales.CompReasonCafeError, nil))
+	require.Equal(t, sales.CompScopeLiveCheck, preCloseComp.Scope)
+	preCloseRefund := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash,
+		payments[0], preCloseComp.Comp.ChargeAdjustmentID, 25000))
+	require.Equal(t, sales.RefundStateCompleted, preCloseRefund.Refund.State)
+
+	sale := env.Close(t, session.ID)
+	require.Len(t, sale.Checks, 1)
+	require.Len(t, sale.Checks[0].ChargeAdjustments, 1)
+	require.Len(t, sale.Checks[0].Refunds, 1)
+
+	postCloseComp := env.compOK(t, env.compCommand(t, wasteIDs[1], sales.CompReasonCafeError, nil))
+	require.Equal(t, sales.CompScopePostSale, postCloseComp.Scope)
+	postCloseRefund := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash,
+		payments[1], postCloseComp.Comp.ChargeAdjustmentID, 25000))
+	require.Equal(t, sales.RefundStateCompleted, postCloseRefund.Refund.State)
+
+	after, _, err := env.GetCompletedSale(t, sale.ID)
+	require.NoError(t, err)
+	require.Len(t, after.Checks, 1)
+	check := after.Checks[0]
+
+	require.EqualValues(t, 50000, check.BaseChargeVND)
+	require.EqualValues(t, 25000, check.ChargeVND)
+	require.EqualValues(t, 50000, check.TotalAppliedVND)
+	require.EqualValues(t, 0, check.TotalVoidedVND)
+	require.EqualValues(t, 25000, check.TotalRefundedVND,
+		"the post-sale completed Refund is additive history, not closure evidence")
+	require.EqualValues(t, 25000, check.EffectiveReceivedVND)
+	require.EqualValues(t, 0, check.BalanceVND)
+	require.EqualValues(t, 0, check.PendingRefundVND)
+
+	require.Len(t, check.ChargeAdjustments, 1)
+	require.Equal(t, preCloseComp.Comp.ChargeAdjustmentID, check.ChargeAdjustments[0].ID)
+	require.Equal(t, sales.CompScopeLiveCheck, check.ChargeAdjustments[0].Scope)
+
+	require.Len(t, check.Refunds, 1)
+	require.Equal(t, preCloseRefund.Refund.ID, check.Refunds[0].ID)
+	for _, refund := range check.Refunds {
+		require.NotEqual(t, postCloseRefund.Refund.ID, refund.ID,
+			"a post-sale Refund never enters the core snapshot")
+	}
+
+	for _, payment := range check.Payments {
+		switch payment.ID {
+		case payments[0]:
+			require.EqualValues(t, 0, payment.RemainingRefundableVND,
+				"the pre-close Refund consumed this Payment's capacity")
+		case payments[1]:
+			require.EqualValues(t, 25000, payment.RemainingRefundableVND,
+				"the post-sale Refund allocation must not consume historical capacity")
+		}
+	}
+
+	require.Len(t, after.PostSaleCorrections, 1)
+	entry := after.PostSaleCorrections[0]
+	require.Equal(t, postCloseComp.Comp.ChargeAdjustmentID, entry.Adjustment.ID)
+	require.Equal(t, sales.CompScopePostSale, entry.Adjustment.Scope)
+	require.Len(t, entry.Refunds, 1)
+	require.Equal(t, postCloseRefund.Refund.ID, entry.Refunds[0].ID)
+	require.Zero(t, entry.Adjustment.RemainingRefundableVND)
+	require.Zero(t, entry.OutstandingRefundVND)
 }

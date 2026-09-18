@@ -4,6 +4,7 @@ package sales_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/preparation"
@@ -158,6 +159,124 @@ func TestCloseServiceSessionRejections(t *testing.T) {
 
 		got := env.GetSessionOK(t, session.ID)
 		require.Equal(t, sales.StateActive, got.State)
+	})
+}
+
+// settledDineInOwedBack pays one Dine-in unit in full with the given method,
+// submits it, wastes it, and Comps the Waste: the Check stays SETTLED and owes
+// its whole paid amount back. Payment and Refund methods must match, so the
+// method decides how the test resolves the obligation.
+func settledDineInOwedBack(t *testing.T, env *refundEnv, method string) (
+	sales.ServiceSessionResponse, uuid.UUID, sales.CompResult,
+) {
+	t.Helper()
+	session := env.commitDineInDraftWithQuantity(t, 1)
+	checkID := env.soleCheckID(t, session.ID)
+	charge := env.checkCharge(t, checkID)
+
+	var status int
+	var err error
+	switch method {
+	case sales.PaymentMethodManualQR:
+		_, status, err = env.payManualQR(t, checkID, charge, true, nil)
+	default:
+		_, status, err = env.payCash(t, checkID, charge, charge)
+	}
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+
+	session = env.Submit(t, session.ID)
+	require.Len(t, session.PreparationUnits, 1)
+	unit := session.PreparationUnits[0]
+	env.advanceToReady(t, unit.ID)
+	wasteID := env.wasteUnit(t, unit.ID)
+
+	comp := env.compOK(t, env.compCommand(t, wasteID, sales.CompReasonCafeError, nil))
+	return session, checkID, comp
+}
+
+// TestCloseServiceSessionPendingRefund proves closure is what enforces money
+// owed back: a settled Check carrying a pending Refund holds the Session open
+// until the Refund is completed — Cash immediately, Manual QR only by
+// confirmation — and a refused closure records neither a Completed Sale nor an
+// idempotent success result.
+func TestCloseServiceSessionPendingRefund(t *testing.T) {
+	env := newRefundEnv(t)
+	ctx := context.Background()
+
+	t.Run("a settled check with a pending refund is refused", func(t *testing.T) {
+		session, checkID, comp := settledDineInOwedBack(t, env, sales.PaymentMethodCash)
+
+		readiness := sales.EvaluateClosureReadiness(env.GetSessionOK(t, session.ID))
+		require.False(t, readiness.Eligible)
+		require.False(t, readiness.AllRefundsResolved)
+		require.Equal(t, []uuid.UUID{checkID}, readiness.PendingRefundCheckIDs)
+		require.ErrorIs(t, readiness.Err(), sales.ErrPendingRefundForClosure)
+
+		requestID := uuid.New()
+		_, status, err := env.CloseWithRequestID(t, requestID, session.ID)
+		require.ErrorIs(t, err, sales.ErrPendingRefundForClosure)
+		require.Equal(t, http.StatusConflict, status)
+
+		got := env.GetSessionOK(t, session.ID)
+		require.Equal(t, sales.StateActive, got.State, "a refused closure records nothing")
+		require.EqualValues(t, 25_000, env.findCheck(t, got, checkID).PendingRefundVND)
+
+		var completedSales int
+		require.NoError(t, env.DB.QueryRowContext(ctx,
+			`SELECT count(*) FROM completed_sales WHERE service_session_id = $1`,
+			session.ID).Scan(&completedSales))
+		require.Zero(t, completedSales, "a refused closure writes no Completed Sale")
+		require.Zero(t, env.idempotencyClaimCount(t, env.Actor, requestID),
+			"a refused closure stores no idempotent success result")
+
+		// The refusal left no claim behind: resolving the Refund and reusing
+		// the same request id closes normally.
+		env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash,
+			env.solePaymentIDForCheck(t, checkID), comp.Comp.ChargeAdjustmentID, 25_000))
+		sale, status, err := env.CloseWithRequestID(t, requestID, session.ID)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, status)
+		require.Equal(t, session.ID, sale.ServiceSessionID)
+	})
+
+	t.Run("a completed cash refund permits closure", func(t *testing.T) {
+		session, checkID, comp := settledDineInOwedBack(t, env, sales.PaymentMethodCash)
+		env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodCash,
+			env.solePaymentIDForCheck(t, checkID), comp.Comp.ChargeAdjustmentID, 25_000))
+
+		got := env.GetSessionOK(t, session.ID)
+		require.True(t, sales.EvaluateClosureReadiness(got).AllRefundsResolved)
+		require.Zero(t, env.findCheck(t, got, checkID).PendingRefundVND)
+
+		sale, status, err := env.TryClose(t, session.ID)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, status)
+		require.Equal(t, session.ID, sale.ServiceSessionID)
+	})
+
+	t.Run("a confirmed manual QR refund permits closure", func(t *testing.T) {
+		session, checkID, comp := settledDineInOwedBack(t, env, sales.PaymentMethodManualQR)
+		pending := env.refundOK(t, env.refundCommand(checkID, sales.RefundMethodManualQR,
+			env.solePaymentIDForCheck(t, checkID), comp.Comp.ChargeAdjustmentID, 25_000))
+		require.Equal(t, sales.RefundStatePending, pending.Refund.State)
+
+		got := env.GetSessionOK(t, session.ID)
+		require.False(t, sales.EvaluateClosureReadiness(got).AllRefundsResolved)
+		_, status, err := env.TryClose(t, session.ID)
+		require.ErrorIs(t, err, sales.ErrPendingRefundForClosure)
+		require.Equal(t, http.StatusConflict, status)
+
+		env.confirmOK(t, env.confirmCommand(pending.Refund.ID, nil))
+
+		got = env.GetSessionOK(t, session.ID)
+		require.True(t, sales.EvaluateClosureReadiness(got).AllRefundsResolved)
+		require.Zero(t, env.findCheck(t, got, checkID).PendingRefundVND)
+
+		sale, status, err := env.TryClose(t, session.ID)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, status)
+		require.Equal(t, session.ID, sale.ServiceSessionID)
 	})
 }
 

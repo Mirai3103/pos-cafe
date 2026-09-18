@@ -134,7 +134,6 @@ func TestPreparationHTTPAuthorization(t *testing.T) {
 	barista := signInPreparation(t, e, q, []string{"BARISTA"})
 	manager := signInPreparation(t, e, q, []string{"MANAGER"})
 	cashier := signInPreparation(t, e, q, []string{"CASHIER"})
-
 	// The bulk body names a unit that does not exist on purpose: an authorized
 	// request still completes with HTTP 200 and one UNIT_NOT_FOUND outcome, so
 	// the authorization matrix needs no fixtures.
@@ -169,6 +168,42 @@ func TestPreparationHTTPAuthorization(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
 		})
 	}
+}
+
+// TestPreparationHTTPCancelDenialInventory keeps the Phase 6C Cancellation
+// route in the same anonymous/Barista denial inventory as the other
+// Preparation routes. Its capability is sales.operate, not preparation.operate:
+// the Cashier and the Manager pass the middleware and then fail on the
+// fabricated unit id with the documented 404, while the Barista and an
+// anonymous caller are denied before any handler logic runs.
+func TestPreparationHTTPCancelDenialInventory(t *testing.T) {
+	e, q := newPreparationTestServer(t)
+	barista := signInPreparation(t, e, q, []string{"BARISTA"})
+	manager := signInPreparation(t, e, q, []string{"MANAGER"})
+	cashier := signInPreparation(t, e, q, []string{"CASHIER"})
+
+	const cancelPath = "/api/v1/preparation/units/cancel"
+	body := cancelUnitsBody(t, preparation.CancelUnitsCommand{
+		RequestID:          uuid.New(),
+		PreparationUnitIDs: []uuid.UUID{uuid.New()},
+		Kind:               preparation.CancelKindCancellation,
+		Reason:             preparation.ReasonCustomerRequest,
+	})
+
+	t.Run("anonymous is denied", func(t *testing.T) {
+		rec := doPreparationRequest(t, e, http.MethodPost, cancelPath, "", body)
+		assertPreparationError(t, rec, http.StatusUnauthorized, "UNAUTHORIZED")
+	})
+	t.Run("barista is denied", func(t *testing.T) {
+		rec := doPreparationRequest(t, e, http.MethodPost, cancelPath, barista, body)
+		assertPreparationError(t, rec, http.StatusForbidden, "FORBIDDEN")
+	})
+	t.Run("cashier and manager pass the capability gate", func(t *testing.T) {
+		for _, token := range []string{cashier, manager} {
+			rec := doPreparationRequest(t, e, http.MethodPost, cancelPath, token, body)
+			assertPreparationError(t, rec, http.StatusNotFound, "PREPARATION_UNIT_NOT_FOUND")
+		}
+	})
 }
 
 func TestPreparationHTTPBulkValidation(t *testing.T) {
@@ -436,6 +471,8 @@ func countPrepWrites(t *testing.T, db *sql.DB) int {
 		     + (SELECT count(*) FROM preparation_wastes)
 		     + (SELECT count(*) FROM preparation_remakes)
 		     + (SELECT count(*) FROM preparation_state_corrections)
+		     + (SELECT count(*) FROM preparation_cancellations)
+		     + (SELECT count(*) FROM charge_adjustments)
 		     + (SELECT count(*) FROM preparation_alerts)
 		     + (SELECT count(*) FROM preparation_unit_transitions)
 		     + (SELECT count(*) FROM preparation_units)`).Scan(&n))
@@ -497,6 +534,14 @@ func correctStateBody(t *testing.T, requestID uuid.UUID, ids []uuid.UUID,
 		Note:               note,
 		ManagerPIN:         pin,
 	})
+	require.NoError(t, err)
+	return raw
+}
+
+// cancelUnitsBody marshals a Cancellation/Change request body.
+func cancelUnitsBody(t *testing.T, cmd preparation.CancelUnitsCommand) []byte {
+	t.Helper()
+	raw, err := json.Marshal(cmd)
 	require.NoError(t, err)
 	return raw
 }
@@ -1141,6 +1186,231 @@ func TestPreparationHTTPCorrectStatePINReplay(t *testing.T) {
 	assert.Equal(t, firstResp, replayResp, "the replay returns the exact stored response")
 
 	assert.Equal(t, 1, env.CountCorrections(t, unit.ID), "a replay records no duplicate fact")
+}
+
+// TestPreparationHTTPCancelRoute exercises the POST /preparation/units/cancel
+// surface end to end. The route requires sales.operate, so the Cashier may
+// cancel while the Barista is denied by the middleware.
+func TestPreparationHTTPCancelRoute(t *testing.T) {
+	env := newCorrectionHTTPEnv(t)
+
+	const cancelPath = "/api/v1/preparation/units/cancel"
+	postCancel := func(t *testing.T, token string, body []byte) *httptest.ResponseRecorder {
+		t.Helper()
+		return doPreparationRequest(t, env.server, http.MethodPost, cancelPath, token, body)
+	}
+	cancellationCmd := func(ids []uuid.UUID, kind, reason string) preparation.CancelUnitsCommand {
+		return preparation.CancelUnitsCommand{
+			RequestID:          uuid.New(),
+			PreparationUnitIDs: ids,
+			Kind:               kind,
+			Reason:             reason,
+		}
+	}
+
+	t.Run("cashier and manager may cancel; barista and anonymous are denied", func(t *testing.T) {
+		cashierUnit := env.SubmittedUnits(t, 1)[0]
+		managerUnit := env.SubmittedUnits(t, 1)[0]
+		baristaUnit := env.SubmittedUnits(t, 1)[0]
+
+		cashierRec := postCancel(t, env.cashierToken,
+			cancelUnitsBody(t, cancellationCmd([]uuid.UUID{cashierUnit.ID},
+				preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)))
+		require.Equal(t, http.StatusOK, cashierRec.Code, cashierRec.Body.String())
+
+		managerRec := postCancel(t, env.managerToken,
+			cancelUnitsBody(t, cancellationCmd([]uuid.UUID{managerUnit.ID},
+				preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)))
+		require.Equal(t, http.StatusOK, managerRec.Code, managerRec.Body.String())
+
+		baristaRec := postCancel(t, env.baristaToken,
+			cancelUnitsBody(t, cancellationCmd([]uuid.UUID{baristaUnit.ID},
+				preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)))
+		assertPreparationError(t, baristaRec, http.StatusForbidden, "FORBIDDEN")
+
+		anonymousRec := postCancel(t, "",
+			cancelUnitsBody(t, cancellationCmd([]uuid.UUID{baristaUnit.ID},
+				preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)))
+		assertPreparationError(t, anonymousRec, http.StatusUnauthorized, "UNAUTHORIZED")
+
+		assert.Equal(t, preparation.StateQueued, env.UnitState(t, baristaUnit.ID),
+			"every denied cancellation leaves the unit untouched")
+	})
+
+	t.Run("a successful cancellation answers 200 with non-null collections", func(t *testing.T) {
+		unit := env.SubmittedUnits(t, 1)[0]
+
+		rec := postCancel(t, env.cashierToken,
+			cancelUnitsBody(t, cancellationCmd([]uuid.UUID{unit.ID},
+				preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)))
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		envl := decodeEnvelope(t, rec)
+		require.True(t, envl.Success)
+		var resp preparation.CancelUnitsResponse
+		require.NoError(t, json.Unmarshal(envl.Data, &resp))
+		require.Len(t, resp.Outcomes, 1)
+		require.Len(t, resp.Alerts, 1)
+		assert.Equal(t, unit.ID, resp.Outcomes[0].PreparationUnitID)
+		assert.Equal(t, preparation.AlertKindCancellation, resp.Alerts[0].Kind)
+		assert.Contains(t, rec.Body.String(), `"outcomes":[`)
+		assert.Contains(t, rec.Body.String(), `"alerts":[`)
+
+		// The raw response must not leak credentials or financial internals.
+		var raw any
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+		for _, fragment := range []string{"pin", "payment", "refund", "check_id"} {
+			assert.False(t, jsonContainsFragment(raw, fragment),
+				"a cancellation response must not contain %q anywhere", fragment)
+		}
+	})
+
+	t.Run("malformed requests are rejected without any database write", func(t *testing.T) {
+		before := countPrepWrites(t, env.DB)
+		unitID := uuid.New()
+		replacement := uuid.New()
+
+		cases := map[string]struct {
+			body   []byte
+			status int
+			code   string
+		}{
+			"malformed json": {
+				body:   []byte(`{"request_id": not json`),
+				status: http.StatusBadRequest, code: "INVALID_INPUT",
+			},
+			"missing request id": {
+				body: []byte(`{"preparation_unit_ids":["` + unitID.String() + `"],` +
+					`"kind":"CANCELLATION","reason":"CUSTOMER_REQUEST"}`),
+				status: http.StatusBadRequest, code: "INVALID_INPUT",
+			},
+			"empty selection": {
+				body: cancelUnitsBody(t, cancellationCmd([]uuid.UUID{},
+					preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)),
+				status: http.StatusBadRequest, code: "CANCELLATION_SELECTION_INVALID",
+			},
+			"51 ids": {
+				body: cancelUnitsBody(t, cancellationCmd(func() []uuid.UUID {
+					many := make([]uuid.UUID, 51)
+					for i := range many {
+						many[i] = uuid.New()
+					}
+					return many
+				}(), preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)),
+				status: http.StatusBadRequest, code: "CANCELLATION_SELECTION_INVALID",
+			},
+			"duplicate ids": {
+				body: cancelUnitsBody(t, cancellationCmd([]uuid.UUID{unitID, unitID},
+					preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)),
+				status: http.StatusBadRequest, code: "CANCELLATION_SELECTION_INVALID",
+			},
+			"zero uuid": {
+				body: cancelUnitsBody(t, cancellationCmd([]uuid.UUID{uuid.Nil},
+					preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)),
+				status: http.StatusBadRequest, code: "CANCELLATION_SELECTION_INVALID",
+			},
+			"invalid kind": {
+				body: cancelUnitsBody(t, cancellationCmd([]uuid.UUID{unitID},
+					"WASTE", preparation.ReasonCustomerRequest)),
+				status: http.StatusBadRequest, code: "CANCELLATION_SELECTION_INVALID",
+			},
+			"change without replacement": {
+				body: cancelUnitsBody(t, cancellationCmd([]uuid.UUID{unitID},
+					preparation.CancelKindChange, preparation.ReasonCustomerRequest)),
+				status: http.StatusBadRequest, code: "REPLACEMENT_ORDER_REQUIRED",
+			},
+			"cancellation with replacement": {
+				body: cancelUnitsBody(t, preparation.CancelUnitsCommand{
+					RequestID:          uuid.New(),
+					PreparationUnitIDs: []uuid.UUID{unitID},
+					Kind:               preparation.CancelKindCancellation,
+					ReplacementOrderID: &replacement,
+					Reason:             preparation.ReasonCustomerRequest,
+				}),
+				status: http.StatusBadRequest, code: "CANCELLATION_SELECTION_INVALID",
+			},
+			"invalid reason": {
+				body: cancelUnitsBody(t, cancellationCmd([]uuid.UUID{unitID},
+					preparation.CancelKindCancellation, preparation.ReasonQualityFailure)),
+				status: http.StatusBadRequest, code: "INVALID_PREPARATION_REASON",
+			},
+			"other without note": {
+				body: cancelUnitsBody(t, cancellationCmd([]uuid.UUID{unitID},
+					preparation.CancelKindCancellation, preparation.ReasonOther)),
+				status: http.StatusBadRequest, code: "INVALID_PREPARATION_NOTE",
+			},
+		}
+		for name, tc := range cases {
+			rec := postCancel(t, env.cashierToken, tc.body)
+			assertPreparationError(t, rec, tc.status, tc.code)
+			assert.Equal(t, before, countPrepWrites(t, env.DB),
+				"the %q class of malformed cancellation must never reach the database", name)
+		}
+	})
+
+	t.Run("an unknown unit is 404", func(t *testing.T) {
+		rec := postCancel(t, env.cashierToken,
+			cancelUnitsBody(t, cancellationCmd([]uuid.UUID{uuid.New()},
+				preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)))
+		assertPreparationError(t, rec, http.StatusNotFound, "PREPARATION_UNIT_NOT_FOUND")
+	})
+
+	t.Run("a stale unit is 409", func(t *testing.T) {
+		unit := env.SubmittedUnits(t, 1)[0]
+		_, _, err := env.Advance(t, unit.ID, preparation.StateInPreparation)
+		require.NoError(t, err)
+
+		rec := postCancel(t, env.cashierToken,
+			cancelUnitsBody(t, cancellationCmd([]uuid.UUID{unit.ID},
+				preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)))
+		assertPreparationError(t, rec, http.StatusConflict, "CANCELLATION_SOURCE_NOT_QUEUED")
+	})
+
+	t.Run("an exact replay returns the stored result", func(t *testing.T) {
+		unit := env.SubmittedUnits(t, 1)[0]
+		requestID := uuid.New()
+		body := cancelUnitsBody(t, preparation.CancelUnitsCommand{
+			RequestID:          requestID,
+			PreparationUnitIDs: []uuid.UUID{unit.ID},
+			Kind:               preparation.CancelKindCancellation,
+			Reason:             preparation.ReasonCustomerRequest,
+		})
+
+		first := postCancel(t, env.cashierToken, body)
+		require.Equal(t, http.StatusOK, first.Code, first.Body.String())
+
+		replay := postCancel(t, env.cashierToken, body)
+		require.Equal(t, http.StatusOK, replay.Code, replay.Body.String())
+		assert.JSONEq(t, first.Body.String(), replay.Body.String())
+
+		// Same request id, different meaning: a conflict, never a replay.
+		conflict := postCancel(t, env.cashierToken,
+			cancelUnitsBody(t, preparation.CancelUnitsCommand{
+				RequestID:          requestID,
+				PreparationUnitIDs: []uuid.UUID{unit.ID},
+				Kind:               preparation.CancelKindCancellation,
+				Reason:             preparation.ReasonItemUnavailable,
+			}))
+		assertPreparationError(t, conflict, http.StatusConflict, "REQUEST_CONFLICT")
+
+		var facts int
+		require.NoError(t, env.DB.QueryRow(
+			`SELECT count(*) FROM preparation_cancellations WHERE preparation_unit_id = $1`,
+			unit.ID).Scan(&facts))
+		assert.Equal(t, 1, facts)
+	})
+
+	t.Run("a closed Shift is 409", func(t *testing.T) {
+		env := newCorrectionHTTPEnv(t)
+		unit := env.SubmittedUnits(t, 1)[0]
+		_, err := env.DB.Exec(`UPDATE sales_shifts SET state = 'CLOSED' WHERE id = $1`, env.ShiftID)
+		require.NoError(t, err)
+
+		rec := postCancel(t, env.cashierToken,
+			cancelUnitsBody(t, cancellationCmd([]uuid.UUID{unit.ID},
+				preparation.CancelKindCancellation, preparation.ReasonCustomerRequest)))
+		assertPreparationError(t, rec, http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED")
+	})
 }
 
 // ptrString returns a pointer to the given string literal.

@@ -90,7 +90,10 @@ func openPrepTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 func truncatePrepTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.Exec(`
-		TRUNCATE preparation_unit_transitions, preparation_units, completed_sales,
+		TRUNCATE refund_completions, refund_adjustment_allocations,
+		         refund_payment_allocations, refunds, payment_voids, sales_comps,
+		         preparation_cancellations, charge_adjustments,
+		         preparation_unit_transitions, preparation_units, completed_sales,
 		         order_items, orders, charge_allocations,
 		         committed_item_modifier_options, committed_items, checks,
 		         order_draft_item_modifier_options, order_draft_items, order_drafts,

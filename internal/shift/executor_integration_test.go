@@ -34,7 +34,12 @@ func openShiftTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 // packages run with -p 1 precisely so this truncation is safe.
 func truncateShiftTables(t *testing.T, db *sql.DB) {
 	t.Helper()
-	_, err := db.Exec(`TRUNCATE cash_movements, sales_shifts RESTART IDENTITY CASCADE`)
+	_, err := db.Exec(`
+		TRUNCATE refund_completions, refund_adjustment_allocations,
+		         refund_payment_allocations, refunds, payment_voids, sales_comps,
+		         preparation_cancellations, charge_adjustments,
+		         cash_movements, sales_shifts
+		RESTART IDENTITY CASCADE`)
 	require.NoError(t, err)
 }
 

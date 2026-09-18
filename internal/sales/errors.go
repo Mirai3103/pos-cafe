@@ -77,10 +77,11 @@ var (
 	// surfaces as a 500 with the Check id logged.
 	ErrChargeInvariantViolated = errors.New("check charge does not match its allocations")
 
-	ErrCheckNotFound          = errors.New("check not found")
-	ErrCheckNotOpen           = errors.New("check is not open")
-	ErrCheckHasPayment        = errors.New("check already carries a payment")
-	ErrChecksDifferentSession = errors.New("checks belong to different service sessions")
+	ErrCheckNotFound            = errors.New("check not found")
+	ErrCheckNotOpen             = errors.New("check is not open")
+	ErrCheckHasPayment          = errors.New("check already carries a payment")
+	ErrCheckHasChargeAdjustment = errors.New("check carries a live charge adjustment")
+	ErrChecksDifferentSession   = errors.New("checks belong to different service sessions")
 
 	ErrPaymentExceedsBalance   = errors.New("payment exceeds the check balance")
 	ErrManualQRReceiptRequired = errors.New("the bank receipt must be confirmed before recording a manual QR payment")
@@ -100,13 +101,57 @@ var (
 	// check_settlement_evidence_valid is the other half.
 	ErrSettlementInvariantViolated = errors.New("check state does not match its balance")
 
+	// ErrFinancialInvariantViolated reports that persisted correction facts
+	// cannot satisfy the live financial equation — a live adjustment larger
+	// than its base charge, a Void larger than its Payment, a completed Refund
+	// larger than the valid receipt, or allocations that disagree with their
+	// source. That is a defect, not a business state, so it is deliberately
+	// absent from MapHTTPError and surfaces as a 500 with the Check id logged.
+	ErrFinancialInvariantViolated = errors.New("check financials do not satisfy their invariant")
+
 	ErrNothingToSubmit                  = errors.New("no committed order draft awaits submission")
 	ErrCheckNotSettledForSubmission     = errors.New("every check must be settled before a takeaway order is submitted")
 	ErrCheckNotSettledForClosure        = errors.New("every check must be settled before the service session closes")
+	ErrPendingRefundForClosure          = errors.New("every pending refund must be resolved before the service session closes")
 	ErrUnsubmittedWorkForClosure        = errors.New("every committed item must be submitted before the service session closes")
 	ErrOrderRequiredForClosure          = errors.New("a service session with no order cannot close")
 	ErrUnfulfilledPreparationForClosure = errors.New("every preparation unit must be terminal before the service session closes")
 	ErrCompletedSaleNotFound            = errors.New("completed sale not found")
+
+	// Phase 6C Comp conditions. A missing Waste is a not-found answer; a
+	// Wasted Remake is an uncharged source; a second Comp of one Waste is
+	// a lifecycle conflict the unique facts reject; and a source mapping
+	// that moved under a concurrent restructuring refuses whole.
+	ErrWasteNotFound            = errors.New("waste not found")
+	ErrCompSourceNotCharged     = errors.New("the comp source is not a charged standard unit")
+	ErrWasteAlreadyComped       = errors.New("the waste already carries a comp")
+	ErrChargeAdjustmentConflict = errors.New("the charge mapping changed concurrently")
+
+	// Phase 6C Refund conditions. A selected source id that resolves to no
+	// row is a not-found answer, so it stays distinguishable from a source
+	// that exists but belongs to another Check, carries the wrong scope, or is
+	// otherwise unusable — that is an invalid allocation. An allocation that
+	// exceeds either source's remaining capacity is a conflict, and a Refund
+	// already completed cannot be completed again.
+	ErrRefundNotFound                  = errors.New("refund not found")
+	ErrRefundSourceNotFound            = errors.New("refund source not found")
+	ErrRefundAllocationInvalid         = errors.New("refund allocation is invalid")
+	ErrRefundExceedsAdjustmentCapacity = errors.New("refund exceeds the charge adjustment's remaining capacity")
+	ErrRefundExceedsPaymentCapacity    = errors.New("refund exceeds the payment's remaining capacity")
+	ErrRefundExceedsPendingRefund      = errors.New("refund exceeds the pending refund still owed back")
+	ErrRefundMethodMismatch            = errors.New("refund method does not match the payment method")
+	ErrRefundAlreadyCompleted          = errors.New("refund is already completed")
+
+	// Phase 6C Payment Void conditions. A missing Payment is a not-found
+	// answer; one whole Void per Payment makes a second attempt a lifecycle
+	// conflict; any Refund allocation — pending or completed — locks the
+	// Payment for good; and the original Shift must still be the currently
+	// open one because voiding after a Shift close needs the separately
+	// deferred Post-Shift Payment Correction.
+	ErrPaymentNotFound        = errors.New("payment not found")
+	ErrPaymentAlreadyVoided   = errors.New("payment already carries a void")
+	ErrPaymentHasRefund       = errors.New("payment carries a refund allocation")
+	ErrPaymentVoidShiftClosed = errors.New("the payment's original sales shift is not currently open")
 )
 
 // serviceSessionSalesShiftFK is the auto-generated name of the only foreign
@@ -270,6 +315,8 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "CHECK_NOT_OPEN", ErrCheckNotOpen)
 	case errors.Is(err, ErrCheckHasPayment):
 		return coded(http.StatusConflict, "CHECK_HAS_PAYMENT", ErrCheckHasPayment)
+	case errors.Is(err, ErrCheckHasChargeAdjustment):
+		return coded(http.StatusConflict, "CHECK_HAS_CHARGE_ADJUSTMENT", ErrCheckHasChargeAdjustment)
 	case errors.Is(err, ErrChecksDifferentSession):
 		return coded(http.StatusConflict, "CHECKS_DIFFERENT_SERVICE_SESSION", ErrChecksDifferentSession)
 	case errors.Is(err, ErrPaymentExceedsBalance):
@@ -302,6 +349,8 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_SUBMISSION", ErrCheckNotSettledForSubmission)
 	case errors.Is(err, ErrCheckNotSettledForClosure):
 		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_CLOSURE", ErrCheckNotSettledForClosure)
+	case errors.Is(err, ErrPendingRefundForClosure):
+		return coded(http.StatusConflict, "PENDING_REFUND_FOR_CLOSURE", ErrPendingRefundForClosure)
 	case errors.Is(err, ErrUnsubmittedWorkForClosure):
 		return coded(http.StatusConflict, "UNSUBMITTED_WORK_FOR_CLOSURE", ErrUnsubmittedWorkForClosure)
 	case errors.Is(err, ErrOrderRequiredForClosure):
@@ -310,6 +359,41 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "UNFULFILLED_PREPARATION_FOR_CLOSURE", ErrUnfulfilledPreparationForClosure)
 	case errors.Is(err, ErrCompletedSaleNotFound):
 		return coded(http.StatusNotFound, "COMPLETED_SALE_NOT_FOUND", ErrCompletedSaleNotFound)
+	case errors.Is(err, ErrWasteNotFound):
+		return coded(http.StatusNotFound, "WASTE_NOT_FOUND", ErrWasteNotFound)
+	case errors.Is(err, ErrCompSourceNotCharged):
+		return coded(http.StatusConflict, "COMP_SOURCE_NOT_CHARGED", ErrCompSourceNotCharged)
+	case errors.Is(err, ErrWasteAlreadyComped):
+		return coded(http.StatusConflict, "WASTE_ALREADY_COMPED", ErrWasteAlreadyComped)
+	case errors.Is(err, ErrChargeAdjustmentConflict):
+		return coded(http.StatusConflict, "CHARGE_ADJUSTMENT_CONFLICT", ErrChargeAdjustmentConflict)
+	case errors.Is(err, ErrRefundNotFound):
+		return coded(http.StatusNotFound, "REFUND_NOT_FOUND", ErrRefundNotFound)
+	case errors.Is(err, ErrRefundSourceNotFound):
+		return coded(http.StatusNotFound, "REFUND_SOURCE_NOT_FOUND", ErrRefundSourceNotFound)
+	case errors.Is(err, ErrRefundAllocationInvalid):
+		return coded(http.StatusBadRequest, "REFUND_ALLOCATION_INVALID", ErrRefundAllocationInvalid)
+	case errors.Is(err, ErrRefundExceedsAdjustmentCapacity):
+		return coded(http.StatusConflict, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY",
+			ErrRefundExceedsAdjustmentCapacity)
+	case errors.Is(err, ErrRefundExceedsPaymentCapacity):
+		return coded(http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY",
+			ErrRefundExceedsPaymentCapacity)
+	case errors.Is(err, ErrRefundExceedsPendingRefund):
+		return coded(http.StatusConflict, "REFUND_EXCEEDS_PENDING_REFUND",
+			ErrRefundExceedsPendingRefund)
+	case errors.Is(err, ErrRefundMethodMismatch):
+		return coded(http.StatusConflict, "REFUND_METHOD_MISMATCH", ErrRefundMethodMismatch)
+	case errors.Is(err, ErrRefundAlreadyCompleted):
+		return coded(http.StatusConflict, "REFUND_ALREADY_COMPLETED", ErrRefundAlreadyCompleted)
+	case errors.Is(err, ErrPaymentNotFound):
+		return coded(http.StatusNotFound, "PAYMENT_NOT_FOUND", ErrPaymentNotFound)
+	case errors.Is(err, ErrPaymentAlreadyVoided):
+		return coded(http.StatusConflict, "PAYMENT_ALREADY_VOIDED", ErrPaymentAlreadyVoided)
+	case errors.Is(err, ErrPaymentHasRefund):
+		return coded(http.StatusConflict, "PAYMENT_HAS_REFUND", ErrPaymentHasRefund)
+	case errors.Is(err, ErrPaymentVoidShiftClosed):
+		return coded(http.StatusConflict, "PAYMENT_VOID_SHIFT_CLOSED", ErrPaymentVoidShiftClosed)
 	default:
 		return err
 	}

@@ -548,3 +548,97 @@ CREATE TABLE idempotency_keys (
 * **Consequences:**
 * Exceptional work can neither be silently lost nor buried by acknowledged history; alerts are the visibility mechanism, so no extra state is added to the unit.
 * Closure ignores alerts entirely — a wasted unit is terminal for closure whether or not anyone acknowledged it — because the alert exists for the bar display, not for the closure policy.
+
+---
+
+## ADR-040: Cancellation is one cross-slice PostgreSQL consistency boundary
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** Cancellation changes a Preparation Unit's lifecycle and the customer's charge in one act, so splitting it across an event or a new orchestration package would leave a terminal unit and a reduced Check able to commit apart.
+* **Decision:**
+* Preparation owns the command, state transition, fact, and alert, and receives a narrow exception to write the live Charge Adjustment and Check charge atomically. No event or new orchestration package is introduced.
+* **Consequences:**
+* Cancel/Change requires `sales.operate`, not `preparation.operate`: it is initiated by Cashier work and changes customer charge; Manager also has the capability, and a Barista alone cannot cancel commercial work.
+* Cancel or active Comp racing a later Submit on the same Session can reach the same narrow AB-BA window as Payment versus Submit; PostgreSQL `40P01` is an accepted retryable outcome for this pairing only (ADR-031), and rollback removes every business write and idempotency claim.
+* Every successful Cancellation writes one terminal state, typed transition, typed fact, alert, and audit evidence atomically with the live Charge Adjustment; unchanged Check charge must equal base allocations less live adjustments.
+
+---
+
+## ADR-041: Charge reduction is append-only and has live versus post-sale scope
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** Cancellation and Comp must reduce what the customer owes without editing any immutable source fact, and a correction requested after closure must not rewrite the sale the customer already received.
+* **Decision:**
+* Cancellation and active Comp update the denormalized live Check charge; post-sale Comp links to Completed Sale and never rewrites its snapshot.
+* **Consequences:**
+* Every reduction is an append-only Charge Adjustment carrying `LIVE_CHECK` or `POST_SALE` scope, its exact source allocation, and the Shift it was recorded in.
+* Completed Sale loading uses a structural closure boundary, not occurrence timestamps: a correction that observes `CLOSED` either rejects (Cancellation and Payment Void) or writes an explicit `POST_SALE` adjustment and Refund carrying `completed_sale_id` (Comp and Refund), and later facts appear only in the additive `post_sale_corrections` history.
+
+---
+
+## ADR-042: Refund consumes two independently locked capacities
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** Money leaves through the same method it arrived, so a Refund must reconcile both the corrected charge it is returning and the original receipt it is returning it through; verifying only one of them would let either side be spent twice.
+* **Decision:**
+* Every Refund allocates against both source Charge Adjustments and original non-voided Payments; pending Manual QR intents reserve both before money moves.
+* **Consequences:**
+* A Refund allocates equal positive totals against explicit source Adjustments and non-voided source Payments of one method and one Check, and a mixed-method source requires separate Refunds.
+* Concurrent or pending Refunds cannot spend Adjustment or Payment refundable capacity twice, including by pending Manual QR intents.
+
+---
+
+## ADR-043: Refund completion is an append-only fact
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** Cash moves the moment staff record it, while a Manual QR Refund is approved before the outbound transfer exists, so completion time is real business content rather than a mutable status.
+* **Decision:**
+* Cash intent and completion commit together; Manual QR completion is appended after outbound confirmation, with no mutable Refund state column.
+* **Consequences:**
+* A Cash Refund always has a completion on successful command return; a Manual QR Refund does not until confirmed, and the approved amount and allocations cannot change during confirmation.
+* Manual QR Refund confirmation requires current `sales.operate` but no second approval: it attests that the approved money movement occurred rather than approving a new one.
+
+---
+
+## ADR-044: A Check remains settled while Refund is pending
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** A Check's state records covered customer debt; once Cancellation or Comp reduces a paid Check's charge, the overpayment is an obligation to return rather than an unpaid balance, and ADR-029 deliberately omitted that branch until Refund existed.
+* **Decision:**
+* Check state records covered customer debt; pending Refund is a separate obligation that blocks Service Session closure, restoring ADR-029's omitted branch without adding a Check state.
+* **Consequences:**
+* Service Session closure rejects pending Refund after unsettled Checks and before work/preparation failures, through the new `PENDING_REFUND_FOR_CLOSURE` condition.
+* A settled Check remains settled while carrying pending Refund and remains ineligible for split or merge, and a cancellation that settles an already-settled Check writes no second settlement evidence.
+
+---
+
+## ADR-045: Payment Void is whole, append-only, and open-original-Shift only
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** A Payment recorded in error must leave the reconciliation trail intact, and un-doing money from a closed Shift or a closed Session needs the deferred Post-Shift Payment Correction contract rather than an under-specified command here.
+* **Decision:**
+* It may reopen a Check but never edits the Payment; a closed Shift requires the deferred Post-Shift Payment Correction.
+* **Consequences:**
+* The Void is always for the entire applied amount and the source Payment is never edited or deleted; it reopens a Check when the remaining valid coverage no longer covers its charge and clears settlement evidence atomically, and leaves a covered Check settled.
+* A refunded Payment, an already-voided Payment, a closed original Shift, a merged Check, or a closed Service Session rejects; it does not automatically create a replacement Payment, and staff record one through the ordinary Cash or Manual QR command.
+* Expected Cash removes the voided Cash Payment term, and received totals remove the voided Manual QR Payment term.
+
+---
+
+## ADR-046: Expected Cash uses valid Cash Payments less completed Cash Refunds
+
+* **Decision Date:** 2026-09-18
+* **Status:** Accepted
+* **Context:** The Shift read reconciles the drawer, so it must count money that actually moved: voids reverse a receipt, pending Refunds have not moved yet, and resolved post-sale corrections change what the drawer owes without rewriting receipt history.
+* **Decision:**
+* Cash Payment Voids remove their source term, pending Refunds do not move money, and `internal/shift` derives all terms through its own SQL.
+* **Consequences:**
+* Expected Cash is Opening Float + non-voided Cash Payments − completed Cash Refunds + Pay Ins − Pay Outs; Manual QR net received is `manual_qr_payment_vnd - manual_qr_payment_void_vnd`, and completed Refunds remain separately visible rather than silently changing received history.
+* `internal/shift` derives every term with its own sqlc queries and imports no Sales or Preparation package.
+* Because Shift Close is not implemented, Phase 6C reports pending Refund intents and unresolved post-sale correction amounts in the current-Shift read but does not add a Shift closure route or claim to enforce its future closure policy; a later Shift Close design must consume these authoritative fields rather than inventing another calculation.
