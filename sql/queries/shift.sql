@@ -449,6 +449,23 @@ FROM shift_qr_observations
 WHERE reconciliation_id = $1
 ORDER BY sequence ASC, id ASC;
 
+-- name: GetNextShiftCashCountSequence :one
+-- The next append-only Cash Count sequence. The caller holds the target
+-- Shift's row FOR UPDATE, so the blind initial count and every recount are
+-- serialized through it and two appends can never claim one sequence.
+SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+FROM shift_cash_counts
+WHERE reconciliation_id = $1;
+
+-- name: GetNextShiftQRObservationSequence :one
+-- The next append-only QR Observation sequence, read under the same Shift row
+-- lock as GetNextShiftCashCountSequence. The two ledgers count independently:
+-- a recount never advances this sequence, and a recheck never advances the
+-- Cash one.
+SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+FROM shift_qr_observations
+WHERE reconciliation_id = $1;
+
 -- name: ListShiftClosureDiscrepancies :many
 -- One closure's nonzero discrepancy rows; exact dimensions have no row.
 SELECT id, shift_closure_id, dimension, expected_vnd, observed_vnd,

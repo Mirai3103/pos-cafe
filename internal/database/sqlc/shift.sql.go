@@ -303,6 +303,39 @@ func (q *Queries) GetLatestReconciliationEvidence(ctx context.Context, reconcili
 	return i, err
 }
 
+const getNextShiftCashCountSequence = `-- name: GetNextShiftCashCountSequence :one
+SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+FROM shift_cash_counts
+WHERE reconciliation_id = $1
+`
+
+// The next append-only Cash Count sequence. The caller holds the target
+// Shift's row FOR UPDATE, so the blind initial count and every recount are
+// serialized through it and two appends can never claim one sequence.
+func (q *Queries) GetNextShiftCashCountSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error) {
+	row := q.db.QueryRowContext(ctx, getNextShiftCashCountSequence, reconciliationID)
+	var next_sequence int32
+	err := row.Scan(&next_sequence)
+	return next_sequence, err
+}
+
+const getNextShiftQRObservationSequence = `-- name: GetNextShiftQRObservationSequence :one
+SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+FROM shift_qr_observations
+WHERE reconciliation_id = $1
+`
+
+// The next append-only QR Observation sequence, read under the same Shift row
+// lock as GetNextShiftCashCountSequence. The two ledgers count independently:
+// a recount never advances this sequence, and a recheck never advances the
+// Cash one.
+func (q *Queries) GetNextShiftQRObservationSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error) {
+	row := q.db.QueryRowContext(ctx, getNextShiftQRObservationSequence, reconciliationID)
+	var next_sequence int32
+	err := row.Scan(&next_sequence)
+	return next_sequence, err
+}
+
 const getOpenSalesShift = `-- name: GetOpenSalesShift :one
 SELECT sh.id, sh.state, sh.opening_float_vnd, sh.opened_at,
        i.id AS opener_id,

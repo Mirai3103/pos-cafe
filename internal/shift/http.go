@@ -248,3 +248,102 @@ func (s *Slices) handleStartReconciliation(c echo.Context) error {
 	}
 	return sendResult(c, status, res)
 }
+
+// handleRecordCashCount appends a Cash Count attempt to a CLOSING Shift.
+//
+//	@Summary		Append a Cash Count
+//	@Description	Appends one immutable Cash Count attempt (a recount) to a CLOSING Sales Shift's reconciliation. The Shift must be CLOSING; an OPEN Shift has no reconciliation to append to. Zero is a valid count. Returns the appended attempt plus the full preview built from the latest evidence.
+//	@Tags			shifts
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			shift_id	path		string					true	"Sales Shift ID"
+//	@Param			request		body		RecordCashCountCommand	true	"Recount Cash amount"
+//	@Success		201			{object}	response.APIResponse{data=CashCountResult}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse	SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT
+//	@Router			/shifts/{shift_id}/reconciliation/cash-counts [post]
+func (s *Slices) handleRecordCashCount(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	shiftID, err := parseUUIDParam(c, "shift_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[RecordCashCountCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// An omitted or negative amount is rejected before any domain
+	// transaction; an explicit zero stays a meaningful count.
+	if err := checkNonNegativeMoney(cmd.CountedCashVND, "counted_cash_vnd"); err != nil {
+		return sendError(c, err)
+	}
+	cmd.ShiftID = shiftID
+
+	status, res, err := s.RecordCashCount.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}
+
+// handleRecordQRObservation appends a Manual QR observation attempt to a
+// CLOSING Shift.
+//
+//	@Summary		Append a Manual QR Observation
+//	@Description	Appends one immutable Manual QR observation attempt (a recheck) to a CLOSING Sales Shift's reconciliation. Both observed values are mandatory together and explicit, including zero; one without the other is rejected. Returns the appended observation plus the full preview built from the latest evidence.
+//	@Tags			shifts
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			shift_id	path		string							true	"Sales Shift ID"
+//	@Param			request		body		RecordQRObservationCommand	true	"Observed received and refunded totals"
+//	@Success		201			{object}	response.APIResponse{data=QRObservationResult}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse	SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT
+//	@Router			/shifts/{shift_id}/reconciliation/qr-observations [post]
+func (s *Slices) handleRecordQRObservation(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	shiftID, err := parseUUIDParam(c, "shift_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[RecordQRObservationCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// Both values are mandatory together and non-negative: one without the
+	// other, or a negative one, is rejected before any domain transaction,
+	// while explicit zeroes are valid observations (spec 14.3).
+	if err := checkNonNegativeMoney(cmd.ObservedReceivedVND, "observed_received_vnd"); err != nil {
+		return sendError(c, err)
+	}
+	if err := checkNonNegativeMoney(cmd.ObservedRefundedVND, "observed_refunded_vnd"); err != nil {
+		return sendError(c, err)
+	}
+	cmd.ShiftID = shiftID
+
+	status, res, err := s.RecordQRObservation.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}

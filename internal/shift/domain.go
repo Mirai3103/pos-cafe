@@ -20,6 +20,8 @@ const (
 	OpRecordCashMovement  = "shift.record_cash_movement"
 	OpGetCurrentShift     = "shift.get_current_shift"
 	OpStartReconciliation = "shift.start_reconciliation"
+	OpRecordCashCount     = "shift.record_cash_count"
+	OpRecordQRObservation = "shift.record_qr_observation"
 )
 
 // Audit event types. Business events are UPPER_SNAKE_CASE and the denial event
@@ -29,6 +31,7 @@ const (
 	EventCashMovementRecorded  = "CASH_MOVEMENT_RECORDED"
 	EventReconciliationStarted = "SHIFT_RECONCILIATION_STARTED"
 	EventCashCountRecorded     = "SHIFT_CASH_COUNT_RECORDED"
+	EventQRObservationRecorded = "SHIFT_QR_OBSERVATION_RECORDED"
 	EventAuthorizationDenied   = "shift.authorization_denied"
 )
 

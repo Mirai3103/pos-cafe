@@ -43,6 +43,31 @@ type StartReconciliationCommand struct {
 	CountedCashVND *int64    `json:"counted_cash_vnd"`
 }
 
+// RecordCashCountCommand appends one immutable Cash Count attempt (a recount)
+// to a CLOSING Shift's reconciliation.
+//
+// ShiftID comes from the route, not the body. CountedCashVND is pointer-backed
+// so an omitted field is rejected rather than silently counted as zero, which
+// is itself a valid count.
+type RecordCashCountCommand struct {
+	RequestID      uuid.UUID `json:"request_id"`
+	ShiftID        uuid.UUID `json:"-"`
+	CountedCashVND *int64    `json:"counted_cash_vnd"`
+}
+
+// RecordQRObservationCommand appends one immutable Manual QR observation
+// attempt (a recheck) to a CLOSING Shift's reconciliation.
+//
+// ShiftID comes from the route, not the body. Both observed values are
+// pointer-backed and mandatory together: one without the other is rejected,
+// while an explicit zero on either is a meaningful observation (spec 14.3).
+type RecordQRObservationCommand struct {
+	RequestID           uuid.UUID `json:"request_id"`
+	ShiftID             uuid.UUID `json:"-"`
+	ObservedReceivedVND *int64    `json:"observed_received_vnd"`
+	ObservedRefundedVND *int64    `json:"observed_refunded_vnd"`
+}
+
 // StaffSummary is the only staff representation that crosses the Shift
 // boundary. It carries exactly these three fields.
 type StaffSummary struct {
@@ -178,6 +203,21 @@ type ReconciliationResponse struct {
 type ClosingShiftResponse struct {
 	SalesShiftMetadata
 	Reconciliation ReconciliationResponse `json:"reconciliation"`
+}
+
+// CashCountResult is the append-cash-count response (spec 9.2): the newly
+// appended attempt plus the full preview rebuilt from the latest evidence.
+type CashCountResult struct {
+	CashCount CashCountResponse     `json:"cash_count"`
+	Preview   ReconciliationPreview `json:"preview"`
+}
+
+// QRObservationResult is the append-qr-observation response (spec 9.3): the
+// newly appended attempt plus the full preview rebuilt from the latest
+// evidence.
+type QRObservationResult struct {
+	QRObservation QRObservationResponse `json:"qr_observation"`
+	Preview       ReconciliationPreview `json:"preview"`
 }
 
 // DiscrepancyResponse is one nonzero signed difference with its catalogued

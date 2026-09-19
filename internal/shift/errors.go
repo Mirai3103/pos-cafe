@@ -14,6 +14,11 @@ var (
 	ErrShiftAlreadyOpen    = errors.New("a sales shift is already open")
 	ErrOpenShiftRequired   = errors.New("an open sales shift is required")
 	ErrShiftAlreadyClosing = errors.New("a sales shift is already closing")
+	// ErrShiftAlreadyClosed marks a mutation whose target Shift has finished
+	// its lifecycle (spec 12: SALES_SHIFT_ALREADY_CLOSED, a 409 lifecycle
+	// conflict). The attempt routes reach it when an append races a committed
+	// close; Final Close (Task 6) reuses it for the second-close loser.
+	ErrShiftAlreadyClosed = errors.New("a sales shift is already closed")
 	// ErrSalesShiftNotFound covers a named Shift that does not exist at all,
 	// which the start route maps to 404 (spec 12: unknown Shift or attempt id).
 	ErrSalesShiftNotFound = errors.New("sales shift not found")
@@ -125,6 +130,8 @@ func MapHTTPError(err error) error {
 		return response.NewCodedError(http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED", ErrOpenShiftRequired.Error(), err)
 	case errors.Is(err, ErrShiftAlreadyClosing):
 		return response.NewCodedError(http.StatusConflict, "SALES_SHIFT_ALREADY_CLOSING", ErrShiftAlreadyClosing.Error(), err)
+	case errors.Is(err, ErrShiftAlreadyClosed):
+		return response.NewCodedError(http.StatusConflict, "SALES_SHIFT_ALREADY_CLOSED", ErrShiftAlreadyClosed.Error(), err)
 	case errors.Is(err, ErrSalesShiftNotFound):
 		return response.NewCodedError(http.StatusNotFound, "SALES_SHIFT_NOT_FOUND", ErrSalesShiftNotFound.Error(), err)
 	case errors.Is(err, ErrReconciliationNotStarted):

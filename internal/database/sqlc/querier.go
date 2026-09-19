@@ -136,6 +136,15 @@ type Querier interface {
 	// Without it two concurrent opens read the same maximum and one loses to the
 	// unique index.
 	GetNextServiceSequence(ctx context.Context, salesShiftID uuid.UUID) (int32, error)
+	// The next append-only Cash Count sequence. The caller holds the target
+	// Shift's row FOR UPDATE, so the blind initial count and every recount are
+	// serialized through it and two appends can never claim one sequence.
+	GetNextShiftCashCountSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error)
+	// The next append-only QR Observation sequence, read under the same Shift row
+	// lock as GetNextShiftCashCountSequence. The two ledgers count independently:
+	// a recount never advances this sequence, and a recheck never advances the
+	// Cash one.
+	GetNextShiftQRObservationSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error)
 	GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, error)
 	// Single-table so the row lock is unambiguous; the opener is fetched separately
 	// with GetStaffSummary.
