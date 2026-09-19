@@ -216,9 +216,9 @@ func TestStartReconciliationAcceptsExplicitZeroCount(t *testing.T) {
 }
 
 // TestStartReconciliationCurrentReadRevealsOnlyAfterSuccess pins the reveal
-// boundary: the OPEN current read shows the redacted shape before start and
-// stops matching once the Shift becomes CLOSING (the interim behavior until
-// the CLOSING projection read lands).
+// boundary: the OPEN current read shows the redacted shape before start, and
+// once the Shift becomes CLOSING the same read reports the frozen
+// reconciliation (spec 4.3, 9.5).
 func TestStartReconciliationCurrentReadRevealsOnlyAfterSuccess(t *testing.T) {
 	f := newShiftFixture(t)
 	ctx := context.Background()
@@ -227,8 +227,11 @@ func TestStartReconciliationCurrentReadRevealsOnlyAfterSuccess(t *testing.T) {
 	before, err := current.Handle(ctx, f.Cashier.actor())
 	require.NoError(t, err)
 	require.NotNil(t, before)
-	assert.Equal(t, shift.StateOpen, before.State)
-	assert.Equal(t, f.Shift.ID, before.ID)
+	beforeRaw, err := json.Marshal(before)
+	require.NoError(t, err)
+	assert.NotContains(t, string(beforeRaw), "reconciliation",
+		"the OPEN read reveals no reconciliation before the blind count commits")
+	assert.NotContains(t, string(beforeRaw), "expected_cash_vnd")
 
 	start := shift.NewStartReconciliationHandler(f.Runner)
 	counted := int64(500_000)
@@ -237,7 +240,17 @@ func TestStartReconciliationCurrentReadRevealsOnlyAfterSuccess(t *testing.T) {
 
 	after, err := current.Handle(ctx, f.Cashier.actor())
 	require.NoError(t, err)
-	assert.Nil(t, after, "the CLOSING Shift no longer matches the OPEN read")
+	require.NotNil(t, after, "the CLOSING Shift is active and the read reveals its snapshot")
+	afterRaw, err := json.Marshal(after)
+	require.NoError(t, err)
+
+	var closing shift.ClosingShiftResponse
+	require.NoError(t, json.Unmarshal(afterRaw, &closing))
+	assert.Equal(t, shift.StateClosing, closing.State)
+	assert.Equal(t, f.Shift.ID, closing.ID)
+	assert.Equal(t, int64(500_000), closing.Reconciliation.ExpectedCashVND,
+		"the current read reveals the same frozen snapshot start returned")
+	assert.Equal(t, counted, closing.Reconciliation.CashCounts[0].CountedCashVND)
 }
 
 // TestStartReconciliationRejectsBlockersInPrecedenceOrder seeds one blocker at
@@ -395,7 +408,14 @@ func TestStartReconciliationCalculationFailureIsGeneric(t *testing.T) {
 	open, readErr := current.Handle(ctx, f.Cashier.actor())
 	require.NoError(t, readErr)
 	require.NotNil(t, open)
-	assert.Equal(t, shift.StateOpen, open.State)
+	openRaw, err := json.Marshal(open)
+	require.NoError(t, err)
+	var redacted shift.OpenCurrentShiftResponse
+	require.NoError(t, json.Unmarshal(openRaw, &redacted))
+	assert.Equal(t, shift.StateOpen, redacted.State,
+		"the Shift is still OPEN to the current read after the failed start")
+	assert.NotContains(t, string(openRaw), "reconciliation",
+		"no snapshot may be revealed by a failed start")
 }
 
 func TestStartReconciliationIsIdempotent(t *testing.T) {

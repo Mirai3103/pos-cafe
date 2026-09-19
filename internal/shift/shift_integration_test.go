@@ -157,6 +157,34 @@ func TestShiftHTTPHappyPath(t *testing.T) {
 	require.NoError(t, json.Unmarshal(env.Data, &current))
 	assert.ElementsMatch(t, []string{"id", "state", "opened_at", "opener"},
 		slices.Collect(maps.Keys(current)))
+
+	// Start reconciliation: the same read now returns the CLOSING shape.
+	body, _ = json.Marshal(map[string]any{"request_id": uuid.New(), "counted_cash_vnd": 450000})
+	rec = doRequest(t, e, http.MethodPost,
+		"/api/v1/shifts/"+opened.ID.String()+"/reconciliation", cashierToken, body)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+
+	rec = doRequest(t, e, http.MethodGet, "/api/v1/shifts/current", cashierToken, nil)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+	require.True(t, env.Success)
+
+	// The CLOSING envelope is the closing shape itself: metadata plus
+	// reconciliation, with the frozen Expected Cash inside it.
+	var closingData map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(env.Data, &closingData))
+	assert.ElementsMatch(t, []string{"id", "state", "opened_at", "opener", "reconciliation"},
+		slices.Collect(maps.Keys(closingData)))
+
+	var closing shift.ClosingShiftResponse
+	require.NoError(t, json.Unmarshal(env.Data, &closing))
+	assert.Equal(t, shift.StateClosing, closing.State)
+	assert.Equal(t, opened.ID, closing.ID)
+	assert.Equal(t, int64(450_000), closing.Reconciliation.ExpectedCashVND,
+		"500000 float less the 50000 Pay Out, frozen at start")
+	require.NotEmpty(t, closing.Reconciliation.CashCounts)
+	assert.Equal(t, 1, closing.Reconciliation.CashCounts[0].Sequence)
+	assert.Equal(t, int64(450_000), closing.Reconciliation.CashCounts[0].CountedCashVND)
 }
 
 func TestShiftHTTPSerializesEmptyListsAsArrays(t *testing.T) {

@@ -14,6 +14,49 @@ import (
 	"github.com/lib/pq"
 )
 
+const getActiveSalesShift = `-- name: GetActiveSalesShift :one
+SELECT sh.id, sh.state, sh.opening_float_vnd, sh.opened_at,
+       i.id AS opener_id,
+       i.display_name AS opener_display_name,
+       i.login_code AS opener_login_code
+FROM sales_shifts sh
+JOIN staff_identities i ON i.id = sh.opened_by_staff_identity_id
+WHERE sh.state IN ('OPEN', 'CLOSING')
+ORDER BY sh.opened_at DESC
+LIMIT 1
+`
+
+type GetActiveSalesShiftRow struct {
+	ID                uuid.UUID `json:"id"`
+	State             string    `json:"state"`
+	OpeningFloatVnd   int64     `json:"opening_float_vnd"`
+	OpenedAt          time.Time `json:"opened_at"`
+	OpenerID          uuid.UUID `json:"opener_id"`
+	OpenerDisplayName string    `json:"opener_display_name"`
+	OpenerLoginCode   string    `json:"opener_login_code"`
+}
+
+// The one active Shift (OPEN or CLOSING) for the current-Shift read. The
+// active-Shift unique index permits at most one row in either state; the
+// ordering and limit keep the query one-row by construction, matching
+// GetOpenSalesShift's shape. The state is returned rather than filtered so the
+// reader dispatches on it: OPEN projects the redacted shape, CLOSING the
+// frozen reconciliation (spec 9.5).
+func (q *Queries) GetActiveSalesShift(ctx context.Context) (GetActiveSalesShiftRow, error) {
+	row := q.db.QueryRowContext(ctx, getActiveSalesShift)
+	var i GetActiveSalesShiftRow
+	err := row.Scan(
+		&i.ID,
+		&i.State,
+		&i.OpeningFloatVnd,
+		&i.OpenedAt,
+		&i.OpenerID,
+		&i.OpenerDisplayName,
+		&i.OpenerLoginCode,
+	)
+	return i, err
+}
+
 const getClosedShiftDetail = `-- name: GetClosedShiftDetail :one
 SELECT c.id AS closure_id, c.sales_shift_id, c.reconciliation_id,
        c.initial_cash_count_id, c.final_cash_count_id, c.final_qr_observation_id,
@@ -334,43 +377,6 @@ func (q *Queries) GetNextShiftQRObservationSequence(ctx context.Context, reconci
 	var next_sequence int32
 	err := row.Scan(&next_sequence)
 	return next_sequence, err
-}
-
-const getOpenSalesShift = `-- name: GetOpenSalesShift :one
-SELECT sh.id, sh.state, sh.opening_float_vnd, sh.opened_at,
-       i.id AS opener_id,
-       i.display_name AS opener_display_name,
-       i.login_code AS opener_login_code
-FROM sales_shifts sh
-JOIN staff_identities i ON i.id = sh.opened_by_staff_identity_id
-WHERE sh.state = 'OPEN'
-ORDER BY sh.opened_at DESC
-LIMIT 1
-`
-
-type GetOpenSalesShiftRow struct {
-	ID                uuid.UUID `json:"id"`
-	State             string    `json:"state"`
-	OpeningFloatVnd   int64     `json:"opening_float_vnd"`
-	OpenedAt          time.Time `json:"opened_at"`
-	OpenerID          uuid.UUID `json:"opener_id"`
-	OpenerDisplayName string    `json:"opener_display_name"`
-	OpenerLoginCode   string    `json:"opener_login_code"`
-}
-
-func (q *Queries) GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, error) {
-	row := q.db.QueryRowContext(ctx, getOpenSalesShift)
-	var i GetOpenSalesShiftRow
-	err := row.Scan(
-		&i.ID,
-		&i.State,
-		&i.OpeningFloatVnd,
-		&i.OpenedAt,
-		&i.OpenerID,
-		&i.OpenerDisplayName,
-		&i.OpenerLoginCode,
-	)
-	return i, err
 }
 
 const getOpenSalesShiftForUpdate = `-- name: GetOpenSalesShiftForUpdate :one

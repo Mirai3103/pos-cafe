@@ -76,6 +76,13 @@ type Querier interface {
 	// never matches itself. A separate query rather than a nullable exclusion
 	// parameter keeps the add path's query untouched.
 	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
+	// The one active Shift (OPEN or CLOSING) for the current-Shift read. The
+	// active-Shift unique index permits at most one row in either state; the
+	// ordering and limit keep the query one-row by construction, matching
+	// GetOpenSalesShift's shape. The state is returned rather than filtered so the
+	// reader dispatches on it: OPEN projects the redacted shape, CLOSING the
+	// frozen reconciliation (spec 9.5).
+	GetActiveSalesShift(ctx context.Context) (GetActiveSalesShiftRow, error)
 	// Non-locking resolution for CHANGE. Returns no row when the replacement Order
 	// does not exist at all; the three boolean columns let the handler reject a
 	// cross-Session, source, or not-later Order with one typed error.
@@ -145,7 +152,6 @@ type Querier interface {
 	// a recount never advances this sequence, and a recheck never advances the
 	// Cash one.
 	GetNextShiftQRObservationSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error)
-	GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, error)
 	// Single-table so the row lock is unambiguous; the opener is fetched separately
 	// with GetStaffSummary.
 	GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) (GetOpenSalesShiftForUpdateRow, error)

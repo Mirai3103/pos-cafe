@@ -1,6 +1,8 @@
 package shift
 
 import (
+	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
@@ -233,6 +235,48 @@ type ReconciliationResponse struct {
 type ClosingShiftResponse struct {
 	SalesShiftMetadata
 	Reconciliation ReconciliationResponse `json:"reconciliation"`
+}
+
+// CurrentShiftResponse is the current-Shift read's state-dispatched payload
+// (spec 9.5): the redacted OPEN shape, the frozen CLOSING reconciliation
+// shape, or nil (data: null) when no Shift is active.
+//
+// The branches are unexported so only the constructors can build the tagged
+// DTO, and MarshalJSON serializes exactly the set branch. The envelope
+// therefore keeps the branch's own key allowlist (spec 9.6) instead of
+// wrapping it in a discriminator key: an OPEN read serializes as
+// id/state/opened_at/opener and a CLOSING read as metadata plus
+// reconciliation.
+type CurrentShiftResponse struct {
+	open    *OpenCurrentShiftResponse
+	closing *ClosingShiftResponse
+}
+
+// newOpenCurrentShiftResponse tags the OPEN branch of the current-Shift read.
+func newOpenCurrentShiftResponse(open OpenCurrentShiftResponse) *CurrentShiftResponse {
+	return &CurrentShiftResponse{open: &open}
+}
+
+// newClosingCurrentShiftResponse tags the CLOSING branch of the current-Shift
+// read.
+func newClosingCurrentShiftResponse(closing ClosingShiftResponse) *CurrentShiftResponse {
+	return &CurrentShiftResponse{closing: &closing}
+}
+
+// MarshalJSON serializes exactly one branch. encoding/json marshals a nil
+// *CurrentShiftResponse as null without calling this method (the no-active-
+// Shift case keeps its data: null shape); the nil check guards a direct call.
+func (r *CurrentShiftResponse) MarshalJSON() ([]byte, error) {
+	switch {
+	case r == nil:
+		return []byte("null"), nil
+	case r.open != nil:
+		return json.Marshal(r.open)
+	case r.closing != nil:
+		return json.Marshal(r.closing)
+	default:
+		return nil, errors.New("current shift response carries no branch")
+	}
 }
 
 // CashCountResult is the append-cash-count response (spec 9.2): the newly

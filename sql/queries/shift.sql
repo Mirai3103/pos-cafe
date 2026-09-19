@@ -25,14 +25,20 @@ INSERT INTO sales_shifts (opened_by_staff_identity_id, opening_float_vnd)
 VALUES ($1, $2)
 RETURNING id, state, opened_by_staff_identity_id, opening_float_vnd, opened_at;
 
--- name: GetOpenSalesShift :one
+-- name: GetActiveSalesShift :one
+-- The one active Shift (OPEN or CLOSING) for the current-Shift read. The
+-- active-Shift unique index permits at most one row in either state; the
+-- ordering and limit keep the query one-row by construction, matching
+-- GetOpenSalesShift's shape. The state is returned rather than filtered so the
+-- reader dispatches on it: OPEN projects the redacted shape, CLOSING the
+-- frozen reconciliation (spec 9.5).
 SELECT sh.id, sh.state, sh.opening_float_vnd, sh.opened_at,
        i.id AS opener_id,
        i.display_name AS opener_display_name,
        i.login_code AS opener_login_code
 FROM sales_shifts sh
 JOIN staff_identities i ON i.id = sh.opened_by_staff_identity_id
-WHERE sh.state = 'OPEN'
+WHERE sh.state IN ('OPEN', 'CLOSING')
 ORDER BY sh.opened_at DESC
 LIMIT 1;
 
