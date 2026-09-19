@@ -194,6 +194,79 @@ func derefString(note *string) string {
 	return *note
 }
 
+// seedClosedShiftsBulk seeds n exact closed Shifts sharing one closed_at in a
+// single statement. The cap test needs more than one page of 100 rows, and
+// row-at-a-time seeding would issue ~500 statements where this CTE chain
+// issues one, so the bulk insert is the cheap variant of "seed > 100 rows".
+// Every row is an exact close (all differences zero, no approver), which
+// satisfies every closure constraint.
+func seedClosedShiftsBulk(t *testing.T, db *sql.DB, operator testActor, n int,
+	openedAt, closedAt time.Time,
+) {
+	t.Helper()
+	var seeded int
+	require.NoError(t, db.QueryRow(`
+		WITH ins_shift AS (
+			INSERT INTO sales_shifts (state, opened_by_staff_identity_id,
+			                          opening_float_vnd, opened_at)
+			SELECT 'CLOSED', $1, 500000, $3
+			FROM generate_series(1, $5::int)
+			RETURNING id AS shift_id, opened_at
+		),
+		ins_recon AS (
+			INSERT INTO shift_reconciliations (sales_shift_id,
+			    started_by_staff_identity_id, started_staff_access_session_id,
+			    started_at, opening_float_vnd, pay_in_vnd, pay_out_vnd,
+			    cash_payment_vnd, cash_payment_void_vnd, cash_refund_vnd,
+			    expected_cash_vnd, manual_qr_payment_vnd, manual_qr_payment_void_vnd,
+			    expected_manual_qr_received_vnd, manual_qr_refund_vnd)
+			SELECT shift_id, $1, $2, $3, 500000, 0, 0, 0, 0, 0, 500000, 0, 0, 0, 0
+			FROM ins_shift
+			RETURNING id AS recon_id, sales_shift_id
+		),
+		ins_count AS (
+			INSERT INTO shift_cash_counts (reconciliation_id, sequence,
+			    counted_cash_vnd, counted_by_staff_identity_id,
+			    counted_staff_access_session_id, counted_at)
+			SELECT recon_id, 1, 500000, $1, $2, $4
+			FROM ins_recon
+			RETURNING id AS count_id, reconciliation_id
+		),
+		ins_obs AS (
+			INSERT INTO shift_qr_observations (reconciliation_id, sequence,
+			    observed_received_vnd, observed_refunded_vnd,
+			    observed_by_staff_identity_id, observed_staff_access_session_id,
+			    observed_at)
+			SELECT recon_id, 1, 0, 0, $1, $2, $4
+			FROM ins_recon
+			RETURNING id AS obs_id, reconciliation_id
+		),
+		ins_closure AS (
+			INSERT INTO shift_closures (sales_shift_id, reconciliation_id,
+			    initial_cash_count_id, final_cash_count_id, final_qr_observation_id,
+			    opener_staff_identity_id, closer_staff_identity_id,
+			    closer_staff_access_session_id, opened_at, closed_at,
+			    opening_float_vnd, pay_in_vnd, pay_out_vnd, cash_payment_vnd,
+			    cash_payment_void_vnd, cash_refund_vnd, expected_cash_vnd,
+			    manual_qr_payment_vnd, manual_qr_payment_void_vnd,
+			    expected_manual_qr_received_vnd, manual_qr_refund_vnd,
+			    observed_cash_vnd, observed_manual_qr_received_vnd,
+			    observed_manual_qr_refunded_vnd, cash_difference_vnd,
+			    manual_qr_received_difference_vnd, manual_qr_refunded_difference_vnd)
+			SELECT r.sales_shift_id, r.recon_id, c.count_id, c.count_id, o.obs_id,
+			       $1, $1, $2, $3, $4,
+			       500000, 0, 0, 0, 0, 0, 500000, 0, 0, 0, 0,
+			       500000, 0, 0, 0, 0, 0
+			FROM ins_recon r
+			JOIN ins_count c ON c.reconciliation_id = r.recon_id
+			JOIN ins_obs o ON o.reconciliation_id = r.recon_id
+			RETURNING sales_shift_id
+		)
+		SELECT count(*) FROM ins_closure`,
+		operator.StaffID, operator.SessionID, openedAt, closedAt, n).Scan(&seeded))
+	require.Equal(t, n, seeded, "every requested closed snapshot is seeded")
+}
+
 // seedHistoryTie seeds the three closed Shifts every pagination test walks:
 // two closures sharing tieClosedAt (one exact, one discrepant) and one
 // strictly newer closure. It returns the seeded shift ids keyed to their
@@ -309,6 +382,36 @@ func TestListClosedShifts(t *testing.T) {
 			Handle(ctx, f.Cashier.actor(), listCommand(historyWindowFrom, historyWindowTo, "", 50))
 		require.Error(t, err)
 		requireCodedError(t, err, http.StatusForbidden, "FORBIDDEN")
+	})
+
+	t.Run("limit above the cap is clamped to 100", func(t *testing.T) {
+		f := newShiftFixture(t)
+		seedClosedShiftsBulk(t, f.DB, f.Cashier, 101,
+			tieClosedAt.Add(-8*time.Hour), tieClosedAt)
+
+		// A limit above the cap is accepted, never rejected: the page stops at
+		// 100 rows and still reports a cursor to continue from (spec 9.5).
+		first, err := shift.NewListClosedShiftsHandler(f.Runner).
+			Handle(ctx, f.Manager.actor(), listCommand(historyWindowFrom, historyWindowTo, "", 250))
+		require.NoError(t, err)
+		require.Len(t, first.Items, 100, "a limit above the cap is clamped to 100 rows")
+		require.NotEmpty(t, first.NextCursor, "a clamped full page still reports a next cursor")
+
+		second, err := shift.NewListClosedShiftsHandler(f.Runner).
+			Handle(ctx, f.Manager.actor(),
+				listCommand(historyWindowFrom, historyWindowTo, first.NextCursor, 250))
+		require.NoError(t, err)
+		require.Len(t, second.Items, 1, "the row past the cap arrives on the next page")
+		assert.Empty(t, second.NextCursor, "the walk is exhausted")
+
+		// The clamped boundary neither duplicates nor omits a row.
+		collected := make(map[uuid.UUID]struct{}, 101)
+		for _, items := range [][]shift.ClosedShiftSummaryResponse{first.Items, second.Items} {
+			for _, item := range items {
+				collected[item.ID] = struct{}{}
+			}
+		}
+		assert.Len(t, collected, 101)
 	})
 
 	t.Run("empty window returns an empty list and no cursor", func(t *testing.T) {
