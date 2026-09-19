@@ -1872,6 +1872,26 @@ definitions:
       request_id:
         type: string
     type: object
+  shift.CashCountResponse:
+    properties:
+      counted_at:
+        type: string
+      counted_by:
+        $ref: '#/definitions/shift.StaffSummary'
+      counted_cash_vnd:
+        type: integer
+      id:
+        type: string
+      sequence:
+        type: integer
+    type: object
+  shift.CashCountResult:
+    properties:
+      cash_count:
+        $ref: '#/definitions/shift.CashCountResponse'
+      preview:
+        $ref: '#/definitions/shift.ReconciliationPreview'
+    type: object
   shift.CashMovementResponse:
     properties:
       amount_vnd:
@@ -1895,16 +1915,238 @@ definitions:
     type: object
   shift.CashMovementResult:
     properties:
-      expected_cash_vnd:
-        type: integer
       movement:
         $ref: '#/definitions/shift.CashMovementResponse'
     type: object
-  shift.CurrentSalesShiftResponse:
+  shift.CloseDiscrepancyInput:
     properties:
-      cash_movements:
+      dimension:
+        type: string
+      note:
+        type: string
+      reason:
+        type: string
+    type: object
+  shift.CloseShiftCommand:
+    properties:
+      approver_login_code:
+        type: string
+      discrepancies:
         items:
-          $ref: '#/definitions/shift.CashMovementResponse'
+          $ref: '#/definitions/shift.CloseDiscrepancyInput'
+        type: array
+      final_cash_count_id:
+        type: string
+      final_qr_observation_id:
+        type: string
+      manager_pin:
+        type: string
+      request_id:
+        type: string
+    type: object
+  shift.ClosedShiftDetailResponse:
+    properties:
+      approver:
+        $ref: '#/definitions/shift.StaffSummary'
+      cash_counts:
+        items:
+          $ref: '#/definitions/shift.CashCountResponse'
+        type: array
+      cash_difference_vnd:
+        type: integer
+      cash_payment_vnd:
+        type: integer
+      cash_payment_void_vnd:
+        type: integer
+      cash_refund_vnd:
+        type: integer
+      closed_at:
+        type: string
+      closer:
+        $ref: '#/definitions/shift.StaffSummary'
+      discrepancies:
+        items:
+          $ref: '#/definitions/shift.DiscrepancyResponse'
+        type: array
+      expected_cash_vnd:
+        type: integer
+      expected_manual_qr_received_vnd:
+        type: integer
+      expected_manual_qr_refunded_vnd:
+        type: integer
+      has_discrepancy:
+        type: boolean
+      id:
+        type: string
+      manual_qr_payment_vnd:
+        type: integer
+      manual_qr_payment_void_vnd:
+        type: integer
+      manual_qr_received_difference_vnd:
+        type: integer
+      manual_qr_refunded_difference_vnd:
+        type: integer
+      observed_cash_vnd:
+        type: integer
+      observed_manual_qr_received_vnd:
+        type: integer
+      observed_manual_qr_refunded_vnd:
+        type: integer
+      opened_at:
+        type: string
+      opener:
+        $ref: '#/definitions/shift.StaffSummary'
+      opening_float_vnd:
+        type: integer
+      pay_in_vnd:
+        type: integer
+      pay_out_vnd:
+        type: integer
+      pending_manual_qr_refund_vnd:
+        type: integer
+      pending_refund_vnd:
+        type: integer
+      qr_observations:
+        items:
+          $ref: '#/definitions/shift.QRObservationResponse'
+        type: array
+      starter:
+        $ref: '#/definitions/shift.StaffSummary'
+      unresolved_post_sale_adjustment_vnd:
+        type: integer
+    type: object
+  shift.ClosedShiftListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/shift.ClosedShiftSummaryResponse'
+        type: array
+      next_cursor:
+        type: string
+    type: object
+  shift.ClosedShiftSummaryResponse:
+    properties:
+      cash_difference_vnd:
+        type: integer
+      closed_at:
+        type: string
+      closer:
+        $ref: '#/definitions/shift.StaffSummary'
+      expected_cash_vnd:
+        type: integer
+      expected_manual_qr_received_vnd:
+        type: integer
+      expected_manual_qr_refunded_vnd:
+        type: integer
+      has_discrepancy:
+        type: boolean
+      id:
+        type: string
+      manual_qr_received_difference_vnd:
+        type: integer
+      manual_qr_refunded_difference_vnd:
+        type: integer
+      observed_cash_vnd:
+        type: integer
+      observed_manual_qr_received_vnd:
+        type: integer
+      observed_manual_qr_refunded_vnd:
+        type: integer
+      opened_at:
+        type: string
+      opener:
+        $ref: '#/definitions/shift.StaffSummary'
+      opening_float_vnd:
+        type: integer
+    type: object
+  shift.ClosingShiftResponse:
+    properties:
+      id:
+        type: string
+      opened_at:
+        type: string
+      opener:
+        $ref: '#/definitions/shift.StaffSummary'
+      reconciliation:
+        $ref: '#/definitions/shift.ReconciliationResponse'
+      state:
+        type: string
+    type: object
+  shift.CurrentShiftResponse:
+    type: object
+  shift.DiscrepancyResponse:
+    properties:
+      created_at:
+        type: string
+      difference_vnd:
+        type: integer
+      dimension:
+        type: string
+      expected_vnd:
+        type: integer
+      note:
+        type: string
+      observed_vnd:
+        type: integer
+      reason:
+        type: string
+    type: object
+  shift.OpenShiftCommand:
+    properties:
+      opening_float_vnd:
+        type: integer
+      request_id:
+        type: string
+    type: object
+  shift.QRObservationResponse:
+    properties:
+      id:
+        type: string
+      observed_at:
+        type: string
+      observed_by:
+        $ref: '#/definitions/shift.StaffSummary'
+      observed_received_vnd:
+        type: integer
+      observed_refunded_vnd:
+        type: integer
+      sequence:
+        type: integer
+    type: object
+  shift.QRObservationResult:
+    properties:
+      preview:
+        $ref: '#/definitions/shift.ReconciliationPreview'
+      qr_observation:
+        $ref: '#/definitions/shift.QRObservationResponse'
+    type: object
+  shift.ReconciliationPreview:
+    properties:
+      can_close:
+        type: boolean
+      dimensions:
+        items:
+          $ref: '#/definitions/shift.ReconciliationPreviewEntry'
+        type: array
+    type: object
+  shift.ReconciliationPreviewEntry:
+    properties:
+      difference_vnd:
+        type: integer
+      dimension:
+        type: string
+      expected_vnd:
+        type: integer
+      observed_vnd:
+        type: integer
+      recheck_required:
+        type: boolean
+    type: object
+  shift.ReconciliationResponse:
+    properties:
+      cash_counts:
+        items:
+          $ref: '#/definitions/shift.CashCountResponse'
         type: array
       cash_payment_vnd:
         type: integer
@@ -1914,6 +2156,8 @@ definitions:
         type: integer
       expected_cash_vnd:
         type: integer
+      expected_manual_qr_received_vnd:
+        type: integer
       id:
         type: string
       manual_qr_payment_vnd:
@@ -1922,28 +2166,32 @@ definitions:
         type: integer
       manual_qr_refund_vnd:
         type: integer
-      opened_at:
-        type: string
-      opener:
-        $ref: '#/definitions/shift.StaffSummary'
       opening_float_vnd:
+        type: integer
+      pay_in_vnd:
+        type: integer
+      pay_out_vnd:
         type: integer
       pending_manual_qr_refund_vnd:
         type: integer
       pending_refund_vnd:
         type: integer
-      refunds:
+      preview:
+        $ref: '#/definitions/shift.ReconciliationPreview'
+      qr_observations:
         items:
-          $ref: '#/definitions/shift.RefundSummaryResponse'
+          $ref: '#/definitions/shift.QRObservationResponse'
         type: array
-      state:
+      started_at:
         type: string
+      starter:
+        $ref: '#/definitions/shift.StaffSummary'
       unresolved_post_sale_adjustment_vnd:
         type: integer
     type: object
-  shift.OpenShiftCommand:
+  shift.RecordCashCountCommand:
     properties:
-      opening_float_vnd:
+      counted_cash_vnd:
         type: integer
       request_id:
         type: string
@@ -1965,23 +2213,13 @@ definitions:
       request_id:
         type: string
     type: object
-  shift.RefundSummaryResponse:
+  shift.RecordQRObservationCommand:
     properties:
-      amount_vnd:
+      observed_received_vnd:
         type: integer
-      check_id:
-        type: string
-      completed_at:
-        type: string
-      completed_sale_id:
-        type: string
-      created_at:
-        type: string
-      id:
-        type: string
-      method:
-        type: string
-      state:
+      observed_refunded_vnd:
+        type: integer
+      request_id:
         type: string
     type: object
   shift.SalesShiftResponse:
@@ -2004,6 +2242,13 @@ definitions:
       id:
         type: string
       login_code:
+        type: string
+    type: object
+  shift.StartReconciliationCommand:
+    properties:
+      counted_cash_vnd:
+        type: integer
+      request_id:
         type: string
     type: object
   tables.CreateTableCommand:
@@ -5858,6 +6103,62 @@ paths:
       tags:
       - sales
   /shifts:
+    get:
+      description: 'Returns Manager-visible closed Sales Shift summaries ordered by
+        closed_at descending (ties by id) inside a half-open [closed_from, closed_to)
+        window of at most 31 days. Pagination is keyset: a full page returns an opaque
+        next_cursor to pass back verbatim; the cursor is exclusive and bound to the
+        window it was minted over. Requires the audit.inspect capability; no fresh
+        PIN is needed.'
+      parameters:
+      - description: Inclusive window start, RFC 3339
+        in: query
+        name: closed_from
+        required: true
+        type: string
+      - description: Exclusive window end, RFC 3339
+        in: query
+        name: closed_to
+        required: true
+        type: string
+      - description: Opaque next_cursor from the previous page
+        in: query
+        name: cursor
+        type: string
+      - description: Page size, default 50, capped at 100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.ClosedShiftListResponse'
+              type: object
+        "400":
+          description: Missing or malformed window, a window over 31 days, a limit
+            below one, or a malformed or mismatched cursor
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Requires audit.inspect
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List closed Sales Shifts
+      tags:
+      - shifts
     post:
       consumes:
       - application/json
@@ -5901,6 +6202,53 @@ paths:
       security:
       - BearerAuth: []
       summary: Open a Sales Shift
+      tags:
+      - shifts
+  /shifts/{shift_id}:
+    get:
+      description: 'Returns one closed Sales Shift''s immutable detail: the summary,
+        the complete frozen source scalars, the reconciliation starter, every Cash
+        Count and Manual QR observation, the discrepancy rows, and the approving Manager
+        when the close was discrepant. Only closed Shifts are exposed: an unknown
+        id and a Shift that is still OPEN or CLOSING both return 404. Requires the
+        audit.inspect capability; no fresh PIN is needed.'
+      parameters:
+      - description: Sales Shift ID
+        in: path
+        name: shift_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.ClosedShiftDetailResponse'
+              type: object
+        "400":
+          description: Malformed shift_id
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Requires audit.inspect
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Unknown Shift, or the Shift is not closed
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Read a closed Sales Shift
       tags:
       - shifts
   /shifts/{shift_id}/cash-movements:
@@ -5955,12 +6303,30 @@ paths:
       summary: Record a Cash Movement
       tags:
       - shifts
-  /shifts/current:
-    get:
-      description: Returns the open Sales Shift with its Expected Cash and Cash Movements,
-        or null when no Shift is open. expected_cash_vnd covers the Opening Float,
-        Cash Payments, and Cash Movements. The Cash Refund term is still outstanding,
-        because Refund is not implemented (ADR-020).
+  /shifts/{shift_id}/close:
+    post:
+      consumes:
+      - application/json
+      description: Performs the Final Close of a CLOSING Sales Shift. The request
+        carries the final evidence ids and, for a discrepant close, one reason per
+        nonzero dimension. Amounts are always derived server-side from the frozen
+        snapshot and the final evidence. A non-null empty discrepancies array closes
+        exactly; any entry selects the discrepant close, which requires inline approval
+        by an enabled Manager holding the MANAGER role, who authenticates with their
+        own login code and PIN. Returns the immutable closed-Shift detail for both
+        outcomes.
+      parameters:
+      - description: Sales Shift ID
+        in: path
+        name: shift_id
+        required: true
+        type: string
+      - description: Final evidence and discrepancy reasons
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/shift.CloseShiftCommand'
       produces:
       - application/json
       responses:
@@ -5971,14 +6337,241 @@ paths:
             - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/shift.CurrentSalesShiftResponse'
+                  $ref: '#/definitions/shift.ClosedShiftDetailResponse'
               type: object
+        "400":
+          description: Malformed body, omitted evidence id, a missing or null discrepancies
+            array, or an invalid reason or note shape
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Missing capability or failed Manager approval, collapsed to
+            MANAGER_APPROVAL_UNAVAILABLE
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Unknown Sales Shift or final attempt id
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Lifecycle, blocker, stale evidence, source mismatch, recount/recheck,
+            or discrepancy reason conflicts
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Close a reconciled Sales Shift
+      tags:
+      - shifts
+  /shifts/{shift_id}/reconciliation:
+    post:
+      consumes:
+      - application/json
+      description: 'Starts the blind reconciliation of an open Sales Shift: it freezes
+        the financial snapshot, records the submitted cash count as the blind initial
+        count (sequence 1), and moves the Shift to CLOSING. The counted amount is
+        submitted before any expected value is revealed. Returns the CLOSING Shift
+        with its frozen reconciliation.'
+      parameters:
+      - description: Sales Shift ID
+        in: path
+        name: shift_id
+        required: true
+        type: string
+      - description: Initial blind cash count
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/shift.StartReconciliationCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.ClosingShiftResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
         "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/response.APIResponse'
         "403":
           description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: SALES_SHIFT_ALREADY_CLOSING, SHIFT_UNSETTLED_CHECK, SHIFT_PENDING_REFUND,
+            SHIFT_UNRESOLVED_CORRECTION, or SHIFT_ACTIVE_SERVICE_SESSION, in that
+            precedence order
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Start Sales Shift reconciliation
+      tags:
+      - shifts
+  /shifts/{shift_id}/reconciliation/cash-counts:
+    post:
+      consumes:
+      - application/json
+      description: Appends one immutable Cash Count attempt (a recount) to a CLOSING
+        Sales Shift's reconciliation. The Shift must be CLOSING; an OPEN Shift has
+        no reconciliation to append to. Zero is a valid count. Returns the appended
+        attempt plus the full preview built from the latest evidence.
+      parameters:
+      - description: Sales Shift ID
+        in: path
+        name: shift_id
+        required: true
+        type: string
+      - description: Recount Cash amount
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/shift.RecordCashCountCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.CashCountResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED,
+            or REQUEST_CONFLICT
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Append a Cash Count
+      tags:
+      - shifts
+  /shifts/{shift_id}/reconciliation/qr-observations:
+    post:
+      consumes:
+      - application/json
+      description: Appends one immutable Manual QR observation attempt (a recheck)
+        to a CLOSING Sales Shift's reconciliation. Both observed values are mandatory
+        together and explicit, including zero; one without the other is rejected.
+        Returns the appended observation plus the full preview built from the latest
+        evidence.
+      parameters:
+      - description: Sales Shift ID
+        in: path
+        name: shift_id
+        required: true
+        type: string
+      - description: Observed received and refunded totals
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/shift.RecordQRObservationCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.QRObservationResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED,
+            or REQUEST_CONFLICT
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Append a Manual QR Observation
+      tags:
+      - shifts
+  /shifts/current:
+    get:
+      description: 'Returns the active Sales Shift''s state-dispatched read (spec
+        9.5), or null when no Shift is open. While the Shift is OPEN the response
+        is the redacted metadata shape only (id, state, opened_at, opener): no Opening
+        Float, Expected Cash, or derivation input crosses the boundary before the
+        blind initial count commits. While the Shift is CLOSING the response is the
+        Shift metadata plus its frozen reconciliation, carrying every attempt and
+        the preview built from the latest evidence. Requires the sales_shift.operate
+        capability.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/shift.CurrentShiftResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Requires sales_shift.operate
           schema:
             $ref: '#/definitions/response.APIResponse'
       security:

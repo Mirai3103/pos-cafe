@@ -4,7 +4,7 @@ Phases 0 through 6C are complete. The TypeScript-to-Go migration is **closed**
 (ADR-047): this repository has passed its source, and every phase from 07 onward is
 designed from [`CONTEXT.md`](CONTEXT.md) rather than ported from TypeScript code.
 
-Phases **07** and **08** are unblocked and are the work to pick up next.
+Phase **08** is unblocked and is the work to pick up next.
 
 ---
 
@@ -41,12 +41,13 @@ When `CONTEXT.md` and an implementation disagree, `CONTEXT.md` states the intent
 | **6A** | Preparation Queue reads and bulk transitions | [spec](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md) |
 | **6B** | Alerts, Waste, Remake, priority, state correction | [spec](docs/superpowers/specs/2026-09-17-preparation-corrections-design.md) |
 | **6C** | Cancellation, Comp, Refund, Payment Void, Shift reconciliation terms | [spec](docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md) |
+| **07** | Close and reconcile a Sales Shift | [spec](docs/superpowers/specs/2026-09-18-shift-closure-reconciliation-design.md) |
 
 Supporting: [PostgreSQL template integration tests](docs/superpowers/specs/2026-09-15-postgres-template-integration-tests-design.md),
 [roadmap migration and closure](docs/superpowers/specs/2026-09-18-roadmap-migration-design.md).
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
-`preparation`. Forty-six architecture decisions are recorded.
+`preparation`. Fifty-two architecture decisions are recorded.
 
 ---
 
@@ -58,7 +59,6 @@ criteria live in the ticket, not here.
 
 | Phase | Scope | Blocked by | Ticket |
 | :--- | :--- | :--- | :--- |
-| **07** | Close and reconcile a Sales Shift | none | [ticket](docs/backlog/phase-07-close-and-reconcile-sales-shift.md) |
 | **08** | Recover a failed or abandoned checkout | none | [ticket](docs/backlog/phase-08-recover-failed-or-abandoned-checkout.md) |
 | **09** | Post-Shift corrections and Audit history | 07, 08 | [ticket](docs/backlog/phase-09-post-shift-corrections-and-audit.md) |
 | **10** | Recover numbered-paper outage Sales | 09 | [ticket](docs/backlog/phase-10-recover-numbered-paper-outage-sales.md) |
@@ -81,16 +81,6 @@ boundary, opening-day readiness, fiscal identity, fiscal invoice path — live i
 [`docs/backlog/open-questions.md`](docs/backlog/open-questions.md). The fiscal
 invoice path is not covered by any phase above; if the cafe needs registered
 e-invoices at opening, a phase must be added.
-
----
-
-## The largest open gap
-
-`internal/shift` exposes Open Shift, the current read, and Cash Movement, but no
-Close. A Sales Shift that has been opened stays `OPEN` permanently, and a second one
-can never be opened. The Phase 4 specification recorded this as an accepted
-consequence on the understanding that Payments and the correction work would come
-first; both have now landed. Phase 07 closes it.
 
 ---
 

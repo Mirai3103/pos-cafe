@@ -1,6 +1,8 @@
 // Package shift implements the Sales Shift vertical slice: the accountability
 // window for the cashier station's cash fund, the Cash Movements that change
-// its Expected Cash, and the read that reports both.
+// its Expected Cash, the blind reconciliation that closes the Shift, and the
+// reads that report it — redacted while OPEN, frozen while CLOSING, and
+// immutable once CLOSED.
 package shift
 
 import (
@@ -94,8 +96,10 @@ const (
 	ReasonOther             = "OTHER"
 )
 
-// MaxAmountVND is the inclusive upper bound on every Phase 4 monetary value.
-// It matches the canonical MAX_OPENING_FLOAT_VND and MAX_CASH_MOVEMENT_VND.
+// MaxAmountVND is the inclusive upper bound on every monetary value the Shift
+// slice accepts, from the Opening Float through the reconciliation attempt
+// amounts. It matches the canonical MAX_OPENING_FLOAT_VND and
+// MAX_CASH_MOVEMENT_VND.
 // BIGINT could hold more, but this is the bound the business rules are written
 // against, so it is enforced in Go and in the database.
 const MaxAmountVND int64 = 2147483647

@@ -85,16 +85,16 @@ func sendError(c echo.Context, err error) error {
 	return response.Error(c, MapHTTPError(err))
 }
 
-// handleGetCurrent returns the open Sales Shift, or null when none is open.
+// handleGetCurrent returns the active Sales Shift, or null when none is open.
 //
 //	@Summary		Current Sales Shift
-//	@Description	Returns the open Sales Shift with its Expected Cash and Cash Movements, or null when no Shift is open. expected_cash_vnd covers the Opening Float, Cash Payments, and Cash Movements. The Cash Refund term is still outstanding, because Refund is not implemented (ADR-020).
+//	@Description	Returns the active Sales Shift's state-dispatched read (spec 9.5), or null when no Shift is open. While the Shift is OPEN the response is the redacted metadata shape only (id, state, opened_at, opener): no Opening Float, Expected Cash, or derivation input crosses the boundary before the blind initial count commits. While the Shift is CLOSING the response is the Shift metadata plus its frozen reconciliation, carrying every attempt and the preview built from the latest evidence. Requires the sales_shift.operate capability.
 //	@Tags			shifts
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Success		200	{object}	response.APIResponse{data=CurrentSalesShiftResponse}
+//	@Success		200	{object}	response.APIResponse{data=CurrentShiftResponse}
 //	@Failure		401	{object}	response.APIResponse
-//	@Failure		403	{object}	response.APIResponse
+//	@Failure		403	{object}	response.APIResponse	"Requires sales_shift.operate"
 //	@Router			/shifts/current [get]
 func (s *Slices) handleGetCurrent(c echo.Context) error {
 	actor, err := getActor(c)
@@ -221,7 +221,7 @@ func (s *Slices) handleRecordCashMovement(c echo.Context) error {
 //	@Failure		401			{object}	response.APIResponse
 //	@Failure		403			{object}	response.APIResponse
 //	@Failure		404			{object}	response.APIResponse
-//	@Failure		409			{object}	response.APIResponse	SALES_SHIFT_ALREADY_CLOSING, SHIFT_UNSETTLED_CHECK, SHIFT_PENDING_REFUND, SHIFT_UNRESOLVED_CORRECTION, or SHIFT_ACTIVE_SERVICE_SESSION, in that precedence order
+//	@Failure		409			{object}	response.APIResponse	"SALES_SHIFT_ALREADY_CLOSING, SHIFT_UNSETTLED_CHECK, SHIFT_PENDING_REFUND, SHIFT_UNRESOLVED_CORRECTION, or SHIFT_ACTIVE_SERVICE_SESSION, in that precedence order"
 //	@Router			/shifts/{shift_id}/reconciliation [post]
 func (s *Slices) handleStartReconciliation(c echo.Context) error {
 	actor, err := getActor(c)
@@ -266,7 +266,7 @@ func (s *Slices) handleStartReconciliation(c echo.Context) error {
 //	@Failure		401			{object}	response.APIResponse
 //	@Failure		403			{object}	response.APIResponse
 //	@Failure		404			{object}	response.APIResponse
-//	@Failure		409			{object}	response.APIResponse	SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT
+//	@Failure		409			{object}	response.APIResponse	"SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT"
 //	@Router			/shifts/{shift_id}/reconciliation/cash-counts [post]
 func (s *Slices) handleRecordCashCount(c echo.Context) error {
 	actor, err := getActor(c)
@@ -314,7 +314,7 @@ func (s *Slices) handleRecordCashCount(c echo.Context) error {
 //	@Failure		401			{object}	response.APIResponse
 //	@Failure		403			{object}	response.APIResponse
 //	@Failure		404			{object}	response.APIResponse
-//	@Failure		409			{object}	response.APIResponse	SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT
+//	@Failure		409			{object}	response.APIResponse	"SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT"
 //	@Router			/shifts/{shift_id}/reconciliation/qr-observations [post]
 func (s *Slices) handleRecordQRObservation(c echo.Context) error {
 	actor, err := getActor(c)
@@ -406,9 +406,9 @@ func parseClosedShiftListQuery(c echo.Context) (ListClosedShiftsQuery, error) {
 //	@Param			cursor		query		string	false	"Opaque next_cursor from the previous page"
 //	@Param			limit		query		int		false	"Page size, default 50, capped at 100"
 //	@Success		200			{object}	response.APIResponse{data=ClosedShiftListResponse}
-//	@Failure		400			{object}	response.APIResponse	Missing or malformed window, a window over 31 days, a limit below one, or a malformed or mismatched cursor
+//	@Failure		400			{object}	response.APIResponse	"Missing or malformed window, a window over 31 days, a limit below one, or a malformed or mismatched cursor"
 //	@Failure		401			{object}	response.APIResponse
-//	@Failure		403			{object}	response.APIResponse	Requires audit.inspect
+//	@Failure		403			{object}	response.APIResponse	"Requires audit.inspect"
 //	@Router			/shifts [get]
 func (s *Slices) handleListClosedShifts(c echo.Context) error {
 	actor, err := getActor(c)
@@ -436,10 +436,10 @@ func (s *Slices) handleListClosedShifts(c echo.Context) error {
 //	@Security		BearerAuth
 //	@Param			shift_id	path		string	true	"Sales Shift ID"
 //	@Success		200			{object}	response.APIResponse{data=ClosedShiftDetailResponse}
-//	@Failure		400			{object}	response.APIResponse	Malformed shift_id
+//	@Failure		400			{object}	response.APIResponse	"Malformed shift_id"
 //	@Failure		401			{object}	response.APIResponse
-//	@Failure		403			{object}	response.APIResponse	Requires audit.inspect
-//	@Failure		404			{object}	response.APIResponse	Unknown Shift, or the Shift is not closed
+//	@Failure		403			{object}	response.APIResponse	"Requires audit.inspect"
+//	@Failure		404			{object}	response.APIResponse	"Unknown Shift, or the Shift is not closed"
 //	@Router			/shifts/{shift_id} [get]
 func (s *Slices) handleGetClosedShift(c echo.Context) error {
 	actor, err := getActor(c)
@@ -469,11 +469,11 @@ func (s *Slices) handleGetClosedShift(c echo.Context) error {
 //	@Param			shift_id	path		string				true	"Sales Shift ID"
 //	@Param			request		body		CloseShiftCommand	true	"Final evidence and discrepancy reasons"
 //	@Success		200			{object}	response.APIResponse{data=ClosedShiftDetailResponse}
-//	@Failure		400			{object}	response.APIResponse	Malformed body, omitted evidence id, a missing or null discrepancies array, or an invalid reason or note shape
+//	@Failure		400			{object}	response.APIResponse	"Malformed body, omitted evidence id, a missing or null discrepancies array, or an invalid reason or note shape"
 //	@Failure		401			{object}	response.APIResponse
-//	@Failure		403			{object}	response.APIResponse	Missing capability or failed Manager approval, collapsed to MANAGER_APPROVAL_UNAVAILABLE
-//	@Failure		404			{object}	response.APIResponse	Unknown Sales Shift or final attempt id
-//	@Failure		409			{object}	response.APIResponse	Lifecycle, blocker, stale evidence, source mismatch, recount/recheck, or discrepancy reason conflicts
+//	@Failure		403			{object}	response.APIResponse	"Missing capability or failed Manager approval, collapsed to MANAGER_APPROVAL_UNAVAILABLE"
+//	@Failure		404			{object}	response.APIResponse	"Unknown Sales Shift or final attempt id"
+//	@Failure		409			{object}	response.APIResponse	"Lifecycle, blocker, stale evidence, source mismatch, recount/recheck, or discrepancy reason conflicts"
 //	@Router			/shifts/{shift_id}/close [post]
 func (s *Slices) handleFinalClose(c echo.Context) error {
 	actor, err := getActor(c)
