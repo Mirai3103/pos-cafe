@@ -12,19 +12,21 @@ import (
 type Slices struct {
 	Runner *Runner
 
-	Current            *CurrentShiftHandler
-	OpenShift          *OpenShiftHandler
-	RecordCashMovement *RecordCashMovementHandler
+	Current             *CurrentShiftHandler
+	OpenShift           *OpenShiftHandler
+	RecordCashMovement  *RecordCashMovementHandler
+	StartReconciliation *StartReconciliationHandler
 }
 
 // NewSlices wires every Shift handler onto a shared Runner.
 func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 	runner := NewRunner(db, queries)
 	return &Slices{
-		Runner:             runner,
-		Current:            NewCurrentShiftHandler(runner),
-		OpenShift:          NewOpenShiftHandler(runner),
-		RecordCashMovement: NewRecordCashMovementHandler(runner),
+		Runner:              runner,
+		Current:             NewCurrentShiftHandler(runner),
+		OpenShift:           NewOpenShiftHandler(runner),
+		RecordCashMovement:  NewRecordCashMovementHandler(runner),
+		StartReconciliation: NewStartReconciliationHandler(runner),
 	}
 }
 
@@ -41,5 +43,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/shifts", s.handleOpenShift,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
 	v1.POST("/shifts/:shift_id/cash-movements", s.handleRecordCashMovement,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
+	v1.POST("/shifts/:shift_id/reconciliation", s.handleStartReconciliation,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
 }

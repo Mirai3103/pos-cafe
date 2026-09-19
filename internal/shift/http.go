@@ -51,6 +51,20 @@ func checkMoney(v *int64, field string) error {
 	return nil
 }
 
+// checkNonNegativeMoney rejects a missing or negative optional-zero money
+// field before the handler runs. Zero is meaningful for a counted Cash
+// amount, so a nil pointer must not silently become one, and a negative value
+// must be rejected rather than flowing into the transaction.
+func checkNonNegativeMoney(v *int64, field string) error {
+	if err := checkMoney(v, field); err != nil {
+		return err
+	}
+	if *v < 0 {
+		return fmt.Errorf("%w: %s cannot be negative", response.ErrInvalid, field)
+	}
+	return nil
+}
+
 func checkRequiredString(v, field string) error {
 	if v == "" {
 		return fmt.Errorf("%w: %s is required", response.ErrInvalid, field)
@@ -184,6 +198,51 @@ func (s *Slices) handleRecordCashMovement(c echo.Context) error {
 	cmd.ShiftID = shiftID
 
 	status, res, err := s.RecordCashMovement.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}
+
+// handleStartReconciliation starts a Sales Shift's blind reconciliation.
+//
+//	@Summary		Start Sales Shift reconciliation
+//	@Description	Starts the blind reconciliation of an open Sales Shift: it freezes the financial snapshot, records the submitted cash count as the blind initial count (sequence 1), and moves the Shift to CLOSING. The counted amount is submitted before any expected value is revealed. Returns the CLOSING Shift with its frozen reconciliation.
+//	@Tags			shifts
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			shift_id	path		string						true	"Sales Shift ID"
+//	@Param			request		body		StartReconciliationCommand	true	"Initial blind cash count"
+//	@Success		201			{object}	response.APIResponse{data=ClosingShiftResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse	SALES_SHIFT_ALREADY_CLOSING, SHIFT_UNSETTLED_CHECK, SHIFT_PENDING_REFUND, SHIFT_UNRESOLVED_CORRECTION, or SHIFT_ACTIVE_SERVICE_SESSION, in that precedence order
+//	@Router			/shifts/{shift_id}/reconciliation [post]
+func (s *Slices) handleStartReconciliation(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	shiftID, err := parseUUIDParam(c, "shift_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[StartReconciliationCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	if err := checkNonNegativeMoney(cmd.CountedCashVND, "counted_cash_vnd"); err != nil {
+		return sendError(c, err)
+	}
+	cmd.ShiftID = shiftID
+
+	status, res, err := s.StartReconciliation.Handle(c.Request().Context(), actor, cmd)
 	if err != nil {
 		return sendError(c, err)
 	}

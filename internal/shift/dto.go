@@ -31,6 +31,18 @@ type RecordCashMovementCommand struct {
 	ManagerPIN        string    `json:"manager_pin"`
 }
 
+// StartReconciliationCommand starts a Sales Shift's blind reconciliation with
+// the initial Cash Count.
+//
+// ShiftID comes from the route, not the body. CountedCashVND is pointer-backed
+// so an omitted field is rejected rather than silently counted as zero, which
+// is itself a valid count.
+type StartReconciliationCommand struct {
+	RequestID      uuid.UUID `json:"request_id"`
+	ShiftID        uuid.UUID `json:"-"`
+	CountedCashVND *int64    `json:"counted_cash_vnd"`
+}
+
 // StaffSummary is the only staff representation that crosses the Shift
 // boundary. It carries exactly these three fields.
 type StaffSummary struct {

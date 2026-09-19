@@ -16,17 +16,20 @@ const CapSalesShiftOperate = "sales_shift.operate"
 
 // Idempotency action names, stored in idempotency_keys.action.
 const (
-	OpOpenShift          = "shift.open_shift"
-	OpRecordCashMovement = "shift.record_cash_movement"
-	OpGetCurrentShift    = "shift.get_current_shift"
+	OpOpenShift           = "shift.open_shift"
+	OpRecordCashMovement  = "shift.record_cash_movement"
+	OpGetCurrentShift     = "shift.get_current_shift"
+	OpStartReconciliation = "shift.start_reconciliation"
 )
 
 // Audit event types. Business events are UPPER_SNAKE_CASE and the denial event
 // is lowercase dotted, matching the convention in internal/tables.
 const (
-	EventSalesShiftOpened     = "SALES_SHIFT_OPENED"
-	EventCashMovementRecorded = "CASH_MOVEMENT_RECORDED"
-	EventAuthorizationDenied  = "shift.authorization_denied"
+	EventSalesShiftOpened      = "SALES_SHIFT_OPENED"
+	EventCashMovementRecorded  = "CASH_MOVEMENT_RECORDED"
+	EventReconciliationStarted = "SHIFT_RECONCILIATION_STARTED"
+	EventCashCountRecorded     = "SHIFT_CASH_COUNT_RECORDED"
+	EventAuthorizationDenied   = "shift.authorization_denied"
 )
 
 // Sales Shift states. StateClosing marks a Shift whose reconciliation has
