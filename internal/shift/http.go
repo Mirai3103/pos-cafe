@@ -3,6 +3,8 @@ package shift
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/response"
@@ -346,6 +348,114 @@ func (s *Slices) handleRecordQRObservation(c echo.Context) error {
 		return sendError(c, err)
 	}
 	return sendResult(c, status, res)
+}
+
+// parseClosedShiftListQuery parses and validates the history list query
+// parameters (spec 9.5): both window bounds are required RFC 3339 instants,
+// the window spans at most 31 days, and the limit is a positive integer. The
+// cursor is passed through opaquely; its decode and range match are the
+// handler's job, where the normalized window is authoritative.
+func parseClosedShiftListQuery(c echo.Context) (ListClosedShiftsQuery, error) {
+	var query ListClosedShiftsQuery
+
+	closedFromRaw := c.QueryParam("closed_from")
+	if closedFromRaw == "" {
+		return query, fmt.Errorf("%w: closed_from is required", response.ErrInvalid)
+	}
+	closedToRaw := c.QueryParam("closed_to")
+	if closedToRaw == "" {
+		return query, fmt.Errorf("%w: closed_to is required", response.ErrInvalid)
+	}
+	closedFrom, err := time.Parse(time.RFC3339, closedFromRaw)
+	if err != nil {
+		return query, fmt.Errorf("%w: closed_from must be an RFC 3339 instant", response.ErrInvalid)
+	}
+	closedTo, err := time.Parse(time.RFC3339, closedToRaw)
+	if err != nil {
+		return query, fmt.Errorf("%w: closed_to must be an RFC 3339 instant", response.ErrInvalid)
+	}
+	if err := validateClosedShiftWindow(closedFrom, closedTo); err != nil {
+		return query, err
+	}
+	query.ClosedFrom = closedFrom
+	query.ClosedTo = closedTo
+
+	if raw := c.QueryParam("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			return query, fmt.Errorf("%w: limit must be a positive integer", response.ErrInvalid)
+		}
+		if limit < 1 {
+			return query, fmt.Errorf("%w: limit must be at least 1", response.ErrInvalid)
+		}
+		query.Limit = limit
+	}
+	query.Cursor = c.QueryParam("cursor")
+	return query, nil
+}
+
+// handleListClosedShifts pages through the closed Sales Shift history.
+//
+//	@Summary		List closed Sales Shifts
+//	@Description	Returns Manager-visible closed Sales Shift summaries ordered by closed_at descending (ties by id) inside a half-open [closed_from, closed_to) window of at most 31 days. Pagination is keyset: a full page returns an opaque next_cursor to pass back verbatim; the cursor is exclusive and bound to the window it was minted over. Requires the audit.inspect capability; no fresh PIN is needed.
+//	@Tags			shifts
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			closed_from	query		string	true	"Inclusive window start, RFC 3339"
+//	@Param			closed_to	query		string	true	"Exclusive window end, RFC 3339"
+//	@Param			cursor		query		string	false	"Opaque next_cursor from the previous page"
+//	@Param			limit		query		int		false	"Page size, default 50, capped at 100"
+//	@Success		200			{object}	response.APIResponse{data=ClosedShiftListResponse}
+//	@Failure		400			{object}	response.APIResponse	Missing or malformed window, a window over 31 days, a limit below one, or a malformed or mismatched cursor
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse	Requires audit.inspect
+//	@Router			/shifts [get]
+func (s *Slices) handleListClosedShifts(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	query, err := parseClosedShiftListQuery(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+
+	res, err := s.ListClosedShifts.Handle(c.Request().Context(), actor, query)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return response.OK(c, res)
+}
+
+// handleGetClosedShift returns one closed Sales Shift's immutable detail.
+//
+//	@Summary		Read a closed Sales Shift
+//	@Description	Returns one closed Sales Shift's immutable detail: the summary, the complete frozen source scalars, the reconciliation starter, every Cash Count and Manual QR observation, the discrepancy rows, and the approving Manager when the close was discrepant. Only closed Shifts are exposed: an unknown id and a Shift that is still OPEN or CLOSING both return 404. Requires the audit.inspect capability; no fresh PIN is needed.
+//	@Tags			shifts
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			shift_id	path		string	true	"Sales Shift ID"
+//	@Success		200			{object}	response.APIResponse{data=ClosedShiftDetailResponse}
+//	@Failure		400			{object}	response.APIResponse	Malformed shift_id
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse	Requires audit.inspect
+//	@Failure		404			{object}	response.APIResponse	Unknown Shift, or the Shift is not closed
+//	@Router			/shifts/{shift_id} [get]
+func (s *Slices) handleGetClosedShift(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	shiftID, err := parseUUIDParam(c, "shift_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+
+	res, err := s.GetClosedShift.Handle(c.Request().Context(), actor, shiftID)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return response.OK(c, res)
 }
 
 // handleFinalClose closes a reconciled Sales Shift.

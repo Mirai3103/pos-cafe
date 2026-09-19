@@ -14,6 +14,12 @@ import (
 // already derived for MANAGER and CASHIER by auth.DeriveCapabilities.
 const CapSalesShiftOperate = "sales_shift.operate"
 
+// CapAuditInspect is the capability closed-Shift history requires (spec 9.5,
+// ADR-052). auth.RoleCapabilities derives it for MANAGER and never for
+// CASHIER, so only Managers can browse closed history; no fresh PIN is needed
+// for a read (spec 10).
+const CapAuditInspect = "audit.inspect"
+
 // Idempotency action names, stored in idempotency_keys.action.
 const (
 	OpOpenShift            = "shift.open_shift"
@@ -24,6 +30,10 @@ const (
 	OpRecordQRObservation  = "shift.record_qr_observation"
 	OpCloseExact           = "shift.close_exact"
 	OpCloseWithDiscrepancy = "shift.close_with_discrepancy"
+	// Read-path operation names: they never reach idempotency_keys but name
+	// the operation in authorization-denial audit events (spec 13).
+	OpListClosedShifts = "shift.list_closed_shifts"
+	OpGetClosedShift   = "shift.get_closed_shift"
 )
 
 // Audit event types. Business events are UPPER_SNAKE_CASE and the denial event

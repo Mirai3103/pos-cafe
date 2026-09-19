@@ -332,6 +332,25 @@ type ClosedShiftSummaryResponse struct {
 	HasDiscrepancy bool `json:"has_discrepancy"`
 }
 
+// ListClosedShiftsQuery is one parsed history list request (spec 9.5): the
+// half-open [ClosedFrom, ClosedTo) window over closed_at, the opaque cursor
+// from the previous page (empty on the first), and the page size the HTTP
+// boundary already defaulted and clamped.
+type ListClosedShiftsQuery struct {
+	ClosedFrom time.Time
+	ClosedTo   time.Time
+	Cursor     string
+	Limit      int
+}
+
+// ClosedShiftListResponse is one history page: the summaries newest-first and
+// the opaque cursor to the next page. NextCursor is empty once the walk is
+// exhausted, and Items serializes as [] never null (spec 9.5).
+type ClosedShiftListResponse struct {
+	Items      []ClosedShiftSummaryResponse `json:"items"`
+	NextCursor string                       `json:"next_cursor"`
+}
+
 // ClosedShiftDetailResponse is one closed Shift's immutable detail: the
 // summary plus the complete frozen source scalars, the reconciliation starter,
 // every attempt, the discrepancy rows (an empty list when the close was
