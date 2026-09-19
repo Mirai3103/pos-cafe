@@ -5,6 +5,7 @@ package shift_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
@@ -230,6 +231,22 @@ func TestCashMovementAllowsManagerSelfApproval(t *testing.T) {
 	assert.Equal(t, manager.StaffID, res.Movement.Approver.ID)
 }
 
+// assertReplayReturnsStoredResponse verifies that a replayed mutation returns
+// the stored response. The comparison runs at the JSON level — the exact form
+// the executor persists — because the two structs carry the same instants in
+// different time.Locations: pgx scans OccurredAt's timestamptz as time.Local,
+// while the stored JSON decodes as UTC (a UTC-offset server re-anchors it to
+// time.Local, so a struct-level assert.Equal passes locally but rejects the
+// location alone on a UTC runner such as CI).
+func assertReplayReturnsStoredResponse(t *testing.T, first, replay shift.CashMovementResult, msg string) {
+	t.Helper()
+	firstJSON, err := json.Marshal(first)
+	require.NoError(t, err)
+	replayJSON, err := json.Marshal(replay)
+	require.NoError(t, err)
+	require.JSONEq(t, string(firstJSON), string(replayJSON), msg)
+}
+
 func TestCashMovementIsIdempotent(t *testing.T) {
 	f := newShiftFixture(t)
 	ctx := context.Background()
@@ -242,7 +259,7 @@ func TestCashMovementIsIdempotent(t *testing.T) {
 	status, replay, err := f.Movement.Handle(ctx, f.Cashier.actor(), cmd)
 	require.NoError(t, err)
 	assert.Equal(t, 201, status)
-	assert.Equal(t, first, replay, "a replay returns the stored response unchanged")
+	assertReplayReturnsStoredResponse(t, first, replay, "a replay returns the stored response unchanged")
 
 	var recorded int
 	require.NoError(t, f.DB.QueryRow(
@@ -293,7 +310,7 @@ func TestCashMovementFingerprintExcludesManagerPin(t *testing.T) {
 	status, replay, err := f.Movement.Handle(ctx, f.Cashier.actor(), cmd)
 	require.NoError(t, err)
 	assert.Equal(t, 201, status)
-	assert.Equal(t, first, replay, "a PIN-insensitive replay returns the stored response")
+	assertReplayReturnsStoredResponse(t, first, replay, "a PIN-insensitive replay returns the stored response")
 
 	var recorded int
 	require.NoError(t, f.DB.QueryRow(
