@@ -1,6 +1,8 @@
 // Package shift implements the Sales Shift vertical slice: the accountability
 // window for the cashier station's cash fund, the Cash Movements that change
-// its Expected Cash, and the read that reports both.
+// its Expected Cash, the blind reconciliation that closes the Shift, and the
+// reads that report it — redacted while OPEN, frozen while CLOSING, and
+// immutable once CLOSED.
 package shift
 
 import (
@@ -14,26 +16,70 @@ import (
 // already derived for MANAGER and CASHIER by auth.DeriveCapabilities.
 const CapSalesShiftOperate = "sales_shift.operate"
 
+// CapAuditInspect is the capability closed-Shift history requires (spec 9.5,
+// ADR-052). auth.RoleCapabilities derives it for MANAGER and never for
+// CASHIER, so only Managers can browse closed history; no fresh PIN is needed
+// for a read (spec 10).
+const CapAuditInspect = "audit.inspect"
+
 // Idempotency action names, stored in idempotency_keys.action.
 const (
-	OpOpenShift          = "shift.open_shift"
-	OpRecordCashMovement = "shift.record_cash_movement"
-	OpGetCurrentShift    = "shift.get_current_shift"
+	OpOpenShift            = "shift.open_shift"
+	OpRecordCashMovement   = "shift.record_cash_movement"
+	OpGetCurrentShift      = "shift.get_current_shift"
+	OpStartReconciliation  = "shift.start_reconciliation"
+	OpRecordCashCount      = "shift.record_cash_count"
+	OpRecordQRObservation  = "shift.record_qr_observation"
+	OpCloseExact           = "shift.close_exact"
+	OpCloseWithDiscrepancy = "shift.close_with_discrepancy"
+	// Read-path operation names: they never reach idempotency_keys but name
+	// the operation in authorization-denial audit events (spec 13).
+	OpListClosedShifts = "shift.list_closed_shifts"
+	OpGetClosedShift   = "shift.get_closed_shift"
 )
 
 // Audit event types. Business events are UPPER_SNAKE_CASE and the denial event
 // is lowercase dotted, matching the convention in internal/tables.
 const (
-	EventSalesShiftOpened     = "SALES_SHIFT_OPENED"
-	EventCashMovementRecorded = "CASH_MOVEMENT_RECORDED"
-	EventAuthorizationDenied  = "shift.authorization_denied"
+	EventSalesShiftOpened           = "SALES_SHIFT_OPENED"
+	EventCashMovementRecorded       = "CASH_MOVEMENT_RECORDED"
+	EventReconciliationStarted      = "SHIFT_RECONCILIATION_STARTED"
+	EventCashCountRecorded          = "SHIFT_CASH_COUNT_RECORDED"
+	EventQRObservationRecorded      = "SHIFT_QR_OBSERVATION_RECORDED"
+	EventShiftClosedExact           = "SHIFT_CLOSED_EXACT"
+	EventShiftClosedWithDiscrepancy = "SHIFT_CLOSED_WITH_DISCREPANCY"
+	EventAuthorizationDenied        = "shift.authorization_denied"
 )
 
-// Sales Shift states. Phase 4 produces only StateOpen; StateClosed exists in
-// the schema so Phase 5 adds a close command without a state-domain migration.
+// Sales Shift states. StateClosing marks a Shift whose reconciliation has
+// started but that has not closed yet: ordinary commands still require OPEN,
+// and no route returns a CLOSING Shift to OPEN or reopens a CLOSED one.
 const (
-	StateOpen   = "OPEN"
-	StateClosed = "CLOSED"
+	StateOpen    = "OPEN"
+	StateClosing = "CLOSING"
+	StateClosed  = "CLOSED"
+)
+
+// DiscrepancyDimension is one axis a closure difference is measured on.
+type DiscrepancyDimension string
+
+// DiscrepancyReason is one catalogued explanation for a nonzero difference.
+type DiscrepancyReason string
+
+// Reconciliation dimensions, in preview order.
+const (
+	DimensionCash             = "CASH"
+	DimensionManualQRReceived = "MANUAL_QR_RECEIVED"
+	DimensionManualQRRefunded = "MANUAL_QR_REFUNDED"
+)
+
+// Discrepancy reasons. ReasonOther is declared once with the Cash Movement
+// reasons above and shared with this catalog: the same OTHER value carries the
+// same requires-a-note rule in both.
+const (
+	ReasonCashCountDifference     = "CASH_COUNT_DIFFERENCE"
+	ReasonQRObservationDifference = "QR_OBSERVATION_DIFFERENCE"
+	ReasonUnexplained             = "UNEXPLAINED"
 )
 
 // Cash Movement methods. Direction is carried here, never by a negative amount.
@@ -50,8 +96,10 @@ const (
 	ReasonOther             = "OTHER"
 )
 
-// MaxAmountVND is the inclusive upper bound on every Phase 4 monetary value.
-// It matches the canonical MAX_OPENING_FLOAT_VND and MAX_CASH_MOVEMENT_VND.
+// MaxAmountVND is the inclusive upper bound on every monetary value the Shift
+// slice accepts, from the Opening Float through the reconciliation attempt
+// amounts. It matches the canonical MAX_OPENING_FLOAT_VND and
+// MAX_CASH_MOVEMENT_VND.
 // BIGINT could hold more, but this is the bound the business rules are written
 // against, so it is enforced in Go and in the database.
 const MaxAmountVND int64 = 2147483647
@@ -126,12 +174,82 @@ func ValidateNote(note *string, reason string) error {
 		}
 		return nil
 	}
+	return checkNoteLength(note)
+}
+
+// checkNoteLength enforces the inclusive 1..MaxNoteLength rune bound on a
+// present note. Runes, not bytes, so Go agrees with the database char_length
+// check.
+func checkNoteLength(note *string) error {
 	n := utf8.RuneCountInString(*note)
 	if n < 1 {
 		return fmt.Errorf("note cannot be empty")
 	}
 	if n > MaxNoteLength {
 		return fmt.Errorf("note is %d characters, maximum is %d", n, MaxNoteLength)
+	}
+	return nil
+}
+
+// ValidateDiscrepancyReason checks a discrepancy reason against its dimension
+// and the reason catalog's note rules.
+//
+// CASH_COUNT_DIFFERENCE is valid only for CASH and QR_OBSERVATION_DIFFERENCE
+// only for the two Manual QR dimensions; UNEXPLAINED and OTHER are valid for
+// every dimension. OTHER requires a note; every other reason forbids one. The
+// note must already be normalized (trimmed), as with ValidateNote.
+func ValidateDiscrepancyReason(dimension, reason string, note *string) error {
+	if err := validateDiscrepancyReasonShape(dimension, reason, note); err != nil {
+		return err
+	}
+
+	switch reason {
+	case ReasonCashCountDifference:
+		if dimension != DimensionCash {
+			return fmt.Errorf("reason %s is valid only for dimension %s",
+				ReasonCashCountDifference, DimensionCash)
+		}
+	case ReasonQRObservationDifference:
+		if dimension != DimensionManualQRReceived && dimension != DimensionManualQRRefunded {
+			return fmt.Errorf("reason %s is valid only for dimensions %s and %s",
+				ReasonQRObservationDifference, DimensionManualQRReceived, DimensionManualQRRefunded)
+		}
+	}
+	return nil
+}
+
+// validateDiscrepancyReasonShape checks the shape parts of one discrepancy
+// reason entry: the dimension and reason allowlists and the note rules.
+//
+// The reason-to-dimension pairing is deliberately absent here. The close
+// command's pairing depends on the server-derived differences, which do not
+// exist at the HTTP boundary: there a pairing mismatch is the stable
+// SHIFT_DISCREPANCY_REASON_UNEXPECTED conflict raised inside the transaction,
+// while an unknown dimension or reason and a malformed note are body errors
+// rejected before dispatch (spec 12).
+func validateDiscrepancyReasonShape(dimension, reason string, note *string) error {
+	switch dimension {
+	case DimensionCash, DimensionManualQRReceived, DimensionManualQRRefunded:
+	default:
+		return fmt.Errorf("dimension must be one of %s, %s, %s",
+			DimensionCash, DimensionManualQRReceived, DimensionManualQRRefunded)
+	}
+
+	switch reason {
+	case ReasonCashCountDifference, ReasonQRObservationDifference, ReasonUnexplained, ReasonOther:
+	default:
+		return fmt.Errorf("reason must be one of %s, %s, %s, %s",
+			ReasonCashCountDifference, ReasonQRObservationDifference, ReasonUnexplained, ReasonOther)
+	}
+
+	if reason == ReasonOther {
+		if note == nil {
+			return fmt.Errorf("note is required when reason is %s", ReasonOther)
+		}
+		return checkNoteLength(note)
+	}
+	if note != nil {
+		return fmt.Errorf("note is only allowed when reason is %s", ReasonOther)
 	}
 	return nil
 }
@@ -171,6 +289,14 @@ func ComputeExpectedCash(
 			ErrExpectedCashOutOfRange, total, -MaxAmountVND, MaxAmountVND)
 	}
 	return total, nil
+}
+
+// ComputeDifference returns the signed closure difference observed - expected.
+// A positive value is an excess; a negative value is a shortage. It runs
+// through the same guarded arithmetic as Expected Cash so a wrap cannot
+// masquerade as a legitimate difference.
+func ComputeDifference(observed, expected int64) (int64, error) {
+	return subtractAmount(observed, expected)
 }
 
 // addAmount and subtractAmount are the guarded arithmetic this formula runs

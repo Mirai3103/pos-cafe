@@ -1,6 +1,6 @@
 # Phase 07: Close and reconcile a Sales Shift
 
-**Status:** ready-for-design
+**Status:** completed
 **Blocked by:** none
 **Source:** cafe-pos `.scratch/opening-day-pos-v0/issues/12-close-and-reconcile-sales-shift.md`
 
@@ -49,32 +49,32 @@ snapshot.
 
 ## Acceptance criteria
 
-- [ ] Normal Shift closure is blocked by any active Service Session, unsettled
+- [x] Normal Shift closure is blocked by any active Service Session, unsettled
       Check, pending Refund, or unresolved financial correction.
-- [ ] Closing staff enter an initial blind cash count before Expected Cash is
+- [x] Closing staff enter an initial blind cash count before Expected Cash is
       revealed; recounts retain initial and final actor and time.
-- [ ] Expected Cash is derived from Opening Float plus Cash Payments and Pay Ins
+- [x] Expected Cash is derived from Opening Float plus Cash Payments and Pay Ins
       minus Cash Refunds and Pay Outs, including valid Payment Void effects.
-- [ ] Expected Manual QR receipts and refunds are shown separately after the blind
+- [x] Expected Manual QR receipts and refunds are shown separately after the blind
       cash step.
-- [ ] Closing staff enter observed Manual QR received and refunded totals, including
+- [x] Closing staff enter observed Manual QR received and refunded totals, including
       explicit zeroes, without storing screenshots or sender identity.
-- [ ] A nonzero cash or QR Shift Discrepancy triggers recount or recheck and
+- [x] A nonzero cash or QR Shift Discrepancy triggers recount or recheck and
       requires `CASH_COUNT_DIFFERENCE`, `QR_OBSERVATION_DIFFERENCE`, `UNEXPLAINED`,
       or `OTHER` plus single-action Manager Approval before closure.
-- [ ] An approved discrepancy remains visible; the product never creates balancing
+- [x] An approved discrepancy remains visible; the product never creates balancing
       Payments, Refunds, or Cash Movements automatically.
-- [ ] Closure atomically freezes opener, closer, times, Opening Float, method
+- [x] Closure atomically freezes opener, closer, times, Opening Float, method
       totals, correction totals, Expected and observed values, discrepancies,
       reasons, and acknowledgers.
-- [ ] A closed Sales Shift cannot reopen or accept current-Shift actions and remains
+- [x] A closed Sales Shift cannot reopen or accept current-Shift actions and remains
       inspectable by authorized staff.
-- [ ] Opening a new Sales Shift after closure succeeds, restoring the operating
+- [x] Opening a new Sales Shift after closure succeeds, restoring the operating
       cycle the Phase 4 specification deferred.
-- [ ] Integration tests cover exact closure, every blocker, recount, QR comparison,
+- [x] Integration tests cover exact closure, every blocker, recount, QR comparison,
       discrepancy approval, immutable snapshots, and concurrent closure attempts.
 - [ ] Basic UI covers the blind-count step, the reveal, discrepancy approval, and
-      the closed-Shift summary. (Phase 11 — UI)
+      the closed-Shift summary. (Phase 11 — UI; deferred, the UI phase owns it)
 
 ## Design notes carried from the source
 

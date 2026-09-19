@@ -41,7 +41,7 @@ func (h *StartTakeawaySessionHandler) Handle(ctx context.Context, actor Actor,
 
 	return ExecuteMutation(ctx, h.runner, actor, spec,
 		func(mc MutationContext) (int, ServiceSessionResponse, AuditRecord, error) {
-			shiftID, err := requireOpenSalesShift(ctx, mc.Queries)
+			shiftID, err := lockOpenSalesShiftForStart(ctx, mc.Queries)
 			if err != nil {
 				return 0, ServiceSessionResponse{}, AuditRecord{}, err
 			}
@@ -124,7 +124,7 @@ func (h *StartDineInSessionHandler) Handle(ctx context.Context, actor Actor,
 		func(mc MutationContext) (int, ServiceSessionResponse, AuditRecord, error) {
 			var zero ServiceSessionResponse
 
-			shiftID, err := requireOpenSalesShift(ctx, mc.Queries)
+			shiftID, err := lockOpenSalesShiftForStart(ctx, mc.Queries)
 			if err != nil {
 				return 0, zero, AuditRecord{}, err
 			}

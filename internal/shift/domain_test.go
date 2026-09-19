@@ -129,6 +129,97 @@ func TestComputeExpectedCashRejectsTotalsOutsideTheBound(t *testing.T) {
 	require.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
 }
 
+func TestValidateDiscrepancyReason(t *testing.T) {
+	// The discrepancy reason catalog (spec section 2): CASH_COUNT_DIFFERENCE
+	// is valid only for CASH, QR_OBSERVATION_DIFFERENCE only for the two
+	// Manual QR dimensions, UNEXPLAINED and OTHER for every dimension. OTHER
+	// requires a note; every other reason forbids one.
+	cases := []struct {
+		name      string
+		dimension string
+		reason    string
+		note      *string
+		wantErr   bool
+	}{
+		{name: "cash count difference on cash",
+			dimension: shift.DimensionCash, reason: shift.ReasonCashCountDifference},
+		{name: "cash count difference on QR received is cross-dimension",
+			dimension: shift.DimensionManualQRReceived, reason: shift.ReasonCashCountDifference, wantErr: true},
+		{name: "cash count difference on QR refunded is cross-dimension",
+			dimension: shift.DimensionManualQRRefunded, reason: shift.ReasonCashCountDifference, wantErr: true},
+		{name: "QR observation difference on QR received",
+			dimension: shift.DimensionManualQRReceived, reason: shift.ReasonQRObservationDifference},
+		{name: "QR observation difference on QR refunded",
+			dimension: shift.DimensionManualQRRefunded, reason: shift.ReasonQRObservationDifference},
+		{name: "QR observation difference on cash is cross-dimension",
+			dimension: shift.DimensionCash, reason: shift.ReasonQRObservationDifference, wantErr: true},
+		{name: "unexplained is valid on every dimension",
+			dimension: shift.DimensionCash, reason: shift.ReasonUnexplained},
+		{name: "unexplained is valid on the second QR dimension",
+			dimension: shift.DimensionManualQRRefunded, reason: shift.ReasonUnexplained},
+		{name: "other with trimmed note",
+			dimension: shift.DimensionCash, reason: shift.ReasonOther, note: strPtr("drawer seal broken")},
+		{name: "other without note",
+			dimension: shift.DimensionCash, reason: shift.ReasonOther, wantErr: true},
+		{name: "non-other reason with a note",
+			dimension: shift.DimensionCash, reason: shift.ReasonCashCountDifference,
+			note: strPtr("spilled during the count"), wantErr: true},
+		{name: "unexplained with a note",
+			dimension: shift.DimensionManualQRReceived, reason: shift.ReasonUnexplained,
+			note: strPtr("recounted twice"), wantErr: true},
+		{name: "unknown reason",
+			dimension: shift.DimensionCash, reason: "MYSTERY", wantErr: true},
+		{name: "unknown dimension",
+			dimension: "BAGS", reason: shift.ReasonUnexplained, wantErr: true},
+		{name: "other note at the length limit",
+			dimension: shift.DimensionManualQRRefunded, reason: shift.ReasonOther,
+			note: strPtr(strings.Repeat("n", shift.MaxNoteLength))},
+		{name: "other note over the length limit",
+			dimension: shift.DimensionManualQRRefunded, reason: shift.ReasonOther,
+			note: strPtr(strings.Repeat("n", shift.MaxNoteLength+1)), wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := shift.ValidateDiscrepancyReason(tc.dimension, tc.reason, tc.note)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestComputeDifference(t *testing.T) {
+	// Difference is always observed - expected: a positive value is an excess,
+	// a negative value a shortage (spec section 2).
+	got, err := shift.ComputeDifference(100_000, 100_000)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), got, "an exact count has no difference")
+
+	got, err = shift.ComputeDifference(110_000, 100_000)
+	require.NoError(t, err)
+	assert.Equal(t, int64(10_000), got, "an excess is positive")
+
+	got, err = shift.ComputeDifference(90_000, 100_000)
+	require.NoError(t, err)
+	assert.Equal(t, int64(-10_000), got, "a shortage is negative")
+
+	// observed - expected == MinInt64 - 1 wraps silently, so the guard must
+	// reject it before the wrapped value can masquerade as a difference.
+	_, err = shift.ComputeDifference(math.MinInt64, 1)
+	require.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
+
+	// The mirror edge wraps in the other direction.
+	_, err = shift.ComputeDifference(math.MaxInt64, -1)
+	require.ErrorIs(t, err, shift.ErrExpectedCashOutOfRange)
+
+	// The extreme in-range difference is representable and accepted.
+	got, err = shift.ComputeDifference(math.MaxInt64, 0)
+	require.NoError(t, err)
+	assert.Equal(t, int64(math.MaxInt64), got)
+}
+
 func TestComputeExpectedCashGuardsEveryArithmeticEdge(t *testing.T) {
 	// Go int64 arithmetic wraps silently, so the guards must reject a wrapped
 	// intermediate before the final bound check can be fooled by it.

@@ -12,19 +12,31 @@ import (
 type Slices struct {
 	Runner *Runner
 
-	Current            *CurrentShiftHandler
-	OpenShift          *OpenShiftHandler
-	RecordCashMovement *RecordCashMovementHandler
+	Current             *CurrentShiftHandler
+	OpenShift           *OpenShiftHandler
+	RecordCashMovement  *RecordCashMovementHandler
+	StartReconciliation *StartReconciliationHandler
+	RecordCashCount     *RecordCashCountHandler
+	RecordQRObservation *RecordQRObservationHandler
+	Close               *CloseShiftHandler
+	ListClosedShifts    *ListClosedShiftsHandler
+	GetClosedShift      *GetClosedShiftHandler
 }
 
 // NewSlices wires every Shift handler onto a shared Runner.
 func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 	runner := NewRunner(db, queries)
 	return &Slices{
-		Runner:             runner,
-		Current:            NewCurrentShiftHandler(runner),
-		OpenShift:          NewOpenShiftHandler(runner),
-		RecordCashMovement: NewRecordCashMovementHandler(runner),
+		Runner:              runner,
+		Current:             NewCurrentShiftHandler(runner),
+		OpenShift:           NewOpenShiftHandler(runner),
+		RecordCashMovement:  NewRecordCashMovementHandler(runner),
+		StartReconciliation: NewStartReconciliationHandler(runner),
+		RecordCashCount:     NewRecordCashCountHandler(runner),
+		RecordQRObservation: NewRecordQRObservationHandler(runner),
+		Close:               NewCloseShiftHandler(runner),
+		ListClosedShifts:    NewListClosedShiftsHandler(runner),
+		GetClosedShift:      NewGetClosedShiftHandler(runner),
 	}
 }
 
@@ -38,8 +50,26 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.GET("/shifts/current", s.handleGetCurrent,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
+	// The history reads require audit.inspect (ADR-052): only Managers hold
+	// it, so a Cashier can still receive the close response of the Shift they
+	// closed but cannot browse history. The list is registered before the
+	// detail route so /shifts/current keeps matching its static segment; echo
+	// ranks static segments above params either way, which the history HTTP
+	// test pins by hitting all three shapes.
+	v1.GET("/shifts", s.handleListClosedShifts,
+		authn.RequireAuth(), authn.RequireCapability(CapAuditInspect))
+	v1.GET("/shifts/:shift_id", s.handleGetClosedShift,
+		authn.RequireAuth(), authn.RequireCapability(CapAuditInspect))
 	v1.POST("/shifts", s.handleOpenShift,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
 	v1.POST("/shifts/:shift_id/cash-movements", s.handleRecordCashMovement,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
+	v1.POST("/shifts/:shift_id/reconciliation", s.handleStartReconciliation,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
+	v1.POST("/shifts/:shift_id/reconciliation/cash-counts", s.handleRecordCashCount,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
+	v1.POST("/shifts/:shift_id/reconciliation/qr-observations", s.handleRecordQRObservation,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
+	v1.POST("/shifts/:shift_id/close", s.handleFinalClose,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
 }

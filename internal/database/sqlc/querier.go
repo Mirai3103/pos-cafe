@@ -76,6 +76,13 @@ type Querier interface {
 	// never matches itself. A separate query rather than a nullable exclusion
 	// parameter keeps the add path's query untouched.
 	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
+	// The one active Shift (OPEN or CLOSING) for the current-Shift read. The
+	// active-Shift unique index permits at most one row in either state; the
+	// ordering and limit keep the query one-row by construction, matching
+	// GetOpenSalesShift's shape. The state is returned rather than filtered so the
+	// reader dispatches on it: OPEN projects the redacted shape, CLOSING the
+	// frozen reconciliation (spec 9.5).
+	GetActiveSalesShift(ctx context.Context) (GetActiveSalesShiftRow, error)
 	// Non-locking resolution for CHANGE. Returns no row when the replacement Order
 	// does not exist at all; the three boolean columns let the handler reject a
 	// cross-Session, source, or not-later Order with one typed error.
@@ -86,14 +93,39 @@ type Querier interface {
 	GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error)
 	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
+	// One closed Shift's immutable detail aggregate, keyed by the Shift id the
+	// history route exposes. An open or closing Shift id finds no row here. The
+	// closure repeats every frozen scalar, so the detail never recalculates the
+	// reconciliation; the caller reads the attempt ledgers and the discrepancy
+	// rows through their own queries.
+	GetClosedShiftDetail(ctx context.Context, salesShiftID uuid.UUID) (GetClosedShiftDetailRow, error)
 	GetCompletedSale(ctx context.Context, id uuid.UUID) (GetCompletedSaleRow, error)
 	GetEditableDraft(ctx context.Context, serviceSessionID uuid.UUID) (GetEditableDraftRow, error)
+	// Every closure blocker for the whole cafe in one row (spec 8), so Go chooses
+	// the first public error by precedence without a race between separate reads.
+	// Deliberately distinct from GetShiftReconciliationTotals: no Shift filter.
+	// The unresolved-correction amount is defined independently of Shift
+	// attribution: for every Check carrying any LIVE_CHECK Charge Adjustment it
+	// sums greatest(valid non-voided Payments - completed live Refunds
+	// - (base Charge Allocations - all LIVE_CHECK adjustments on that Check), 0),
+	// plus, for every POST_SALE Charge Adjustment, greatest(its amount - its
+	// completed Refund allocations, 0). It reuses GetShiftReconciliationTotals'
+	// conventions: valid Payments exclude voided ones, completed live Refunds are
+	// completed Refunds without a Completed Sale, and base charge comes from the
+	// Charge Allocations' frozen unit prices.
+	GetGlobalShiftClosureBlockers(ctx context.Context) (GetGlobalShiftClosureBlockersRow, error)
 	// Includes released assignments, so a released sequence number is never
 	// reused and the audit trail stays unambiguous.
 	GetHighestAssignmentSequence(ctx context.Context, serviceSessionID uuid.UUID) (int32, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	// -- Shared idempotency (ADR-005) --
 	GetIdempotencyRecord(ctx context.Context, arg GetIdempotencyRecordParams) (IdempotencyKey, error)
+	// The final attempt of each ledger in one read. The QR side is nullable
+	// because a reconciliation may not have an observation yet; the Cash side is
+	// never empty while a reconciliation exists, because Start inserts sequence 1.
+	// sqlc's analyzer calls the bare reconciliation_id reference ambiguous across
+	// the two CTEs, so each WHERE spells its table name out.
+	GetLatestReconciliationEvidence(ctx context.Context, reconciliationID uuid.UUID) (GetLatestReconciliationEvidenceRow, error)
 	GetMenuCategoryByID(ctx context.Context, id uuid.UUID) (MenuCategory, error)
 	GetMenuCategoryForUpdate(ctx context.Context, id uuid.UUID) (MenuCategory, error)
 	GetMenuItemByID(ctx context.Context, id uuid.UUID) (MenuItem, error)
@@ -111,7 +143,15 @@ type Querier interface {
 	// Without it two concurrent opens read the same maximum and one loses to the
 	// unique index.
 	GetNextServiceSequence(ctx context.Context, salesShiftID uuid.UUID) (int32, error)
-	GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, error)
+	// The next append-only Cash Count sequence. The caller holds the target
+	// Shift's row FOR UPDATE, so the blind initial count and every recount are
+	// serialized through it and two appends can never claim one sequence.
+	GetNextShiftCashCountSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error)
+	// The next append-only QR Observation sequence, read under the same Shift row
+	// lock as GetNextShiftCashCountSequence. The two ledgers count independently:
+	// a recount never advances this sequence, and a recheck never advances the
+	// Cash one.
+	GetNextShiftQRObservationSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error)
 	// Single-table so the row lock is unambiguous; the opener is fetched separately
 	// with GetStaffSummary.
 	GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) (GetOpenSalesShiftForUpdateRow, error)
@@ -129,6 +169,9 @@ type Querier interface {
 	GetPreparationCheckFinancials(ctx context.Context, id uuid.UUID) (GetPreparationCheckFinancialsRow, error)
 	GetPreparationCurrentTime(ctx context.Context) (time.Time, error)
 	GetPreparationUnit(ctx context.Context, id uuid.UUID) (PreparationUnit, error)
+	// The frozen per-Shift reconciliation, read back for the CLOSING response and
+	// re-verified against fresh totals at Final Close.
+	GetReconciliationSnapshot(ctx context.Context, salesShiftID uuid.UUID) (ShiftReconciliation, error)
 	GetSalesOccurredAt(ctx context.Context) (time.Time, error)
 	// Queries for internal/sales (Phase 5A).
 	//
@@ -247,6 +290,26 @@ type Querier interface {
 	InsertRefundPaymentAllocations(ctx context.Context, arg InsertRefundPaymentAllocationsParams) error
 	InsertSalesComp(ctx context.Context, arg InsertSalesCompParams) (SalesComp, error)
 	InsertServiceSession(ctx context.Context, arg InsertServiceSessionParams) (InsertServiceSessionRow, error)
+	// One append-only Cash Count attempt; counted_at comes from the database
+	// clock and is returned with the id.
+	InsertShiftCashCount(ctx context.Context, arg InsertShiftCashCountParams) (InsertShiftCashCountRow, error)
+	// The immutable closure aggregate. opened_at repeats the Shift's immutable
+	// fact; closed_at comes from the database clock and is returned with the id.
+	InsertShiftClosure(ctx context.Context, arg InsertShiftClosureParams) (InsertShiftClosureRow, error)
+	// The close command's whole discrepancy set in one statement: one row per
+	// nonzero closure dimension, at most three, so the rows and the closure commit
+	// together. Notes arrive as a plain text array because a database/sql array
+	// parameter cannot carry NULL elements: an empty string means no note, and
+	// NULLIF(btrim(note), '') turns it into SQL NULL before the reason/note
+	// checks see it.
+	InsertShiftDiscrepancies(ctx context.Context, arg InsertShiftDiscrepanciesParams) error
+	// One append-only Manual QR observation attempt; both observed values are
+	// explicit, including zero.
+	InsertShiftQRObservation(ctx context.Context, arg InsertShiftQRObservationParams) (InsertShiftQRObservationRow, error)
+	// The immutable per-Shift snapshot. The three blocker-evidence columns are
+	// omitted: reconciliation may only start when every global blocker is clear,
+	// so they are born at their CHECK-enforced zero.
+	InsertShiftReconciliation(ctx context.Context, arg InsertShiftReconciliationParams) (InsertShiftReconciliationRow, error)
 	// Batches assignTables' per-Table insert loop into one round trip. Two
 	// single-array unnests joined by WITH ORDINALITY zip table_ids and sequences
 	// into rows in lockstep, so row i of the result is table_ids[i] assigned at
@@ -296,7 +359,6 @@ type Querier interface {
 	// carries CommittedItemIds rather than a positional Column2.
 	ListAllocationsForItems(ctx context.Context, arg ListAllocationsForItemsParams) ([]ListAllocationsForItemsRow, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
-	ListCashMovements(ctx context.Context, salesShiftID uuid.UUID) ([]ListCashMovementsRow, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	ListCheckAllocationQuantities(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationQuantitiesRow, error)
 	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
@@ -314,6 +376,11 @@ type Querier interface {
 	// Post-sale Refunds are excluded; they are read through
 	// ListCompletedSalePostSaleCorrections.
 	ListCheckRefunds(ctx context.Context, checkID uuid.UUID) ([]ListCheckRefundsRow, error)
+	// Closed-Shift history, ordered by (closed_at DESC, id DESC) per the history
+	// index. The window is [closed_from, closed_to). The exclusive cursor is the
+	// last (closed_at, id) of the previous page; the caller passes both cursor
+	// values or neither and validates that pairing.
+	ListClosedShiftSummaries(ctx context.Context, arg ListClosedShiftSummariesParams) ([]ListClosedShiftSummariesRow, error)
 	ListCommittedItemModifiers(ctx context.Context, committedItemIds []uuid.UUID) ([]ListCommittedItemModifiersRow, error)
 	ListCommittedItemsForSubmission(ctx context.Context, orderDraftID uuid.UUID) ([]ListCommittedItemsForSubmissionRow, error)
 	// Additive post-sale correction history for one Completed Sale: every
@@ -421,9 +488,12 @@ type Querier interface {
 	// projections. priority and remake_of_preparation_unit_id carry the Phase 6B
 	// Remake metadata; original units are STANDARD with a null link.
 	ListSessionPreparationUnits(ctx context.Context, serviceSessionID uuid.UUID) ([]ListSessionPreparationUnitsRow, error)
-	// The Shift response's Refund summaries ordered by (created_at, id), each
-	// carrying derived completion state and no credentials.
-	ListShiftRefunds(ctx context.Context, salesShiftID uuid.UUID) ([]ListShiftRefundsRow, error)
+	// One reconciliation's append-only Cash Counts, oldest first.
+	ListShiftCashCounts(ctx context.Context, reconciliationID uuid.UUID) ([]ListShiftCashCountsRow, error)
+	// One closure's nonzero discrepancy rows; exact dimensions have no row.
+	ListShiftClosureDiscrepancies(ctx context.Context, shiftClosureID uuid.UUID) ([]ShiftDiscrepancy, error)
+	// One reconciliation's append-only QR Observations, oldest first.
+	ListShiftQRObservations(ctx context.Context, reconciliationID uuid.UUID) ([]ListShiftQRObservationsRow, error)
 	// The `submitted` flag on a Charge Allocation is derived, not stored: there is
 	// no submitted column anywhere in the schema, and therefore no flag that can
 	// fall out of step with the Order that defines it.
@@ -517,9 +587,10 @@ type Querier interface {
 	// closure takes FOR UPDATE and stays excluded for the whole transaction. No
 	// row means no Shift is open.
 	LockOpenSalesShiftForCancellation(ctx context.Context) (LockOpenSalesShiftForCancellationRow, error)
-	// The Sales Shift open right now, locked FOR SHARE. Only one Shift can be open
-	// at a time, enforced by sales_shift_only_one_open_unique, so no ordering or
-	// disambiguation is needed.
+	// The Sales Shift open right now, locked FOR SHARE. Only one Shift can be
+	// active (OPEN or CLOSING) at a time, enforced by
+	// sales_shift_only_one_active_unique, so no ordering or disambiguation is
+	// needed.
 	//
 	// Read from sales_shifts rather than through the Check's Session. The Shift in
 	// which money reached the cashier is an independent fact — a Session opened in
@@ -579,6 +650,18 @@ type Querier interface {
 	// Locks one Refund for Manual QR confirmation, after its Check, Session, and
 	// Shift are locked, and returns the completion evidence that decides replay.
 	LockRefundForConfirmation(ctx context.Context, id uuid.UUID) (LockRefundForConfirmationRow, error)
+	// -- Phase 7: Shift Closure & Reconciliation --
+	//
+	// Reconciliation freezes the Shift's financial facts once per Shift; Cash
+	// Counts and QR Observations append to per-reconciliation attempt ledgers;
+	// the closure repeats the frozen scalars. Reads join staff_identities for
+	// display names, which stay identity projection labels, never copied facts.
+	// The Shift row FOR UPDATE shared by Start Reconciliation, the attempt
+	// commands, and Final Close (spec 11.1). The state is returned rather than
+	// filtered so an unknown Shift, an OPEN Shift, a CLOSING one, and a CLOSED one
+	// map to their own errors instead of collapsing into one missing row; the
+	// caller branches on it.
+	LockSalesShiftForReconciliation(ctx context.Context, id uuid.UUID) (SalesShift, error)
 	LockServiceSessionForClosure(ctx context.Context, id uuid.UUID) (LockServiceSessionForClosureRow, error)
 	// The Submit source's Service Session, locked first. The state is returned
 	// rather than filtered so an unknown Session and a closed one map to their own
@@ -711,6 +794,10 @@ type Querier interface {
 	SumCheckAllocatedCharge(ctx context.Context, checkID uuid.UUID) (int64, error)
 	SumCheckPayments(ctx context.Context, checkID uuid.UUID) (int64, error)
 	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	TransitionSalesShiftToClosed(ctx context.Context, id uuid.UUID) error
+	// The caller locks the Shift with LockSalesShiftForReconciliation and verifies
+	// the OPEN state first, so no guard is repeated here.
+	TransitionSalesShiftToClosing(ctx context.Context, id uuid.UUID) error
 	// Writes the denormalized live charge after one Cancellation batch plans all
 	// of its adjustments. The invariant is stored charge = base charge - live
 	// adjustments; POST_SALE adjustments are excluded.

@@ -28,10 +28,11 @@ func NewOpenShiftHandler(runner *Runner) *OpenShiftHandler {
 
 // Handle opens a Sales Shift with a counted Opening Float.
 //
-// At most one Sales Shift may be OPEN across the whole system. The partial
-// unique index sales_shift_only_one_open_unique is the sole authority for that
-// invariant: a second open receives SALES_SHIFT_ALREADY_OPEN rather than a
-// generic 500, and two truly concurrent opens resolve to exactly one success.
+// At most one Sales Shift may be OPEN or CLOSING across the whole system. The
+// partial unique index sales_shift_only_one_active_unique is the sole
+// authority for that invariant: a second open receives SALES_SHIFT_ALREADY_OPEN
+// rather than a generic 500, and two truly concurrent opens resolve to exactly
+// one success.
 func (h *OpenShiftHandler) Handle(ctx context.Context, actor Actor, cmd OpenShiftCommand) (int, SalesShiftResponse, error) {
 	if cmd.OpeningFloatVND == nil {
 		return 0, SalesShiftResponse{}, fmt.Errorf("%w: opening_float_vnd is required", response.ErrInvalid)
