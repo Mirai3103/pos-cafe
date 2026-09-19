@@ -665,6 +665,46 @@ func TestCloseShift(t *testing.T) {
 		requireShiftClosureCounts(t, f, 1, 1)
 	})
 
+	t.Run("request conflict on a reused id", func(t *testing.T) {
+		f := newShiftFixture(t)
+		startRequestID := uuid.New()
+		_, start, err := shift.NewStartReconciliationHandler(f.Runner).Handle(
+			ctx, f.Cashier.actor(), f.startCommand(500_000, startRequestID))
+		require.NoError(t, err)
+		observation := appendQRObservation(t, f, 0, 0)
+		closes := shift.NewCloseShiftHandler(f.Runner)
+		initial := start.Reconciliation.CashCounts[0]
+
+		// A request id already consumed by another operation (the start) is a
+		// conflict for the close, whatever the fingerprint (spec 10).
+		_, _, err = closes.Handle(ctx, f.Cashier.actor(),
+			f.closeCommand(startRequestID, initial.ID, observation.ID, []shift.CloseDiscrepancyInput{}, "", ""))
+		require.Error(t, err)
+		requireCodedError(t, err, 409, "REQUEST_CONFLICT")
+		assert.ErrorIs(t, err, shift.ErrRequestConflict)
+
+		// The same is true for a request id this close command itself
+		// consumed with a different fingerprint: the replay comparison happens
+		// before any state check, so a changed command shape cannot slip
+		// through as a second close.
+		replayRequestID := uuid.New()
+		_, _, err = closes.Handle(ctx, f.Cashier.actor(),
+			f.closeCommand(replayRequestID, initial.ID, observation.ID, []shift.CloseDiscrepancyInput{}, "", ""))
+		require.NoError(t, err)
+
+		_, _, err = closes.Handle(ctx, f.Cashier.actor(),
+			f.closeCommand(replayRequestID, initial.ID, observation.ID,
+				[]shift.CloseDiscrepancyInput{reasonInput(shift.DimensionCash, shift.ReasonUnexplained)},
+				f.Manager.LoginCode, f.Manager.Pin))
+		require.Error(t, err)
+		requireCodedError(t, err, 409, "REQUEST_CONFLICT")
+		assert.ErrorIs(t, err, shift.ErrRequestConflict)
+
+		// The conflicting attempts wrote no second closure: the exact close
+		// that consumed replayRequestID stands alone.
+		requireShiftClosureCounts(t, f, 1, 0)
+	})
+
 	t.Run("second independent close", func(t *testing.T) {
 		f := newShiftFixture(t)
 		cashID, qrID := shortageEvidence(t, f)

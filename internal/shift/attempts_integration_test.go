@@ -581,4 +581,26 @@ func TestShiftHTTPRecordCashCountHappyPath(t *testing.T) {
 		assert.JSONEq(t, "499000", string(count["counted_cash_vnd"]))
 		assert.JSONEq(t, "2", string(count["sequence"]))
 	})
+
+	t.Run("appends an explicit zero recount", func(t *testing.T) {
+		// JSON 0 is a present, meaningful count — an empty drawer — and must
+		// be distinguished from an omitted field (spec 7.2): the boundary
+		// accepts it and the sequence advances.
+		body, _ := json.Marshal(map[string]any{"request_id": uuid.New(), "counted_cash_vnd": 0})
+		rec := doRequest(t, e, http.MethodPost,
+			"/api/v1/shifts/"+shiftID+"/reconciliation/cash-counts", token, body)
+		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+
+		var env envelope
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+		require.True(t, env.Success)
+
+		var data map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(env.Data, &data))
+		var count map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(data["cash_count"], &count))
+		assert.JSONEq(t, "0", string(count["counted_cash_vnd"]),
+			"an explicit zero is stored, not defaulted")
+		assert.JSONEq(t, "3", string(count["sequence"]))
+	})
 }

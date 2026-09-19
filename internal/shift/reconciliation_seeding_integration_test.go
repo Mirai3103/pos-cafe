@@ -45,30 +45,6 @@ func seedActiveServiceSession(t *testing.T, db *sql.DB, shiftID, actorID uuid.UU
 	return sessionID
 }
 
-// seedShiftEnvCheck inserts one ACTIVE Service Session plus one OPEN Check
-// with direct SQL and returns the Check's id. The Session is created against
-// the named Sales Shift, which service_sessions.sales_shift_id (NOT NULL since
-// Phase 5A) requires. This is exactly the unsettled-Check blocker shape.
-func seedShiftEnvCheck(t *testing.T, db *sql.DB, shiftID, actorID uuid.UUID) uuid.UUID {
-	t.Helper()
-
-	var sessionID uuid.UUID
-	require.NoError(t, db.QueryRow(
-		`INSERT INTO service_sessions (service_number, sequence, sales_shift_id, created_by_staff_identity_id)
-		 VALUES ($1,
-		         (SELECT COALESCE(MAX(sequence), 0) + 1
-		          FROM service_sessions WHERE sales_shift_id = $2),
-		         $2, $3)
-		 RETURNING id`,
-		testServiceNumber(), shiftID, actorID).Scan(&sessionID))
-
-	var checkID uuid.UUID
-	require.NoError(t, db.QueryRow(
-		`INSERT INTO checks (service_session_id) VALUES ($1) RETURNING id`,
-		sessionID).Scan(&checkID))
-	return checkID
-}
-
 // seedSettledCheck inserts one CLOSED Service Session carrying one SETTLED
 // Check (with the four settlement-evidence columns the
 // check_settlement_evidence_valid constraint demands) and returns the Check's
