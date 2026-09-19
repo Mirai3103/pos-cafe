@@ -6237,7 +6237,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Records a Pay In or Pay Out against an open Sales Shift. Requires inline approval by an enabled Manager, who authenticates with their own login code and PIN. Returns the resulting Expected Cash.",
+                "description": "Records a Pay In or Pay Out against an open Sales Shift. Requires inline approval by an enabled Manager, who authenticates with their own login code and PIN. The response carries the recorded movement only: while the Shift is OPEN, no Expected Cash or derivation total crosses the boundary (spec 9.5).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6368,7 +6368,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Malformed body, omitted evidence id, a missing or null discrepancies array, or an invalid reason or note shape",
+                        "description": "Malformed body, omitted evidence id, a missing or null discrepancies array, an omitted approval pair for a discrepant close, or an invalid reason or note shape",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }

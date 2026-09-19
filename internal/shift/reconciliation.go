@@ -394,6 +394,14 @@ func loadReconciliationSnapshot(ctx context.Context, q *sqlc.Queries, shiftID uu
 // when its latest evidence disagrees with the frozen expectation, and the
 // Shift can close exactly only when every dimension is exact and a QR
 // observation exists (spec 5.4, 7).
+//
+// Its ComputeDifference failures carry no calculation-failed sentinel wrap,
+// unlike the start path: this preview is built only after the reveal, both
+// sides of each comparison are already bounded (the frozen expectations were
+// range-checked at start and attempt amounts carry database CHECK bounds), and
+// MaxAmountVND keeps the subtraction far from int64 wrap. An error here is
+// therefore corrupt state that surfaces as the generic 500, not a secrecy
+// boundary.
 func buildReconciliationPreview(expectedCashVND, expectedQRReceivedVND, expectedQRRefundedVND int64,
 	evidence sqlc.GetLatestReconciliationEvidenceRow,
 ) (ReconciliationPreview, error) {

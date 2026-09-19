@@ -419,7 +419,9 @@ func TestCloseShift(t *testing.T) {
 		closes := shift.NewCloseShiftHandler(f.Runner)
 
 		// A discrepant close without the approval pair is a failed Manager
-		// approval: 403, collapsed, and nothing persisted (spec 10, 12).
+		// approval at the command level: 403, collapsed, and nothing persisted
+		// (spec 10, 12). The HTTP boundary rejects the omission earlier with a
+		// 400 (spec 9.4); a domain caller without the pair is denied here.
 		_, _, err := closes.Handle(ctx, f.Cashier.actor(),
 			f.closeCommand(uuid.New(), cashID, qrID,
 				[]shift.CloseDiscrepancyInput{reasonInput(shift.DimensionCash, shift.ReasonUnexplained)},
@@ -881,6 +883,29 @@ func TestCloseShiftHTTP(t *testing.T) {
 					"final_qr_observation_id": qrID,
 					"discrepancies":           []any{map[string]any{"dimension": "CASH", "reason": "UNEXPLAINED"}},
 					"approver_login_code":     managerCode, "manager_pin": "abc",
+				},
+			},
+			{
+				name: "approval pair omitted",
+				body: map[string]any{"request_id": uuid.New(), "final_cash_count_id": cashID,
+					"final_qr_observation_id": qrID,
+					"discrepancies":           []any{map[string]any{"dimension": "CASH", "reason": "UNEXPLAINED"}},
+				},
+			},
+			{
+				name: "manager_pin omitted",
+				body: map[string]any{"request_id": uuid.New(), "final_cash_count_id": cashID,
+					"final_qr_observation_id": qrID,
+					"discrepancies":           []any{map[string]any{"dimension": "CASH", "reason": "UNEXPLAINED"}},
+					"approver_login_code":     managerCode,
+				},
+			},
+			{
+				name: "approver_login_code omitted",
+				body: map[string]any{"request_id": uuid.New(), "final_cash_count_id": cashID,
+					"final_qr_observation_id": qrID,
+					"discrepancies":           []any{map[string]any{"dimension": "CASH", "reason": "UNEXPLAINED"}},
+					"manager_pin":             "8642",
 				},
 			},
 		}

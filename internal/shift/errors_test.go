@@ -67,7 +67,6 @@ func TestMapHTTPErrorStatusesAndCodes(t *testing.T) {
 		{shift.ErrActiveServiceSession, http.StatusConflict, "SHIFT_ACTIVE_SERVICE_SESSION"},
 		{shift.ErrManagerApprovalUnavailable, http.StatusForbidden, "MANAGER_APPROVAL_UNAVAILABLE"},
 		{shift.ErrRequestConflict, http.StatusConflict, "REQUEST_CONFLICT"},
-		{shift.ErrExpectedCashOutOfRange, http.StatusBadRequest, "EXPECTED_CASH_OUT_OF_RANGE"},
 		{shift.ErrForbidden, http.StatusForbidden, "FORBIDDEN"},
 		{shift.ErrUnauthorized, http.StatusUnauthorized, "UNAUTHORIZED"},
 		{shift.ErrInvalidStoredResult, http.StatusInternalServerError, "INVALID_STORED_RESULT"},

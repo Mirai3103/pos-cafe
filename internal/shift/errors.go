@@ -56,10 +56,16 @@ var (
 	ErrReconciliationAttemptNotFound = errors.New("shift reconciliation attempt not found")
 	ErrManagerApprovalUnavailable    = errors.New("manager approval unavailable")
 	ErrRequestConflict               = errors.New("request conflict")
-	ErrExpectedCashOutOfRange        = errors.New("expected cash out of range")
-	ErrForbidden                     = errors.New("forbidden")
-	ErrUnauthorized                  = errors.New("unauthorized")
-	ErrInvalidStoredResult           = errors.New("invalid stored result")
+	// ErrExpectedCashOutOfRange marks guarded-arithmetic overflow in the
+	// Expected Cash and difference equations. It has no direct HTTP mapping:
+	// every pre-reveal producer is wrapped in the private calculation-failed
+	// sentinel (spec 12), and a post-reveal escape is corrupt state that
+	// surfaces as the generic 500. Mapping it to a client-facing status would
+	// leak the wrapped operands in the message.
+	ErrExpectedCashOutOfRange = errors.New("expected cash out of range")
+	ErrForbidden              = errors.New("forbidden")
+	ErrUnauthorized           = errors.New("unauthorized")
+	ErrInvalidStoredResult    = errors.New("invalid stored result")
 )
 
 // errReconciliationCalculationFailed is private by design (spec 12): before
@@ -190,8 +196,6 @@ func MapHTTPError(err error) error {
 			"manager approval could not be confirmed with this login code and PIN", err)
 	case errors.Is(err, ErrRequestConflict):
 		return response.NewCodedError(http.StatusConflict, "REQUEST_CONFLICT", err.Error(), err)
-	case errors.Is(err, ErrExpectedCashOutOfRange):
-		return response.NewCodedError(http.StatusBadRequest, "EXPECTED_CASH_OUT_OF_RANGE", err.Error(), err)
 	case errors.Is(err, ErrForbidden):
 		return response.NewCodedError(http.StatusForbidden, "FORBIDDEN", err.Error(), err)
 	case errors.Is(err, ErrUnauthorized):

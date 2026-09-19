@@ -107,10 +107,11 @@ func (h *CloseShiftHandler) Handle(ctx context.Context, actor Actor, cmd CloseSh
 	var approval *ApprovalSpec
 	if len(discrepancies) > 0 {
 		operation = OpCloseWithDiscrepancy
-		// The approver pair is verification input: a missing or wrong pair is
-		// denied by auth.VerifyManagerApproval inside the transaction and
-		// collapses to the one 403 code (spec 10, 12, ADR-048). The approver
-		// must hold the MANAGER role and sales_shift.operate.
+		// The approver pair is verification input. The HTTP boundary rejects a
+		// pair missing either field with 400 (spec 9.4, 12); a provided but
+		// wrong pair is denied by auth.VerifyManagerApproval inside the
+		// transaction and collapses to the one 403 code (spec 10, ADR-048). The
+		// approver must hold the MANAGER role and sales_shift.operate.
 		approval = &ApprovalSpec{
 			ApproverLoginCode:  auth.NormalizeLoginCode(cmd.ApproverLoginCode),
 			ManagerPIN:         cmd.ManagerPIN,

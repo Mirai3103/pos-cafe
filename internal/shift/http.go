@@ -151,7 +151,7 @@ func (s *Slices) handleOpenShift(c echo.Context) error {
 // handleRecordCashMovement records a Pay In or Pay Out.
 //
 //	@Summary		Record a Cash Movement
-//	@Description	Records a Pay In or Pay Out against an open Sales Shift. Requires inline approval by an enabled Manager, who authenticates with their own login code and PIN. Returns the resulting Expected Cash.
+//	@Description	Records a Pay In or Pay Out against an open Sales Shift. Requires inline approval by an enabled Manager, who authenticates with their own login code and PIN. The response carries the recorded movement only: while the Shift is OPEN, no Expected Cash or derivation total crosses the boundary (spec 9.5).
 //	@Tags			shifts
 //	@Accept			json
 //	@Produce		json
@@ -469,7 +469,7 @@ func (s *Slices) handleGetClosedShift(c echo.Context) error {
 //	@Param			shift_id	path		string				true	"Sales Shift ID"
 //	@Param			request		body		CloseShiftCommand	true	"Final evidence and discrepancy reasons"
 //	@Success		200			{object}	response.APIResponse{data=ClosedShiftDetailResponse}
-//	@Failure		400			{object}	response.APIResponse	"Malformed body, omitted evidence id, a missing or null discrepancies array, or an invalid reason or note shape"
+//	@Failure		400			{object}	response.APIResponse	"Malformed body, omitted evidence id, a missing or null discrepancies array, an omitted approval pair for a discrepant close, or an invalid reason or note shape"
 //	@Failure		401			{object}	response.APIResponse
 //	@Failure		403			{object}	response.APIResponse	"Missing capability or failed Manager approval, collapsed to MANAGER_APPROVAL_UNAVAILABLE"
 //	@Failure		404			{object}	response.APIResponse	"Unknown Sales Shift or final attempt id"
@@ -520,11 +520,19 @@ func (s *Slices) handleFinalClose(c echo.Context) error {
 		}
 		seenDimensions[entry.Dimension] = struct{}{}
 	}
-	// The approval pair belongs to the discrepant close only. A non-empty but
-	// malformed PIN is rejected on shape alone; a missing or wrong pair is
-	// dispatched so the transaction's verification denies it and collapses to
-	// the one 403 code without naming the reason (spec 10, 12).
-	if len(cmd.Discrepancies) > 0 && cmd.ManagerPIN != "" {
+	// The approval pair belongs to the discrepant close only and is required
+	// together there (spec 9.4): the non-empty discrepancy list selects that
+	// operation, so an omitted field is a malformed request, exactly like the
+	// cash movement boundary's missing approver_login_code (spec 12). A wrong
+	// pair stays an approval denial: it is dispatched so the transaction's
+	// verification denies it and collapses to the one 403 code without naming
+	// which condition failed (spec 10, 12).
+	if len(cmd.Discrepancies) > 0 {
+		if cmd.ApproverLoginCode == "" || cmd.ManagerPIN == "" {
+			return sendError(c, fmt.Errorf("%w: approver_login_code and manager_pin are required together for a discrepant close",
+				response.ErrInvalid))
+		}
+		// A non-empty but malformed PIN is rejected on shape alone.
 		if err := auth.ValidatePinFormat(cmd.ManagerPIN); err != nil {
 			return sendError(c, fmt.Errorf("%w: manager_pin: %s", response.ErrInvalid, err.Error()))
 		}
