@@ -604,3 +604,43 @@ func TestShiftHTTPRecordCashCountHappyPath(t *testing.T) {
 		assert.JSONEq(t, "3", string(count["sequence"]))
 	})
 }
+
+// TestShiftHTTPRecordAttemptAuthorization pins the capability guard and the
+// anonymous denial on both attempt routes (spec 12): a BARISTA holds neither
+// sales.operate nor sales_shift.operate, and an unauthenticated caller never
+// reaches the handler.
+func TestShiftHTTPRecordAttemptAuthorization(t *testing.T) {
+	e, q := newTestServer(t)
+	baristaToken, _ := signIn(t, e, q, []string{"BARISTA"}, "1357")
+	cashierToken, _ := signIn(t, e, q, []string{"CASHIER"}, "2468")
+	shiftID := startReconciliationViaHTTP(t, e, cashierToken)
+
+	cases := []struct {
+		name string
+		path string
+		body map[string]any
+	}{
+		{
+			name: "cash count",
+			path: "/api/v1/shifts/" + shiftID + "/reconciliation/cash-counts",
+			body: map[string]any{"request_id": uuid.New(), "counted_cash_vnd": 500000},
+		},
+		{
+			name: "qr observation",
+			path: "/api/v1/shifts/" + shiftID + "/reconciliation/qr-observations",
+			body: map[string]any{"request_id": uuid.New(), "observed_received_vnd": 0, "observed_refunded_vnd": 0},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name+" denies barista", func(t *testing.T) {
+			body, _ := json.Marshal(tc.body)
+			rec := doRequest(t, e, http.MethodPost, tc.path, baristaToken, body)
+			assert.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+		})
+		t.Run(tc.name+" denies anonymous", func(t *testing.T) {
+			body, _ := json.Marshal(tc.body)
+			rec := doRequest(t, e, http.MethodPost, tc.path, "", body)
+			assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+		})
+	}
+}

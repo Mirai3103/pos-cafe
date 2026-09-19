@@ -937,6 +937,25 @@ func TestCloseShiftHTTP(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
 	})
 
+	t.Run("denies barista", func(t *testing.T) {
+		baristaToken, _ := signIn(t, e, q, []string{"BARISTA"}, "1357")
+		body, _ := json.Marshal(map[string]any{
+			"request_id": uuid.New(), "final_cash_count_id": cashID, "final_qr_observation_id": qrID,
+			"discrepancies": []any{},
+		})
+		rec := doRequest(t, e, http.MethodPost, closePath, baristaToken, body)
+		assert.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+	})
+
+	t.Run("denies anonymous", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]any{
+			"request_id": uuid.New(), "final_cash_count_id": cashID, "final_qr_observation_id": qrID,
+			"discrepancies": []any{},
+		})
+		rec := doRequest(t, e, http.MethodPost, closePath, "", body)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+	})
+
 	t.Run("exact close returns the immutable detail", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{
 			"request_id": uuid.New(), "final_cash_count_id": cashID, "final_qr_observation_id": qrID,
