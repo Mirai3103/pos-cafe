@@ -73,8 +73,8 @@ snapshot.
       cycle the Phase 4 specification deferred.
 - [x] Integration tests cover exact closure, every blocker, recount, QR comparison,
       discrepancy approval, immutable snapshots, and concurrent closure attempts.
-- [x] Basic UI covers the blind-count step, the reveal, discrepancy approval, and
-      the closed-Shift summary. (Phase 11 — UI)
+- [ ] Basic UI covers the blind-count step, the reveal, discrepancy approval, and
+      the closed-Shift summary. (Phase 11 — UI; deferred, the UI phase owns it)
 
 ## Design notes carried from the source
 

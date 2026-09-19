@@ -144,6 +144,17 @@ func (h *StartReconciliationHandler) Handle(ctx context.Context, actor Actor, cm
 				return 0, zero, AuditRecord{},
 					fmt.Errorf("compute expected manual QR received: %w: %w", errReconciliationCalculationFailed, err)
 			}
+			// The snapshot table bounds this figure to the same symmetric
+			// ±MaxAmountVND window Expected Cash keeps (migration 000015). A
+			// breach would otherwise surface as an unmapped check violation,
+			// and a start that can never succeed would strand the Shift short
+			// of CLOSING permanently.
+			if expectedQRReceived > MaxAmountVND || expectedQRReceived < -MaxAmountVND {
+				rangeErr := fmt.Errorf("%w: expected manual QR received %d is outside [%d, %d]",
+					ErrExpectedCashOutOfRange, expectedQRReceived, -MaxAmountVND, MaxAmountVND)
+				return 0, zero, AuditRecord{},
+					fmt.Errorf("compute expected manual QR received: %w: %w", errReconciliationCalculationFailed, rangeErr)
+			}
 
 			// The immutable snapshot and the blind initial count are born in
 			// this order, before any read path can observe one without the

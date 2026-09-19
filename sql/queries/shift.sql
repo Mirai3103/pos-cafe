@@ -68,20 +68,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING id, sales_shift_id, method, amount_vnd, reason, note,
           initiated_by_staff_identity_id, approved_by_staff_identity_id, occurred_at;
 
--- name: ListCashMovements :many
-SELECT cm.id, cm.sales_shift_id, cm.method, cm.amount_vnd, cm.reason, cm.note, cm.occurred_at,
-       ini.id AS initiator_id,
-       ini.display_name AS initiator_display_name,
-       ini.login_code AS initiator_login_code,
-       apr.id AS approver_id,
-       apr.display_name AS approver_display_name,
-       apr.login_code AS approver_login_code
-FROM cash_movements cm
-JOIN staff_identities ini ON ini.id = cm.initiated_by_staff_identity_id
-JOIN staff_identities apr ON apr.id = cm.approved_by_staff_identity_id
-WHERE cm.sales_shift_id = $1
-ORDER BY cm.occurred_at DESC, cm.id DESC;
-
 -- name: SumCashMovements :one
 SELECT
     COALESCE(SUM(amount_vnd) FILTER (WHERE method = 'PAY_IN'), 0)::BIGINT AS pay_in_vnd,
@@ -207,18 +193,6 @@ SELECT
          AS pending_refund_vnd,
     (SELECT unresolved_post_sale_adjustment_vnd FROM post_sale)
          AS unresolved_post_sale_adjustment_vnd;
-
--- name: ListShiftRefunds :many
--- The Shift response's Refund summaries ordered by (created_at, id), each
--- carrying derived completion state and no credentials.
-SELECT r.id, r.check_id, r.completed_sale_id, r.method, r.amount_vnd,
-       r.reason, r.note, r.created_at,
-       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS completed,
-       rc.completed_at, rc.transaction_reference
-FROM refunds AS r
-LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
-WHERE r.sales_shift_id = $1
-ORDER BY r.created_at ASC, r.id ASC;
 
 -- -- Phase 7: Shift Closure & Reconciliation --
 --

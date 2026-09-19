@@ -418,6 +418,62 @@ func TestStartReconciliationCalculationFailureIsGeneric(t *testing.T) {
 		"no snapshot may be revealed by a failed start")
 }
 
+// TestStartReconciliationQRReceivedCalculationFailureIsGeneric injects an
+// Expected Manual QR Received range failure through seeded Payments and asserts
+// the public error is the generic calculation-failed code with no amount or
+// operand text, and that nothing persisted (spec 4.3, 12). The bound mirrors
+// the symmetric expected_manual_qr_received_vnd check the snapshot table
+// enforces, so a breach must fail the checked formula before the insert.
+func TestStartReconciliationQRReceivedCalculationFailureIsGeneric(t *testing.T) {
+	f := newShiftFixture(t)
+	ctx := context.Background()
+
+	// Each Payment sits inside the per-Payment money bound, but their
+	// aggregate breaches the snapshot's symmetric ±MaxAmountVND window.
+	checkID := seedSettledCheck(t, f.DB, f.Shift.ID, f.Cashier.StaffID, f.Cashier.SessionID)
+	for i := 0; i < 2; i++ {
+		seedPayment(t, f.DB, checkID, f.Shift.ID, f.Cashier.StaffID, f.Cashier.SessionID,
+			"MANUAL_QR", 2_000_000_000, 0)
+	}
+
+	start := shift.NewStartReconciliationHandler(f.Runner)
+	_, _, err := start.Handle(ctx, f.Cashier.actor(), f.startCommand(0, uuid.New()))
+	require.Error(t, err, "the net Manual QR sum breaches the Expected Manual QR Received bound")
+
+	mapped := shift.MapHTTPError(err)
+	var coded *response.CodedError
+	require.True(t, errors.As(mapped, &coded))
+	assert.Equal(t, http.StatusInternalServerError, coded.Status)
+	assert.Equal(t, "SHIFT_RECONCILIATION_CALCULATION_FAILED", coded.Code)
+	assert.NotRegexp(t, `[0-9]`, coded.Message, "no amount or operand may cross the boundary")
+	assert.NotContains(t, coded.Message, "expected manual QR")
+	assert.NotContains(t, coded.Message, "outside")
+
+	// Nothing persisted: no snapshot, no count, no audit events, and the
+	// Shift is still OPEN to the current read.
+	var reconRows int
+	require.NoError(t, f.DB.QueryRow(`SELECT count(*) FROM shift_reconciliations`).Scan(&reconRows))
+	assert.Equal(t, 0, reconRows)
+	var countRows int
+	require.NoError(t, f.DB.QueryRow(`SELECT count(*) FROM shift_cash_counts`).Scan(&countRows))
+	assert.Equal(t, 0, countRows)
+	assert.Equal(t, 0, countAuditEvents(t, f.DB, shift.EventReconciliationStarted, f.Shift.ID))
+	assert.Equal(t, 0, countAuditEvents(t, f.DB, shift.EventCashCountRecorded, f.Shift.ID))
+
+	current := shift.NewCurrentShiftHandler(f.Runner)
+	open, readErr := current.Handle(ctx, f.Cashier.actor())
+	require.NoError(t, readErr)
+	require.NotNil(t, open)
+	openRaw, err := json.Marshal(open)
+	require.NoError(t, err)
+	var redacted shift.OpenCurrentShiftResponse
+	require.NoError(t, json.Unmarshal(openRaw, &redacted))
+	assert.Equal(t, shift.StateOpen, redacted.State,
+		"the Shift is still OPEN to the current read after the failed start")
+	assert.NotContains(t, string(openRaw), "reconciliation",
+		"no snapshot may be revealed by a failed start")
+}
+
 func TestStartReconciliationIsIdempotent(t *testing.T) {
 	f := newShiftFixture(t)
 	ctx := context.Background()

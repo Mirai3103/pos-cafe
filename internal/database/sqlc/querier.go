@@ -359,7 +359,6 @@ type Querier interface {
 	// carries CommittedItemIds rather than a positional Column2.
 	ListAllocationsForItems(ctx context.Context, arg ListAllocationsForItemsParams) ([]ListAllocationsForItemsRow, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
-	ListCashMovements(ctx context.Context, salesShiftID uuid.UUID) ([]ListCashMovementsRow, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	ListCheckAllocationQuantities(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationQuantitiesRow, error)
 	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
@@ -495,9 +494,6 @@ type Querier interface {
 	ListShiftClosureDiscrepancies(ctx context.Context, shiftClosureID uuid.UUID) ([]ShiftDiscrepancy, error)
 	// One reconciliation's append-only QR Observations, oldest first.
 	ListShiftQRObservations(ctx context.Context, reconciliationID uuid.UUID) ([]ListShiftQRObservationsRow, error)
-	// The Shift response's Refund summaries ordered by (created_at, id), each
-	// carrying derived completion state and no credentials.
-	ListShiftRefunds(ctx context.Context, salesShiftID uuid.UUID) ([]ListShiftRefundsRow, error)
 	// The `submitted` flag on a Charge Allocation is derived, not stored: there is
 	// no submitted column anywhere in the schema, and therefore no flag that can
 	// fall out of step with the Order that defines it.
@@ -591,9 +587,10 @@ type Querier interface {
 	// closure takes FOR UPDATE and stays excluded for the whole transaction. No
 	// row means no Shift is open.
 	LockOpenSalesShiftForCancellation(ctx context.Context) (LockOpenSalesShiftForCancellationRow, error)
-	// The Sales Shift open right now, locked FOR SHARE. Only one Shift can be open
-	// at a time, enforced by sales_shift_only_one_open_unique, so no ordering or
-	// disambiguation is needed.
+	// The Sales Shift open right now, locked FOR SHARE. Only one Shift can be
+	// active (OPEN or CLOSING) at a time, enforced by
+	// sales_shift_only_one_active_unique, so no ordering or disambiguation is
+	// needed.
 	//
 	// Read from sales_shifts rather than through the Check's Session. The Shift in
 	// which money reached the cashier is an independent fact — a Session opened in

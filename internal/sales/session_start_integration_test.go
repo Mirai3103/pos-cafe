@@ -680,9 +680,7 @@ func TestSalesShiftConcurrentReconciliationRaces(t *testing.T) {
 		holder.release(t)
 		requireCorrectionRaceResolved(t, &wg)
 
-		// The Comp commits whenever it runs. If it committed before the
-		// start's blocker read, the pending Refund it created is the blocker
-		// (spec 8's precedence); otherwise the committed Session is.
+		// The Comp commits whenever it runs, whichever way the race resolves.
 		require.NoError(t, compErr)
 		// If the start's blocker read ran before the Comp landed, the still
 		// OPEN Check is the unsettled-Check blocker; after the Comp zeroed and
