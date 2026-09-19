@@ -24,17 +24,42 @@ var (
 	ErrSalesShiftNotFound = errors.New("sales shift not found")
 	// ErrReconciliationNotStarted is defined now for the attempt and close
 	// routes (Task 5) whose target Shift carries no reconciliation snapshot.
-	ErrReconciliationNotStarted   = errors.New("shift reconciliation not started")
-	ErrUnsettledCheck             = errors.New("the shift has unsettled checks")
-	ErrPendingRefund              = errors.New("the shift has pending refunds")
-	ErrUnresolvedCorrection       = errors.New("the shift has unresolved corrections")
-	ErrActiveServiceSession       = errors.New("the shift has active service sessions")
-	ErrManagerApprovalUnavailable = errors.New("manager approval unavailable")
-	ErrRequestConflict            = errors.New("request conflict")
-	ErrExpectedCashOutOfRange     = errors.New("expected cash out of range")
-	ErrForbidden                  = errors.New("forbidden")
-	ErrUnauthorized               = errors.New("unauthorized")
-	ErrInvalidStoredResult        = errors.New("invalid stored result")
+	ErrReconciliationNotStarted = errors.New("shift reconciliation not started")
+	ErrUnsettledCheck           = errors.New("the shift has unsettled checks")
+	ErrPendingRefund            = errors.New("the shift has pending refunds")
+	ErrUnresolvedCorrection     = errors.New("the shift has unresolved corrections")
+	ErrActiveServiceSession     = errors.New("the shift has active service sessions")
+	// ErrReconciliationStale marks a close whose submitted final attempt ids
+	// are no longer the latest rows of their ledgers: a later attempt landed
+	// and the client must refresh and resubmit (spec 7.11, 12).
+	ErrReconciliationStale = errors.New("shift reconciliation evidence is stale")
+	// ErrReconciliationSourceChanged marks a close whose reloaded live source
+	// totals disagree with the frozen snapshot — an uncoordinated future
+	// writer or corrupt state (spec 11.3, 12).
+	ErrReconciliationSourceChanged = errors.New("shift reconciliation source totals changed")
+	// ErrCashRecountRequired marks a nonzero Cash difference whose final Cash
+	// Count is still the blind sequence 1 (spec 5.3, 7.5).
+	ErrCashRecountRequired = errors.New("a cash recount is required")
+	// ErrQRRecheckRequired marks a nonzero Manual QR difference whose final
+	// QR Observation is still sequence 1 (spec 5.4, 7.6).
+	ErrQRRecheckRequired = errors.New("a manual QR observation recheck is required")
+	// ErrDiscrepancyReasonRequired marks a nonzero closure dimension without
+	// exactly one reason entry (spec 7.7, 12).
+	ErrDiscrepancyReasonRequired = errors.New("a discrepancy reason is required")
+	// ErrDiscrepancyReasonUnexpected marks a reason entry a close cannot use:
+	// an entry on a dimension whose server-derived difference is zero, or a
+	// reason-to-dimension pairing the catalog forbids (spec 5.6, 7.8, 12).
+	ErrDiscrepancyReasonUnexpected = errors.New("a discrepancy reason is unexpected")
+	// ErrReconciliationAttemptNotFound marks a submitted final attempt id that
+	// does not exist in the target reconciliation's ledger (spec 5.5's
+	// application validation; spec 12 maps an unknown attempt id to 404).
+	ErrReconciliationAttemptNotFound = errors.New("shift reconciliation attempt not found")
+	ErrManagerApprovalUnavailable    = errors.New("manager approval unavailable")
+	ErrRequestConflict               = errors.New("request conflict")
+	ErrExpectedCashOutOfRange        = errors.New("expected cash out of range")
+	ErrForbidden                     = errors.New("forbidden")
+	ErrUnauthorized                  = errors.New("unauthorized")
+	ErrInvalidStoredResult           = errors.New("invalid stored result")
 )
 
 // errReconciliationCalculationFailed is private by design (spec 12): before
@@ -144,6 +169,20 @@ func MapHTTPError(err error) error {
 		return response.NewCodedError(http.StatusConflict, "SHIFT_UNRESOLVED_CORRECTION", ErrUnresolvedCorrection.Error(), err)
 	case errors.Is(err, ErrActiveServiceSession):
 		return response.NewCodedError(http.StatusConflict, "SHIFT_ACTIVE_SERVICE_SESSION", ErrActiveServiceSession.Error(), err)
+	case errors.Is(err, ErrReconciliationStale):
+		return response.NewCodedError(http.StatusConflict, "SHIFT_RECONCILIATION_STALE", ErrReconciliationStale.Error(), err)
+	case errors.Is(err, ErrReconciliationSourceChanged):
+		return response.NewCodedError(http.StatusConflict, "SHIFT_RECONCILIATION_SOURCE_CHANGED", ErrReconciliationSourceChanged.Error(), err)
+	case errors.Is(err, ErrCashRecountRequired):
+		return response.NewCodedError(http.StatusConflict, "SHIFT_CASH_RECOUNT_REQUIRED", ErrCashRecountRequired.Error(), err)
+	case errors.Is(err, ErrQRRecheckRequired):
+		return response.NewCodedError(http.StatusConflict, "SHIFT_QR_RECHECK_REQUIRED", ErrQRRecheckRequired.Error(), err)
+	case errors.Is(err, ErrDiscrepancyReasonRequired):
+		return response.NewCodedError(http.StatusConflict, "SHIFT_DISCREPANCY_REASON_REQUIRED", ErrDiscrepancyReasonRequired.Error(), err)
+	case errors.Is(err, ErrDiscrepancyReasonUnexpected):
+		return response.NewCodedError(http.StatusConflict, "SHIFT_DISCREPANCY_REASON_UNEXPECTED", ErrDiscrepancyReasonUnexpected.Error(), err)
+	case errors.Is(err, ErrReconciliationAttemptNotFound):
+		return response.NewCodedError(http.StatusNotFound, "SHIFT_RECONCILIATION_ATTEMPT_NOT_FOUND", ErrReconciliationAttemptNotFound.Error(), err)
 	case errors.Is(err, ErrManagerApprovalUnavailable):
 		// Every denial reason collapses here so the API never discloses which
 		// condition failed. The reason is in the server log and audit event.

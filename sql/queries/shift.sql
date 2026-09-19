@@ -222,10 +222,11 @@ ORDER BY r.created_at ASC, r.id ASC;
 -- display names, which stay identity projection labels, never copied facts.
 
 -- name: LockSalesShiftForReconciliation :one
--- The Shift row FOR UPDATE for Start Reconciliation and Final Close. The state
--- is returned rather than filtered so an unknown Shift, an OPEN Shift, and a
--- CLOSING one map to their own errors instead of collapsing into one missing
--- row; the caller branches on it.
+-- The Shift row FOR UPDATE shared by Start Reconciliation, the attempt
+-- commands, and Final Close (spec 11.1). The state is returned rather than
+-- filtered so an unknown Shift, an OPEN Shift, a CLOSING one, and a CLOSED one
+-- map to their own errors instead of collapsing into one missing row; the
+-- caller branches on it.
 SELECT id, state, opened_by_staff_identity_id, opening_float_vnd, opened_at
 FROM sales_shifts
 WHERE id = $1

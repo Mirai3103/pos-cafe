@@ -68,6 +68,36 @@ type RecordQRObservationCommand struct {
 	ObservedRefundedVND *int64    `json:"observed_refunded_vnd"`
 }
 
+// CloseDiscrepancyInput is one client-declared reason for a nonzero closure
+// dimension. It carries reason metadata only: expected, observed, and
+// difference amounts never come from the request — the server derives all
+// three from the frozen snapshot and the final evidence (spec 9.4).
+type CloseDiscrepancyInput struct {
+	Dimension DiscrepancyDimension `json:"dimension"`
+	Reason    DiscrepancyReason    `json:"reason"`
+	Note      *string              `json:"note"`
+}
+
+// CloseShiftCommand closes a reconciled Sales Shift exactly or, with
+// discrepancy reasons, under a fresh Manager Approval.
+//
+// ShiftID comes from the route, not the body. Discrepancies selects the
+// operation: a non-null empty array is the exact close and any entry selects
+// shift.close_with_discrepancy, which requires the approval pair. The field
+// is checked for nil at the HTTP boundary so a JSON null cannot masquerade as
+// the exact close. ManagerPIN is a secret: it is excluded from the request
+// fingerprint and must never be audited or logged, and the approver login is
+// excluded from the fingerprint too (spec 9.4).
+type CloseShiftCommand struct {
+	RequestID            uuid.UUID               `json:"request_id"`
+	ShiftID              uuid.UUID               `json:"-"`
+	FinalCashCountID     uuid.UUID               `json:"final_cash_count_id"`
+	FinalQRObservationID uuid.UUID               `json:"final_qr_observation_id"`
+	Discrepancies        []CloseDiscrepancyInput `json:"discrepancies"`
+	ApproverLoginCode    string                  `json:"approver_login_code"`
+	ManagerPIN           string                  `json:"manager_pin"`
+}
+
 // StaffSummary is the only staff representation that crosses the Shift
 // boundary. It carries exactly these three fields.
 type StaffSummary struct {

@@ -16,23 +16,27 @@ const CapSalesShiftOperate = "sales_shift.operate"
 
 // Idempotency action names, stored in idempotency_keys.action.
 const (
-	OpOpenShift           = "shift.open_shift"
-	OpRecordCashMovement  = "shift.record_cash_movement"
-	OpGetCurrentShift     = "shift.get_current_shift"
-	OpStartReconciliation = "shift.start_reconciliation"
-	OpRecordCashCount     = "shift.record_cash_count"
-	OpRecordQRObservation = "shift.record_qr_observation"
+	OpOpenShift            = "shift.open_shift"
+	OpRecordCashMovement   = "shift.record_cash_movement"
+	OpGetCurrentShift      = "shift.get_current_shift"
+	OpStartReconciliation  = "shift.start_reconciliation"
+	OpRecordCashCount      = "shift.record_cash_count"
+	OpRecordQRObservation  = "shift.record_qr_observation"
+	OpCloseExact           = "shift.close_exact"
+	OpCloseWithDiscrepancy = "shift.close_with_discrepancy"
 )
 
 // Audit event types. Business events are UPPER_SNAKE_CASE and the denial event
 // is lowercase dotted, matching the convention in internal/tables.
 const (
-	EventSalesShiftOpened      = "SALES_SHIFT_OPENED"
-	EventCashMovementRecorded  = "CASH_MOVEMENT_RECORDED"
-	EventReconciliationStarted = "SHIFT_RECONCILIATION_STARTED"
-	EventCashCountRecorded     = "SHIFT_CASH_COUNT_RECORDED"
-	EventQRObservationRecorded = "SHIFT_QR_OBSERVATION_RECORDED"
-	EventAuthorizationDenied   = "shift.authorization_denied"
+	EventSalesShiftOpened           = "SALES_SHIFT_OPENED"
+	EventCashMovementRecorded       = "CASH_MOVEMENT_RECORDED"
+	EventReconciliationStarted      = "SHIFT_RECONCILIATION_STARTED"
+	EventCashCountRecorded          = "SHIFT_CASH_COUNT_RECORDED"
+	EventQRObservationRecorded      = "SHIFT_QR_OBSERVATION_RECORDED"
+	EventShiftClosedExact           = "SHIFT_CLOSED_EXACT"
+	EventShiftClosedWithDiscrepancy = "SHIFT_CLOSED_WITH_DISCREPANCY"
+	EventAuthorizationDenied        = "shift.authorization_denied"
 )
 
 // Sales Shift states. StateClosing marks a Shift whose reconciliation has
@@ -181,11 +185,8 @@ func checkNoteLength(note *string) error {
 // every dimension. OTHER requires a note; every other reason forbids one. The
 // note must already be normalized (trimmed), as with ValidateNote.
 func ValidateDiscrepancyReason(dimension, reason string, note *string) error {
-	switch dimension {
-	case DimensionCash, DimensionManualQRReceived, DimensionManualQRRefunded:
-	default:
-		return fmt.Errorf("dimension must be one of %s, %s, %s",
-			DimensionCash, DimensionManualQRReceived, DimensionManualQRRefunded)
+	if err := validateDiscrepancyReasonShape(dimension, reason, note); err != nil {
+		return err
 	}
 
 	switch reason {
@@ -199,7 +200,29 @@ func ValidateDiscrepancyReason(dimension, reason string, note *string) error {
 			return fmt.Errorf("reason %s is valid only for dimensions %s and %s",
 				ReasonQRObservationDifference, DimensionManualQRReceived, DimensionManualQRRefunded)
 		}
-	case ReasonUnexplained, ReasonOther:
+	}
+	return nil
+}
+
+// validateDiscrepancyReasonShape checks the shape parts of one discrepancy
+// reason entry: the dimension and reason allowlists and the note rules.
+//
+// The reason-to-dimension pairing is deliberately absent here. The close
+// command's pairing depends on the server-derived differences, which do not
+// exist at the HTTP boundary: there a pairing mismatch is the stable
+// SHIFT_DISCREPANCY_REASON_UNEXPECTED conflict raised inside the transaction,
+// while an unknown dimension or reason and a malformed note are body errors
+// rejected before dispatch (spec 12).
+func validateDiscrepancyReasonShape(dimension, reason string, note *string) error {
+	switch dimension {
+	case DimensionCash, DimensionManualQRReceived, DimensionManualQRRefunded:
+	default:
+		return fmt.Errorf("dimension must be one of %s, %s, %s",
+			DimensionCash, DimensionManualQRReceived, DimensionManualQRRefunded)
+	}
+
+	switch reason {
+	case ReasonCashCountDifference, ReasonQRObservationDifference, ReasonUnexplained, ReasonOther:
 	default:
 		return fmt.Errorf("reason must be one of %s, %s, %s, %s",
 			ReasonCashCountDifference, ReasonQRObservationDifference, ReasonUnexplained, ReasonOther)

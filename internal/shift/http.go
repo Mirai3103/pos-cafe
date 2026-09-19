@@ -347,3 +347,83 @@ func (s *Slices) handleRecordQRObservation(c echo.Context) error {
 	}
 	return sendResult(c, status, res)
 }
+
+// handleFinalClose closes a reconciled Sales Shift.
+//
+//	@Summary		Close a reconciled Sales Shift
+//	@Description	Performs the Final Close of a CLOSING Sales Shift. The request carries the final evidence ids and, for a discrepant close, one reason per nonzero dimension. Amounts are always derived server-side from the frozen snapshot and the final evidence. A non-null empty discrepancies array closes exactly; any entry selects the discrepant close, which requires inline approval by an enabled Manager holding the MANAGER role, who authenticates with their own login code and PIN. Returns the immutable closed-Shift detail for both outcomes.
+//	@Tags			shifts
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			shift_id	path		string				true	"Sales Shift ID"
+//	@Param			request		body		CloseShiftCommand	true	"Final evidence and discrepancy reasons"
+//	@Success		200			{object}	response.APIResponse{data=ClosedShiftDetailResponse}
+//	@Failure		400			{object}	response.APIResponse	Malformed body, omitted evidence id, a missing or null discrepancies array, or an invalid reason or note shape
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse	Missing capability or failed Manager approval, collapsed to MANAGER_APPROVAL_UNAVAILABLE
+//	@Failure		404			{object}	response.APIResponse	Unknown Sales Shift or final attempt id
+//	@Failure		409			{object}	response.APIResponse	Lifecycle, blocker, stale evidence, source mismatch, recount/recheck, or discrepancy reason conflicts
+//	@Router			/shifts/{shift_id}/close [post]
+func (s *Slices) handleFinalClose(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	shiftID, err := parseUUIDParam(c, "shift_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := bindBody[CloseShiftCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	// Both final evidence ids are required: a zero UUID cannot name an attempt.
+	if cmd.FinalCashCountID == uuid.Nil {
+		return sendError(c, fmt.Errorf("%w: final_cash_count_id is required", response.ErrInvalid))
+	}
+	if cmd.FinalQRObservationID == uuid.Nil {
+		return sendError(c, fmt.Errorf("%w: final_qr_observation_id is required", response.ErrInvalid))
+	}
+	// discrepancies must be a non-null array: JSON null and an omitted field
+	// both leave the slice nil, and only an explicit [] closes exactly (spec
+	// 9.4).
+	if cmd.Discrepancies == nil {
+		return sendError(c, fmt.Errorf("%w: discrepancies is required and must be a non-null array", response.ErrInvalid))
+	}
+	// Each reason entry is shape-checked before dispatch: the dimension and
+	// reason allowlists and the note rules. A reason-to-dimension pairing that
+	// does not match the server-derived differences is a 409 conflict raised
+	// inside the transaction instead, where those differences are known.
+	seenDimensions := make(map[DiscrepancyDimension]struct{}, len(cmd.Discrepancies))
+	for _, entry := range cmd.Discrepancies {
+		note := NormalizeNote(entry.Note)
+		if err := validateDiscrepancyReasonShape(string(entry.Dimension), string(entry.Reason), note); err != nil {
+			return sendError(c, fmt.Errorf("%w: discrepancies: %s", response.ErrInvalid, err.Error()))
+		}
+		if _, duplicate := seenDimensions[entry.Dimension]; duplicate {
+			return sendError(c, fmt.Errorf("%w: discrepancies: duplicate dimension %s",
+				response.ErrInvalid, entry.Dimension))
+		}
+		seenDimensions[entry.Dimension] = struct{}{}
+	}
+	// The approval pair belongs to the discrepant close only. A non-empty but
+	// malformed PIN is rejected on shape alone; a missing or wrong pair is
+	// dispatched so the transaction's verification denies it and collapses to
+	// the one 403 code without naming the reason (spec 10, 12).
+	if len(cmd.Discrepancies) > 0 && cmd.ManagerPIN != "" {
+		if err := auth.ValidatePinFormat(cmd.ManagerPIN); err != nil {
+			return sendError(c, fmt.Errorf("%w: manager_pin: %s", response.ErrInvalid, err.Error()))
+		}
+	}
+	cmd.ShiftID = shiftID
+
+	status, res, err := s.Close.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}

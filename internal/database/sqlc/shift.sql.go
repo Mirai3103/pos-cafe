@@ -1448,10 +1448,11 @@ FOR UPDATE
 // Counts and QR Observations append to per-reconciliation attempt ledgers;
 // the closure repeats the frozen scalars. Reads join staff_identities for
 // display names, which stay identity projection labels, never copied facts.
-// The Shift row FOR UPDATE for Start Reconciliation and Final Close. The state
-// is returned rather than filtered so an unknown Shift, an OPEN Shift, and a
-// CLOSING one map to their own errors instead of collapsing into one missing
-// row; the caller branches on it.
+// The Shift row FOR UPDATE shared by Start Reconciliation, the attempt
+// commands, and Final Close (spec 11.1). The state is returned rather than
+// filtered so an unknown Shift, an OPEN Shift, a CLOSING one, and a CLOSED one
+// map to their own errors instead of collapsing into one missing row; the
+// caller branches on it.
 func (q *Queries) LockSalesShiftForReconciliation(ctx context.Context, id uuid.UUID) (SalesShift, error) {
 	row := q.db.QueryRowContext(ctx, lockSalesShiftForReconciliation, id)
 	var i SalesShift

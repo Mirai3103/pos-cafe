@@ -18,6 +18,7 @@ type Slices struct {
 	StartReconciliation *StartReconciliationHandler
 	RecordCashCount     *RecordCashCountHandler
 	RecordQRObservation *RecordQRObservationHandler
+	Close               *CloseShiftHandler
 }
 
 // NewSlices wires every Shift handler onto a shared Runner.
@@ -31,6 +32,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		StartReconciliation: NewStartReconciliationHandler(runner),
 		RecordCashCount:     NewRecordCashCountHandler(runner),
 		RecordQRObservation: NewRecordQRObservationHandler(runner),
+		Close:               NewCloseShiftHandler(runner),
 	}
 }
 
@@ -53,5 +55,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/shifts/:shift_id/reconciliation/cash-counts", s.handleRecordCashCount,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
 	v1.POST("/shifts/:shift_id/reconciliation/qr-observations", s.handleRecordQRObservation,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
+	v1.POST("/shifts/:shift_id/close", s.handleFinalClose,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesShiftOperate))
 }
