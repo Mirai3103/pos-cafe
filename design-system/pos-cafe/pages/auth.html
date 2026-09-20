@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POS Cafe - Đăng nhập PIN & Khóa phiên trạm</title>
+
+  <!-- Google Fonts: Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            emerald: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              300: '#6ee7b7',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            }
+          },
+          boxShadow: {
+            '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- POS Cafe Shared Cross-Tab Sync Bus (Task 1) -->
+  <script src="../shared/pos-bus.js"></script>
+
+  <style>
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    * { -webkit-tap-highlight-color: transparent; }
+    
+    @keyframes pinShake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-10px); }
+      40% { transform: translateX(10px); }
+      60% { transform: translateX(-6px); }
+      80% { transform: translateX(6px); }
+    }
+    
+    .animate-pin-shake {
+      animation: pinShake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0.6); opacity: 0; }
+      70% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .animate-pop-in {
+      animation: popIn 0.2s ease-out forwards;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .animate-pin-shake,
+      .animate-pop-in {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-[100dvh] w-full bg-slate-50 text-slate-900 flex flex-col font-sans antialiased select-none">
+
+  <!-- Station Switcher Click-outside Backdrop -->
+  <div id="station-switcher-backdrop" class="fixed inset-0 z-40 hidden" onclick="toggleStationSwitcher(false)"></div>
+
+  <!-- Top Navigation Bar -->
+  <header id="top-bar" class="relative z-50 h-16 w-full border-b border-slate-200 bg-white/95 backdrop-blur px-4 sm:px-6 flex items-center justify-between flex-shrink-0">
+    <!-- Left: Station Switcher & Brand -->
+    <div class="flex items-center gap-3">
+      <!-- Station Switcher Dropdown Anchor -->
+      <div class="relative">
+        <button id="btn-station-switcher" type="button" onclick="toggleStationSwitcher()"
+          class="min-h-[48px] min-w-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 transition flex items-center gap-2 select-none shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          title="Chuyển trạm làm việc (F0, F10 hoặc click)" aria-expanded="false" aria-haspopup="true">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/60">
+            <i data-lucide="layout-grid" class="w-4 h-4"></i>
+          </div>
+          <div class="flex flex-col text-left">
+            <span class="text-xs font-bold text-slate-900 leading-tight">Trạm làm việc</span>
+            <span id="current-station-label" class="text-[10px] font-medium text-emerald-600 leading-tight">Đăng nhập PIN</span>
+          </div>
+          <i id="station-switcher-chevron" data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 ml-0.5 transition-transform duration-200"></i>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div id="station-switcher-dropdown" class="hidden absolute top-14 left-0 z-50 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 flex flex-col gap-1 backdrop-blur-md">
+          <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between mb-1">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Chọn trạm làm việc</span>
+            <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">F0 / F10</span>
+          </div>
+
+          <!-- F1: Thu ngân -->
+          <a href="../index.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Quầy thu ngân</span>
+                <span class="text-[10px] text-slate-400">Order & Thanh toán</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F1</span>
+          </a>
+
+          <!-- F3: Pha chế KDS -->
+          <a href="kds.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="coffee" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Pha chế KDS</span>
+                <span class="text-[10px] text-slate-400">Màn hình Barista</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F3</span>
+          </a>
+
+          <!-- F4: Quản lý Ca -->
+          <a href="shift.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Quản lý Ca</span>
+                <span class="text-[10px] text-slate-400">Giao ca & Kiểm quỹ</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F4</span>
+          </a>
+
+          <!-- F5: Sơ đồ Bàn -->
+          <a href="tables.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="table-2" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Sơ đồ Bàn</span>
+                <span class="text-[10px] text-slate-400">Khu vực & Đặt bàn</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F5</span>
+          </a>
+
+          <!-- F6: Lịch sử đơn -->
+          <a href="history.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="receipt" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Lịch sử đơn</span>
+                <span class="text-[10px] text-slate-400">Hóa đơn & Tra cứu</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F6</span>
+          </a>
+
+          <!-- F7: Cài đặt món -->
+          <a href="settings.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Cài đặt món</span>
+                <span class="text-[10px] text-slate-400">Bật / Tắt món bán</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F7</span>
+          </a>
+
+          <div class="h-[1px] bg-slate-100 my-1"></div>
+
+          <!-- Khóa: Đăng nhập PIN (Current Active) -->
+          <div class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm bg-emerald-50/80 border border-emerald-200/80 text-emerald-900 font-semibold select-none">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                <i data-lucide="lock" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-emerald-950">Khóa phiên trạm</span>
+                <span class="text-[10px] text-emerald-700">Màn hình xác thực PIN</span>
+              </div>
+            </div>
+            <span class="flex h-2 w-2 relative">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Store Tagline (Desktop) -->
+      <div class="hidden md:flex items-center gap-2 border-l border-slate-200 pl-3">
+        <span class="text-xs font-semibold text-slate-700" id="top-store-name">The Coffee Workshop</span>
+        <span class="text-[11px] text-slate-400 font-medium">· Chi nhánh Tây Hồ</span>
+      </div>
+    </div>
+
+    <!-- Right: Sound Toggle, Clock, Close/Back Button -->
+    <div class="flex items-center gap-2.5 sm:gap-3">
+      <!-- Sound Feedback Toggle (>= 48px touch target) -->
+      <button id="btn-sound-toggle" type="button" onclick="toggleSound()"
+        class="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl border border-slate-200 bg-emerald-50/60 hover:bg-emerald-100/70 active:scale-95 text-emerald-700 transition flex items-center justify-center select-none shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+        title="Bật/Tắt âm thanh phản hồi" aria-label="Bật/tắt âm thanh" aria-pressed="true">
+        <i id="sound-toggle-icon" data-lucide="volume-2" class="w-5 h-5 text-emerald-600"></i>
+      </button>
+
+      <!-- Real-time Clock Badge -->
+      <div class="hidden sm:flex flex-col items-end px-3 py-1.5 rounded-xl border border-slate-200 bg-white shadow-2xs">
+        <span id="live-clock" class="font-mono text-xs font-bold text-slate-800 tracking-tight">--:--:--</span>
+        <span id="live-date" class="text-[10px] font-medium text-slate-500">--/--/----</span>
+      </div>
+
+      <!-- Direct Return to Cashier Button -->
+      <a href="../index.html" class="min-h-[48px] min-w-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 text-slate-700 transition flex items-center gap-1.5 text-xs font-semibold shadow-2xs">
+        <i data-lucide="arrow-left" class="w-4 h-4 text-slate-500"></i>
+        <span class="hidden sm:inline">Về thu ngân</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Content Viewport Area -->
+  <main class="flex-1 w-full flex items-center justify-center p-4 sm:p-6 md:p-8">
+    
+    <!-- Central Card Container -->
+    <div id="auth-card" class="w-full max-w-md sm:max-w-lg bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-8 flex flex-col items-center relative overflow-hidden transition-all duration-300">
+      
+      <!-- Top Emerald Accent Bar -->
+      <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600"></div>
+
+      <!-- ===================================================================== -->
+      <!-- MANAGER APPROVAL BANNER (Visible only in manager_approval mode) -->
+      <!-- ===================================================================== -->
+      <div id="manager-approval-banner" class="hidden w-full mb-6 p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 flex flex-col gap-2.5 shadow-xs">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 border border-amber-200">
+            <i data-lucide="shield-alert" class="w-5 h-5 text-amber-600"></i>
+          </div>
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-amber-950 leading-tight">Xác thực duyệt quyền Quản lý</h2>
+            <p class="text-[11px] text-amber-800 font-medium">Yêu cầu quyền hạn cấp Quản lý để tiếp tục</p>
+          </div>
+        </div>
+        
+        <div class="p-3 rounded-xl bg-white/80 border border-amber-200/70 text-xs flex flex-col gap-1">
+          <div class="flex items-center justify-between text-slate-600">
+            <span class="text-[11px] font-medium text-slate-500">Thao tác yêu cầu:</span>
+            <span class="font-mono text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">Cần phê duyệt</span>
+          </div>
+          <div id="manager-action-reason" class="font-semibold text-slate-900 text-sm">Hủy hóa đơn thanh toán</div>
+        </div>
+
+        <div class="text-[11px] text-amber-800 flex items-center gap-1.5">
+          <i data-lucide="info" class="w-3.5 h-3.5 text-amber-600 flex-shrink-0"></i>
+          <span>Vui lòng nhập PIN Quản lý (8888 - Lê Hoàng Tuấn)</span>
+        </div>
+      </div>
+
+      <!-- ===================================================================== -->
+      <!-- STANDARD AUTH HEADER (Visible in normal mode) -->
+      <!-- ===================================================================== -->
+      <div id="standard-auth-header" class="flex flex-col items-center text-center mb-5">
+        <div class="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-600 flex items-center justify-center mb-3 shadow-2xs">
+          <i data-lucide="coffee" class="w-7 h-7"></i>
+        </div>
+        <h1 class="font-bold text-2xl text-slate-900 tracking-tight" id="auth-title">The Coffee Workshop</h1>
+        <p class="text-xs sm:text-sm text-slate-500 font-normal mt-1" id="auth-subtitle">Đăng nhập ca làm việc hoặc mở khóa phiên trạm</p>
+      </div>
+
+      <!-- ===================================================================== -->
+      <!-- WORKSPACE DESTINATION SELECTOR (Visible in normal mode) -->
+      <!-- ===================================================================== -->
+      <div id="workspace-selector-section" class="w-full mb-6">
+        <div class="flex items-center justify-between mb-2 px-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạm làm việc sau khi mở khóa:</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 w-full">
+          <!-- Quầy thu ngân -->
+          <button type="button" onclick="selectWorkspace('cashier', '../index.html')" id="ws-chip-cashier"
+            class="min-h-[48px] px-3 py-2.5 rounded-xl border border-emerald-500 bg-emerald-50/90 text-emerald-950 font-semibold ring-2 ring-emerald-500/20 shadow-xs flex items-center gap-2.5 transition text-left cursor-pointer focus:outline-none">
+            <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+              <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-xs font-bold leading-tight">Thu ngân</span>
+              <span class="text-[10px] text-emerald-700 font-normal">Quầy chính</span>
+            </div>
+          </button>
+
+          <!-- Pha chế KDS -->
+          <button type="button" onclick="selectWorkspace('kds', 'kds.html')" id="ws-chip-kds"
+            class="min-h-[48px] px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 font-medium shadow-2xs flex items-center gap-2.5 transition text-left cursor-pointer focus:outline-none">
+            <div class="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="coffee" class="w-3.5 h-3.5"></i>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-xs font-bold leading-tight">Pha chế</span>
+              <span class="text-[10px] text-slate-500 font-normal">Màn hình KDS</span>
+            </div>
+          </button>
+
+          <!-- Quản lý Ca -->
+          <button type="button" onclick="selectWorkspace('shift', 'shift.html')" id="ws-chip-shift"
+            class="min-h-[48px] px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 font-medium shadow-2xs flex items-center gap-2.5 transition text-left cursor-pointer focus:outline-none">
+            <div class="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-xs font-bold leading-tight">Quản lý Ca</span>
+              <span class="text-[10px] text-slate-500 font-normal">Báo cáo & Tiền</span>
+            </div>
+          </button>
+
+          <!-- Sơ đồ Bàn -->
+          <button type="button" onclick="selectWorkspace('tables', 'tables.html')" id="ws-chip-tables"
+            class="min-h-[48px] px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 font-medium shadow-2xs flex items-center gap-2.5 transition text-left cursor-pointer focus:outline-none">
+            <div class="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="table-2" class="w-3.5 h-3.5"></i>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-xs font-bold leading-tight">Sơ đồ Bàn</span>
+              <span class="text-[10px] text-slate-500 font-normal">Phòng & Bàn</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- ===================================================================== -->
+      <!-- PIN DISPLAY: 4 MASKED SLOTS -->
+      <!-- ===================================================================== -->
+      <div class="w-full flex flex-col items-center mb-5">
+        <div id="pin-slots-container" class="flex items-center justify-center gap-3 sm:gap-4 p-2 transition-transform">
+          <!-- Slot 0 -->
+          <div id="pin-slot-0" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-slate-200 bg-slate-50 flex items-center justify-center transition-all duration-200 shadow-2xs">
+            <div class="pin-dot w-3.5 h-3.5 rounded-full bg-slate-300 transition-all duration-200"></div>
+          </div>
+          <!-- Slot 1 -->
+          <div id="pin-slot-1" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-slate-200 bg-slate-50 flex items-center justify-center transition-all duration-200 shadow-2xs">
+            <div class="pin-dot w-3.5 h-3.5 rounded-full bg-slate-300 transition-all duration-200"></div>
+          </div>
+          <!-- Slot 2 -->
+          <div id="pin-slot-2" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-slate-200 bg-slate-50 flex items-center justify-center transition-all duration-200 shadow-2xs">
+            <div class="pin-dot w-3.5 h-3.5 rounded-full bg-slate-300 transition-all duration-200"></div>
+          </div>
+          <!-- Slot 3 -->
+          <div id="pin-slot-3" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-slate-200 bg-slate-50 flex items-center justify-center transition-all duration-200 shadow-2xs">
+            <div class="pin-dot w-3.5 h-3.5 rounded-full bg-slate-300 transition-all duration-200"></div>
+          </div>
+        </div>
+
+        <!-- Feedback & Status Message -->
+        <div id="pin-feedback" class="mt-2.5 text-xs font-mono font-medium text-slate-500 h-5 flex items-center justify-center text-center">
+          Nhập mã PIN 4 chữ số của bạn
+        </div>
+      </div>
+
+      <!-- ===================================================================== -->
+      <!-- LARGE TACTILE NUMPAD (Keys >= 64px) -->
+      <!-- ===================================================================== -->
+      <div class="w-full max-w-[340px] sm:max-w-[360px] grid grid-cols-3 gap-2.5 sm:gap-3 mb-6">
+        <!-- Row 1: 1, 2, 3 -->
+        <button type="button" onclick="handleNumpadPress('1')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 1">1</button>
+
+        <button type="button" onclick="handleNumpadPress('2')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 2">2</button>
+
+        <button type="button" onclick="handleNumpadPress('3')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 3">3</button>
+
+        <!-- Row 2: 4, 5, 6 -->
+        <button type="button" onclick="handleNumpadPress('4')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 4">4</button>
+
+        <button type="button" onclick="handleNumpadPress('5')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 5">5</button>
+
+        <button type="button" onclick="handleNumpadPress('6')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 6">6</button>
+
+        <!-- Row 3: 7, 8, 9 -->
+        <button type="button" onclick="handleNumpadPress('7')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 7">7</button>
+
+        <button type="button" onclick="handleNumpadPress('8')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 8">8</button>
+
+        <button type="button" onclick="handleNumpadPress('9')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 9">9</button>
+
+        <!-- Row 4: C (Clear all), 0, Backspace -->
+        <button type="button" onclick="handleNumpadPress('C')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-rose-50/60 border border-rose-200 hover:border-rose-400 hover:bg-rose-100/60 active:scale-95 transition font-mono font-bold text-lg text-rose-700 shadow-xs flex flex-col items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+          aria-label="Xóa toàn bộ mã PIN">
+          <span class="text-xl leading-none">C</span>
+          <span class="text-[10px] font-sans font-medium text-rose-600 mt-0.5">Xóa hết</span>
+        </button>
+
+        <button type="button" onclick="handleNumpadPress('0')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-95 transition font-mono font-bold text-2xl text-slate-900 shadow-xs flex items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          aria-label="Số 0">0</button>
+
+        <button type="button" onclick="handleNumpadPress('BACKSPACE')"
+          class="min-h-[64px] min-w-[64px] h-16 sm:h-20 rounded-2xl bg-slate-100/80 border border-slate-200 hover:border-slate-300 hover:bg-slate-200/80 active:scale-95 transition font-mono font-bold text-slate-700 shadow-xs flex flex-col items-center justify-center cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-slate-400/20"
+          aria-label="Xóa 1 ký tự">
+          <i data-lucide="delete" class="w-6 h-6"></i>
+          <span class="text-[10px] font-sans font-medium text-slate-500 mt-0.5">Lùi 1 số</span>
+        </button>
+      </div>
+
+      <!-- ===================================================================== -->
+      <!-- SAMPLE STAFF QUICK-SELECT AVATARS (Quick-test bar) -->
+      <!-- ===================================================================== -->
+      <div class="w-full border-t border-slate-100 pt-5">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Nhân viên mẫu (Kiểm thử 1 chạm):</span>
+          <span class="text-[10px] font-mono text-slate-400">Click để tự điền PIN</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5 w-full">
+          <!-- Staff 1: Lan (Thu ngân) -->
+          <button type="button" onclick="quickSelectStaff('1234')"
+            class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/40 active:scale-95 transition shadow-2xs flex items-center justify-between gap-2 text-left cursor-pointer select-none focus:outline-none">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center flex-shrink-0 border border-emerald-200">
+                LN
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs font-bold text-slate-900 leading-tight">Lan</span>
+                <span class="text-[10px] text-emerald-700 font-medium">Thu ngân</span>
+              </div>
+            </div>
+            <span class="font-mono text-[11px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">1234</span>
+          </button>
+
+          <!-- Staff 2: Nam (Barista) -->
+          <button type="button" onclick="quickSelectStaff('5678')"
+            class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/40 active:scale-95 transition shadow-2xs flex items-center justify-between gap-2 text-left cursor-pointer select-none focus:outline-none">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center flex-shrink-0 border border-blue-200">
+                NM
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs font-bold text-slate-900 leading-tight">Nam</span>
+                <span class="text-[10px] text-blue-700 font-medium">Barista bar</span>
+              </div>
+            </div>
+            <span class="font-mono text-[11px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">5678</span>
+          </button>
+
+          <!-- Staff 3: Tuấn (Quản lý) -->
+          <button type="button" onclick="quickSelectStaff('8888')"
+            class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/40 active:scale-95 transition shadow-2xs flex items-center justify-between gap-2 text-left cursor-pointer select-none focus:outline-none">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center flex-shrink-0 border border-amber-200">
+                TN
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs font-bold text-slate-900 leading-tight">Tuấn</span>
+                <span class="text-[10px] text-amber-700 font-medium">Cửa hàng trưởng</span>
+              </div>
+            </div>
+            <span class="font-mono text-[11px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">8888</span>
+          </button>
+
+          <!-- Staff 4: Hà (Phục vụ) -->
+          <button type="button" onclick="quickSelectStaff('2468')"
+            class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/40 active:scale-95 transition shadow-2xs flex items-center justify-between gap-2 text-left cursor-pointer select-none focus:outline-none">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-purple-100 text-purple-800 font-bold text-xs flex items-center justify-center flex-shrink-0 border border-purple-200">
+                HA
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs font-bold text-slate-900 leading-tight">Hà</span>
+                <span class="text-[10px] text-purple-700 font-medium">Phục vụ</span>
+              </div>
+            </div>
+            <span class="font-mono text-[11px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">2468</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ===================================================================== -->
+      <!-- MANAGER APPROVAL CANCEL / DISMISS BUTTON -->
+      <!-- ===================================================================== -->
+      <div id="manager-cancel-section" class="hidden w-full mt-4 border-t border-slate-100 pt-4">
+        <button type="button" onclick="cancelManagerApproval()"
+          class="min-h-[48px] w-full py-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 active:scale-95 text-slate-700 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs">
+          <i data-lucide="x" class="w-4 h-4 text-slate-400"></i>
+          <span>Hủy thao tác và quay lại</span>
+        </button>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="pos-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 transform translate-y-8 opacity-0">
+    <div id="pos-toast-content" class="px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs sm:text-sm font-medium shadow-2xl flex items-center gap-2.5 border border-slate-800">
+      <i id="pos-toast-icon" data-lucide="info" class="w-4 h-4 text-emerald-400"></i>
+      <span id="pos-toast-text">Thông báo</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <!-- ========================================================================= -->
+  <script>
+    'use strict';
+
+    /* =========================================================================
+       1. Application State & Staff Registry
+       ========================================================================= */
+    const STAFF_DATABASE = [
+      {
+        pin: '1234',
+        name: 'Nguyễn Văn Lan',
+        shortName: 'Lan',
+        role: 'cashier',
+        roleLabel: 'Thu ngân',
+        defaultWorkspace: 'cashier',
+        defaultUrl: '../index.html'
+      },
+      {
+        pin: '5678',
+        name: 'Trần Hoài Nam',
+        shortName: 'Nam',
+        role: 'barista',
+        roleLabel: 'Barista quầy bar',
+        defaultWorkspace: 'kds',
+        defaultUrl: 'kds.html'
+      },
+      {
+        pin: '8888',
+        name: 'Lê Hoàng Tuấn',
+        shortName: 'Tuấn',
+        role: 'manager',
+        roleLabel: 'Cửa hàng trưởng',
+        defaultWorkspace: 'shift',
+        defaultUrl: 'shift.html'
+      },
+      {
+        pin: '2468',
+        name: 'Phạm Thu Hà',
+        shortName: 'Hà',
+        role: 'waiter',
+        roleLabel: 'Nhân viên phục vụ',
+        defaultWorkspace: 'tables',
+        defaultUrl: 'tables.html'
+      }
+    ];
+
+    const STATE = {
+      currentPin: '',
+      isSubmitting: false,
+      selectedWorkspace: 'cashier',
+      targetWorkspaceUrl: '../index.html',
+      isManagerApprovalMode: false,
+      approvalAction: 'Xác thực thao tác quản trị đặc biệt',
+      callbackUrl: '',
+      soundEnabled: true
+    };
+
+    /* =========================================================================
+       2. Web Audio API Synthesizers (Task 2 Brief Section 4)
+       ========================================================================= */
+    let sharedAudioCtx = null;
+
+    function getAudioContext() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+        if (!sharedAudioCtx) {
+          sharedAudioCtx = new AudioCtx();
+        }
+        if (sharedAudioCtx.state === 'suspended') {
+          sharedAudioCtx.resume();
+        }
+        return sharedAudioCtx;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    // Tactile key tap: 800Hz gentle sine chirp (30ms)
+    function playTapChirp() {
+      if (!STATE.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, now);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.03);
+      } catch (err) {}
+    }
+
+    // Success sign-in: ascending chime (523Hz -> 659Hz -> 784Hz)
+    function playSuccessChirp() {
+      if (!STATE.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+        notes.forEach((freq, idx) => {
+          const noteTime = now + (idx * 0.09);
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, noteTime);
+          gain.gain.setValueAtTime(0.12, noteTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.28);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(noteTime);
+          osc.stop(noteTime + 0.28);
+        });
+      } catch (err) {}
+    }
+
+    // Error buzz: 200Hz saw/square wave buzz (150ms)
+    function playErrorBuzz() {
+      if (!STATE.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, now);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } catch (err) {}
+    }
+
+    function toggleSound() {
+      STATE.soundEnabled = !STATE.soundEnabled;
+      const icon = document.getElementById('sound-toggle-icon');
+      const btn = document.getElementById('btn-sound-toggle');
+      if (STATE.soundEnabled) {
+        if (icon) icon.setAttribute('data-lucide', 'volume-2');
+        if (btn) {
+          btn.className = 'w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl border border-slate-200 bg-emerald-50/60 hover:bg-emerald-100/70 active:scale-95 text-emerald-700 transition flex items-center justify-center select-none shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20';
+          btn.setAttribute('aria-pressed', 'true');
+        }
+        playTapChirp();
+        showToast('Âm thanh phản hồi: Đã bật');
+      } else {
+        if (icon) icon.setAttribute('data-lucide', 'volume-x');
+        if (btn) {
+          btn.className = 'w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-400 transition flex items-center justify-center select-none shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300';
+          btn.setAttribute('aria-pressed', 'false');
+        }
+        showToast('Âm thanh phản hồi: Đã tắt');
+      }
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    /* =========================================================================
+       3. PIN Entry Logic & UI Rendering
+       ========================================================================= */
+    function renderPinDisplay() {
+      const pinLength = STATE.currentPin.length;
+      for (let i = 0; i < 4; i++) {
+        const slotEl = document.getElementById(`pin-slot-${i}`);
+        if (!slotEl) continue;
+        const dotEl = slotEl.querySelector('.pin-dot');
+
+        if (i < pinLength) {
+          // Filled state
+          slotEl.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-emerald-500 bg-emerald-50/60 flex items-center justify-center transition-all duration-200 shadow-xs';
+          if (dotEl) {
+            dotEl.className = 'pin-dot w-4 h-4 rounded-full bg-emerald-600 ring-4 ring-emerald-200/80 animate-pop-in transition-all duration-200';
+          }
+        } else {
+          // Empty state
+          slotEl.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-slate-200 bg-slate-50 flex items-center justify-center transition-all duration-200 shadow-2xs';
+          if (dotEl) {
+            dotEl.className = 'pin-dot w-3.5 h-3.5 rounded-full bg-slate-300 transition-all duration-200';
+          }
+        }
+      }
+    }
+
+    function handleNumpadPress(key) {
+      if (STATE.isSubmitting) return;
+
+      playTapChirp();
+
+      if (key === 'C') {
+        STATE.currentPin = '';
+        renderPinDisplay();
+        setFeedbackMessage('Đã xóa mã PIN', 'text-slate-500');
+        return;
+      }
+
+      if (key === 'BACKSPACE') {
+        if (STATE.currentPin.length > 0) {
+          STATE.currentPin = STATE.currentPin.slice(0, -1);
+          renderPinDisplay();
+          setFeedbackMessage(
+            STATE.currentPin.length > 0 ? `Đang nhập (${STATE.currentPin.length}/4)...` : 'Nhập mã PIN 4 chữ số của bạn',
+            'text-slate-500'
+          );
+        }
+        return;
+      }
+
+      // Numeric digit '0' - '9'
+      if (/^[0-9]$/.test(key)) {
+        if (STATE.currentPin.length < 4) {
+          STATE.currentPin += key;
+          renderPinDisplay();
+
+          if (STATE.currentPin.length === 4) {
+            // Auto submit when 4 digits reached
+            submitPinAuth();
+          } else {
+            setFeedbackMessage(`Đang nhập (${STATE.currentPin.length}/4)...`, 'text-slate-500');
+          }
+        }
+      }
+    }
+
+    function setFeedbackMessage(message, colorClass = 'text-slate-500') {
+      const el = document.getElementById('pin-feedback');
+      if (el) {
+        el.textContent = message;
+        el.className = `mt-2.5 text-xs font-mono font-medium ${colorClass} h-5 flex items-center justify-center text-center transition-colors duration-200`;
+      }
+    }
+
+    function triggerPinError(errorMessage) {
+      playErrorBuzz();
+      STATE.isSubmitting = true;
+
+      // Visual error style on slots
+      for (let i = 0; i < 4; i++) {
+        const slotEl = document.getElementById(`pin-slot-${i}`);
+        if (slotEl) {
+          slotEl.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-rose-500 bg-rose-50 flex items-center justify-center transition-all duration-200 shadow-xs';
+          const dotEl = slotEl.querySelector('.pin-dot');
+          if (dotEl) {
+            dotEl.className = 'pin-dot w-4 h-4 rounded-full bg-rose-600 ring-4 ring-rose-200/80 transition-all duration-200';
+          }
+        }
+      }
+
+      const container = document.getElementById('pin-slots-container');
+      if (container) {
+        container.classList.remove('animate-pin-shake');
+        // Force reflow
+        void container.offsetWidth;
+        container.classList.add('animate-pin-shake');
+      }
+
+      setFeedbackMessage(errorMessage, 'text-rose-600 font-bold');
+
+      // Auto clear after 700ms
+      setTimeout(() => {
+        STATE.currentPin = '';
+        STATE.isSubmitting = false;
+        renderPinDisplay();
+        setFeedbackMessage('Nhập mã PIN 4 chữ số của bạn', 'text-slate-500');
+        if (container) {
+          container.classList.remove('animate-pin-shake');
+        }
+      }, 700);
+    }
+
+    /* =========================================================================
+       4. Authentication & Approval Submission Engine
+       ========================================================================= */
+    function submitPinAuth() {
+      if (STATE.isSubmitting) return;
+      STATE.isSubmitting = true;
+
+      const enteredPin = STATE.currentPin;
+
+      // A. MANAGER APPROVAL MODE
+      if (STATE.isManagerApprovalMode) {
+        if (enteredPin === '8888') {
+          playSuccessChirp();
+          setFeedbackMessage('Xác thực Quản lý thành công! Đang phê duyệt...', 'text-emerald-600 font-bold');
+
+          // Highlight slots with success green
+          for (let i = 0; i < 4; i++) {
+            const slotEl = document.getElementById(`pin-slot-${i}`);
+            if (slotEl) {
+              slotEl.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-emerald-600 bg-emerald-100 flex items-center justify-center transition-all duration-200 shadow-md';
+            }
+          }
+
+          // Broadcast Manager Approval via POS_BUS
+          if (window.POS_BUS && window.POS_BUS.publish) {
+            window.POS_BUS.publish('MANAGER_APPROVAL_GRANTED', {
+              action: STATE.approvalAction,
+              manager: 'Lê Hoàng Tuấn',
+              managerPin: '8888',
+              timestamp: Date.now()
+            });
+          }
+
+          showToast('Đã duyệt quyền Quản lý thành công!');
+
+          // Return result to parent / caller
+          setTimeout(() => {
+            if (window.opener && !window.opener.closed) {
+              try {
+                window.opener.postMessage({
+                  type: 'MANAGER_APPROVED',
+                  success: true,
+                  action: STATE.approvalAction,
+                  manager: 'Lê Hoàng Tuấn',
+                  timestamp: Date.now()
+                }, '*');
+              } catch (e) {
+                console.warn('postMessage to opener failed:', e);
+              }
+              window.close();
+            } else if (STATE.callbackUrl) {
+              window.location.href = STATE.callbackUrl;
+            } else if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              window.location.href = '../index.html';
+            }
+          }, 650);
+
+        } else {
+          // Denied - Only Manager PIN 8888 allowed
+          triggerPinError('Chỉ Quản lý (Tuấn - PIN 8888) mới có quyền duyệt!');
+        }
+        return;
+      }
+
+      // B. STANDARD WORKSPACE SESSION AUTH
+      const matchedStaff = STAFF_DATABASE.find(s => s.pin === enteredPin);
+
+      if (matchedStaff) {
+        playSuccessChirp();
+        setFeedbackMessage(`Xin chào ${matchedStaff.name}! Đang mở trạm...`, 'text-emerald-600 font-bold');
+
+        // Update shared bus state
+        if (window.POS_BUS && window.POS_BUS.setCurrentStaff) {
+          window.POS_BUS.setCurrentStaff({
+            pin: matchedStaff.pin,
+            name: matchedStaff.name,
+            shortName: matchedStaff.shortName,
+            role: matchedStaff.role,
+            roleLabel: matchedStaff.roleLabel,
+            workspace: STATE.selectedWorkspace
+          });
+        }
+
+        if (window.POS_BUS && window.POS_BUS.publish) {
+          window.POS_BUS.publish('STAFF_LOGGED_IN', {
+            staff: matchedStaff,
+            workspace: STATE.selectedWorkspace,
+            timestamp: Date.now()
+          });
+        }
+
+        showToast(`Đăng nhập thành công: ${matchedStaff.name} (${matchedStaff.roleLabel})`);
+
+        // Navigate to chosen workspace destination
+        setTimeout(() => {
+          window.location.href = STATE.targetWorkspaceUrl;
+        }, 600);
+
+      } else {
+        // Unknown PIN
+        triggerPinError('Mã PIN không đúng (Gợi ý: 1234, 5678, 8888, 2468)');
+      }
+    }
+
+    /* =========================================================================
+       5. Quick Staff Shortcuts & Workspace Selection
+       ========================================================================= */
+    function selectWorkspace(workspaceKey, targetUrl) {
+      playTapChirp();
+      STATE.selectedWorkspace = workspaceKey;
+      STATE.targetWorkspaceUrl = targetUrl;
+
+      const keys = ['cashier', 'kds', 'shift', 'tables'];
+      keys.forEach(k => {
+        const chip = document.getElementById(`ws-chip-${k}`);
+        if (!chip) return;
+        if (k === workspaceKey) {
+          chip.className = 'min-h-[48px] px-3 py-2.5 rounded-xl border border-emerald-500 bg-emerald-50/90 text-emerald-950 font-semibold ring-2 ring-emerald-500/20 shadow-xs flex items-center gap-2.5 transition text-left cursor-pointer focus:outline-none';
+          const iconContainer = chip.querySelector('div');
+          if (iconContainer) {
+            iconContainer.className = 'w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs';
+          }
+        } else {
+          chip.className = 'min-h-[48px] px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 font-medium shadow-2xs flex items-center gap-2.5 transition text-left cursor-pointer focus:outline-none';
+          const iconContainer = chip.querySelector('div');
+          if (iconContainer) {
+            iconContainer.className = 'w-7 h-7 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center flex-shrink-0';
+          }
+        }
+      });
+    }
+
+    function quickSelectStaff(pin) {
+      if (STATE.isSubmitting) return;
+
+      const staff = STAFF_DATABASE.find(s => s.pin === pin);
+      if (staff && !STATE.isManagerApprovalMode) {
+        // In normal mode, align destination workspace with staff role
+        selectWorkspace(staff.defaultWorkspace, staff.defaultUrl);
+      }
+
+      STATE.currentPin = '';
+      renderPinDisplay();
+
+      // Tactile fill simulation (50ms per digit)
+      const digits = pin.split('');
+      let index = 0;
+      const interval = setInterval(() => {
+        if (index < digits.length) {
+          handleNumpadPress(digits[index]);
+          index++;
+        } else {
+          clearInterval(interval);
+        }
+      }, 65);
+    }
+
+    function cancelManagerApproval() {
+      playTapChirp();
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({
+            type: 'MANAGER_APPROVED',
+            success: false,
+            cancelled: true
+          }, '*');
+        } catch (e) {}
+        window.close();
+      } else if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = '../index.html';
+      }
+    }
+
+    /* =========================================================================
+       6. Station Switcher Dropdown Controller
+       ========================================================================= */
+    function toggleStationSwitcher(forceState) {
+      const dropdown = document.getElementById('station-switcher-dropdown');
+      const backdrop = document.getElementById('station-switcher-backdrop');
+      const chevron = document.getElementById('station-switcher-chevron');
+      const btn = document.getElementById('btn-station-switcher');
+      if (!dropdown || !backdrop) return;
+
+      const isCurrentlyOpen = !dropdown.classList.contains('hidden');
+      const nextOpen = (typeof forceState === 'boolean') ? forceState : !isCurrentlyOpen;
+
+      if (nextOpen) {
+        dropdown.classList.remove('hidden');
+        backdrop.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+        playTapChirp();
+      } else {
+        dropdown.classList.add('hidden');
+        backdrop.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    /* =========================================================================
+       7. Keyboard Shortcuts Navigation (Task 2 Brief Section 5)
+       ========================================================================= */
+    window.addEventListener('keydown', function (e) {
+      // Toggle station switcher on F0, F10, or backtick
+      if (e.key === 'F10' || e.key === '`') {
+        e.preventDefault();
+        toggleStationSwitcher();
+        return;
+      }
+
+      // Close open station switcher on Escape
+      const dropdown = document.getElementById('station-switcher-dropdown');
+      if (e.key === 'Escape' && dropdown && !dropdown.classList.contains('hidden')) {
+        e.preventDefault();
+        toggleStationSwitcher(false);
+        return;
+      }
+
+      // Handle Numpad / Keypad digits 0 - 9
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        handleNumpadPress(e.key);
+        return;
+      }
+
+      // Backspace
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        handleNumpadPress('BACKSPACE');
+        return;
+      }
+
+      // Escape or 'c' / 'C' -> Clear all
+      if (e.key === 'Escape' || e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        handleNumpadPress('C');
+        return;
+      }
+
+      // Enter -> Submit PIN
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (STATE.currentPin.length === 4) {
+          submitPinAuth();
+        } else {
+          setFeedbackMessage('Vui lòng nhập đủ 4 chữ số PIN', 'text-amber-600 font-bold');
+        }
+        return;
+      }
+
+      // Station hotkeys F1, F3, F4, F5, F6, F7
+      if (e.key === 'F1') { e.preventDefault(); window.location.href = '../index.html'; }
+      if (e.key === 'F3') { e.preventDefault(); window.location.href = 'kds.html'; }
+      if (e.key === 'F4') { e.preventDefault(); window.location.href = 'shift.html'; }
+      if (e.key === 'F5') { e.preventDefault(); window.location.href = 'tables.html'; }
+      if (e.key === 'F6') { e.preventDefault(); window.location.href = 'history.html'; }
+      if (e.key === 'F7') { e.preventDefault(); window.location.href = 'settings.html'; }
+    });
+
+    /* =========================================================================
+       8. Real-time Clock & Store Metadata Init
+       ========================================================================= */
+    function updateClock() {
+      const now = new Date();
+      const clockEl = document.getElementById('live-clock');
+      const dateEl = document.getElementById('live-date');
+      if (clockEl) {
+        clockEl.textContent = now.toLocaleTimeString('vi-VN', { hour12: false });
+      }
+      if (dateEl) {
+        dateEl.textContent = now.toLocaleDateString('vi-VN', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      }
+    }
+
+    let toastTimer = null;
+    function showToast(text, iconName = 'check-circle') {
+      const toast = document.getElementById('pos-toast');
+      const toastText = document.getElementById('pos-toast-text');
+      const toastIcon = document.getElementById('pos-toast-icon');
+      if (!toast || !toastText) return;
+
+      toastText.textContent = text;
+      if (toastIcon) {
+        toastIcon.setAttribute('data-lucide', iconName);
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      toast.classList.remove('translate-y-8', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-8', 'opacity-0');
+      }, 2500);
+    }
+
+    /* =========================================================================
+       9. Initialization & Mode Detection
+       ========================================================================= */
+    window.addEventListener('DOMContentLoaded', function () {
+      // Initialize Lucide icons
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+
+      // Initialize Clock
+      updateClock();
+      setInterval(updateClock, 1000);
+
+      // Read URL Query Params for Manager Approval Mode
+      const urlParams = new URLSearchParams(window.location.search);
+      const mode = urlParams.get('mode');
+      const action = urlParams.get('action');
+      const callback = urlParams.get('callback') || urlParams.get('return_url');
+
+      if (mode === 'manager_approval') {
+        STATE.isManagerApprovalMode = true;
+        if (action) STATE.approvalAction = action;
+        if (callback) STATE.callbackUrl = callback;
+
+        // Configure UI for Manager Approval Mode
+        const approvalBanner = document.getElementById('manager-approval-banner');
+        const standardHeader = document.getElementById('standard-auth-header');
+        const wsSection = document.getElementById('workspace-selector-section');
+        const cancelSection = document.getElementById('manager-cancel-section');
+        const actionReasonEl = document.getElementById('manager-action-reason');
+        const stationLabel = document.getElementById('current-station-label');
+
+        if (approvalBanner) approvalBanner.classList.remove('hidden');
+        if (standardHeader) standardHeader.classList.add('hidden');
+        if (wsSection) wsSection.classList.add('hidden');
+        if (cancelSection) cancelSection.classList.remove('hidden');
+        if (actionReasonEl) actionReasonEl.textContent = STATE.approvalAction;
+        if (stationLabel) stationLabel.textContent = 'Duyệt Quản lý';
+
+        document.title = 'POS Cafe - Xác thực duyệt quyền Quản lý';
+      }
+
+      // Sync Store Info from POS_BUS if available
+      if (window.POS_BUS && window.POS_BUS.getStoreInfo) {
+        try {
+          const storeInfo = window.POS_BUS.getStoreInfo();
+          if (storeInfo && storeInfo.storeName) {
+            const titleEl = document.getElementById('auth-title');
+            const topStoreEl = document.getElementById('top-store-name');
+            if (titleEl && !STATE.isManagerApprovalMode) titleEl.textContent = storeInfo.storeName;
+            if (topStoreEl) topStoreEl.textContent = storeInfo.storeName;
+          }
+        } catch (e) {}
+      }
+
+      // Sync active staff default workspace
+      if (window.POS_BUS && window.POS_BUS.getCurrentStaff) {
+        try {
+          const curStaff = window.POS_BUS.getCurrentStaff();
+          if (curStaff && curStaff.role) {
+            const matching = STAFF_DATABASE.find(s => s.role === curStaff.role);
+            if (matching && !STATE.isManagerApprovalMode) {
+              selectWorkspace(matching.defaultWorkspace, matching.defaultUrl);
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Refresh icons
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>
