@@ -756,3 +756,15 @@ CREATE TABLE idempotency_keys (
 * The cashier screen has no local cart to reconcile; a stale draft surfaces as a refetch rather than as a divergent total.
 * Every draft edit costs a round trip. On the staff LAN this is the intended trade: correctness of the money path over interaction latency.
 * Optimistic update and rollback become a shared concern of the feature `api/` seam rather than of a store.
+
+## ADR-054: Capability-denied routes redirect to /no-access, never to /
+
+* **Decision Date:** 2026-09-21
+* **Status:** Accepted
+* **Context:** Web slice 1 ships `requireCapability(capability)` in `web/src/lib/guards.ts`, whose implementation plan mandated redirecting a capability miss to `/`. But `/` itself is guarded by `requireCapability("sales.operate")`, and the Barista role holds `catalog.manage_availability` and `preparation.operate` but not `sales.operate`. Under that composition, a Barista signing in, declaring any workspace, and landing on `/` — or entering any route they lack the capability for — triggers a redirect whose target re-runs the identical failing guard: an unresolvable self-redirect cycle.
+* **Decision:**
+* A dedicated `/no-access` route (`web/src/routes/_app/no-access.tsx`) is the redirect target for every capability miss. It carries no `beforeLoad` of its own; the `_app` layout's `requireAuthenticated` is its only guard, so the redirect always settles on the first hop.
+* Route capability guards are unchanged: `/` requires `sales.operate`, `/shift` requires `sales_shift.operate`, `/kds` requires `preparation.operate`, `/settings` requires `staff.administer`.
+* **Consequences:**
+* A role with no slice-1 screen of its own (Barista today) lands on an explicit Vietnamese access-denied screen instead of looping or silently rendering an unauthorized surface.
+* Later slices that give a role its first screen (KDS in slice 6) should land users on their first permitted route after workspace declaration, making `/no-access` a rarely-seen fallback rather than a destination.
