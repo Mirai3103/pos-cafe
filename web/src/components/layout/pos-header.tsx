@@ -9,10 +9,11 @@ import {
   Receipt,
   Settings,
   Lock,
-  User,
+  LogOut,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useSessionStore } from "@/stores/use-session-store";
+import { useLock, useSignOut } from "@/features/auth/api/use-auth";
 
 const navItems = [
   { to: "/", label: "Bán hàng", icon: ShoppingCart },
@@ -23,9 +24,19 @@ const navItems = [
   { to: "/settings", label: "Cài đặt", icon: Settings },
 ];
 
+const WORKSPACE_LABELS: Record<string, string> = {
+  cashier: "Quầy thu ngân",
+  preparation: "Khu pha chế",
+  manager: "Quản lý",
+};
+
 export function PosHeader() {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+  const displayName = useSessionStore((s) => s.displayName);
+  const workspace = useSessionStore((s) => s.workspace);
+  const lock = useLock();
+  const signOut = useSignOut();
 
   const [time, setTime] = React.useState<string>("");
 
@@ -90,24 +101,35 @@ export function PosHeader() {
           <span className="text-sm font-semibold font-mono tracking-wide text-foreground">{time}</span>
         </div>
 
-        {/* Active Cashier & Shift Badge */}
-        <div className="flex items-center gap-2 border-l border-border pl-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <User className="h-4 w-4" />
+        {/* Staff identity & session actions */}
+        <div className="flex items-center gap-2">
+          <div className="text-right">
+            <div className="text-sm font-semibold text-foreground">{displayName ?? "—"}</div>
+            <div className="text-2xs text-muted-foreground">
+              {workspace ? WORKSPACE_LABELS[workspace] : "Chưa chọn khu vực"}
+            </div>
           </div>
-          <div className="hidden md:flex flex-col text-left">
-            <span className="text-xs font-semibold text-foreground">Thu ngân #01</span>
-            <span className="text-2xs text-muted-foreground">Ca sáng (06:00 - 14:00)</span>
-          </div>
-          <Badge variant="secondary" className="hidden xl:inline-flex">Đang mở ca</Badge>
-        </div>
-
-        {/* Lock Screen / Logout */}
-        <Link to="/auth/login">
-          <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg" title="Khóa màn hình">
-            <Lock className="h-4 w-4 text-muted-foreground" />
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-12 w-12 rounded-xl"
+            aria-label="Khóa màn hình"
+            disabled={lock.isPending}
+            onClick={() => lock.mutate()}
+          >
+            <Lock className="size-5" />
           </Button>
-        </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-12 w-12 rounded-xl"
+            aria-label="Đăng xuất"
+            disabled={signOut.isPending}
+            onClick={() => signOut.mutate()}
+          >
+            <LogOut className="size-5" />
+          </Button>
+        </div>
       </div>
     </header>
   );
