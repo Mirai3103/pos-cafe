@@ -872,7 +872,10 @@
       const sizeId = options.sizeId || item.defaultSize || (item.sizes && item.sizes[0] ? item.sizes[0].id : null);
       const sizeObj = item.sizes ? item.sizes.find(s => s.id === sizeId) : null;
       const sizeName = sizeObj ? sizeObj.name : '';
-      const unitPrice = sizeObj ? sizeObj.price : item.basePrice;
+      const toppingsSurcharge = (options.modifiers || []).reduce((sum, m) => sum + (m.price || 0), 0);
+      const baseSizePrice = sizeObj ? sizeObj.price : item.basePrice;
+      const unitPrice = options.unitPrice != null ? options.unitPrice : (baseSizePrice + toppingsSurcharge);
+      const qty = options.quantity || 1;
 
       // Check if item already exists in cart with same size and modifiers
       const existingItem = state.cart.find(ci => {
@@ -883,11 +886,11 @@
       });
 
       if (existingItem) {
-        existingItem.quantity += (options.quantity || 1);
+        existingItem.quantity += qty;
         existingItem.lineTotalVND = existingItem.quantity * existingItem.unitPrice;
       } else {
         const newCartItem = {
-          id: 'cart_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          id: options.id || ('cart_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
           menuItemId: item.id,
           name: item.name,
           sizeId: sizeId,
@@ -896,20 +899,408 @@
           unitPrice: unitPrice,
           modifiers: options.modifiers || [],
           preparationNote: options.preparationNote || '',
-          quantity: options.quantity || 1,
-          lineTotalVND: unitPrice * (options.quantity || 1)
+          quantity: qty,
+          lineTotalVND: unitPrice * qty
         };
         state.cart.push(newCartItem);
       }
 
       state.notify();
-      showToast(`Đã thêm "${item.name}" vào đơn hàng`);
+      const sizeSuffix = sizeName ? ` (${sizeName})` : '';
+      showToast(`Đã thêm "${item.name}"${sizeSuffix} vào đơn hàng`);
     }
 
-    // Placeholder hook for Task 3: Modifier Popover with Smart Defaults
+    /* =========================================================================
+       3.5 Modifier Popover State & Controllers (Task 3)
+       ========================================================================= */
+    let selectedItemForModifier = null;
+    let modifierState = {
+      sizeId: null,
+      sugar: '100%',
+      ice: '100% đá',
+      toppings: [],
+      preparationNote: '',
+      quantity: 1
+    };
+
+    const SUGAR_OPTIONS = [
+      { value: '0%', label: '0%' },
+      { value: '30%', label: '30%' },
+      { value: '50%', label: '50%' },
+      { value: '70%', label: '70%' },
+      { value: '100%', label: '100% (Mặc định)', isDefault: true }
+    ];
+
+    const ICE_OPTIONS = [
+      { value: 'Nóng', label: 'Nóng' },
+      { value: 'Không đá', label: 'Không đá' },
+      { value: '50% đá', label: '50% đá' },
+      { value: '100% đá', label: '100% đá (Mặc định)', isDefault: true }
+    ];
+
+    const MODIFIER_TOPPINGS = [
+      { id: 'thach_cf', name: 'Thạch cà phê', price: 10000 },
+      { id: 'kem_cheese', name: 'Kem Cheese', price: 12000 },
+      { id: 'tran_chau_trang', name: 'Trân châu trắng', price: 10000 }
+    ];
+
+    const QUICK_TAGS = ['Ít sữa', 'Pha đậm', 'Để đá riêng'];
+
     function openModifierModal(item) {
-      console.log('openModifierModal called for:', item);
-      showToast(`Tùy chọn cho "${item.name}" (Hook Task 3)`);
+      if (!item) return;
+      selectedItemForModifier = item;
+      window.selectedItemForModifier = item;
+
+      // Smart Defaults: pre-select Size M (or item default), 100% Đường, 100% Đá
+      const defaultSize = (item.sizes && item.sizes.length > 0)
+        ? (item.sizes.find(s => s.isDefault || s.id === item.defaultSize)?.id || item.sizes[0].id)
+        : null;
+
+      modifierState = {
+        sizeId: defaultSize,
+        sugar: '100%',
+        ice: '100% đá',
+        toppings: [],
+        preparationNote: '',
+        quantity: 1
+      };
+
+      // Populate header
+      const titleEl = document.getElementById('modifier-modal-title');
+      const catEl = document.getElementById('modifier-modal-category');
+      if (titleEl) titleEl.textContent = item.name;
+      if (catEl) catEl.textContent = item.categoryName || '';
+
+      // Render modal body & footer
+      renderModifierModalBody();
+      updateModifierFooter();
+
+      // Show modal
+      const backdrop = document.getElementById('modifier-modal-backdrop');
+      if (backdrop) {
+        backdrop.classList.remove('hidden');
+      }
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    function closeModifierModal() {
+      const backdrop = document.getElementById('modifier-modal-backdrop');
+      if (backdrop) {
+        backdrop.classList.add('hidden');
+      }
+      selectedItemForModifier = null;
+      window.selectedItemForModifier = null;
+    }
+
+    function selectModifierSize(sizeId) {
+      modifierState.sizeId = sizeId;
+      renderModifierModalBody();
+      updateModifierFooter();
+    }
+
+    function selectModifierSugar(sugarVal) {
+      modifierState.sugar = sugarVal;
+      renderModifierModalBody();
+    }
+
+    function selectModifierIce(iceVal) {
+      modifierState.ice = iceVal;
+      renderModifierModalBody();
+    }
+
+    function toggleModifierTopping(toppingId) {
+      const idx = modifierState.toppings.indexOf(toppingId);
+      if (idx >= 0) {
+        modifierState.toppings.splice(idx, 1);
+      } else {
+        modifierState.toppings.push(toppingId);
+      }
+      renderModifierModalBody();
+      updateModifierFooter();
+    }
+
+    function toggleQuickTag(tagText) {
+      const noteInput = document.getElementById('modifier-note-input');
+      const currentVal = (noteInput ? noteInput.value : modifierState.preparationNote) || '';
+      let parts = currentVal.split(',').map(s => s.trim()).filter(Boolean);
+
+      const tagIdx = parts.indexOf(tagText);
+      if (tagIdx >= 0) {
+        parts.splice(tagIdx, 1);
+      } else {
+        parts.push(tagText);
+      }
+
+      modifierState.preparationNote = parts.join(', ');
+      if (noteInput) {
+        noteInput.value = modifierState.preparationNote;
+      }
+      renderModifierModalBody();
+    }
+
+    function handleNoteInput(noteText) {
+      modifierState.preparationNote = noteText || '';
+      updateQuickTagStyles();
+    }
+
+    function updateQuickTagStyles() {
+      const currentVal = modifierState.preparationNote || '';
+      const parts = currentVal.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+      QUICK_TAGS.forEach((tag, idx) => {
+        const btn = document.getElementById(`quick-tag-btn-${idx}`);
+        if (!btn) return;
+        const isActive = parts.includes(tag.toLowerCase());
+        if (isActive) {
+          btn.className = 'min-h-[48px] h-12 px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 select-none bg-emerald-50 text-emerald-800 border-2 border-emerald-500 shadow-xs';
+        } else {
+          btn.className = 'min-h-[48px] h-12 px-3.5 py-2 rounded-xl text-xs md:text-sm font-medium transition-all flex items-center justify-center gap-1.5 select-none bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+        }
+      });
+    }
+
+    function updateModifierQty(delta) {
+      modifierState.quantity = Math.max(1, (modifierState.quantity || 1) + delta);
+      const qtyEl = document.getElementById('modifier-qty-display');
+      if (qtyEl) qtyEl.textContent = String(modifierState.quantity);
+      updateModifierFooter();
+    }
+
+    function calculateCurrentModifierTotal() {
+      if (!selectedItemForModifier) return { basePrice: 0, toppingsTotal: 0, unitTotal: 0, quantity: 1, lineTotal: 0 };
+
+      let basePrice = selectedItemForModifier.basePrice || 0;
+      if (selectedItemForModifier.sizes && selectedItemForModifier.sizes.length > 0) {
+        const sizeObj = selectedItemForModifier.sizes.find(s => s.id === modifierState.sizeId);
+        if (sizeObj) {
+          basePrice = sizeObj.price;
+        }
+      }
+
+      const toppingsTotal = modifierState.toppings.reduce((sum, tid) => {
+        const top = MODIFIER_TOPPINGS.find(t => t.id === tid);
+        return sum + (top ? top.price : 0);
+      }, 0);
+
+      const unitTotal = basePrice + toppingsTotal;
+      const quantity = modifierState.quantity || 1;
+      return {
+        basePrice,
+        toppingsTotal,
+        unitTotal,
+        quantity,
+        lineTotal: unitTotal * quantity
+      };
+    }
+
+    function updateModifierFooter() {
+      const totals = calculateCurrentModifierTotal();
+      const totalPriceEl = document.getElementById('modifier-modal-total-price');
+      const btnPriceEl = document.getElementById('modifier-btn-price');
+      const qtyEl = document.getElementById('modifier-qty-display');
+
+      if (totalPriceEl) totalPriceEl.textContent = formatVND(totals.lineTotal);
+      if (btnPriceEl) btnPriceEl.textContent = formatVND(totals.lineTotal);
+      if (qtyEl) qtyEl.textContent = String(totals.quantity);
+    }
+
+    function confirmModifierSelection() {
+      if (!selectedItemForModifier) return;
+
+      const item = selectedItemForModifier;
+      const totals = calculateCurrentModifierTotal();
+      const sizeObj = item.sizes ? item.sizes.find(s => s.id === modifierState.sizeId) : null;
+      const sizeName = sizeObj ? sizeObj.name : '';
+
+      // Build structured modifiers array
+      const modifiersList = [];
+      if (modifierState.sugar) {
+        modifiersList.push({ group: 'sugar', name: 'Đường', value: modifierState.sugar });
+      }
+      if (modifierState.ice) {
+        modifiersList.push({ group: 'ice', name: 'Đá', value: modifierState.ice });
+      }
+      modifierState.toppings.forEach(tid => {
+        const top = MODIFIER_TOPPINGS.find(t => t.id === tid);
+        if (top) {
+          modifiersList.push({ group: 'topping', name: top.name, price: top.price });
+        }
+      });
+
+      addToCart(item, {
+        sizeId: modifierState.sizeId,
+        unitPrice: totals.unitTotal,
+        modifiers: modifiersList,
+        preparationNote: (modifierState.preparationNote || '').trim(),
+        quantity: totals.quantity
+      });
+
+      closeModifierModal();
+    }
+
+    function renderModifierModalBody() {
+      const container = document.getElementById('modifier-modal-body');
+      if (!container || !selectedItemForModifier) return;
+
+      const item = selectedItemForModifier;
+      const currentNotes = (modifierState.preparationNote || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+      let html = '';
+
+      // 1. Size Selection Group
+      if (item.sizes && item.sizes.length > 0) {
+        const gridCols = item.sizes.length <= 2 ? 'grid-cols-2' : (item.sizes.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4');
+        html += `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Chọn kích cỡ</span>
+              <span class="text-[11px] text-slate-400 font-medium">Bắt buộc</span>
+            </div>
+            <div class="grid ${gridCols} gap-2">
+              ${item.sizes.map(size => {
+                const isSelected = modifierState.sizeId === size.id;
+                const isDefault = size.isDefault || size.id === item.defaultSize;
+                const activeClass = isSelected
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+                const sizePrefix = (size.id === 'S' || size.id === 'M' || size.id === 'L') ? size.id : size.name;
+                const defaultSuffix = isDefault ? ' (Mặc định)' : '';
+
+                return `
+                  <button type="button" onclick="selectModifierSize('${size.id}')"
+                    class="min-h-[48px] h-12 px-3 py-1.5 rounded-xl border text-xs md:text-sm font-semibold transition-all flex flex-col items-center justify-center leading-tight select-none ${activeClass}">
+                    <span class="font-bold">${sizePrefix}: ${formatVND(size.price)}</span>
+                    ${isDefault ? `<span class="text-[10px] ${isSelected ? 'text-slate-300' : 'text-slate-400'} font-normal leading-none mt-0.5">${defaultSuffix.trim()}</span>` : ''}
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // 2. Sugar Level Group (Mức ngọt)
+      html += `
+        <div class="space-y-2 pt-3 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Mức ngọt (Đường)</span>
+            <span class="text-[11px] text-slate-400 font-medium">Mặc định: 100%</span>
+          </div>
+          <div class="grid grid-cols-5 gap-1.5">
+            ${SUGAR_OPTIONS.map(opt => {
+              const isSelected = modifierState.sugar === opt.value;
+              const activeClass = isSelected
+                ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-semibold'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 font-medium';
+
+              return `
+                <button type="button" onclick="selectModifierSugar('${opt.value}')"
+                  class="min-h-[48px] h-12 px-1.5 py-1 rounded-xl border text-xs md:text-sm transition-all flex flex-col items-center justify-center leading-tight select-none ${activeClass}">
+                  <span class="font-bold">${opt.value}</span>
+                  ${opt.isDefault ? `<span class="text-[9px] ${isSelected ? 'text-slate-300' : 'text-slate-400'} leading-none mt-0.5">(Mặc định)</span>` : ''}
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+
+      // 3. Ice Level Group (Mức đá)
+      html += `
+        <div class="space-y-2 pt-3 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Mức đá</span>
+            <span class="text-[11px] text-slate-400 font-medium">Mặc định: 100% đá</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            ${ICE_OPTIONS.map(opt => {
+              const isSelected = modifierState.ice === opt.value;
+              const activeClass = isSelected
+                ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-semibold'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 font-medium';
+
+              return `
+                <button type="button" onclick="selectModifierIce('${opt.value}')"
+                  class="min-h-[48px] h-12 px-2 py-1 rounded-xl border text-xs md:text-sm transition-all flex flex-col items-center justify-center leading-tight select-none ${activeClass}">
+                  <span class="font-bold">${opt.value}</span>
+                  ${opt.isDefault ? `<span class="text-[9px] ${isSelected ? 'text-slate-300' : 'text-slate-400'} leading-none mt-0.5">(Mặc định)</span>` : ''}
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+
+      // 4. Topping Group (Topping thêm)
+      html += `
+        <div class="space-y-2 pt-3 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Topping thêm</span>
+            <span class="text-[11px] text-slate-400 font-medium">Chọn nhiều</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            ${MODIFIER_TOPPINGS.map(top => {
+              const isChecked = modifierState.toppings.includes(top.id);
+              const activeClass = isChecked
+                ? 'bg-emerald-50 text-emerald-900 border-2 border-emerald-500 shadow-xs'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+
+              return `
+                <button type="button" onclick="toggleModifierTopping('${top.id}')"
+                  class="min-h-[48px] h-12 px-3 py-2 rounded-xl text-xs md:text-sm transition-all flex items-center justify-between select-none ${activeClass}">
+                  <div class="flex items-center gap-1.5 truncate">
+                    <i data-lucide="${isChecked ? 'check-square' : 'square'}" class="w-4 h-4 flex-shrink-0 ${isChecked ? 'text-emerald-600' : 'text-slate-400'}"></i>
+                    <span class="font-semibold truncate">+ ${top.name}</span>
+                  </div>
+                  <span class="font-mono text-xs font-bold flex-shrink-0 ${isChecked ? 'text-emerald-700' : 'text-slate-500'}">+${formatVND(top.price)}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+
+      // 5. Preparation Notes Group (Ghi chú pha chế)
+      html += `
+        <div class="space-y-2 pt-3 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Ghi chú pha chế</span>
+            <span class="text-[11px] text-slate-400 font-medium">Nhấn tag nhanh hoặc gõ tay</span>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            ${QUICK_TAGS.map((tag, idx) => {
+              const isActive = currentNotes.includes(tag.toLowerCase());
+              const activeClass = isActive
+                ? 'bg-emerald-50 text-emerald-800 border-2 border-emerald-500 shadow-xs font-semibold'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 font-medium';
+
+              return `
+                <button id="quick-tag-btn-${idx}" type="button" onclick="toggleQuickTag('${tag}')"
+                  class="min-h-[48px] h-12 px-3 py-2 rounded-xl text-xs md:text-sm transition-all flex items-center justify-center gap-1.5 select-none ${activeClass}">
+                  <i data-lucide="tag" class="w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-emerald-600' : 'text-slate-400'}"></i>
+                  <span class="truncate">${tag}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+          <div class="pt-1">
+            <input id="modifier-note-input" type="text" autocomplete="off"
+              value="${(modifierState.preparationNote || '').replace(/"/g, '&quot;')}"
+              placeholder="Ghi chú thêm cho pha chế (nhập tay)..."
+              class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-xs md:text-sm text-slate-800 placeholder-slate-400 outline-none transition font-medium"
+              oninput="handleNoteInput(this.value)">
+          </div>
+        </div>
+      `;
+
+      container.innerHTML = html;
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
     }
 
     // Floating tactile toast helper
@@ -987,6 +1378,7 @@
     function initKeyboardShortcuts() {
       const searchInput = document.getElementById('quick-search-input');
       const clearBtn = document.getElementById('btn-clear-search');
+      const modalBackdrop = document.getElementById('modifier-modal-backdrop');
 
       if (searchInput) {
         searchInput.addEventListener('input', (e) => {
@@ -1000,7 +1392,52 @@
         });
       }
 
+      if (modalBackdrop) {
+        modalBackdrop.addEventListener('click', (e) => {
+          if (e.target === modalBackdrop) {
+            closeModifierModal();
+          }
+        });
+      }
+
       window.addEventListener('keydown', (e) => {
+        const isModalOpen = modalBackdrop && !modalBackdrop.classList.contains('hidden');
+
+        // Modal Active Shortcuts
+        if (isModalOpen) {
+          // Esc: Cancel & close modal without adding
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            closeModifierModal();
+            return;
+          }
+
+          const noteInput = document.getElementById('modifier-note-input');
+          const isNoteInputActive = document.activeElement === noteInput;
+
+          // Enter: Confirm and add to cart (works even if focused in note input)
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmModifierSelection();
+            return;
+          }
+
+          // Space: Confirm and add to cart when NOT actively typing in note input
+          if ((e.key === ' ' || e.code === 'Space') && !isNoteInputActive) {
+            e.preventDefault();
+            confirmModifierSelection();
+            return;
+          }
+
+          // Trap / prevent conflicting shortcuts when modal is open
+          if (['F1', 'F2', '/'].includes(e.key) || (e.ctrlKey && e.key.toLowerCase() === 'k')) {
+            e.preventDefault();
+            return;
+          }
+
+          return;
+        }
+
         const isInputActive = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
 
         // F1: Mang đi (Takeaway)
@@ -1040,6 +1477,15 @@
     window.handleItemClick = handleItemClick;
     window.addToCart = addToCart;
     window.openModifierModal = openModifierModal;
+    window.closeModifierModal = closeModifierModal;
+    window.confirmModifierSelection = confirmModifierSelection;
+    window.selectModifierSize = selectModifierSize;
+    window.selectModifierSugar = selectModifierSugar;
+    window.selectModifierIce = selectModifierIce;
+    window.toggleModifierTopping = toggleModifierTopping;
+    window.toggleQuickTag = toggleQuickTag;
+    window.updateModifierQty = updateModifierQty;
+    window.handleNoteInput = handleNoteInput;
     window.clearSearch = clearSearch;
     window.matchesSearch = matchesSearch;
     window.showToast = showToast;
@@ -1072,8 +1518,78 @@
     });
   </script>
 
+  <!-- ========================================================================= -->
+  <!-- 4. MODIFIER POPOVER MODAL (Task 3)                                         -->
+  <!-- ========================================================================= -->
+  <div id="modifier-modal-backdrop" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 hidden animate-in fade-in duration-150">
+    <div id="modifier-modal-dialog" class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150" role="dialog" aria-modal="true" aria-labelledby="modifier-modal-title">
+
+      <!-- Modal Header -->
+      <div class="h-16 px-5 border-b border-slate-200 flex items-center justify-between flex-shrink-0 bg-white">
+        <div class="flex items-center gap-2.5 overflow-hidden">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0 font-bold">
+            <i data-lucide="coffee" class="w-5 h-5"></i>
+          </div>
+          <div class="truncate">
+            <div class="flex items-center gap-2">
+              <h3 id="modifier-modal-title" class="text-base font-bold text-slate-900 truncate">Cà phê sữa đá</h3>
+              <span id="modifier-modal-category" class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[11px] font-medium flex-shrink-0">Cà phê Việt</span>
+            </div>
+            <p id="modifier-modal-subtitle" class="text-xs text-slate-500 truncate mt-0.5">Tùy chọn kích cỡ, mức đường đá và topping</p>
+          </div>
+        </div>
+        <!-- Close Button (>= 48px touch target) -->
+        <button id="modifier-modal-close-btn" type="button" onclick="closeModifierModal()"
+          class="h-12 w-12 min-h-[48px] min-w-[48px] rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition flex items-center justify-center flex-shrink-0 select-none"
+          title="Đóng (Esc)">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable Option Groups) -->
+      <div id="modifier-modal-body" class="p-5 overflow-y-auto space-y-4 flex-1 bg-white">
+        <!-- Rendered dynamically by renderModifierModalBody -->
+      </div>
+
+      <!-- Sticky Footer Bar -->
+      <div class="border-t border-slate-200 bg-slate-50 px-5 py-3.5 flex items-center justify-between gap-3 flex-shrink-0 shadow-xs">
+        <div class="flex flex-col">
+          <span class="text-xs font-medium text-slate-500">Tổng cộng món:</span>
+          <span id="modifier-modal-total-price" class="font-mono font-bold text-xl md:text-2xl text-emerald-700 tabular-nums">35.000 đ</span>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <!-- Quantity Stepper (>= 48px touch target) -->
+          <div class="inline-flex items-center bg-white border border-slate-200 rounded-xl p-0.5 shadow-2xs">
+            <button type="button" onclick="updateModifierQty(-1)"
+              class="h-12 w-12 min-h-[48px] min-w-[48px] rounded-lg text-slate-600 hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center transition font-bold select-none text-base"
+              title="Giảm số lượng">
+              <i data-lucide="minus" class="w-4 h-4"></i>
+            </button>
+            <span id="modifier-qty-display" class="font-mono font-bold text-sm md:text-base text-slate-900 w-8 md:w-9 text-center tabular-nums">1</span>
+            <button type="button" onclick="updateModifierQty(1)"
+              class="h-12 w-12 min-h-[48px] min-w-[48px] rounded-lg text-slate-600 hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center transition font-bold select-none text-base"
+              title="Tăng số lượng">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Primary CTA Button (>= 48px touch target) -->
+          <button id="modifier-modal-confirm-btn" type="button" onclick="confirmModifierSelection()"
+            class="min-h-[48px] h-12 px-5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-semibold text-xs md:text-sm rounded-xl flex items-center justify-center gap-2 shadow-xs transition select-none">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Thêm vào đơn - </span>
+            <span id="modifier-btn-price" class="font-mono font-bold">35.000 đ</span>
+            <kbd class="hidden sm:inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-800/60 text-emerald-100 border border-emerald-400/20">Enter / Space</kbd>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Floating notification toast for tactile touch feedback -->
-  <div id="pos-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-lg text-xs md:text-sm font-medium transition-all duration-200 opacity-0 pointer-events-none translate-y-2 flex items-center gap-2 select-none">
+  <div id="pos-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-lg text-xs md:text-sm font-medium transition-all duration-200 opacity-0 pointer-events-none translate-y-2 flex items-center gap-2 select-none">
     <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i>
     <span id="pos-toast-msg">Thông báo</span>
   </div>
