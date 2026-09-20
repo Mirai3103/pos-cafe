@@ -56,15 +56,15 @@ Test dispatching and receiving events in Node environment.
 - Produces: Authenticated staff session in `localStorage.POS_CURRENT_STAFF`, redirects to selected workspace (`index.html`, `kds.html`, `shift.html`, `tables.html`).
 - Modal Mode: Supports `?mode=manager_approval` with postMessage callback.
 
-- [ ] **Step 1: Build auth.html layout**
+- [x] **Step 1: Build auth.html layout**
 Centered light card with PIN dots, 3x4 touch numpad (keys >= 64px), staff avatar shortcuts (`1234` Cashier, `5678` Barista, `8888` Manager, `2468` Waiter).
-- [ ] **Step 2: Implement PIN validation & Workspace routing**
+- [x] **Step 2: Implement PIN validation & Workspace routing**
 Handles 4-digit PIN entry, tactile click chirp, invalid shake animation, and workspace navigation.
-- [ ] **Step 3: Implement Manager Approval popup mode**
+- [x] **Step 3: Implement Manager Approval popup mode**
 Handles URL param `?mode=manager_approval` to authorize elevated actions.
-- [ ] **Step 4: Verify touch targets and zero em-dashes**
+- [x] **Step 4: Verify touch targets and zero em-dashes**
 Run automated checks.
-- [ ] **Step 5: Commit changes**
+- [x] **Step 5: Commit changes**
 `git add design-system/pos-cafe/pages/auth.html`
 `git commit -m "feat(ui): implement staff pin auth and workspace session lock screen"`
 
@@ -80,17 +80,17 @@ Run automated checks.
 - Consumes: `window.POS_BUS` events (`NEW_ORDER`, `ORDER_CANCELLED`, `ORDER_REMAKE`).
 - Produces: Order status updates (`QUEUED` -> `IN_PREPARATION` -> `READY` -> `FULFILLED`).
 
-- [ ] **Step 1: Build KDS header & 3-column Kanban layout**
+- [x] **Step 1: Build KDS header & 3-column Kanban layout**
 Columns: "Chờ pha (Queued)", "Đang pha (In Preparation)", "Đã xong (Ready)".
-- [ ] **Step 2: Implement Ticket Card with live timer & modifiers**
+- [x] **Step 2: Implement Ticket Card with live timer & modifiers**
 Color escalation (< 3 min green, 3-5 min amber, > 5 min red pulsing), item checklist, custom notes tags.
-- [ ] **Step 3: Implement Web Audio new ticket alert & status transitions**
+- [x] **Step 3: Implement Web Audio new ticket alert & status transitions**
 Audio chime when order arrives via bus; 1-touch buttons to advance ticket status.
-- [ ] **Step 4: Add station filtering**
+- [x] **Step 4: Add station filtering**
 Filter by `[Tất cả]`, `[Quầy Bar]`, `[Bếp Bánh]`.
-- [ ] **Step 5: Verify layout and touch targets**
+- [x] **Step 5: Verify layout and touch targets**
 Run automated checks.
-- [ ] **Step 6: Commit changes**
+- [x] **Step 6: Commit changes**
 `git add design-system/pos-cafe/pages/kds.html`
 `git commit -m "feat(ui): implement barista kitchen display system with live ticket kanban"`
 
@@ -106,17 +106,17 @@ Run automated checks.
 - Consumes: `window.POS_BUS` orders and cash transactions.
 - Produces: `localStorage.POS_ACTIVE_SHIFT` updates, opening float record, cash in/out logs, closing Z-report.
 
-- [ ] **Step 1: Build Opening Float Denomination Calculator**
+- [x] **Step 1: Build Opening Float Denomination Calculator**
 Numpad counter for currency notes (500k to 1k) calculating initial cash fund.
-- [ ] **Step 2: Build In-Shift Cash Fund Dashboard**
+- [x] **Step 2: Build In-Shift Cash Fund Dashboard**
 Cards for Opening Float, Cash Sales, VietQR Sales, Current Expected Cash. Cash In / Cash Out drawer modals with reason inputs.
-- [ ] **Step 3: Build Shift Closure & Reconciliation Dialog**
+- [x] **Step 3: Build Shift Closure & Reconciliation Dialog**
 Counted cash inputs, expected cash comparison, discrepancy calculation (Thừa/Khớp/Thiếu).
-- [ ] **Step 4: Build K80 Z-Report Preview & Print Modal**
+- [x] **Step 4: Build K80 Z-Report Preview & Print Modal**
 Closing financial statement with dedicated `@media print` CSS.
-- [ ] **Step 5: Verify calculations & touch targets**
+- [x] **Step 5: Verify calculations & touch targets**
 Run automated checks.
-- [ ] **Step 6: Commit changes**
+- [x] **Step 6: Commit changes**
 `git add design-system/pos-cafe/pages/shift.html`
 `git commit -m "feat(ui): implement sales shift management and z-report reconciliation"`
 
@@ -132,17 +132,17 @@ Run automated checks.
 - Consumes: `window.POS_BUS` table sessions.
 - Produces: Table transfer, merge, and split check events.
 
-- [ ] **Step 1: Build Floor Plan Grid & Zone Filters**
+- [x] **Step 1: Build Floor Plan Grid & Zone Filters**
 Tabs: Tầng 1, Tầng 2, Sân vườn. Table cards showing status, party size, running total.
-- [ ] **Step 2: Implement Table Transfer (Chuyển bàn)**
+- [x] **Step 2: Implement Table Transfer (Chuyển bàn)**
 Select source table -> target empty table -> transfer all orders.
-- [ ] **Step 3: Implement Table Merge (Gộp bàn)**
+- [x] **Step 3: Implement Table Merge (Gộp bàn)**
 Select Table A and Table B -> merge into unified session.
-- [ ] **Step 4: Implement Split Check (Tách bill)**
+- [x] **Step 4: Implement Split Check (Tách bill)**
 Item selection modal to split charges onto separate check.
-- [ ] **Step 5: Verify touch targets and UI transitions**
+- [x] **Step 5: Verify touch targets and UI transitions**
 Run automated checks.
-- [ ] **Step 6: Commit changes**
+- [x] **Step 6: Commit changes**
 `git add design-system/pos-cafe/pages/tables.html`
 `git commit -m "feat(ui): implement floor plan and table operations in waiter mode"`
 
@@ -158,17 +158,17 @@ Run automated checks.
 - Consumes: `localStorage.POS_ORDERS`.
 - Produces: Void records, Refund transactions, K80 re-prints.
 
-- [ ] **Step 1: Build Order History Data Table & Search Filters**
+- [x] **Step 1: Build Order History Data Table & Search Filters**
 Filter by date, payment method (Tiền mặt / VietQR), order status.
-- [ ] **Step 2: Build Order Details Drawer**
+- [x] **Step 2: Build Order Details Drawer**
 Itemized list, modifiers, payment details, cashier name, timestamps.
-- [ ] **Step 3: Implement K80 Receipt Re-print**
+- [x] **Step 3: Implement K80 Receipt Re-print**
 Modal with printable thermal receipt layout.
-- [ ] **Step 4: Implement Void / Refund with Reason and Manager Approval**
+- [x] **Step 4: Implement Void / Refund with Reason and Manager Approval**
 Reason dropdown, mandatory notes for "Khác", PIN verification check.
-- [ ] **Step 5: Verify table responsiveness and touch targets**
+- [x] **Step 5: Verify table responsiveness and touch targets**
 Run automated checks.
-- [ ] **Step 6: Commit changes**
+- [x] **Step 6: Commit changes**
 `git add design-system/pos-cafe/pages/history.html`
 `git commit -m "feat(ui): implement order history audit and void refund manager flow"`
 
@@ -183,15 +183,15 @@ Run automated checks.
 **Interfaces:**
 - Produces: `localStorage.POS_CATALOG_STATUS` and `localStorage.POS_STORE_INFO` broadcasting updates via `pos_cafe_bus`.
 
-- [ ] **Step 1: Build Out-of-Stock Quick Toggles**
+- [x] **Step 1: Build Out-of-Stock Quick Toggles**
 Searchable list of all menu items and toppings with 1-tap on/off switches.
-- [ ] **Step 2: Build Store & VietQR Setup Form**
+- [x] **Step 2: Build Store & VietQR Setup Form**
 Store name, address, hotline, WiFi password, Bank name, STK, Account holder.
-- [ ] **Step 3: Broadcast stock updates to index.html**
+- [x] **Step 3: Broadcast stock updates to index.html**
 Disabled items gray out on Cashier screen in real time.
-- [ ] **Step 4: Verify form persistence and touch targets**
+- [x] **Step 4: Verify form persistence and touch targets**
 Run automated checks.
-- [ ] **Step 5: Commit changes**
+- [x] **Step 5: Commit changes**
 `git add design-system/pos-cafe/pages/settings.html`
 `git commit -m "feat(ui): implement catalog out-of-stock toggles and store settings"`
 
@@ -209,8 +209,8 @@ Run automated checks.
 - Touch targets >= 48px across all 7 screens.
 - Zero em-dashes and zero AI-purple gradients across all files.
 
-- [ ] **Step 1: Run comprehensive node verification across all pages**
-- [ ] **Step 2: Verify touch targets, font stacks, and no em-dashes**
-- [ ] **Step 3: Commit final suite polish**
+- [x] **Step 1: Run comprehensive node verification across all pages**
+- [x] **Step 2: Verify touch targets, font stacks, and no em-dashes**
+- [x] **Step 3: Commit final suite polish**
 `git add .`
 `git commit -m "feat(ui): finalize pos cafe multi-screen suite with real-time sync"`
