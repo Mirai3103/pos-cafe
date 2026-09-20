@@ -1474,8 +1474,8 @@
         paymentMethod: 'cash',
         tenderedVND: 100000,
         changeDueVND: 8000,
-        timestamp: new Date(Date.now() - 290 * 60 * 1000).toISOString(),
-        shiftCode: 'Ca #04',
+        timestamp: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
+        shiftCode: 'Ca #03',
         cashierName: 'Nguyễn Thu Ngân'
       },
       {
@@ -1494,8 +1494,8 @@
         paymentMethod: 'qr',
         tenderedVND: 98000,
         changeDueVND: 0,
-        timestamp: new Date(Date.now() - 320 * 60 * 1000).toISOString(),
-        shiftCode: 'Ca #04',
+        timestamp: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
+        shiftCode: 'Ca #03',
         cashierName: 'Nguyễn Thu Ngân'
       },
       {
@@ -1515,8 +1515,8 @@
         paymentMethod: 'cash',
         tenderedVND: 100000,
         changeDueVND: 26000,
-        timestamp: new Date(Date.now() - 360 * 60 * 1000).toISOString(),
-        shiftCode: 'Ca #04',
+        timestamp: new Date(Date.now() - 72 * 3600 * 1000).toISOString(),
+        shiftCode: 'Ca #02',
         cashierName: 'Nguyễn Thu Ngân'
       },
       {
@@ -1535,8 +1535,8 @@
         paymentMethod: 'cash',
         tenderedVND: 50000,
         changeDueVND: 5000,
-        timestamp: new Date(Date.now() - 400 * 60 * 1000).toISOString(),
-        shiftCode: 'Ca #04',
+        timestamp: new Date(Date.now() - 96 * 3600 * 1000).toISOString(),
+        shiftCode: 'Ca #01',
         cashierName: 'Nguyễn Thu Ngân'
       }
     ];
@@ -2467,6 +2467,13 @@
       var reason = reasonSelect ? reasonSelect.value : 'Hết nguyên liệu';
       var note = noteInput ? noteInput.value.trim() : '';
 
+      if (reason.indexOf('Khác') !== -1 && !note) {
+        playErrorBuzz();
+        showToast('Vui lòng nhập ghi chú chi tiết khi chọn lý do Khác!', true);
+        if (noteInput) noteInput.focus();
+        return;
+      }
+
       // Update Order Model
       selectedOrder.status = 'void';
       selectedOrder.voidReason = reason;
@@ -2819,7 +2826,13 @@
         });
         if (order) {
           order.status = payload.status;
+          if (payload.order) {
+            Object.assign(order, payload.order);
+          }
           applyFilters();
+          if (selectedOrder && (selectedOrder.id === payload.orderId || selectedOrder.orderId === payload.orderId)) {
+            openOrderDrawer(order.id || order.orderId);
+          }
         }
       });
 
