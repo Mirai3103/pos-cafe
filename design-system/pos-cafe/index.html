@@ -186,21 +186,25 @@
 
       <!-- Bill Header -->
       <div class="h-14 border-b border-slate-200 px-4 flex items-center justify-between flex-shrink-0 bg-white">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-sm">
-            <i data-lucide="receipt" class="w-4 h-4"></i>
+        <div class="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
+          <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
+            <i id="bill-header-icon" data-lucide="receipt" class="w-4 h-4"></i>
           </div>
-          <div>
-            <div id="bill-order-title" class="text-sm font-bold text-slate-900 leading-tight">Đơn mang đi #14</div>
-            <div id="bill-order-subtitle" class="text-[11px] text-slate-500 font-medium">Khách mua mang về</div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span id="bill-order-title" class="text-sm font-bold text-slate-900 leading-tight truncate">Đơn mang đi #14</span>
+              <span id="bill-order-badge" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/60 flex-shrink-0">Mang đi</span>
+            </div>
+            <div id="bill-order-subtitle" class="text-[11px] text-slate-500 font-medium truncate mt-0.5">Khách mua mang về</div>
           </div>
         </div>
 
         <!-- Action / Reset Button -->
-        <button id="btn-clear-cart" type="button" onclick="window.POS_STATE.clearCart()"
-          class="min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition flex items-center gap-1.5 select-none">
+        <button id="btn-clear-cart" type="button" onclick="promptClearCart()"
+          class="min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 active:bg-rose-100 border border-transparent hover:border-rose-200 transition flex items-center gap-1.5 select-none flex-shrink-0"
+          title="Hủy đơn hàng / Làm mới">
           <i data-lucide="trash-2" class="w-4 h-4"></i>
-          <span>Làm mới</span>
+          <span>Hủy đơn</span>
         </button>
       </div>
 
@@ -214,21 +218,26 @@
           <p class="text-sm font-semibold text-slate-700">Chưa có món trong đơn</p>
           <p class="text-xs text-slate-400 mt-1 max-w-xs">Chạm vào món ở thực đơn bên trái hoặc gõ phím tắt để thêm món vào đơn hàng.</p>
         </div>
+
+        <!-- Rendered Cart Items List Container -->
+        <div id="cart-items-list" class="space-y-2.5 hidden">
+          <!-- Cart item cards populated dynamically by renderCart() -->
+        </div>
       </div>
 
       <!-- Financial Totals & Summary (Hook for Task 4 & 5) -->
       <div id="bill-financial-summary" class="border-t border-slate-200 bg-white p-4 space-y-2 flex-shrink-0 shadow-xs">
         <div class="flex items-center justify-between text-xs text-slate-600">
           <span>Tạm tính:</span>
-          <span id="bill-subtotal" class="font-mono font-semibold text-slate-800">0 đ</span>
+          <span id="bill-subtotal" class="font-mono font-semibold text-slate-800 tabular-nums">0 đ</span>
         </div>
         <div class="flex items-center justify-between text-xs text-slate-600">
-          <span>Khuyến mãi:</span>
-          <span id="bill-discount" class="font-mono text-slate-500">0 đ</span>
+          <span>Giảm giá:</span>
+          <span id="bill-discount" class="font-mono text-slate-500 tabular-nums">0 đ</span>
         </div>
         <div class="pt-2 border-t border-slate-100 flex items-baseline justify-between">
           <span class="text-sm font-bold text-slate-900">TỔNG CỘNG:</span>
-          <span id="bill-grand-total" class="font-mono text-2xl font-extrabold text-emerald-600 tracking-tight tabular-nums">0 đ</span>
+          <span id="bill-grand-total" class="font-mono text-2xl font-bold text-emerald-700 tracking-tight tabular-nums">0 đ</span>
         </div>
       </div>
 
@@ -584,14 +593,37 @@
         renderCatalog(this);
       },
 
+      // Financial adjustments
+      discountVND: 0,
+
       setSelectedTable(table) {
-        this.selectedTable = table;
+        if (typeof table === 'string') {
+          const found = (this.tables || []).find(t => t.id === table);
+          this.selectedTable = found || { id: table, name: table, zone: 'Tầng 1', seats: 4 };
+        } else {
+          this.selectedTable = table;
+        }
         this.notify();
       },
 
-      clearCart() {
-        this.cart = [];
-        this.notify();
+      updateItemQty(cartItemId, delta) {
+        return updateItemQty(cartItemId, delta);
+      },
+
+      removeCartItem(cartItemId) {
+        return removeCartItem(cartItemId);
+      },
+
+      clearCart(force = true) {
+        return clearCart(force);
+      },
+
+      getFinancialTotals() {
+        return getFinancialTotals();
+      },
+
+      renderCart() {
+        return renderCart(this);
       },
 
       formatVND: formatVND,
@@ -635,17 +667,59 @@
         }
       }
 
-      // Update Order Title in Bill Area
+      // Update Order Context in Bill Area
       const billTitle = document.getElementById('bill-order-title');
+      const billBadge = document.getElementById('bill-order-badge');
       const billSubtitle = document.getElementById('bill-order-subtitle');
-      if (billTitle && billSubtitle) {
+      const billHeaderIcon = document.getElementById('bill-header-icon');
+
+      if (billTitle) {
         if (isTakeaway) {
           billTitle.textContent = `Đơn mang đi #${state.serviceNumber}`;
-          billSubtitle.textContent = 'Khách mua mang về';
+          if (billBadge) {
+            billBadge.textContent = 'Mang đi';
+            billBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/60 flex-shrink-0';
+          }
+          if (billSubtitle) {
+            billSubtitle.textContent = 'Khách mua mang về';
+          }
+          if (billHeaderIcon) {
+            billHeaderIcon.setAttribute('data-lucide', 'shopping-bag');
+          }
         } else {
-          const tableName = state.selectedTable ? state.selectedTable.name : 'Chưa chọn bàn';
-          billTitle.textContent = `Đơn tại bàn - ${tableName}`;
-          billSubtitle.textContent = state.selectedTable ? `Khu vực: ${state.selectedTable.zone} (${state.selectedTable.seats} chỗ)` : 'Vui lòng chọn bàn trên sơ đồ';
+          let table = state.selectedTable;
+          if (typeof table === 'string') {
+            table = (state.tables || []).find(t => t.id === table) || { id: table, zone: 'Tầng 1', seats: 4 };
+          }
+
+          if (table) {
+            billTitle.textContent = `Bàn ${table.id} (${table.zone})`;
+            if (billBadge) {
+              billBadge.textContent = 'Tại bàn';
+              billBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 flex-shrink-0';
+            }
+            if (billSubtitle) {
+              const dur = table.activeSession && table.activeSession.duration ? ` • ${table.activeSession.duration}` : '';
+              billSubtitle.textContent = `${table.seats} chỗ${dur}`;
+            }
+          } else {
+            billTitle.textContent = 'Tại bàn (Chưa chọn bàn)';
+            if (billBadge) {
+              billBadge.textContent = 'Tại bàn';
+              billBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 flex-shrink-0';
+            }
+            if (billSubtitle) {
+              billSubtitle.textContent = 'Vui lòng chọn bàn trên sơ đồ';
+            }
+          }
+
+          if (billHeaderIcon) {
+            billHeaderIcon.setAttribute('data-lucide', 'utensils');
+          }
+        }
+
+        if (window.lucide) {
+          window.lucide.createIcons();
         }
       }
 
@@ -1321,24 +1395,247 @@
       }, 2200);
     }
 
-    // 6. Sync Bill Area Summary with State
-    function updateBillUI(state) {
-      const subtotalEl = document.getElementById('bill-subtotal');
-      const grandTotalEl = document.getElementById('bill-grand-total');
-      const emptyCartState = document.getElementById('empty-cart-state');
+    /* =========================================================================
+       3.6 Order Bill, Stepper & Financial Totals (Task 4)
+       ========================================================================= */
 
-      const total = (state.cart || []).reduce((sum, item) => sum + (item.lineTotalVND || 0), 0);
+    function escapeHtml(str) {
+      if (str == null) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
 
-      if (subtotalEl) subtotalEl.textContent = formatVND(total);
-      if (grandTotalEl) grandTotalEl.textContent = formatVND(total);
+    function formatModifiersSummary(item) {
+      if (!item) return '';
+      const parts = [];
 
-      if (emptyCartState) {
-        if ((state.cart || []).length === 0) {
-          emptyCartState.classList.remove('hidden');
+      // Sugar
+      const sugarMod = (item.modifiers || []).find(m => m.group === 'sugar');
+      if (sugarMod && sugarMod.value) {
+        const val = String(sugarMod.value).trim();
+        if (val.toLowerCase().includes('ngọt') || val.toLowerCase().includes('đường')) {
+          parts.push(val);
         } else {
-          emptyCartState.classList.add('hidden');
+          parts.push(`${val} ngọt`);
         }
       }
+
+      // Ice
+      const iceMod = (item.modifiers || []).find(m => m.group === 'ice');
+      if (iceMod && iceMod.value) {
+        parts.push(String(iceMod.value).trim());
+      }
+
+      // Toppings
+      const toppings = (item.modifiers || []).filter(m => m.group === 'topping');
+      toppings.forEach(t => {
+        const tName = String(t.name || t.id || '').trim();
+        if (tName) {
+          parts.push(tName.startsWith('+') ? tName : `+ ${tName}`);
+        }
+      });
+
+      // Notes
+      if (item.preparationNote && String(item.preparationNote).trim()) {
+        const note = String(item.preparationNote).trim();
+        if (note.toLowerCase().startsWith('note:') || note.toLowerCase().startsWith('ghi chú:')) {
+          parts.push(note);
+        } else {
+          parts.push(`Note: ${note}`);
+        }
+      }
+
+      return parts.join(', ');
+    }
+
+    function renderCartItemHTML(item) {
+      const summaryText = formatModifiersSummary(item);
+      const summaryHtml = summaryText
+        ? `<p class="text-xs text-slate-500 font-medium mt-1 leading-normal break-words">${escapeHtml(summaryText)}</p>`
+        : '';
+
+      const sizeLabel = item.sizeId || (item.sizeName ? item.sizeName.replace(/^Size\s+/i, '') : '');
+      const sizeSuffix = sizeLabel ? ` <span class="font-semibold text-slate-600 text-xs">(${escapeHtml(sizeLabel)})</span>` : '';
+
+      return `
+        <div class="cart-item-card bg-white rounded-xl border border-slate-200 p-3 shadow-2xs hover:border-slate-300 transition flex flex-col gap-2 select-none" data-cart-item-id="${item.id}">
+          <!-- Item Info & Delete Button -->
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-bold text-slate-900 text-sm leading-snug">
+                  ${escapeHtml(item.name)}${sizeSuffix}
+                </span>
+              </div>
+              ${summaryHtml}
+            </div>
+
+            <!-- Delete button (>= 48px touch target) -->
+            <button type="button" onclick="removeCartItem('${item.id}')"
+              class="w-12 h-12 min-w-[48px] min-h-[48px] -mr-1 -mt-1 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:bg-rose-100 transition flex items-center justify-center flex-shrink-0 select-none"
+              title="Xóa món khỏi đơn">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Stepper & Line Total -->
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <!-- Stepper (>= 48px touch targets) -->
+            <div class="inline-flex items-center bg-slate-50 border border-slate-200 rounded-xl p-0.5">
+              <button type="button" onclick="updateItemQty('${item.id}', -1)"
+                class="w-12 h-12 min-w-[48px] min-h-[48px] rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 active:bg-slate-200 flex items-center justify-center transition font-bold text-base select-none"
+                title="Giảm số lượng">
+                <i data-lucide="minus" class="w-4 h-4"></i>
+              </button>
+              <span class="font-mono font-bold text-sm text-slate-900 w-8 text-center tabular-nums select-none">${item.quantity}</span>
+              <button type="button" onclick="updateItemQty('${item.id}', 1)"
+                class="w-12 h-12 min-w-[48px] min-h-[48px] rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 active:bg-slate-200 flex items-center justify-center transition font-bold text-base select-none"
+                title="Tăng số lượng">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <!-- Line Total Price -->
+            <div class="text-right flex flex-col items-end">
+              ${item.quantity > 1 ? `<span class="text-[11px] font-mono text-slate-400 leading-tight">${formatVND(item.unitPrice)} x ${item.quantity}</span>` : ''}
+              <span class="font-mono font-bold text-slate-900 text-sm md:text-base tabular-nums">${formatVND(item.lineTotalVND)}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderCart(state = window.POS_STATE) {
+      const emptyState = document.getElementById('empty-cart-state');
+      const cartList = document.getElementById('cart-items-list');
+
+      const cart = (state && state.cart) || [];
+
+      if (cart.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        if (cartList) {
+          cartList.classList.add('hidden');
+          cartList.innerHTML = '';
+        }
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+      if (cartList) {
+        cartList.classList.remove('hidden');
+        cartList.innerHTML = cart.map(item => renderCartItemHTML(item)).join('');
+      }
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    function updateItemQty(cartItemId, delta) {
+      const state = window.POS_STATE;
+      if (!state || !state.cart) return;
+
+      const item = state.cart.find(ci => ci.id === cartItemId);
+      if (!item) return;
+
+      const newQty = (item.quantity || 1) + delta;
+      if (newQty <= 0) {
+        removeCartItem(cartItemId);
+        return;
+      }
+
+      item.quantity = newQty;
+      item.lineTotalVND = item.quantity * item.unitPrice;
+      state.notify();
+    }
+
+    function removeCartItem(cartItemId) {
+      const state = window.POS_STATE;
+      if (!state || !state.cart) return;
+
+      const item = state.cart.find(ci => ci.id === cartItemId);
+      const itemName = item ? item.name : 'món';
+      state.cart = state.cart.filter(ci => ci.id !== cartItemId);
+      state.notify();
+      showToast(`Đã xóa "${itemName}" khỏi đơn hàng`);
+    }
+
+    function clearCart(force = true) {
+      const state = window.POS_STATE;
+      if (!state) return;
+
+      if (!force) {
+        promptClearCart();
+        return;
+      }
+
+      const prevCount = (state.cart || []).length;
+      state.cart = [];
+      state.notify();
+      if (prevCount > 0) {
+        showToast('Đã hủy toàn bộ đơn hàng');
+      }
+    }
+
+    function openClearCartModal() {
+      const modal = document.getElementById('clear-cart-modal-backdrop');
+      if (modal) {
+        modal.classList.remove('hidden');
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
+
+    function closeClearCartModal() {
+      const modal = document.getElementById('clear-cart-modal-backdrop');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    }
+
+    function promptClearCart() {
+      const cart = (window.POS_STATE && window.POS_STATE.cart) || [];
+      if (cart.length === 0) {
+        showToast('Chưa có món nào trong đơn để hủy');
+        return;
+      }
+      openClearCartModal();
+    }
+
+    function confirmClearCart() {
+      clearCart(true);
+      closeClearCartModal();
+    }
+
+    function getFinancialTotals() {
+      const state = window.POS_STATE;
+      const cart = (state && state.cart) || [];
+      const subtotalVND = cart.reduce((sum, item) => sum + (item.lineTotalVND != null ? item.lineTotalVND : ((item.unitPrice || 0) * (item.quantity || 1))), 0);
+      const discountVND = (state && state.discountVND) || 0;
+      const grandTotalVND = Math.max(0, subtotalVND - discountVND);
+
+      return {
+        subtotalVND,
+        discountVND,
+        grandTotalVND
+      };
+    }
+
+    // 7. Sync Bill Area Summary with State
+    function updateBillUI(state = window.POS_STATE) {
+      renderCart(state);
+
+      const totals = getFinancialTotals();
+      const subtotalEl = document.getElementById('bill-subtotal');
+      const discountEl = document.getElementById('bill-discount');
+      const grandTotalEl = document.getElementById('bill-grand-total');
+
+      if (subtotalEl) subtotalEl.textContent = formatVND(totals.subtotalVND);
+      if (discountEl) discountEl.textContent = formatVND(totals.discountVND);
+      if (grandTotalEl) grandTotalEl.textContent = formatVND(totals.grandTotalVND);
     }
 
     /* =========================================================================
@@ -1400,8 +1697,33 @@
         });
       }
 
+      const clearCartBackdrop = document.getElementById('clear-cart-modal-backdrop');
+      if (clearCartBackdrop) {
+        clearCartBackdrop.addEventListener('click', (e) => {
+          if (e.target === clearCartBackdrop) {
+            closeClearCartModal();
+          }
+        });
+      }
+
       window.addEventListener('keydown', (e) => {
         const isModalOpen = modalBackdrop && !modalBackdrop.classList.contains('hidden');
+        const isClearCartOpen = clearCartBackdrop && !clearCartBackdrop.classList.contains('hidden');
+
+        // Clear Cart Modal Active Shortcuts
+        if (isClearCartOpen) {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            closeClearCartModal();
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmClearCart();
+            return;
+          }
+          return;
+        }
 
         // Modal Active Shortcuts
         if (isModalOpen) {
@@ -1489,6 +1811,20 @@
     window.clearSearch = clearSearch;
     window.matchesSearch = matchesSearch;
     window.showToast = showToast;
+
+    // Task 4: Cart & Financial public bindings
+    window.renderCart = renderCart;
+    window.updateItemQty = updateItemQty;
+    window.removeCartItem = removeCartItem;
+    window.clearCart = clearCart;
+    window.getFinancialTotals = getFinancialTotals;
+    window.updateBillUI = updateBillUI;
+    window.updateTopBarUI = updateTopBarUI;
+    window.promptClearCart = promptClearCart;
+    window.openClearCartModal = openClearCartModal;
+    window.closeClearCartModal = closeClearCartModal;
+    window.confirmClearCart = confirmClearCart;
+    window.formatModifiersSummary = formatModifiersSummary;
 
     document.addEventListener('DOMContentLoaded', () => {
       // 1. Initialize real-time digital clock
@@ -1585,6 +1921,37 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 5. CLEAR CART CONFIRMATION MODAL (Task 4)                                  -->
+  <!-- ========================================================================= -->
+  <div id="clear-cart-modal-backdrop" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 hidden animate-in fade-in duration-150">
+    <div id="clear-cart-modal-dialog" class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden flex flex-col p-6 animate-in fade-in zoom-in-95 duration-150" role="dialog" aria-modal="true" aria-labelledby="clear-cart-modal-title">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 id="clear-cart-modal-title" class="text-base font-bold text-slate-900 leading-tight">Hủy toàn bộ đơn hàng?</h3>
+          <p class="text-xs text-slate-500 mt-0.5">Xóa tất cả món đang có trong đơn</p>
+        </div>
+      </div>
+      <p class="text-xs md:text-sm text-slate-600 mb-5 leading-relaxed">
+        Bạn có chắc chắn muốn xóa toàn bộ món trong đơn này không? Thao tác này không thể hoàn tác.
+      </p>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button id="btn-cancel-clear-cart" type="button" onclick="closeClearCartModal()"
+          class="min-h-[48px] h-12 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs md:text-sm transition flex items-center justify-center select-none">
+          Bỏ qua
+        </button>
+        <button id="btn-confirm-clear-cart" type="button" onclick="confirmClearCart()"
+          class="min-h-[48px] h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-semibold text-xs md:text-sm transition flex items-center justify-center gap-1.5 shadow-xs select-none">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          <span>Hủy đơn</span>
+        </button>
+      </div>
     </div>
   </div>
 
