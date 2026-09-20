@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppKdsRouteImport } from './routes/_app/kds'
+import { Route as AppNoAccessRouteImport } from './routes/_app/no-access'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppShiftRouteImport } from './routes/_app/shift'
 import { Route as AppTablesRouteImport } from './routes/_app/tables'
@@ -36,6 +37,11 @@ const AppHistoryRoute = AppHistoryRouteImport.update({
 const AppKdsRoute = AppKdsRouteImport.update({
   id: '/kds',
   path: '/kds',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNoAccessRoute = AppNoAccessRouteImport.update({
+  id: '/no-access',
+  path: '/no-access',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/history': typeof AppHistoryRoute
   '/kds': typeof AppKdsRoute
+  '/no-access': typeof AppNoAccessRoute
   '/settings': typeof AppSettingsRoute
   '/shift': typeof AppShiftRoute
   '/tables': typeof AppTablesRoute
@@ -77,6 +84,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
   '/kds': typeof AppKdsRoute
+  '/no-access': typeof AppNoAccessRoute
   '/settings': typeof AppSettingsRoute
   '/shift': typeof AppShiftRoute
   '/tables': typeof AppTablesRoute
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/_app/history': typeof AppHistoryRoute
   '/_app/kds': typeof AppKdsRoute
+  '/_app/no-access': typeof AppNoAccessRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/shift': typeof AppShiftRoute
   '/_app/tables': typeof AppTablesRoute
@@ -102,6 +111,7 @@ export interface FileRouteTypes {
     | '/'
     | '/history'
     | '/kds'
+    | '/no-access'
     | '/settings'
     | '/shift'
     | '/tables'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
   to:
     | '/history'
     | '/kds'
+    | '/no-access'
     | '/settings'
     | '/shift'
     | '/tables'
@@ -122,6 +133,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/_app/history'
     | '/_app/kds'
+    | '/_app/no-access'
     | '/_app/settings'
     | '/_app/shift'
     | '/_app/tables'
@@ -166,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppKdsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/no-access': {
+      id: '/_app/no-access'
+      path: '/no-access'
+      fullPath: '/no-access'
+      preLoaderRoute: typeof AppNoAccessRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
@@ -207,6 +226,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppHistoryRoute: typeof AppHistoryRoute
   AppKdsRoute: typeof AppKdsRoute
+  AppNoAccessRoute: typeof AppNoAccessRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppShiftRoute: typeof AppShiftRoute
   AppTablesRoute: typeof AppTablesRoute
@@ -216,6 +236,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppHistoryRoute: AppHistoryRoute,
   AppKdsRoute: AppKdsRoute,
+  AppNoAccessRoute: AppNoAccessRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppShiftRoute: AppShiftRoute,
   AppTablesRoute: AppTablesRoute,

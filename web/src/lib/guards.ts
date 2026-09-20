@@ -35,6 +35,9 @@ export function requireCapability(capability: string): void {
   // Capability is not evaluated while locked: the overlay is showing and the
   // operator has not yet proven they are still there.
   if (state === "authenticated" && !capabilities.includes(capability)) {
-    throw redirect({ to: "/" });
+    // The miss target must be loop-free: `/` itself requires `sales.operate`,
+    // so redirecting there would re-run this same failing guard forever.
+    // `/no-access` is authentication-only, so the redirect always settles.
+    throw redirect({ to: "/no-access" });
   }
 }
