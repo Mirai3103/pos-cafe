@@ -67,7 +67,7 @@ auth session ──> open Sales Shift ──> POS (draft → commit → pay → 
 
 | Slice | Screen | Primary endpoints | Why here |
 | :--- | :--- | :--- | :--- |
-| **1** | Sign-in, Workspace, Lock/Unlock | `/auth/*`, `/staff/me` | Blocks everything else. Creates the shared primitives in section 4. |
+| **1** | Sign-in, Workspace, Lock/Unlock | `/auth/*` | Blocks everything else. Creates the shared primitives in section 4. |
 | **2** | Shift: open, cash movements, close and reconcile | `/shifts/*` | POS cannot take money without an open Shift. Form-heavy and state-light, so it settles the command-and-reason pattern cheaply. |
 | **3** | POS-a: sellable menu and Order Draft | `/catalog/menu/sellable`, `/sales/service-sessions/takeaway`, `/draft/items/*` | The largest screen in the product, split into three. This third reads catalog and edits a draft; it touches no money. |
 | **4** | POS-b: commit, Check, cash payment | `/draft/commit`, `/checks/{id}/payments/cash` | The money path. Closes the Phase 11 cash takeaway tracer bullet. |
@@ -145,9 +145,16 @@ infrastructure layer rather than in each screen:
 
 | Condition | Handling |
 | :--- | :--- |
-| `401` | Clear session, route to `/auth/login` |
-| session reported `locked` | Raise the lock overlay; do not clear the session |
-| `429` | Surface a retry message; sign-in is rate limited |
+| `401 UNAUTHORIZED` | Clear session, route to `/auth/login` |
+| `403 FORBIDDEN` | Ambiguous, see below |
+| `429 TOO_MANY_REQUESTS` | Surface a retry message; sign-in and unlock are rate limited |
+
+`internal/auth/middleware.go` returns the same `403 FORBIDDEN` for a locked
+session and for a missing role, differing only in a Vietnamese message. A client
+must not branch on message text. On any `403`, re-read `GET /auth/session`,
+which is registered outside `RequireAuth` and therefore answers while locked: a
+`locked` state raises the lock overlay, anything else is a genuine authority
+denial. The extra round trip is paid only on a rare path.
 
 ### 4.3 `request_id` is generated per intent, not per call
 
@@ -171,11 +178,20 @@ Recorded as **ADR-053**.
 
 ### 4.5 The three primitives
 
-| Primitive | Location | Consumed by |
-| :--- | :--- | :--- |
-| Session store: token, profile, `capabilities[]`, workspace, `state` | `src/stores/use-session-store.ts` | Every slice |
-| `requireCapability()` in `beforeLoad` of `_app` and its children | `src/lib/guards.ts` | Slices 2 through 9 |
-| `<ManagerApprovalDialog>`: collects a fresh `manager_pin`, returns it to the calling command | `src/components/feedback/manager-approval-dialog.tsx` | Slices 2, 4, 5, 6, 9 |
+| Primitive | Location | Built in | Consumed by |
+| :--- | :--- | :--- | :--- |
+| Session store: token, profile, `capabilities[]`, workspace, `state` | `src/stores/use-session-store.ts` | Slice 1 | Every slice |
+| `unwrap` and `ApiError` | `src/lib/unwrap.ts` | Slice 1 | Every slice |
+| `requireAuthenticated()` and `requireCapability()` in `beforeLoad` | `src/lib/guards.ts` | Slice 1 | Slices 2 through 9 |
+| `newRequestId()` and the command wrapper | `src/lib/command.ts` | **Slice 2** | Slices 2 through 9 |
+| `<ManagerApprovalDialog>`: collects a fresh `manager_pin` | `src/components/feedback/manager-approval-dialog.tsx` | **Slice 2** | Slices 2, 4, 5, 6, 9 |
+
+The last two are built in slice 2, not slice 1, because no auth command takes
+either one: `SignInRequest`, `UnlockRequest`, and `DeclareWorkspaceRequest` carry
+no `request_id` and no `manager_pin`, while `shift.OpenShiftCommand` carries a
+`request_id` and shift closure needs Manager Approval. Building them in slice 1
+would ship two untestable components with no caller. The rule in section 4.3
+still binds from the moment the first command exists.
 
 `_app` currently has no guard at all. Today that is harmless because its
 children are placeholders; from slice 1 they call real APIs, so the guard ships
