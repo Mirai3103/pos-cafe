@@ -1172,10 +1172,10 @@
           var sizeBadge = item.sizeName ? '<span class="text-xs font-normal text-slate-500">(' + item.sizeName + ')</span>' : '';
           var itemDoneClass = isDone ? 'line-through text-slate-400' : 'text-slate-900';
 
-          return '<div class="min-h-[48px] py-1 flex items-start gap-2.5 group cursor-pointer" onclick="toggleItemCheck(\'' + itemKey + '\')">' +
-            '<button type="button" class="min-h-[36px] min-w-[36px] mt-0.5 rounded-lg border ' + (isDone ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white hover:border-emerald-500 text-transparent') + ' flex items-center justify-center transition flex-shrink-0 cursor-pointer">' +
-              '<i data-lucide="check" class="w-4 h-4"></i>' +
-            '</button>' +
+          return '<div class="min-h-[48px] py-1 flex items-center gap-3 group cursor-pointer" onclick="toggleItemCheck(\'' + itemKey + '\')">' +
+            '<div class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border ' + (isDone ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white group-hover:border-emerald-500 text-transparent') + ' flex items-center justify-center transition flex-shrink-0">' +
+              '<i data-lucide="check" class="w-5 h-5"></i>' +
+            '</div>' +
             '<div class="flex-1 min-w-0">' +
               '<div class="flex items-center gap-1.5 flex-wrap">' +
                 '<span class="font-mono font-bold text-xs bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">x' + (item.quantity || 1) + '</span>' +

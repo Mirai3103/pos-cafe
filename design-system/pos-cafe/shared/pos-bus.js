@@ -13,6 +13,7 @@
   var CHANNEL_NAME = 'pos_cafe_bus';
   var STORAGE_KEYS = {
     ORDERS: 'POS_ORDERS',
+    TABLES: 'POS_TABLES',
     ACTIVE_SHIFT: 'POS_ACTIVE_SHIFT',
     CATALOG_STATUS: 'POS_CATALOG_STATUS',
     CURRENT_STAFF: 'POS_CURRENT_STAFF',
@@ -508,6 +509,57 @@
       this.publish('CATALOG_STOCK_CHANGED', { itemId: itemId, inStock: inStockVal, catalogStatus: status });
       this.publish('CATALOG_STATUS_CHANGED', { itemId: itemId, isAvailable: inStockVal, inStock: inStockVal, catalogStatus: status });
       return status;
+    },
+
+    /**
+     * Checks if item is available.
+     */
+    isItemAvailable: function (itemId) {
+      if (!itemId) return true;
+      var status = this.getCatalogStatus();
+      var entry = status[itemId];
+      if (entry === undefined || entry === null) return true;
+      if (typeof entry === 'boolean') return entry;
+      if (typeof entry === 'object' && typeof entry.inStock === 'boolean') return entry.inStock;
+      return true;
+    },
+
+    /**
+     * Records cash sales transaction into active shift.
+     */
+    recordCashTransaction: function (amount) {
+      var shift = this.getActiveShift();
+      if (shift && typeof amount === 'number') {
+        shift.cashSales = (shift.cashSales || 0) + amount;
+        shift.totalSales = (shift.totalSales || 0) + amount;
+        return this.saveActiveShift(shift);
+      }
+      return shift;
+    },
+
+    /**
+     * Updates table status and broadcasts TABLE_STATUS_CHANGED.
+     */
+    setTableStatus: function (tableId, status, meta) {
+      if (!tableId) return null;
+      var tables = readStorage(STORAGE_KEYS.TABLES, []);
+      var updatedTable = null;
+      for (var i = 0; i < tables.length; i++) {
+        if (tables[i].id === tableId) {
+          tables[i].status = status;
+          if (meta) {
+            tables[i].activeSession = Object.assign({}, tables[i].activeSession || {}, meta);
+          }
+          updatedTable = tables[i];
+          break;
+        }
+      }
+      if (tables.length > 0) {
+        writeStorage(STORAGE_KEYS.TABLES, tables);
+      }
+      var payload = { tableId: tableId, status: status, meta: meta, table: updatedTable };
+      this.publish('TABLE_STATUS_CHANGED', payload);
+      return payload;
     },
 
     /**
