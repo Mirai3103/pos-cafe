@@ -23,6 +23,7 @@ import (
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/Mirai3103/pos-cafe/internal/shift"
 	"github.com/Mirai3103/pos-cafe/internal/tables"
+	"github.com/Mirai3103/pos-cafe/web"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoSwagger "github.com/swaggo/echo-swagger"
@@ -181,7 +182,12 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	preparationSlices := preparation.NewSlices(db, queries)
 	preparationSlices.RegisterRoutes(v1, authSlices.Middleware)
 
-	// 7. Start Server with Graceful Shutdown error propagation
+	// 7. Register Embedded Web SPA & Static Assets
+	if err := web.RegisterHandlers(e); err != nil {
+		return fmt.Errorf("register web static handlers: %w", err)
+	}
+
+	// 8. Start Server with Graceful Shutdown error propagation
 	serverErrChan := make(chan error, 1)
 	go func() {
 		addr := fmt.Sprintf(":%s", cfg.Port)

@@ -1,9 +1,10 @@
-.PHONY: help run build test test-integration test-integration-fast test-db-clean test-all coverage fmt vet lint vuln check sqlc swagger tidy clean \
+.PHONY: help run build build-web build-app test test-integration test-integration-fast test-db-clean test-all coverage fmt vet lint vuln check sqlc swagger tidy clean \
 	docker-up docker-down docker-logs db-wait
 
 # Single source of truth for the integration-test database.
 TEST_DATABASE_URL ?= postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
 GOLANGCI_VERSION  ?= v2.13.2
+OUTPUT_BINARY     ?= build/app.exe
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -29,8 +30,15 @@ db-wait: ## Block until PostgreSQL is accepting connections
 run: ## Run the API server
 	go run ./cmd/api
 
-build: ## Build the API binary into bin/
-	go build -o bin/api ./cmd/api
+build-web: ## Build the React frontend with bun
+	cd web && bun run build
+	@touch web/dist/.gitkeep 2>/dev/null || true
+
+build-app: ## Build the Go binary embedding the web build into ./build/app.exe
+	@mkdir -p $(dir $(OUTPUT_BINARY))
+	go build -o $(OUTPUT_BINARY) ./cmd/api
+
+build: build-web build-app ## Build React frontend and embed into ./build/app.exe
 
 ## --- Quality gates ---
 
@@ -83,4 +91,4 @@ tidy: ## Tidy go.mod / go.sum
 	go mod tidy
 
 clean: ## Remove build artifacts
-	rm -rf bin/ *.db*
+	rm -rf bin/ build/ *.db*

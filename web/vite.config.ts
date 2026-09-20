@@ -20,4 +20,21 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
+  server: {
+    port: 5173,
+    proxy: {
+      "/api": {
+        target: process.env.VITE_BACKEND_URL || "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/swagger": {
+        target: process.env.VITE_BACKEND_URL || "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/health": {
+        target: process.env.VITE_BACKEND_URL || "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
+  },
 });
