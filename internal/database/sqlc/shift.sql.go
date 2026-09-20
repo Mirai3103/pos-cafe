@@ -11,21 +11,22 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
-const getOpenSalesShift = `-- name: GetOpenSalesShift :one
+const getActiveSalesShift = `-- name: GetActiveSalesShift :one
 SELECT sh.id, sh.state, sh.opening_float_vnd, sh.opened_at,
        i.id AS opener_id,
        i.display_name AS opener_display_name,
        i.login_code AS opener_login_code
 FROM sales_shifts sh
 JOIN staff_identities i ON i.id = sh.opened_by_staff_identity_id
-WHERE sh.state = 'OPEN'
+WHERE sh.state IN ('OPEN', 'CLOSING')
 ORDER BY sh.opened_at DESC
 LIMIT 1
 `
 
-type GetOpenSalesShiftRow struct {
+type GetActiveSalesShiftRow struct {
 	ID                uuid.UUID `json:"id"`
 	State             string    `json:"state"`
 	OpeningFloatVnd   int64     `json:"opening_float_vnd"`
@@ -35,9 +36,15 @@ type GetOpenSalesShiftRow struct {
 	OpenerLoginCode   string    `json:"opener_login_code"`
 }
 
-func (q *Queries) GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, error) {
-	row := q.db.QueryRowContext(ctx, getOpenSalesShift)
-	var i GetOpenSalesShiftRow
+// The one active Shift (OPEN or CLOSING) for the current-Shift read. The
+// active-Shift unique index permits at most one row in either state; the
+// ordering and limit keep the query one-row by construction, matching
+// GetOpenSalesShift's shape. The state is returned rather than filtered so the
+// reader dispatches on it: OPEN projects the redacted shape, CLOSING the
+// frozen reconciliation (spec 9.5).
+func (q *Queries) GetActiveSalesShift(ctx context.Context) (GetActiveSalesShiftRow, error) {
+	row := q.db.QueryRowContext(ctx, getActiveSalesShift)
+	var i GetActiveSalesShiftRow
 	err := row.Scan(
 		&i.ID,
 		&i.State,
@@ -48,6 +55,328 @@ func (q *Queries) GetOpenSalesShift(ctx context.Context) (GetOpenSalesShiftRow, 
 		&i.OpenerLoginCode,
 	)
 	return i, err
+}
+
+const getClosedShiftDetail = `-- name: GetClosedShiftDetail :one
+SELECT c.id AS closure_id, c.sales_shift_id, c.reconciliation_id,
+       c.initial_cash_count_id, c.final_cash_count_id, c.final_qr_observation_id,
+       c.opened_at, c.closed_at,
+       opener.id AS opener_staff_identity_id,
+       opener.display_name AS opener_display_name,
+       opener.login_code AS opener_login_code,
+       closer.id AS closer_staff_identity_id,
+       closer.display_name AS closer_display_name,
+       closer.login_code AS closer_login_code,
+       approver.id AS approved_by_staff_identity_id,
+       approver.display_name AS approved_by_display_name,
+       approver.login_code AS approved_by_login_code,
+       r.started_at,
+       starter.id AS started_by_staff_identity_id,
+       starter.display_name AS starter_display_name,
+       starter.login_code AS starter_login_code,
+       c.opening_float_vnd, c.pay_in_vnd, c.pay_out_vnd,
+       c.cash_payment_vnd, c.cash_payment_void_vnd, c.cash_refund_vnd,
+       c.expected_cash_vnd,
+       c.manual_qr_payment_vnd, c.manual_qr_payment_void_vnd,
+       c.expected_manual_qr_received_vnd, c.manual_qr_refund_vnd,
+       c.pending_manual_qr_refund_vnd, c.pending_refund_vnd,
+       c.unresolved_post_sale_adjustment_vnd,
+       c.observed_cash_vnd, c.observed_manual_qr_received_vnd,
+       c.observed_manual_qr_refunded_vnd,
+       c.cash_difference_vnd, c.manual_qr_received_difference_vnd,
+       c.manual_qr_refunded_difference_vnd
+FROM shift_closures AS c
+JOIN shift_reconciliations AS r ON r.id = c.reconciliation_id
+JOIN staff_identities AS opener ON opener.id = c.opener_staff_identity_id
+JOIN staff_identities AS closer ON closer.id = c.closer_staff_identity_id
+JOIN staff_identities AS starter ON starter.id = r.started_by_staff_identity_id
+LEFT JOIN staff_identities AS approver ON approver.id = c.approved_by_staff_identity_id
+WHERE c.sales_shift_id = $1
+`
+
+type GetClosedShiftDetailRow struct {
+	ClosureID                       uuid.UUID      `json:"closure_id"`
+	SalesShiftID                    uuid.UUID      `json:"sales_shift_id"`
+	ReconciliationID                uuid.UUID      `json:"reconciliation_id"`
+	InitialCashCountID              uuid.UUID      `json:"initial_cash_count_id"`
+	FinalCashCountID                uuid.UUID      `json:"final_cash_count_id"`
+	FinalQrObservationID            uuid.UUID      `json:"final_qr_observation_id"`
+	OpenedAt                        time.Time      `json:"opened_at"`
+	ClosedAt                        time.Time      `json:"closed_at"`
+	OpenerStaffIdentityID           uuid.UUID      `json:"opener_staff_identity_id"`
+	OpenerDisplayName               string         `json:"opener_display_name"`
+	OpenerLoginCode                 string         `json:"opener_login_code"`
+	CloserStaffIdentityID           uuid.UUID      `json:"closer_staff_identity_id"`
+	CloserDisplayName               string         `json:"closer_display_name"`
+	CloserLoginCode                 string         `json:"closer_login_code"`
+	ApprovedByStaffIdentityID       uuid.NullUUID  `json:"approved_by_staff_identity_id"`
+	ApprovedByDisplayName           sql.NullString `json:"approved_by_display_name"`
+	ApprovedByLoginCode             sql.NullString `json:"approved_by_login_code"`
+	StartedAt                       time.Time      `json:"started_at"`
+	StartedByStaffIdentityID        uuid.UUID      `json:"started_by_staff_identity_id"`
+	StarterDisplayName              string         `json:"starter_display_name"`
+	StarterLoginCode                string         `json:"starter_login_code"`
+	OpeningFloatVnd                 int64          `json:"opening_float_vnd"`
+	PayInVnd                        int64          `json:"pay_in_vnd"`
+	PayOutVnd                       int64          `json:"pay_out_vnd"`
+	CashPaymentVnd                  int64          `json:"cash_payment_vnd"`
+	CashPaymentVoidVnd              int64          `json:"cash_payment_void_vnd"`
+	CashRefundVnd                   int64          `json:"cash_refund_vnd"`
+	ExpectedCashVnd                 int64          `json:"expected_cash_vnd"`
+	ManualQrPaymentVnd              int64          `json:"manual_qr_payment_vnd"`
+	ManualQrPaymentVoidVnd          int64          `json:"manual_qr_payment_void_vnd"`
+	ExpectedManualQrReceivedVnd     int64          `json:"expected_manual_qr_received_vnd"`
+	ManualQrRefundVnd               int64          `json:"manual_qr_refund_vnd"`
+	PendingManualQrRefundVnd        int64          `json:"pending_manual_qr_refund_vnd"`
+	PendingRefundVnd                int64          `json:"pending_refund_vnd"`
+	UnresolvedPostSaleAdjustmentVnd int64          `json:"unresolved_post_sale_adjustment_vnd"`
+	ObservedCashVnd                 int64          `json:"observed_cash_vnd"`
+	ObservedManualQrReceivedVnd     int64          `json:"observed_manual_qr_received_vnd"`
+	ObservedManualQrRefundedVnd     int64          `json:"observed_manual_qr_refunded_vnd"`
+	CashDifferenceVnd               int64          `json:"cash_difference_vnd"`
+	ManualQrReceivedDifferenceVnd   int64          `json:"manual_qr_received_difference_vnd"`
+	ManualQrRefundedDifferenceVnd   int64          `json:"manual_qr_refunded_difference_vnd"`
+}
+
+// One closed Shift's immutable detail aggregate, keyed by the Shift id the
+// history route exposes. An open or closing Shift id finds no row here. The
+// closure repeats every frozen scalar, so the detail never recalculates the
+// reconciliation; the caller reads the attempt ledgers and the discrepancy
+// rows through their own queries.
+func (q *Queries) GetClosedShiftDetail(ctx context.Context, salesShiftID uuid.UUID) (GetClosedShiftDetailRow, error) {
+	row := q.db.QueryRowContext(ctx, getClosedShiftDetail, salesShiftID)
+	var i GetClosedShiftDetailRow
+	err := row.Scan(
+		&i.ClosureID,
+		&i.SalesShiftID,
+		&i.ReconciliationID,
+		&i.InitialCashCountID,
+		&i.FinalCashCountID,
+		&i.FinalQrObservationID,
+		&i.OpenedAt,
+		&i.ClosedAt,
+		&i.OpenerStaffIdentityID,
+		&i.OpenerDisplayName,
+		&i.OpenerLoginCode,
+		&i.CloserStaffIdentityID,
+		&i.CloserDisplayName,
+		&i.CloserLoginCode,
+		&i.ApprovedByStaffIdentityID,
+		&i.ApprovedByDisplayName,
+		&i.ApprovedByLoginCode,
+		&i.StartedAt,
+		&i.StartedByStaffIdentityID,
+		&i.StarterDisplayName,
+		&i.StarterLoginCode,
+		&i.OpeningFloatVnd,
+		&i.PayInVnd,
+		&i.PayOutVnd,
+		&i.CashPaymentVnd,
+		&i.CashPaymentVoidVnd,
+		&i.CashRefundVnd,
+		&i.ExpectedCashVnd,
+		&i.ManualQrPaymentVnd,
+		&i.ManualQrPaymentVoidVnd,
+		&i.ExpectedManualQrReceivedVnd,
+		&i.ManualQrRefundVnd,
+		&i.PendingManualQrRefundVnd,
+		&i.PendingRefundVnd,
+		&i.UnresolvedPostSaleAdjustmentVnd,
+		&i.ObservedCashVnd,
+		&i.ObservedManualQrReceivedVnd,
+		&i.ObservedManualQrRefundedVnd,
+		&i.CashDifferenceVnd,
+		&i.ManualQrReceivedDifferenceVnd,
+		&i.ManualQrRefundedDifferenceVnd,
+	)
+	return i, err
+}
+
+const getGlobalShiftClosureBlockers = `-- name: GetGlobalShiftClosureBlockers :one
+WITH live_check_obligations AS (
+    SELECT DISTINCT ca.check_id
+    FROM charge_adjustments AS ca
+    WHERE ca.scope = 'LIVE_CHECK'
+),
+live_check_financials AS (
+    SELECT lc.check_id,
+           COALESCE((SELECT SUM(ca.quantity::BIGINT * ci.unit_price_vnd)
+                     FROM charge_allocations AS ca
+                     JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+                     WHERE ca.check_id = lc.check_id), 0)::BIGINT
+               AS base_charge_vnd,
+           COALESCE((SELECT SUM(ca.amount_vnd)
+                     FROM charge_adjustments AS ca
+                     WHERE ca.check_id = lc.check_id
+                       AND ca.scope = 'LIVE_CHECK'), 0)::BIGINT
+               AS live_adjustment_vnd,
+           COALESCE((SELECT SUM(p.applied_amount_vnd)
+                     FROM payments AS p
+                     WHERE p.check_id = lc.check_id
+                       AND NOT EXISTS (SELECT 1
+                                       FROM payment_voids AS pv
+                                       WHERE pv.payment_id = p.id)), 0)::BIGINT
+               AS valid_payment_vnd,
+           COALESCE((SELECT SUM(r.amount_vnd)
+                     FROM refunds AS r
+                     JOIN refund_completions AS rc ON rc.refund_id = r.id
+                     WHERE r.check_id = lc.check_id
+                       AND r.completed_sale_id IS NULL), 0)::BIGINT
+               AS completed_live_refund_vnd
+    FROM live_check_obligations AS lc
+),
+post_sale AS (
+    SELECT COALESCE(SUM(GREATEST(
+               ca.amount_vnd
+               - COALESCE((SELECT SUM(raa.amount_vnd)
+                           FROM refund_adjustment_allocations AS raa
+                           JOIN refunds AS r ON r.id = raa.refund_id
+                           JOIN refund_completions AS rc ON rc.refund_id = r.id
+                           WHERE raa.charge_adjustment_id = ca.id), 0),
+               0)), 0)::BIGINT
+               AS unresolved_post_sale_adjustment_vnd
+    FROM charge_adjustments AS ca
+    WHERE ca.scope = 'POST_SALE'
+)
+SELECT
+    (SELECT count(*) FROM checks WHERE state = 'OPEN')::BIGINT
+        AS unsettled_check_count,
+    -- A pending Refund intent is one lacking its unique completion row.
+    (SELECT count(*)
+     FROM refunds AS r
+     WHERE NOT EXISTS (SELECT 1 FROM refund_completions AS rc
+                       WHERE rc.refund_id = r.id))::BIGINT
+        AS pending_refund_count,
+    (((SELECT COALESCE(SUM(GREATEST(cf.valid_payment_vnd
+                                    - cf.completed_live_refund_vnd
+                                    - (cf.base_charge_vnd - cf.live_adjustment_vnd),
+                                    0)), 0)::BIGINT
+       FROM live_check_financials AS cf)
+      + (SELECT unresolved_post_sale_adjustment_vnd FROM post_sale)))::BIGINT
+        AS unresolved_correction_vnd,
+    (SELECT count(*) FROM service_sessions WHERE state = 'ACTIVE')::BIGINT
+        AS active_service_session_count
+`
+
+type GetGlobalShiftClosureBlockersRow struct {
+	UnsettledCheckCount       int64 `json:"unsettled_check_count"`
+	PendingRefundCount        int64 `json:"pending_refund_count"`
+	UnresolvedCorrectionVnd   int64 `json:"unresolved_correction_vnd"`
+	ActiveServiceSessionCount int64 `json:"active_service_session_count"`
+}
+
+// Every closure blocker for the whole cafe in one row (spec 8), so Go chooses
+// the first public error by precedence without a race between separate reads.
+// Deliberately distinct from GetShiftReconciliationTotals: no Shift filter.
+// The unresolved-correction amount is defined independently of Shift
+// attribution: for every Check carrying any LIVE_CHECK Charge Adjustment it
+// sums greatest(valid non-voided Payments - completed live Refunds
+// - (base Charge Allocations - all LIVE_CHECK adjustments on that Check), 0),
+// plus, for every POST_SALE Charge Adjustment, greatest(its amount - its
+// completed Refund allocations, 0). It reuses GetShiftReconciliationTotals'
+// conventions: valid Payments exclude voided ones, completed live Refunds are
+// completed Refunds without a Completed Sale, and base charge comes from the
+// Charge Allocations' frozen unit prices.
+func (q *Queries) GetGlobalShiftClosureBlockers(ctx context.Context) (GetGlobalShiftClosureBlockersRow, error) {
+	row := q.db.QueryRowContext(ctx, getGlobalShiftClosureBlockers)
+	var i GetGlobalShiftClosureBlockersRow
+	err := row.Scan(
+		&i.UnsettledCheckCount,
+		&i.PendingRefundCount,
+		&i.UnresolvedCorrectionVnd,
+		&i.ActiveServiceSessionCount,
+	)
+	return i, err
+}
+
+const getLatestReconciliationEvidence = `-- name: GetLatestReconciliationEvidence :one
+WITH latest_cash AS (
+    SELECT id, sequence, counted_cash_vnd, counted_at
+    FROM shift_cash_counts
+    WHERE shift_cash_counts.reconciliation_id = $1
+    ORDER BY sequence DESC, id DESC
+    LIMIT 1
+),
+latest_qr AS (
+    SELECT id, sequence, observed_received_vnd, observed_refunded_vnd, observed_at
+    FROM shift_qr_observations
+    WHERE shift_qr_observations.reconciliation_id = $1
+    ORDER BY sequence DESC, id DESC
+    LIMIT 1
+)
+SELECT lc.id AS cash_count_id, lc.sequence AS cash_count_sequence,
+       lc.counted_cash_vnd, lc.counted_at,
+       lq.id AS qr_observation_id, lq.sequence AS qr_observation_sequence,
+       lq.observed_received_vnd, lq.observed_refunded_vnd, lq.observed_at
+FROM latest_cash AS lc
+LEFT JOIN latest_qr AS lq ON true
+`
+
+type GetLatestReconciliationEvidenceRow struct {
+	CashCountID           uuid.UUID     `json:"cash_count_id"`
+	CashCountSequence     int32         `json:"cash_count_sequence"`
+	CountedCashVnd        int64         `json:"counted_cash_vnd"`
+	CountedAt             time.Time     `json:"counted_at"`
+	QrObservationID       uuid.NullUUID `json:"qr_observation_id"`
+	QrObservationSequence sql.NullInt32 `json:"qr_observation_sequence"`
+	ObservedReceivedVnd   sql.NullInt64 `json:"observed_received_vnd"`
+	ObservedRefundedVnd   sql.NullInt64 `json:"observed_refunded_vnd"`
+	ObservedAt            sql.NullTime  `json:"observed_at"`
+}
+
+// The final attempt of each ledger in one read. The QR side is nullable
+// because a reconciliation may not have an observation yet; the Cash side is
+// never empty while a reconciliation exists, because Start inserts sequence 1.
+// sqlc's analyzer calls the bare reconciliation_id reference ambiguous across
+// the two CTEs, so each WHERE spells its table name out.
+func (q *Queries) GetLatestReconciliationEvidence(ctx context.Context, reconciliationID uuid.UUID) (GetLatestReconciliationEvidenceRow, error) {
+	row := q.db.QueryRowContext(ctx, getLatestReconciliationEvidence, reconciliationID)
+	var i GetLatestReconciliationEvidenceRow
+	err := row.Scan(
+		&i.CashCountID,
+		&i.CashCountSequence,
+		&i.CountedCashVnd,
+		&i.CountedAt,
+		&i.QrObservationID,
+		&i.QrObservationSequence,
+		&i.ObservedReceivedVnd,
+		&i.ObservedRefundedVnd,
+		&i.ObservedAt,
+	)
+	return i, err
+}
+
+const getNextShiftCashCountSequence = `-- name: GetNextShiftCashCountSequence :one
+SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+FROM shift_cash_counts
+WHERE reconciliation_id = $1
+`
+
+// The next append-only Cash Count sequence. The caller holds the target
+// Shift's row FOR UPDATE, so the blind initial count and every recount are
+// serialized through it and two appends can never claim one sequence.
+func (q *Queries) GetNextShiftCashCountSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error) {
+	row := q.db.QueryRowContext(ctx, getNextShiftCashCountSequence, reconciliationID)
+	var next_sequence int32
+	err := row.Scan(&next_sequence)
+	return next_sequence, err
+}
+
+const getNextShiftQRObservationSequence = `-- name: GetNextShiftQRObservationSequence :one
+SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+FROM shift_qr_observations
+WHERE reconciliation_id = $1
+`
+
+// The next append-only QR Observation sequence, read under the same Shift row
+// lock as GetNextShiftCashCountSequence. The two ledgers count independently:
+// a recount never advances this sequence, and a recheck never advances the
+// Cash one.
+func (q *Queries) GetNextShiftQRObservationSequence(ctx context.Context, reconciliationID uuid.UUID) (int32, error) {
+	row := q.db.QueryRowContext(ctx, getNextShiftQRObservationSequence, reconciliationID)
+	var next_sequence int32
+	err := row.Scan(&next_sequence)
+	return next_sequence, err
 }
 
 const getOpenSalesShiftForUpdate = `-- name: GetOpenSalesShiftForUpdate :one
@@ -77,6 +406,48 @@ func (q *Queries) GetOpenSalesShiftForUpdate(ctx context.Context, id uuid.UUID) 
 		&i.OpeningFloatVnd,
 		&i.OpenedAt,
 		&i.OpenedByStaffIdentityID,
+	)
+	return i, err
+}
+
+const getReconciliationSnapshot = `-- name: GetReconciliationSnapshot :one
+SELECT id, sales_shift_id, started_by_staff_identity_id,
+       started_staff_access_session_id, started_at,
+       opening_float_vnd, pay_in_vnd, pay_out_vnd,
+       cash_payment_vnd, cash_payment_void_vnd, cash_refund_vnd, expected_cash_vnd,
+       manual_qr_payment_vnd, manual_qr_payment_void_vnd,
+       expected_manual_qr_received_vnd, manual_qr_refund_vnd,
+       pending_manual_qr_refund_vnd, pending_refund_vnd,
+       unresolved_post_sale_adjustment_vnd
+FROM shift_reconciliations
+WHERE sales_shift_id = $1
+`
+
+// The frozen per-Shift reconciliation, read back for the CLOSING response and
+// re-verified against fresh totals at Final Close.
+func (q *Queries) GetReconciliationSnapshot(ctx context.Context, salesShiftID uuid.UUID) (ShiftReconciliation, error) {
+	row := q.db.QueryRowContext(ctx, getReconciliationSnapshot, salesShiftID)
+	var i ShiftReconciliation
+	err := row.Scan(
+		&i.ID,
+		&i.SalesShiftID,
+		&i.StartedByStaffIdentityID,
+		&i.StartedStaffAccessSessionID,
+		&i.StartedAt,
+		&i.OpeningFloatVnd,
+		&i.PayInVnd,
+		&i.PayOutVnd,
+		&i.CashPaymentVnd,
+		&i.CashPaymentVoidVnd,
+		&i.CashRefundVnd,
+		&i.ExpectedCashVnd,
+		&i.ManualQrPaymentVnd,
+		&i.ManualQrPaymentVoidVnd,
+		&i.ExpectedManualQrReceivedVnd,
+		&i.ManualQrRefundVnd,
+		&i.PendingManualQrRefundVnd,
+		&i.PendingRefundVnd,
+		&i.UnresolvedPostSaleAdjustmentVnd,
 	)
 	return i, err
 }
@@ -391,60 +762,399 @@ func (q *Queries) InsertCashMovement(ctx context.Context, arg InsertCashMovement
 	return i, err
 }
 
-const listCashMovements = `-- name: ListCashMovements :many
-SELECT cm.id, cm.sales_shift_id, cm.method, cm.amount_vnd, cm.reason, cm.note, cm.occurred_at,
-       ini.id AS initiator_id,
-       ini.display_name AS initiator_display_name,
-       ini.login_code AS initiator_login_code,
-       apr.id AS approver_id,
-       apr.display_name AS approver_display_name,
-       apr.login_code AS approver_login_code
-FROM cash_movements cm
-JOIN staff_identities ini ON ini.id = cm.initiated_by_staff_identity_id
-JOIN staff_identities apr ON apr.id = cm.approved_by_staff_identity_id
-WHERE cm.sales_shift_id = $1
-ORDER BY cm.occurred_at DESC, cm.id DESC
+const insertShiftCashCount = `-- name: InsertShiftCashCount :one
+INSERT INTO shift_cash_counts (
+    reconciliation_id, sequence, counted_cash_vnd,
+    counted_by_staff_identity_id, counted_staff_access_session_id
+) VALUES ($1, $2, $3, $4, $5)
+RETURNING id, sequence, counted_cash_vnd, counted_at
 `
 
-type ListCashMovementsRow struct {
-	ID                   uuid.UUID      `json:"id"`
-	SalesShiftID         uuid.UUID      `json:"sales_shift_id"`
-	Method               string         `json:"method"`
-	AmountVnd            int64          `json:"amount_vnd"`
-	Reason               string         `json:"reason"`
-	Note                 sql.NullString `json:"note"`
-	OccurredAt           time.Time      `json:"occurred_at"`
-	InitiatorID          uuid.UUID      `json:"initiator_id"`
-	InitiatorDisplayName string         `json:"initiator_display_name"`
-	InitiatorLoginCode   string         `json:"initiator_login_code"`
-	ApproverID           uuid.UUID      `json:"approver_id"`
-	ApproverDisplayName  string         `json:"approver_display_name"`
-	ApproverLoginCode    string         `json:"approver_login_code"`
+type InsertShiftCashCountParams struct {
+	ReconciliationID            uuid.UUID `json:"reconciliation_id"`
+	Sequence                    int32     `json:"sequence"`
+	CountedCashVnd              int64     `json:"counted_cash_vnd"`
+	CountedByStaffIdentityID    uuid.UUID `json:"counted_by_staff_identity_id"`
+	CountedStaffAccessSessionID uuid.UUID `json:"counted_staff_access_session_id"`
 }
 
-func (q *Queries) ListCashMovements(ctx context.Context, salesShiftID uuid.UUID) ([]ListCashMovementsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCashMovements, salesShiftID)
+type InsertShiftCashCountRow struct {
+	ID             uuid.UUID `json:"id"`
+	Sequence       int32     `json:"sequence"`
+	CountedCashVnd int64     `json:"counted_cash_vnd"`
+	CountedAt      time.Time `json:"counted_at"`
+}
+
+// One append-only Cash Count attempt; counted_at comes from the database
+// clock and is returned with the id.
+func (q *Queries) InsertShiftCashCount(ctx context.Context, arg InsertShiftCashCountParams) (InsertShiftCashCountRow, error) {
+	row := q.db.QueryRowContext(ctx, insertShiftCashCount,
+		arg.ReconciliationID,
+		arg.Sequence,
+		arg.CountedCashVnd,
+		arg.CountedByStaffIdentityID,
+		arg.CountedStaffAccessSessionID,
+	)
+	var i InsertShiftCashCountRow
+	err := row.Scan(
+		&i.ID,
+		&i.Sequence,
+		&i.CountedCashVnd,
+		&i.CountedAt,
+	)
+	return i, err
+}
+
+const insertShiftClosure = `-- name: InsertShiftClosure :one
+INSERT INTO shift_closures (
+    sales_shift_id, reconciliation_id,
+    initial_cash_count_id, final_cash_count_id, final_qr_observation_id,
+    opener_staff_identity_id, closer_staff_identity_id, closer_staff_access_session_id,
+    approved_by_staff_identity_id, opened_at,
+    opening_float_vnd, pay_in_vnd, pay_out_vnd,
+    cash_payment_vnd, cash_payment_void_vnd, cash_refund_vnd, expected_cash_vnd,
+    manual_qr_payment_vnd, manual_qr_payment_void_vnd, expected_manual_qr_received_vnd,
+    manual_qr_refund_vnd,
+    observed_cash_vnd, observed_manual_qr_received_vnd, observed_manual_qr_refunded_vnd,
+    cash_difference_vnd, manual_qr_received_difference_vnd, manual_qr_refunded_difference_vnd
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+          $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+RETURNING id, closed_at
+`
+
+type InsertShiftClosureParams struct {
+	SalesShiftID                  uuid.UUID     `json:"sales_shift_id"`
+	ReconciliationID              uuid.UUID     `json:"reconciliation_id"`
+	InitialCashCountID            uuid.UUID     `json:"initial_cash_count_id"`
+	FinalCashCountID              uuid.UUID     `json:"final_cash_count_id"`
+	FinalQrObservationID          uuid.UUID     `json:"final_qr_observation_id"`
+	OpenerStaffIdentityID         uuid.UUID     `json:"opener_staff_identity_id"`
+	CloserStaffIdentityID         uuid.UUID     `json:"closer_staff_identity_id"`
+	CloserStaffAccessSessionID    uuid.UUID     `json:"closer_staff_access_session_id"`
+	ApprovedByStaffIdentityID     uuid.NullUUID `json:"approved_by_staff_identity_id"`
+	OpenedAt                      time.Time     `json:"opened_at"`
+	OpeningFloatVnd               int64         `json:"opening_float_vnd"`
+	PayInVnd                      int64         `json:"pay_in_vnd"`
+	PayOutVnd                     int64         `json:"pay_out_vnd"`
+	CashPaymentVnd                int64         `json:"cash_payment_vnd"`
+	CashPaymentVoidVnd            int64         `json:"cash_payment_void_vnd"`
+	CashRefundVnd                 int64         `json:"cash_refund_vnd"`
+	ExpectedCashVnd               int64         `json:"expected_cash_vnd"`
+	ManualQrPaymentVnd            int64         `json:"manual_qr_payment_vnd"`
+	ManualQrPaymentVoidVnd        int64         `json:"manual_qr_payment_void_vnd"`
+	ExpectedManualQrReceivedVnd   int64         `json:"expected_manual_qr_received_vnd"`
+	ManualQrRefundVnd             int64         `json:"manual_qr_refund_vnd"`
+	ObservedCashVnd               int64         `json:"observed_cash_vnd"`
+	ObservedManualQrReceivedVnd   int64         `json:"observed_manual_qr_received_vnd"`
+	ObservedManualQrRefundedVnd   int64         `json:"observed_manual_qr_refunded_vnd"`
+	CashDifferenceVnd             int64         `json:"cash_difference_vnd"`
+	ManualQrReceivedDifferenceVnd int64         `json:"manual_qr_received_difference_vnd"`
+	ManualQrRefundedDifferenceVnd int64         `json:"manual_qr_refunded_difference_vnd"`
+}
+
+type InsertShiftClosureRow struct {
+	ID       uuid.UUID `json:"id"`
+	ClosedAt time.Time `json:"closed_at"`
+}
+
+// The immutable closure aggregate. opened_at repeats the Shift's immutable
+// fact; closed_at comes from the database clock and is returned with the id.
+func (q *Queries) InsertShiftClosure(ctx context.Context, arg InsertShiftClosureParams) (InsertShiftClosureRow, error) {
+	row := q.db.QueryRowContext(ctx, insertShiftClosure,
+		arg.SalesShiftID,
+		arg.ReconciliationID,
+		arg.InitialCashCountID,
+		arg.FinalCashCountID,
+		arg.FinalQrObservationID,
+		arg.OpenerStaffIdentityID,
+		arg.CloserStaffIdentityID,
+		arg.CloserStaffAccessSessionID,
+		arg.ApprovedByStaffIdentityID,
+		arg.OpenedAt,
+		arg.OpeningFloatVnd,
+		arg.PayInVnd,
+		arg.PayOutVnd,
+		arg.CashPaymentVnd,
+		arg.CashPaymentVoidVnd,
+		arg.CashRefundVnd,
+		arg.ExpectedCashVnd,
+		arg.ManualQrPaymentVnd,
+		arg.ManualQrPaymentVoidVnd,
+		arg.ExpectedManualQrReceivedVnd,
+		arg.ManualQrRefundVnd,
+		arg.ObservedCashVnd,
+		arg.ObservedManualQrReceivedVnd,
+		arg.ObservedManualQrRefundedVnd,
+		arg.CashDifferenceVnd,
+		arg.ManualQrReceivedDifferenceVnd,
+		arg.ManualQrRefundedDifferenceVnd,
+	)
+	var i InsertShiftClosureRow
+	err := row.Scan(&i.ID, &i.ClosedAt)
+	return i, err
+}
+
+const insertShiftDiscrepancies = `-- name: InsertShiftDiscrepancies :exec
+INSERT INTO shift_discrepancies (
+    shift_closure_id, dimension, expected_vnd, observed_vnd, difference_vnd, reason, note
+)
+SELECT $1::uuid,
+       dims.dimension, exps.expected_vnd, obss.observed_vnd, diffs.difference_vnd,
+       rsn.reason,
+       NULLIF(btrim(nts.note), '')
+FROM unnest($2::text[]) WITH ORDINALITY AS dims(dimension, ord)
+JOIN unnest($3::bigint[]) WITH ORDINALITY AS exps(expected_vnd, ord)
+  ON exps.ord = dims.ord
+JOIN unnest($4::bigint[]) WITH ORDINALITY AS obss(observed_vnd, ord)
+  ON obss.ord = dims.ord
+JOIN unnest($5::bigint[]) WITH ORDINALITY AS diffs(difference_vnd, ord)
+  ON diffs.ord = dims.ord
+JOIN unnest($6::text[]) WITH ORDINALITY AS rsn(reason, ord)
+  ON rsn.ord = dims.ord
+JOIN unnest($7::text[]) WITH ORDINALITY AS nts(note, ord)
+  ON nts.ord = dims.ord
+`
+
+type InsertShiftDiscrepanciesParams struct {
+	ShiftClosureID uuid.UUID `json:"shift_closure_id"`
+	Dimensions     []string  `json:"dimensions"`
+	Expecteds      []int64   `json:"expecteds"`
+	Observeds      []int64   `json:"observeds"`
+	Differences    []int64   `json:"differences"`
+	Reasons        []string  `json:"reasons"`
+	Notes          []string  `json:"notes"`
+}
+
+// The close command's whole discrepancy set in one statement: one row per
+// nonzero closure dimension, at most three, so the rows and the closure commit
+// together. Notes arrive as a plain text array because a database/sql array
+// parameter cannot carry NULL elements: an empty string means no note, and
+// NULLIF(btrim(note), ”) turns it into SQL NULL before the reason/note
+// checks see it.
+func (q *Queries) InsertShiftDiscrepancies(ctx context.Context, arg InsertShiftDiscrepanciesParams) error {
+	_, err := q.db.ExecContext(ctx, insertShiftDiscrepancies,
+		arg.ShiftClosureID,
+		pq.Array(arg.Dimensions),
+		pq.Array(arg.Expecteds),
+		pq.Array(arg.Observeds),
+		pq.Array(arg.Differences),
+		pq.Array(arg.Reasons),
+		pq.Array(arg.Notes),
+	)
+	return err
+}
+
+const insertShiftQRObservation = `-- name: InsertShiftQRObservation :one
+INSERT INTO shift_qr_observations (
+    reconciliation_id, sequence, observed_received_vnd, observed_refunded_vnd,
+    observed_by_staff_identity_id, observed_staff_access_session_id
+) VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, sequence, observed_received_vnd, observed_refunded_vnd, observed_at
+`
+
+type InsertShiftQRObservationParams struct {
+	ReconciliationID             uuid.UUID `json:"reconciliation_id"`
+	Sequence                     int32     `json:"sequence"`
+	ObservedReceivedVnd          int64     `json:"observed_received_vnd"`
+	ObservedRefundedVnd          int64     `json:"observed_refunded_vnd"`
+	ObservedByStaffIdentityID    uuid.UUID `json:"observed_by_staff_identity_id"`
+	ObservedStaffAccessSessionID uuid.UUID `json:"observed_staff_access_session_id"`
+}
+
+type InsertShiftQRObservationRow struct {
+	ID                  uuid.UUID `json:"id"`
+	Sequence            int32     `json:"sequence"`
+	ObservedReceivedVnd int64     `json:"observed_received_vnd"`
+	ObservedRefundedVnd int64     `json:"observed_refunded_vnd"`
+	ObservedAt          time.Time `json:"observed_at"`
+}
+
+// One append-only Manual QR observation attempt; both observed values are
+// explicit, including zero.
+func (q *Queries) InsertShiftQRObservation(ctx context.Context, arg InsertShiftQRObservationParams) (InsertShiftQRObservationRow, error) {
+	row := q.db.QueryRowContext(ctx, insertShiftQRObservation,
+		arg.ReconciliationID,
+		arg.Sequence,
+		arg.ObservedReceivedVnd,
+		arg.ObservedRefundedVnd,
+		arg.ObservedByStaffIdentityID,
+		arg.ObservedStaffAccessSessionID,
+	)
+	var i InsertShiftQRObservationRow
+	err := row.Scan(
+		&i.ID,
+		&i.Sequence,
+		&i.ObservedReceivedVnd,
+		&i.ObservedRefundedVnd,
+		&i.ObservedAt,
+	)
+	return i, err
+}
+
+const insertShiftReconciliation = `-- name: InsertShiftReconciliation :one
+INSERT INTO shift_reconciliations (
+    sales_shift_id, started_by_staff_identity_id, started_staff_access_session_id,
+    opening_float_vnd, pay_in_vnd, pay_out_vnd,
+    cash_payment_vnd, cash_payment_void_vnd, cash_refund_vnd, expected_cash_vnd,
+    manual_qr_payment_vnd, manual_qr_payment_void_vnd, expected_manual_qr_received_vnd,
+    manual_qr_refund_vnd
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING id, started_at
+`
+
+type InsertShiftReconciliationParams struct {
+	SalesShiftID                uuid.UUID `json:"sales_shift_id"`
+	StartedByStaffIdentityID    uuid.UUID `json:"started_by_staff_identity_id"`
+	StartedStaffAccessSessionID uuid.UUID `json:"started_staff_access_session_id"`
+	OpeningFloatVnd             int64     `json:"opening_float_vnd"`
+	PayInVnd                    int64     `json:"pay_in_vnd"`
+	PayOutVnd                   int64     `json:"pay_out_vnd"`
+	CashPaymentVnd              int64     `json:"cash_payment_vnd"`
+	CashPaymentVoidVnd          int64     `json:"cash_payment_void_vnd"`
+	CashRefundVnd               int64     `json:"cash_refund_vnd"`
+	ExpectedCashVnd             int64     `json:"expected_cash_vnd"`
+	ManualQrPaymentVnd          int64     `json:"manual_qr_payment_vnd"`
+	ManualQrPaymentVoidVnd      int64     `json:"manual_qr_payment_void_vnd"`
+	ExpectedManualQrReceivedVnd int64     `json:"expected_manual_qr_received_vnd"`
+	ManualQrRefundVnd           int64     `json:"manual_qr_refund_vnd"`
+}
+
+type InsertShiftReconciliationRow struct {
+	ID        uuid.UUID `json:"id"`
+	StartedAt time.Time `json:"started_at"`
+}
+
+// The immutable per-Shift snapshot. The three blocker-evidence columns are
+// omitted: reconciliation may only start when every global blocker is clear,
+// so they are born at their CHECK-enforced zero.
+func (q *Queries) InsertShiftReconciliation(ctx context.Context, arg InsertShiftReconciliationParams) (InsertShiftReconciliationRow, error) {
+	row := q.db.QueryRowContext(ctx, insertShiftReconciliation,
+		arg.SalesShiftID,
+		arg.StartedByStaffIdentityID,
+		arg.StartedStaffAccessSessionID,
+		arg.OpeningFloatVnd,
+		arg.PayInVnd,
+		arg.PayOutVnd,
+		arg.CashPaymentVnd,
+		arg.CashPaymentVoidVnd,
+		arg.CashRefundVnd,
+		arg.ExpectedCashVnd,
+		arg.ManualQrPaymentVnd,
+		arg.ManualQrPaymentVoidVnd,
+		arg.ExpectedManualQrReceivedVnd,
+		arg.ManualQrRefundVnd,
+	)
+	var i InsertShiftReconciliationRow
+	err := row.Scan(&i.ID, &i.StartedAt)
+	return i, err
+}
+
+const listClosedShiftSummaries = `-- name: ListClosedShiftSummaries :many
+SELECT c.sales_shift_id, c.id AS closure_id, c.opened_at, c.closed_at,
+       opener.id AS opener_staff_identity_id,
+       opener.display_name AS opener_display_name,
+       opener.login_code AS opener_login_code,
+       closer.id AS closer_staff_identity_id,
+       closer.display_name AS closer_display_name,
+       closer.login_code AS closer_login_code,
+       c.opening_float_vnd,
+       c.expected_cash_vnd, c.observed_cash_vnd, c.cash_difference_vnd,
+       c.expected_manual_qr_received_vnd, c.observed_manual_qr_received_vnd,
+       c.manual_qr_received_difference_vnd,
+       -- The expected refunded amount is the completed refund sum itself, so
+       -- the snapshot's manual_qr_refund_vnd doubles as the equation's
+       -- expected term under its response name.
+       c.manual_qr_refund_vnd AS expected_manual_qr_refunded_vnd,
+       c.observed_manual_qr_refunded_vnd,
+       c.manual_qr_refunded_difference_vnd,
+       (c.cash_difference_vnd <> 0
+        OR c.manual_qr_received_difference_vnd <> 0
+        OR c.manual_qr_refunded_difference_vnd <> 0) AS has_discrepancy
+FROM shift_closures AS c
+JOIN staff_identities AS opener ON opener.id = c.opener_staff_identity_id
+JOIN staff_identities AS closer ON closer.id = c.closer_staff_identity_id
+WHERE c.closed_at >= $1::timestamptz
+  AND c.closed_at < $2::timestamptz
+  AND ($3::timestamptz IS NULL
+       OR (c.closed_at, c.id) < ($3::timestamptz,
+                                 $4::uuid))
+ORDER BY c.closed_at DESC, c.id DESC
+LIMIT $5::int
+`
+
+type ListClosedShiftSummariesParams struct {
+	ClosedFrom     time.Time     `json:"closed_from"`
+	ClosedTo       time.Time     `json:"closed_to"`
+	CursorClosedAt sql.NullTime  `json:"cursor_closed_at"`
+	CursorID       uuid.NullUUID `json:"cursor_id"`
+	RowLimit       int32         `json:"row_limit"`
+}
+
+type ListClosedShiftSummariesRow struct {
+	SalesShiftID                  uuid.UUID    `json:"sales_shift_id"`
+	ClosureID                     uuid.UUID    `json:"closure_id"`
+	OpenedAt                      time.Time    `json:"opened_at"`
+	ClosedAt                      time.Time    `json:"closed_at"`
+	OpenerStaffIdentityID         uuid.UUID    `json:"opener_staff_identity_id"`
+	OpenerDisplayName             string       `json:"opener_display_name"`
+	OpenerLoginCode               string       `json:"opener_login_code"`
+	CloserStaffIdentityID         uuid.UUID    `json:"closer_staff_identity_id"`
+	CloserDisplayName             string       `json:"closer_display_name"`
+	CloserLoginCode               string       `json:"closer_login_code"`
+	OpeningFloatVnd               int64        `json:"opening_float_vnd"`
+	ExpectedCashVnd               int64        `json:"expected_cash_vnd"`
+	ObservedCashVnd               int64        `json:"observed_cash_vnd"`
+	CashDifferenceVnd             int64        `json:"cash_difference_vnd"`
+	ExpectedManualQrReceivedVnd   int64        `json:"expected_manual_qr_received_vnd"`
+	ObservedManualQrReceivedVnd   int64        `json:"observed_manual_qr_received_vnd"`
+	ManualQrReceivedDifferenceVnd int64        `json:"manual_qr_received_difference_vnd"`
+	ExpectedManualQrRefundedVnd   int64        `json:"expected_manual_qr_refunded_vnd"`
+	ObservedManualQrRefundedVnd   int64        `json:"observed_manual_qr_refunded_vnd"`
+	ManualQrRefundedDifferenceVnd int64        `json:"manual_qr_refunded_difference_vnd"`
+	HasDiscrepancy                sql.NullBool `json:"has_discrepancy"`
+}
+
+// Closed-Shift history, ordered by (closed_at DESC, id DESC) per the history
+// index. The window is [closed_from, closed_to). The exclusive cursor is the
+// last (closed_at, id) of the previous page; the caller passes both cursor
+// values or neither and validates that pairing.
+func (q *Queries) ListClosedShiftSummaries(ctx context.Context, arg ListClosedShiftSummariesParams) ([]ListClosedShiftSummariesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listClosedShiftSummaries,
+		arg.ClosedFrom,
+		arg.ClosedTo,
+		arg.CursorClosedAt,
+		arg.CursorID,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListCashMovementsRow{}
+	items := []ListClosedShiftSummariesRow{}
 	for rows.Next() {
-		var i ListCashMovementsRow
+		var i ListClosedShiftSummariesRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.SalesShiftID,
-			&i.Method,
-			&i.AmountVnd,
-			&i.Reason,
-			&i.Note,
-			&i.OccurredAt,
-			&i.InitiatorID,
-			&i.InitiatorDisplayName,
-			&i.InitiatorLoginCode,
-			&i.ApproverID,
-			&i.ApproverDisplayName,
-			&i.ApproverLoginCode,
+			&i.ClosureID,
+			&i.OpenedAt,
+			&i.ClosedAt,
+			&i.OpenerStaffIdentityID,
+			&i.OpenerDisplayName,
+			&i.OpenerLoginCode,
+			&i.CloserStaffIdentityID,
+			&i.CloserDisplayName,
+			&i.CloserLoginCode,
+			&i.OpeningFloatVnd,
+			&i.ExpectedCashVnd,
+			&i.ObservedCashVnd,
+			&i.CashDifferenceVnd,
+			&i.ExpectedManualQrReceivedVnd,
+			&i.ObservedManualQrReceivedVnd,
+			&i.ManualQrReceivedDifferenceVnd,
+			&i.ExpectedManualQrRefundedVnd,
+			&i.ObservedManualQrRefundedVnd,
+			&i.ManualQrRefundedDifferenceVnd,
+			&i.HasDiscrepancy,
 		); err != nil {
 			return nil, err
 		}
@@ -459,54 +1169,82 @@ func (q *Queries) ListCashMovements(ctx context.Context, salesShiftID uuid.UUID)
 	return items, nil
 }
 
-const listShiftRefunds = `-- name: ListShiftRefunds :many
-SELECT r.id, r.check_id, r.completed_sale_id, r.method, r.amount_vnd,
-       r.reason, r.note, r.created_at,
-       CASE WHEN rc.id IS NOT NULL THEN true ELSE false END AS completed,
-       rc.completed_at, rc.transaction_reference
-FROM refunds AS r
-LEFT JOIN refund_completions AS rc ON rc.refund_id = r.id
-WHERE r.sales_shift_id = $1
-ORDER BY r.created_at ASC, r.id ASC
+const listShiftCashCounts = `-- name: ListShiftCashCounts :many
+SELECT id, sequence, counted_cash_vnd,
+       counted_by_staff_identity_id, counted_staff_access_session_id, counted_at
+FROM shift_cash_counts
+WHERE reconciliation_id = $1
+ORDER BY sequence ASC, id ASC
 `
 
-type ListShiftRefundsRow struct {
-	ID                   uuid.UUID      `json:"id"`
-	CheckID              uuid.UUID      `json:"check_id"`
-	CompletedSaleID      uuid.NullUUID  `json:"completed_sale_id"`
-	Method               string         `json:"method"`
-	AmountVnd            int64          `json:"amount_vnd"`
-	Reason               string         `json:"reason"`
-	Note                 sql.NullString `json:"note"`
-	CreatedAt            time.Time      `json:"created_at"`
-	Completed            bool           `json:"completed"`
-	CompletedAt          sql.NullTime   `json:"completed_at"`
-	TransactionReference sql.NullString `json:"transaction_reference"`
+type ListShiftCashCountsRow struct {
+	ID                          uuid.UUID `json:"id"`
+	Sequence                    int32     `json:"sequence"`
+	CountedCashVnd              int64     `json:"counted_cash_vnd"`
+	CountedByStaffIdentityID    uuid.UUID `json:"counted_by_staff_identity_id"`
+	CountedStaffAccessSessionID uuid.UUID `json:"counted_staff_access_session_id"`
+	CountedAt                   time.Time `json:"counted_at"`
 }
 
-// The Shift response's Refund summaries ordered by (created_at, id), each
-// carrying derived completion state and no credentials.
-func (q *Queries) ListShiftRefunds(ctx context.Context, salesShiftID uuid.UUID) ([]ListShiftRefundsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listShiftRefunds, salesShiftID)
+// One reconciliation's append-only Cash Counts, oldest first.
+func (q *Queries) ListShiftCashCounts(ctx context.Context, reconciliationID uuid.UUID) ([]ListShiftCashCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listShiftCashCounts, reconciliationID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListShiftRefundsRow{}
+	items := []ListShiftCashCountsRow{}
 	for rows.Next() {
-		var i ListShiftRefundsRow
+		var i ListShiftCashCountsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.CheckID,
-			&i.CompletedSaleID,
-			&i.Method,
-			&i.AmountVnd,
+			&i.Sequence,
+			&i.CountedCashVnd,
+			&i.CountedByStaffIdentityID,
+			&i.CountedStaffAccessSessionID,
+			&i.CountedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShiftClosureDiscrepancies = `-- name: ListShiftClosureDiscrepancies :many
+SELECT id, shift_closure_id, dimension, expected_vnd, observed_vnd,
+       difference_vnd, reason, note, created_at
+FROM shift_discrepancies
+WHERE shift_closure_id = $1
+ORDER BY dimension ASC
+`
+
+// One closure's nonzero discrepancy rows; exact dimensions have no row.
+func (q *Queries) ListShiftClosureDiscrepancies(ctx context.Context, shiftClosureID uuid.UUID) ([]ShiftDiscrepancy, error) {
+	rows, err := q.db.QueryContext(ctx, listShiftClosureDiscrepancies, shiftClosureID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ShiftDiscrepancy{}
+	for rows.Next() {
+		var i ShiftDiscrepancy
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShiftClosureID,
+			&i.Dimension,
+			&i.ExpectedVnd,
+			&i.ObservedVnd,
+			&i.DifferenceVnd,
 			&i.Reason,
 			&i.Note,
 			&i.CreatedAt,
-			&i.Completed,
-			&i.CompletedAt,
-			&i.TransactionReference,
 		); err != nil {
 			return nil, err
 		}
@@ -519,6 +1257,89 @@ func (q *Queries) ListShiftRefunds(ctx context.Context, salesShiftID uuid.UUID) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const listShiftQRObservations = `-- name: ListShiftQRObservations :many
+SELECT id, sequence, observed_received_vnd, observed_refunded_vnd,
+       observed_by_staff_identity_id, observed_staff_access_session_id, observed_at
+FROM shift_qr_observations
+WHERE reconciliation_id = $1
+ORDER BY sequence ASC, id ASC
+`
+
+type ListShiftQRObservationsRow struct {
+	ID                           uuid.UUID `json:"id"`
+	Sequence                     int32     `json:"sequence"`
+	ObservedReceivedVnd          int64     `json:"observed_received_vnd"`
+	ObservedRefundedVnd          int64     `json:"observed_refunded_vnd"`
+	ObservedByStaffIdentityID    uuid.UUID `json:"observed_by_staff_identity_id"`
+	ObservedStaffAccessSessionID uuid.UUID `json:"observed_staff_access_session_id"`
+	ObservedAt                   time.Time `json:"observed_at"`
+}
+
+// One reconciliation's append-only QR Observations, oldest first.
+func (q *Queries) ListShiftQRObservations(ctx context.Context, reconciliationID uuid.UUID) ([]ListShiftQRObservationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listShiftQRObservations, reconciliationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShiftQRObservationsRow{}
+	for rows.Next() {
+		var i ListShiftQRObservationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Sequence,
+			&i.ObservedReceivedVnd,
+			&i.ObservedRefundedVnd,
+			&i.ObservedByStaffIdentityID,
+			&i.ObservedStaffAccessSessionID,
+			&i.ObservedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockSalesShiftForReconciliation = `-- name: LockSalesShiftForReconciliation :one
+
+SELECT id, state, opened_by_staff_identity_id, opening_float_vnd, opened_at
+FROM sales_shifts
+WHERE id = $1
+LIMIT 1
+FOR UPDATE
+`
+
+// -- Phase 7: Shift Closure & Reconciliation --
+//
+// Reconciliation freezes the Shift's financial facts once per Shift; Cash
+// Counts and QR Observations append to per-reconciliation attempt ledgers;
+// the closure repeats the frozen scalars. Reads join staff_identities for
+// display names, which stay identity projection labels, never copied facts.
+// The Shift row FOR UPDATE shared by Start Reconciliation, the attempt
+// commands, and Final Close (spec 11.1). The state is returned rather than
+// filtered so an unknown Shift, an OPEN Shift, a CLOSING one, and a CLOSED one
+// map to their own errors instead of collapsing into one missing row; the
+// caller branches on it.
+func (q *Queries) LockSalesShiftForReconciliation(ctx context.Context, id uuid.UUID) (SalesShift, error) {
+	row := q.db.QueryRowContext(ctx, lockSalesShiftForReconciliation, id)
+	var i SalesShift
+	err := row.Scan(
+		&i.ID,
+		&i.State,
+		&i.OpenedByStaffIdentityID,
+		&i.OpeningFloatVnd,
+		&i.OpenedAt,
+	)
+	return i, err
 }
 
 const openSalesShift = `-- name: OpenSalesShift :one
@@ -574,4 +1395,24 @@ func (q *Queries) SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) 
 	var i SumCashMovementsRow
 	err := row.Scan(&i.PayInVnd, &i.PayOutVnd)
 	return i, err
+}
+
+const transitionSalesShiftToClosed = `-- name: TransitionSalesShiftToClosed :exec
+UPDATE sales_shifts SET state = 'CLOSED' WHERE id = $1
+`
+
+func (q *Queries) TransitionSalesShiftToClosed(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, transitionSalesShiftToClosed, id)
+	return err
+}
+
+const transitionSalesShiftToClosing = `-- name: TransitionSalesShiftToClosing :exec
+UPDATE sales_shifts SET state = 'CLOSING' WHERE id = $1
+`
+
+// The caller locks the Shift with LockSalesShiftForReconciliation and verifies
+// the OPEN state first, so no guard is repeated here.
+func (q *Queries) TransitionSalesShiftToClosing(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, transitionSalesShiftToClosing, id)
+	return err
 }

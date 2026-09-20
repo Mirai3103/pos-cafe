@@ -550,9 +550,10 @@ WHERE c.id = $1
 FOR UPDATE;
 
 -- name: LockOpenSalesShiftForShare :one
--- The Sales Shift open right now, locked FOR SHARE. Only one Shift can be open
--- at a time, enforced by sales_shift_only_one_open_unique, so no ordering or
--- disambiguation is needed.
+-- The Sales Shift open right now, locked FOR SHARE. Only one Shift can be
+-- active (OPEN or CLOSING) at a time, enforced by
+-- sales_shift_only_one_active_unique, so no ordering or disambiguation is
+-- needed.
 --
 -- Read from sales_shifts rather than through the Check's Session. The Shift in
 -- which money reached the cashier is an independent fact — a Session opened in

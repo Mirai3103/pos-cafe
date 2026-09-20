@@ -424,7 +424,7 @@ type SalesComp struct {
 	OccurredAt                time.Time      `json:"occurred_at"`
 }
 
-// Owned by internal/shift (Phase 4). At most one row may be in OPEN state. Phase 4 ships no close operation; see the Non-Goals in the Phase 4 design spec.
+// Owned by internal/shift (Phase 4; closure in Phase 7). At most one row may be in OPEN or CLOSING state. Closure facts live in shift_closures, not here.
 type SalesShift struct {
 	ID                      uuid.UUID `json:"id"`
 	State                   string    `json:"state"`
@@ -443,6 +443,96 @@ type ServiceSession struct {
 	CreatedAt                time.Time `json:"created_at"`
 	SalesShiftID             uuid.UUID `json:"sales_shift_id"`
 	Sequence                 int32     `json:"sequence"`
+}
+
+type ShiftCashCount struct {
+	ID                          uuid.UUID `json:"id"`
+	ReconciliationID            uuid.UUID `json:"reconciliation_id"`
+	Sequence                    int32     `json:"sequence"`
+	CountedCashVnd              int64     `json:"counted_cash_vnd"`
+	CountedByStaffIdentityID    uuid.UUID `json:"counted_by_staff_identity_id"`
+	CountedStaffAccessSessionID uuid.UUID `json:"counted_staff_access_session_id"`
+	CountedAt                   time.Time `json:"counted_at"`
+}
+
+type ShiftClosure struct {
+	ID                              uuid.UUID     `json:"id"`
+	SalesShiftID                    uuid.UUID     `json:"sales_shift_id"`
+	ReconciliationID                uuid.UUID     `json:"reconciliation_id"`
+	InitialCashCountID              uuid.UUID     `json:"initial_cash_count_id"`
+	FinalCashCountID                uuid.UUID     `json:"final_cash_count_id"`
+	FinalQrObservationID            uuid.UUID     `json:"final_qr_observation_id"`
+	OpenerStaffIdentityID           uuid.UUID     `json:"opener_staff_identity_id"`
+	CloserStaffIdentityID           uuid.UUID     `json:"closer_staff_identity_id"`
+	CloserStaffAccessSessionID      uuid.UUID     `json:"closer_staff_access_session_id"`
+	ApprovedByStaffIdentityID       uuid.NullUUID `json:"approved_by_staff_identity_id"`
+	OpenedAt                        time.Time     `json:"opened_at"`
+	ClosedAt                        time.Time     `json:"closed_at"`
+	OpeningFloatVnd                 int64         `json:"opening_float_vnd"`
+	PayInVnd                        int64         `json:"pay_in_vnd"`
+	PayOutVnd                       int64         `json:"pay_out_vnd"`
+	CashPaymentVnd                  int64         `json:"cash_payment_vnd"`
+	CashPaymentVoidVnd              int64         `json:"cash_payment_void_vnd"`
+	CashRefundVnd                   int64         `json:"cash_refund_vnd"`
+	ExpectedCashVnd                 int64         `json:"expected_cash_vnd"`
+	ManualQrPaymentVnd              int64         `json:"manual_qr_payment_vnd"`
+	ManualQrPaymentVoidVnd          int64         `json:"manual_qr_payment_void_vnd"`
+	ExpectedManualQrReceivedVnd     int64         `json:"expected_manual_qr_received_vnd"`
+	ManualQrRefundVnd               int64         `json:"manual_qr_refund_vnd"`
+	PendingManualQrRefundVnd        int64         `json:"pending_manual_qr_refund_vnd"`
+	PendingRefundVnd                int64         `json:"pending_refund_vnd"`
+	UnresolvedPostSaleAdjustmentVnd int64         `json:"unresolved_post_sale_adjustment_vnd"`
+	ObservedCashVnd                 int64         `json:"observed_cash_vnd"`
+	ObservedManualQrReceivedVnd     int64         `json:"observed_manual_qr_received_vnd"`
+	ObservedManualQrRefundedVnd     int64         `json:"observed_manual_qr_refunded_vnd"`
+	CashDifferenceVnd               int64         `json:"cash_difference_vnd"`
+	ManualQrReceivedDifferenceVnd   int64         `json:"manual_qr_received_difference_vnd"`
+	ManualQrRefundedDifferenceVnd   int64         `json:"manual_qr_refunded_difference_vnd"`
+}
+
+type ShiftDiscrepancy struct {
+	ID             uuid.UUID      `json:"id"`
+	ShiftClosureID uuid.UUID      `json:"shift_closure_id"`
+	Dimension      string         `json:"dimension"`
+	ExpectedVnd    int64          `json:"expected_vnd"`
+	ObservedVnd    int64          `json:"observed_vnd"`
+	DifferenceVnd  int64          `json:"difference_vnd"`
+	Reason         string         `json:"reason"`
+	Note           sql.NullString `json:"note"`
+	CreatedAt      time.Time      `json:"created_at"`
+}
+
+type ShiftQrObservation struct {
+	ID                           uuid.UUID `json:"id"`
+	ReconciliationID             uuid.UUID `json:"reconciliation_id"`
+	Sequence                     int32     `json:"sequence"`
+	ObservedReceivedVnd          int64     `json:"observed_received_vnd"`
+	ObservedRefundedVnd          int64     `json:"observed_refunded_vnd"`
+	ObservedByStaffIdentityID    uuid.UUID `json:"observed_by_staff_identity_id"`
+	ObservedStaffAccessSessionID uuid.UUID `json:"observed_staff_access_session_id"`
+	ObservedAt                   time.Time `json:"observed_at"`
+}
+
+type ShiftReconciliation struct {
+	ID                              uuid.UUID `json:"id"`
+	SalesShiftID                    uuid.UUID `json:"sales_shift_id"`
+	StartedByStaffIdentityID        uuid.UUID `json:"started_by_staff_identity_id"`
+	StartedStaffAccessSessionID     uuid.UUID `json:"started_staff_access_session_id"`
+	StartedAt                       time.Time `json:"started_at"`
+	OpeningFloatVnd                 int64     `json:"opening_float_vnd"`
+	PayInVnd                        int64     `json:"pay_in_vnd"`
+	PayOutVnd                       int64     `json:"pay_out_vnd"`
+	CashPaymentVnd                  int64     `json:"cash_payment_vnd"`
+	CashPaymentVoidVnd              int64     `json:"cash_payment_void_vnd"`
+	CashRefundVnd                   int64     `json:"cash_refund_vnd"`
+	ExpectedCashVnd                 int64     `json:"expected_cash_vnd"`
+	ManualQrPaymentVnd              int64     `json:"manual_qr_payment_vnd"`
+	ManualQrPaymentVoidVnd          int64     `json:"manual_qr_payment_void_vnd"`
+	ExpectedManualQrReceivedVnd     int64     `json:"expected_manual_qr_received_vnd"`
+	ManualQrRefundVnd               int64     `json:"manual_qr_refund_vnd"`
+	PendingManualQrRefundVnd        int64     `json:"pending_manual_qr_refund_vnd"`
+	PendingRefundVnd                int64     `json:"pending_refund_vnd"`
+	UnresolvedPostSaleAdjustmentVnd int64     `json:"unresolved_post_sale_adjustment_vnd"`
 }
 
 type StaffAccessSession struct {

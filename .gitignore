@@ -29,3 +29,6 @@ bin/
 # Worktrees
 .worktrees
 .worktrees/
+
+# Agent tooling session state
+.pi/

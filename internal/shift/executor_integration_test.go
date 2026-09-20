@@ -35,7 +35,9 @@ func openShiftTestDB(t *testing.T) (*sql.DB, *sqlc.Queries) {
 func truncateShiftTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.Exec(`
-		TRUNCATE refund_completions, refund_adjustment_allocations,
+		TRUNCATE shift_discrepancies, shift_closures, shift_qr_observations,
+		         shift_cash_counts, shift_reconciliations,
+		         refund_completions, refund_adjustment_allocations,
 		         refund_payment_allocations, refunds, payment_voids, sales_comps,
 		         preparation_cancellations, charge_adjustments,
 		         cash_movements, sales_shifts
@@ -357,4 +359,247 @@ func TestExecuteMutationConcurrentDuplicatesRunOnce(t *testing.T) {
 		assert.NoError(t, execErr, "every concurrent duplicate must succeed by replay")
 	}
 	assert.Equal(t, 1, runs, "the advisory lock must serialize duplicates so the body runs once")
+}
+
+// startReconciliation exercises the Phase 7 query path one command would run:
+// lock the OPEN Shift, freeze the totals into a reconciliation, append the
+// blind initial Cash Count, and move the Shift to CLOSING. It returns the
+// reconciliation id and its initial count id.
+func startReconciliation(
+	t *testing.T, ctx context.Context, q *sqlc.Queries, shiftID uuid.UUID, starter testActor,
+) (uuid.UUID, uuid.UUID) {
+	t.Helper()
+
+	locked, err := q.LockSalesShiftForReconciliation(ctx, shiftID)
+	require.NoError(t, err)
+	require.Equal(t, shift.StateOpen, locked.State)
+
+	totals, err := q.GetShiftReconciliationTotals(ctx, shiftID)
+	require.NoError(t, err)
+	movements, err := q.SumCashMovements(ctx, shiftID)
+	require.NoError(t, err)
+	expectedCash, err := shift.ComputeExpectedCash(locked.OpeningFloatVnd,
+		totals.CashPaymentVnd, totals.CashPaymentVoidVnd, totals.CashRefundVnd,
+		movements.PayInVnd, movements.PayOutVnd)
+	require.NoError(t, err)
+
+	reconciliation, err := q.InsertShiftReconciliation(ctx, sqlc.InsertShiftReconciliationParams{
+		SalesShiftID:                shiftID,
+		StartedByStaffIdentityID:    starter.StaffID,
+		StartedStaffAccessSessionID: starter.SessionID,
+		OpeningFloatVnd:             locked.OpeningFloatVnd,
+		PayInVnd:                    movements.PayInVnd,
+		PayOutVnd:                   movements.PayOutVnd,
+		CashPaymentVnd:              totals.CashPaymentVnd,
+		CashPaymentVoidVnd:          totals.CashPaymentVoidVnd,
+		CashRefundVnd:               totals.CashRefundVnd,
+		ExpectedCashVnd:             expectedCash,
+		ManualQrPaymentVnd:          totals.ManualQrPaymentVnd,
+		ManualQrPaymentVoidVnd:      totals.ManualQrPaymentVoidVnd,
+		ExpectedManualQrReceivedVnd: totals.ManualQrPaymentVnd - totals.ManualQrPaymentVoidVnd,
+		ManualQrRefundVnd:           totals.ManualQrRefundVnd,
+	})
+	require.NoError(t, err)
+	assert.False(t, reconciliation.StartedAt.IsZero())
+
+	count, err := q.InsertShiftCashCount(ctx, sqlc.InsertShiftCashCountParams{
+		ReconciliationID:            reconciliation.ID,
+		Sequence:                    1,
+		CountedCashVnd:              expectedCash,
+		CountedByStaffIdentityID:    starter.StaffID,
+		CountedStaffAccessSessionID: starter.SessionID,
+	})
+	require.NoError(t, err)
+	assert.False(t, count.CountedAt.IsZero())
+
+	require.NoError(t, q.TransitionSalesShiftToClosing(ctx, shiftID))
+	return reconciliation.ID, count.ID
+}
+
+// closeShift exercises the Phase 7 query path Final Close runs: the closure
+// aggregate plus its discrepancy set. approver nil means an exact close.
+func closeShift(
+	t *testing.T, ctx context.Context, q *sqlc.Queries, shiftID, reconciliationID,
+	initialCountID, finalQrObservationID uuid.UUID, closer testActor, approver uuid.NullUUID,
+	observedCashVND, expectedCashVND int64,
+) uuid.UUID {
+	t.Helper()
+
+	difference := observedCashVND - expectedCashVND
+	closure, err := q.InsertShiftClosure(ctx, sqlc.InsertShiftClosureParams{
+		SalesShiftID:               shiftID,
+		ReconciliationID:           reconciliationID,
+		InitialCashCountID:         initialCountID,
+		FinalCashCountID:           initialCountID,
+		FinalQrObservationID:       finalQrObservationID,
+		OpenerStaffIdentityID:      closer.StaffID,
+		CloserStaffIdentityID:      closer.StaffID,
+		CloserStaffAccessSessionID: closer.SessionID,
+		ApprovedByStaffIdentityID:  approver,
+		OpenedAt:                   time.Now().Add(-time.Hour),
+		OpeningFloatVnd:            expectedCashVND,
+		ExpectedCashVnd:            expectedCashVND,
+		ObservedCashVnd:            observedCashVND,
+		CashDifferenceVnd:          difference,
+	})
+	require.NoError(t, err)
+	assert.False(t, closure.ClosedAt.IsZero())
+
+	if difference == 0 {
+		require.NoError(t, q.InsertShiftDiscrepancies(ctx, sqlc.InsertShiftDiscrepanciesParams{
+			ShiftClosureID: closure.ID,
+			Dimensions:     []string{},
+			Expecteds:      []int64{},
+			Observeds:      []int64{},
+			Differences:    []int64{},
+			Reasons:        []string{},
+			Notes:          []string{},
+		}), "an empty discrepancy set must insert nothing without error")
+	} else {
+		require.NoError(t, q.InsertShiftDiscrepancies(ctx, sqlc.InsertShiftDiscrepanciesParams{
+			ShiftClosureID: closure.ID,
+			Dimensions:     []string{shift.DimensionCash},
+			Expecteds:      []int64{expectedCashVND},
+			Observeds:      []int64{observedCashVND},
+			Differences:    []int64{difference},
+			Reasons:        []string{shift.ReasonCashCountDifference},
+			Notes:          []string{""},
+		}))
+	}
+
+	require.NoError(t, q.TransitionSalesShiftToClosed(ctx, shiftID))
+	return closure.ID
+}
+
+func TestShiftReconciliationQueryRoundTrip(t *testing.T) {
+	db, q := openShiftTestDB(t)
+	truncateShiftTables(t, db)
+	ctx := context.Background()
+
+	cashier := newTestActor(t, q, []string{"CASHIER"}, true)
+	manager := newTestActor(t, q, []string{"MANAGER"}, true)
+
+	// A fresh cafe has no blockers of any kind.
+	blockers, err := q.GetGlobalShiftClosureBlockers(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), blockers.UnsettledCheckCount)
+	assert.Equal(t, int64(0), blockers.PendingRefundCount)
+	assert.Equal(t, int64(0), blockers.UnresolvedCorrectionVnd)
+	assert.Equal(t, int64(0), blockers.ActiveServiceSessionCount)
+
+	opened, err := q.OpenSalesShift(ctx, sqlc.OpenSalesShiftParams{
+		OpenedByStaffIdentityID: cashier.StaffID,
+		OpeningFloatVnd:         500000,
+	})
+	require.NoError(t, err)
+
+	reconciliationID, initialCountID := startReconciliation(t, ctx, q, opened.ID, cashier)
+
+	// The latest evidence is the initial count alone until a QR recheck lands.
+	latest, err := q.GetLatestReconciliationEvidence(ctx, reconciliationID)
+	require.NoError(t, err)
+	assert.Equal(t, initialCountID, latest.CashCountID)
+	assert.Equal(t, int32(1), latest.CashCountSequence)
+	assert.False(t, latest.QrObservationID.Valid, "no QR observation exists yet")
+
+	qr, err := q.InsertShiftQRObservation(ctx, sqlc.InsertShiftQRObservationParams{
+		ReconciliationID:             reconciliationID,
+		Sequence:                     1,
+		ObservedReceivedVnd:          0,
+		ObservedRefundedVnd:          0,
+		ObservedByStaffIdentityID:    cashier.StaffID,
+		ObservedStaffAccessSessionID: cashier.SessionID,
+	})
+	require.NoError(t, err)
+	latest, err = q.GetLatestReconciliationEvidence(ctx, reconciliationID)
+	require.NoError(t, err)
+	require.True(t, latest.QrObservationID.Valid)
+	assert.Equal(t, qr.ID, latest.QrObservationID.UUID)
+
+	snapshot, err := q.GetReconciliationSnapshot(ctx, opened.ID)
+	require.NoError(t, err)
+	assert.Equal(t, reconciliationID, snapshot.ID)
+	assert.Equal(t, int64(500000), snapshot.ExpectedCashVnd)
+	assert.Equal(t, int64(0), snapshot.PendingRefundVnd)
+
+	closureID := closeShift(t, ctx, q, opened.ID, reconciliationID, initialCountID, qr.ID,
+		cashier, uuid.NullUUID{}, 500000, 500000)
+
+	discrepancies, err := q.ListShiftClosureDiscrepancies(ctx, closureID)
+	require.NoError(t, err)
+	assert.Empty(t, discrepancies, "an exact close leaves no discrepancy rows")
+
+	counts, err := q.ListShiftCashCounts(ctx, reconciliationID)
+	require.NoError(t, err)
+	require.Len(t, counts, 1)
+	observations, err := q.ListShiftQRObservations(ctx, reconciliationID)
+	require.NoError(t, err)
+	require.Len(t, observations, 1)
+
+	detail, err := q.GetClosedShiftDetail(ctx, opened.ID)
+	require.NoError(t, err)
+	assert.Equal(t, closureID, detail.ClosureID)
+	assert.Equal(t, cashier.StaffID, detail.StartedByStaffIdentityID)
+	assert.Equal(t, int64(500000), detail.ExpectedCashVnd)
+	assert.Equal(t, int64(500000), detail.ObservedCashVnd)
+	assert.Equal(t, int64(0), detail.CashDifferenceVnd)
+	assert.False(t, detail.ApprovedByStaffIdentityID.Valid)
+
+	// A new Shift opens after closure; its close is discrepant and approved.
+	second, err := q.OpenSalesShift(ctx, sqlc.OpenSalesShiftParams{
+		OpenedByStaffIdentityID: cashier.StaffID,
+		OpeningFloatVnd:         500000,
+	})
+	require.NoError(t, err, "the active-Shift index must allow a Shift after closure")
+
+	secondReconciliationID, secondInitialCountID := startReconciliation(t, ctx, q, second.ID, cashier)
+	secondQr, err := q.InsertShiftQRObservation(ctx, sqlc.InsertShiftQRObservationParams{
+		ReconciliationID:             secondReconciliationID,
+		Sequence:                     1,
+		ObservedReceivedVnd:          0,
+		ObservedRefundedVnd:          0,
+		ObservedByStaffIdentityID:    cashier.StaffID,
+		ObservedStaffAccessSessionID: cashier.SessionID,
+	})
+	require.NoError(t, err)
+	secondClosureID := closeShift(t, ctx, q, second.ID, secondReconciliationID, secondInitialCountID,
+		secondQr.ID, cashier, uuid.NullUUID{UUID: manager.StaffID, Valid: true}, 390000, 500000)
+
+	secondDiscrepancies, err := q.ListShiftClosureDiscrepancies(ctx, secondClosureID)
+	require.NoError(t, err)
+	require.Len(t, secondDiscrepancies, 1)
+	assert.Equal(t, shift.DimensionCash, secondDiscrepancies[0].Dimension)
+	assert.Equal(t, int64(-110000), secondDiscrepancies[0].DifferenceVnd)
+	assert.Equal(t, shift.ReasonCashCountDifference, secondDiscrepancies[0].Reason)
+	assert.False(t, secondDiscrepancies[0].Note.Valid, "an empty Go note must store SQL NULL")
+
+	secondDetail, err := q.GetClosedShiftDetail(ctx, second.ID)
+	require.NoError(t, err)
+	require.True(t, secondDetail.ApprovedByStaffIdentityID.Valid)
+	assert.Equal(t, manager.StaffID, secondDetail.ApprovedByStaffIdentityID.UUID)
+
+	// History reads both closures newest-first across an exclusive cursor.
+	windowFrom := time.Now().Add(-24 * time.Hour)
+	windowTo := time.Now().Add(24 * time.Hour)
+	page, err := q.ListClosedShiftSummaries(ctx, sqlc.ListClosedShiftSummariesParams{
+		ClosedFrom: windowFrom,
+		ClosedTo:   windowTo,
+		RowLimit:   1,
+	})
+	require.NoError(t, err)
+	require.Len(t, page, 1)
+	assert.Equal(t, second.ID, page[0].SalesShiftID, "the newest closure comes first")
+	assert.True(t, page[0].HasDiscrepancy.Bool)
+
+	page, err = q.ListClosedShiftSummaries(ctx, sqlc.ListClosedShiftSummariesParams{
+		ClosedFrom:     windowFrom,
+		ClosedTo:       windowTo,
+		CursorClosedAt: sql.NullTime{Time: page[0].ClosedAt, Valid: true},
+		CursorID:       uuid.NullUUID{UUID: page[0].ClosureID, Valid: true},
+		RowLimit:       10,
+	})
+	require.NoError(t, err)
+	require.Len(t, page, 1)
+	assert.Equal(t, opened.ID, page[0].SalesShiftID, "the cursor excludes the first page")
+	assert.False(t, page[0].HasDiscrepancy.Bool)
 }

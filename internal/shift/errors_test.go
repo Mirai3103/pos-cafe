@@ -16,8 +16,19 @@ import (
 func TestMapDBErrorMapsConstraintFailures(t *testing.T) {
 	assert.NoError(t, shift.MapDBError(nil))
 
-	unique := &pgconn.PgError{Code: "23505", Message: "duplicate key", Detail: "sales_shift_only_one_open_unique"}
-	assert.ErrorIs(t, shift.MapDBError(unique), shift.ErrShiftAlreadyOpen)
+	activeUnique := &pgconn.PgError{Code: "23505", Message: "duplicate key", Detail: "Key (state)=(OPEN) already exists.", ConstraintName: "sales_shift_only_one_active_unique"}
+	assert.ErrorIs(t, shift.MapDBError(activeUnique), shift.ErrShiftAlreadyOpen)
+
+	reconUnique := &pgconn.PgError{Code: "23505", Message: "duplicate key", ConstraintName: "shift_reconciliation_sales_shift_unique"}
+	assert.ErrorIs(t, shift.MapDBError(reconUnique), shift.ErrShiftAlreadyClosing)
+
+	// A unique violation on any other constraint is a defect, not a business
+	// state: it must pass through unmapped so it surfaces as a logged 500
+	// (spec 12 narrows the old blanket mapping).
+	unknownUnique := &pgconn.PgError{Code: "23505", Message: "duplicate key", ConstraintName: "some_other_unique"}
+	mappedUnknownUnique := shift.MapDBError(unknownUnique)
+	assert.NotErrorIs(t, mappedUnknownUnique, shift.ErrShiftAlreadyOpen)
+	assert.ErrorIs(t, mappedUnknownUnique, unknownUnique)
 
 	fk := &pgconn.PgError{Code: "23503", Message: "foreign key violation", ConstraintName: "cash_movements_sales_shift_id_fkey"}
 	assert.ErrorIs(t, shift.MapDBError(fk), shift.ErrOpenShiftRequired)
@@ -47,9 +58,15 @@ func TestMapHTTPErrorStatusesAndCodes(t *testing.T) {
 	}{
 		{shift.ErrShiftAlreadyOpen, http.StatusConflict, "SALES_SHIFT_ALREADY_OPEN"},
 		{shift.ErrOpenShiftRequired, http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED"},
+		{shift.ErrShiftAlreadyClosing, http.StatusConflict, "SALES_SHIFT_ALREADY_CLOSING"},
+		{shift.ErrSalesShiftNotFound, http.StatusNotFound, "SALES_SHIFT_NOT_FOUND"},
+		{shift.ErrReconciliationNotStarted, http.StatusConflict, "SHIFT_RECONCILIATION_NOT_STARTED"},
+		{shift.ErrUnsettledCheck, http.StatusConflict, "SHIFT_UNSETTLED_CHECK"},
+		{shift.ErrPendingRefund, http.StatusConflict, "SHIFT_PENDING_REFUND"},
+		{shift.ErrUnresolvedCorrection, http.StatusConflict, "SHIFT_UNRESOLVED_CORRECTION"},
+		{shift.ErrActiveServiceSession, http.StatusConflict, "SHIFT_ACTIVE_SERVICE_SESSION"},
 		{shift.ErrManagerApprovalUnavailable, http.StatusForbidden, "MANAGER_APPROVAL_UNAVAILABLE"},
 		{shift.ErrRequestConflict, http.StatusConflict, "REQUEST_CONFLICT"},
-		{shift.ErrExpectedCashOutOfRange, http.StatusBadRequest, "EXPECTED_CASH_OUT_OF_RANGE"},
 		{shift.ErrForbidden, http.StatusForbidden, "FORBIDDEN"},
 		{shift.ErrUnauthorized, http.StatusUnauthorized, "UNAUTHORIZED"},
 		{shift.ErrInvalidStoredResult, http.StatusInternalServerError, "INVALID_STORED_RESULT"},
@@ -72,7 +89,7 @@ func TestMapHTTPErrorHidesDBDetail(t *testing.T) {
 	// A raw PostgreSQL constraint detail must never reach the client message,
 	// even though MapDBError legitimately embeds it in the Go error chain for
 	// server-side logging.
-	unique := &pgconn.PgError{Code: "23505", Message: "duplicate key", Detail: "Key (state)=(OPEN) already exists."}
+	unique := &pgconn.PgError{Code: "23505", Message: "duplicate key", Detail: "Key (state)=(OPEN) already exists.", ConstraintName: "sales_shift_only_one_active_unique"}
 	mapped := shift.MapHTTPError(shift.MapDBError(unique))
 
 	var coded *response.CodedError

@@ -5950,6 +5950,87 @@
             }
         },
         "/shifts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns Manager-visible closed Sales Shift summaries ordered by closed_at descending (ties by id) inside a half-open [closed_from, closed_to) window of at most 31 days. Pagination is keyset: a full page returns an opaque next_cursor to pass back verbatim; the cursor is exclusive and bound to the window it was minted over. Requires the audit.inspect capability; no fresh PIN is needed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shifts"
+                ],
+                "summary": "List closed Sales Shifts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inclusive window start, RFC 3339",
+                        "name": "closed_from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Exclusive window end, RFC 3339",
+                        "name": "closed_to",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque next_cursor from the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, default 50, capped at 100",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/shift.ClosedShiftListResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Missing or malformed window, a window over 31 days, a limit below one, or a malformed or mismatched cursor",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Requires audit.inspect",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -6031,7 +6112,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the open Sales Shift with its Expected Cash and Cash Movements, or null when no Shift is open. expected_cash_vnd covers the Opening Float, Cash Payments, and Cash Movements. The Cash Refund term is still outstanding, because Refund is not implemented (ADR-020).",
+                "description": "Returns the active Sales Shift's state-dispatched read (spec 9.5), or null when no Shift is open. While the Shift is OPEN the response is the redacted metadata shape only (id, state, opened_at, opener): no Opening Float, Expected Cash, or derivation input crosses the boundary before the blind initial count commits. While the Shift is CLOSING the response is the Shift metadata plus its frozen reconciliation, carrying every attempt and the preview built from the latest evidence. Requires the sales_shift.operate capability.",
                 "produces": [
                     "application/json"
                 ],
@@ -6051,7 +6132,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/shift.CurrentSalesShiftResponse"
+                                            "$ref": "#/definitions/shift.CurrentShiftResponse"
                                         }
                                     }
                                 }
@@ -6065,7 +6146,77 @@
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Requires sales_shift.operate",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/shifts/{shift_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns one closed Sales Shift's immutable detail: the summary, the complete frozen source scalars, the reconciliation starter, every Cash Count and Manual QR observation, the discrepancy rows, and the approving Manager when the close was discrepant. Only closed Shifts are exposed: an unknown id and a Shift that is still OPEN or CLOSING both return 404. Requires the audit.inspect capability; no fresh PIN is needed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shifts"
+                ],
+                "summary": "Read a closed Sales Shift",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Sales Shift ID",
+                        "name": "shift_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/shift.ClosedShiftDetailResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Malformed shift_id",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Requires audit.inspect",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown Shift, or the Shift is not closed",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -6080,7 +6231,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Records a Pay In or Pay Out against an open Sales Shift. Requires inline approval by an enabled Manager, who authenticates with their own login code and PIN. Returns the resulting Expected Cash.",
+                "description": "Records a Pay In or Pay Out against an open Sales Shift. Requires inline approval by an enabled Manager, who authenticates with their own login code and PIN. The response carries the recorded movement only: while the Shift is OPEN, no Expected Cash or derivation total crosses the boundary (spec 9.5).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6148,6 +6299,358 @@
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/shifts/{shift_id}/close": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Performs the Final Close of a CLOSING Sales Shift. The request carries the final evidence ids and, for a discrepant close, one reason per nonzero dimension. Amounts are always derived server-side from the frozen snapshot and the final evidence. A non-null empty discrepancies array closes exactly; any entry selects the discrepant close, which requires inline approval by an enabled Manager holding the MANAGER role, who authenticates with their own login code and PIN. Returns the immutable closed-Shift detail for both outcomes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shifts"
+                ],
+                "summary": "Close a reconciled Sales Shift",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Sales Shift ID",
+                        "name": "shift_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Final evidence and discrepancy reasons",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/shift.CloseShiftCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/shift.ClosedShiftDetailResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Malformed body, omitted evidence id, a missing or null discrepancies array, an omitted approval pair for a discrepant close, or an invalid reason or note shape",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Missing capability or failed Manager approval, collapsed to MANAGER_APPROVAL_UNAVAILABLE",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown Sales Shift or final attempt id",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Lifecycle, blocker, stale evidence, source mismatch, recount/recheck, or discrepancy reason conflicts",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/shifts/{shift_id}/reconciliation": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts the blind reconciliation of an open Sales Shift: it freezes the financial snapshot, records the submitted cash count as the blind initial count (sequence 1), and moves the Shift to CLOSING. The counted amount is submitted before any expected value is revealed. Returns the CLOSING Shift with its frozen reconciliation.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shifts"
+                ],
+                "summary": "Start Sales Shift reconciliation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Sales Shift ID",
+                        "name": "shift_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Initial blind cash count",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/shift.StartReconciliationCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/shift.ClosingShiftResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "SALES_SHIFT_ALREADY_CLOSING, SHIFT_UNSETTLED_CHECK, SHIFT_PENDING_REFUND, SHIFT_UNRESOLVED_CORRECTION, or SHIFT_ACTIVE_SERVICE_SESSION, in that precedence order",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/shifts/{shift_id}/reconciliation/cash-counts": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Appends one immutable Cash Count attempt (a recount) to a CLOSING Sales Shift's reconciliation. The Shift must be CLOSING; an OPEN Shift has no reconciliation to append to. Zero is a valid count. Returns the appended attempt plus the full preview built from the latest evidence.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shifts"
+                ],
+                "summary": "Append a Cash Count",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Sales Shift ID",
+                        "name": "shift_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Recount Cash amount",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/shift.RecordCashCountCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/shift.CashCountResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/shifts/{shift_id}/reconciliation/qr-observations": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Appends one immutable Manual QR observation attempt (a recheck) to a CLOSING Sales Shift's reconciliation. Both observed values are mandatory together and explicit, including zero; one without the other is rejected. Returns the appended observation plus the full preview built from the latest evidence.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shifts"
+                ],
+                "summary": "Append a Manual QR Observation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Sales Shift ID",
+                        "name": "shift_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Observed received and refunded totals",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/shift.RecordQRObservationCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/shift.QRObservationResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT",
                         "schema": {
                             "$ref": "#/definitions/response.APIResponse"
                         }
@@ -9752,6 +10255,37 @@
                 }
             }
         },
+        "shift.CashCountResponse": {
+            "type": "object",
+            "properties": {
+                "counted_at": {
+                    "type": "string"
+                },
+                "counted_by": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "counted_cash_vnd": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "sequence": {
+                    "type": "integer"
+                }
+            }
+        },
+        "shift.CashCountResult": {
+            "type": "object",
+            "properties": {
+                "cash_count": {
+                    "$ref": "#/definitions/shift.CashCountResponse"
+                },
+                "preview": {
+                    "$ref": "#/definitions/shift.ReconciliationPreview"
+                }
+            }
+        },
         "shift.CashMovementResponse": {
             "type": "object",
             "properties": {
@@ -9787,21 +10321,360 @@
         "shift.CashMovementResult": {
             "type": "object",
             "properties": {
-                "expected_cash_vnd": {
-                    "type": "integer"
-                },
                 "movement": {
                     "$ref": "#/definitions/shift.CashMovementResponse"
                 }
             }
         },
-        "shift.CurrentSalesShiftResponse": {
+        "shift.CloseDiscrepancyInput": {
             "type": "object",
             "properties": {
-                "cash_movements": {
+                "dimension": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "shift.CloseShiftCommand": {
+            "type": "object",
+            "properties": {
+                "approver_login_code": {
+                    "type": "string"
+                },
+                "discrepancies": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/shift.CashMovementResponse"
+                        "$ref": "#/definitions/shift.CloseDiscrepancyInput"
+                    }
+                },
+                "final_cash_count_id": {
+                    "type": "string"
+                },
+                "final_qr_observation_id": {
+                    "type": "string"
+                },
+                "manager_pin": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "shift.ClosedShiftDetailResponse": {
+            "type": "object",
+            "properties": {
+                "approver": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "cash_counts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/shift.CashCountResponse"
+                    }
+                },
+                "cash_difference_vnd": {
+                    "type": "integer"
+                },
+                "cash_payment_vnd": {
+                    "type": "integer"
+                },
+                "cash_payment_void_vnd": {
+                    "type": "integer"
+                },
+                "cash_refund_vnd": {
+                    "type": "integer"
+                },
+                "closed_at": {
+                    "type": "string"
+                },
+                "closer": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "discrepancies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/shift.DiscrepancyResponse"
+                    }
+                },
+                "expected_cash_vnd": {
+                    "type": "integer"
+                },
+                "expected_manual_qr_received_vnd": {
+                    "type": "integer"
+                },
+                "expected_manual_qr_refunded_vnd": {
+                    "type": "integer"
+                },
+                "has_discrepancy": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "manual_qr_payment_vnd": {
+                    "type": "integer"
+                },
+                "manual_qr_payment_void_vnd": {
+                    "type": "integer"
+                },
+                "manual_qr_received_difference_vnd": {
+                    "type": "integer"
+                },
+                "manual_qr_refunded_difference_vnd": {
+                    "type": "integer"
+                },
+                "observed_cash_vnd": {
+                    "type": "integer"
+                },
+                "observed_manual_qr_received_vnd": {
+                    "type": "integer"
+                },
+                "observed_manual_qr_refunded_vnd": {
+                    "type": "integer"
+                },
+                "opened_at": {
+                    "type": "string"
+                },
+                "opener": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "opening_float_vnd": {
+                    "type": "integer"
+                },
+                "pay_in_vnd": {
+                    "type": "integer"
+                },
+                "pay_out_vnd": {
+                    "type": "integer"
+                },
+                "pending_manual_qr_refund_vnd": {
+                    "type": "integer"
+                },
+                "pending_refund_vnd": {
+                    "type": "integer"
+                },
+                "qr_observations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/shift.QRObservationResponse"
+                    }
+                },
+                "starter": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "unresolved_post_sale_adjustment_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "shift.ClosedShiftListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/shift.ClosedShiftSummaryResponse"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "shift.ClosedShiftSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "cash_difference_vnd": {
+                    "type": "integer"
+                },
+                "closed_at": {
+                    "type": "string"
+                },
+                "closer": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "expected_cash_vnd": {
+                    "type": "integer"
+                },
+                "expected_manual_qr_received_vnd": {
+                    "type": "integer"
+                },
+                "expected_manual_qr_refunded_vnd": {
+                    "type": "integer"
+                },
+                "has_discrepancy": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "manual_qr_received_difference_vnd": {
+                    "type": "integer"
+                },
+                "manual_qr_refunded_difference_vnd": {
+                    "type": "integer"
+                },
+                "observed_cash_vnd": {
+                    "type": "integer"
+                },
+                "observed_manual_qr_received_vnd": {
+                    "type": "integer"
+                },
+                "observed_manual_qr_refunded_vnd": {
+                    "type": "integer"
+                },
+                "opened_at": {
+                    "type": "string"
+                },
+                "opener": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "opening_float_vnd": {
+                    "type": "integer"
+                }
+            }
+        },
+        "shift.ClosingShiftResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "opened_at": {
+                    "type": "string"
+                },
+                "opener": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "reconciliation": {
+                    "$ref": "#/definitions/shift.ReconciliationResponse"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "shift.CurrentShiftResponse": {
+            "type": "object"
+        },
+        "shift.DiscrepancyResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "difference_vnd": {
+                    "type": "integer"
+                },
+                "dimension": {
+                    "type": "string"
+                },
+                "expected_vnd": {
+                    "type": "integer"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "observed_vnd": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "shift.OpenShiftCommand": {
+            "type": "object",
+            "properties": {
+                "opening_float_vnd": {
+                    "type": "integer"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "shift.QRObservationResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "observed_by": {
+                    "$ref": "#/definitions/shift.StaffSummary"
+                },
+                "observed_received_vnd": {
+                    "type": "integer"
+                },
+                "observed_refunded_vnd": {
+                    "type": "integer"
+                },
+                "sequence": {
+                    "type": "integer"
+                }
+            }
+        },
+        "shift.QRObservationResult": {
+            "type": "object",
+            "properties": {
+                "preview": {
+                    "$ref": "#/definitions/shift.ReconciliationPreview"
+                },
+                "qr_observation": {
+                    "$ref": "#/definitions/shift.QRObservationResponse"
+                }
+            }
+        },
+        "shift.ReconciliationPreview": {
+            "type": "object",
+            "properties": {
+                "can_close": {
+                    "type": "boolean"
+                },
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/shift.ReconciliationPreviewEntry"
+                    }
+                }
+            }
+        },
+        "shift.ReconciliationPreviewEntry": {
+            "type": "object",
+            "properties": {
+                "difference_vnd": {
+                    "type": "integer"
+                },
+                "dimension": {
+                    "type": "string"
+                },
+                "expected_vnd": {
+                    "type": "integer"
+                },
+                "observed_vnd": {
+                    "type": "integer"
+                },
+                "recheck_required": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "shift.ReconciliationResponse": {
+            "type": "object",
+            "properties": {
+                "cash_counts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/shift.CashCountResponse"
                     }
                 },
                 "cash_payment_vnd": {
@@ -9816,6 +10689,9 @@
                 "expected_cash_vnd": {
                     "type": "integer"
                 },
+                "expected_manual_qr_received_vnd": {
+                    "type": "integer"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -9828,13 +10704,13 @@
                 "manual_qr_refund_vnd": {
                     "type": "integer"
                 },
-                "opened_at": {
-                    "type": "string"
-                },
-                "opener": {
-                    "$ref": "#/definitions/shift.StaffSummary"
-                },
                 "opening_float_vnd": {
+                    "type": "integer"
+                },
+                "pay_in_vnd": {
+                    "type": "integer"
+                },
+                "pay_out_vnd": {
                     "type": "integer"
                 },
                 "pending_manual_qr_refund_vnd": {
@@ -9843,24 +10719,30 @@
                 "pending_refund_vnd": {
                     "type": "integer"
                 },
-                "refunds": {
+                "preview": {
+                    "$ref": "#/definitions/shift.ReconciliationPreview"
+                },
+                "qr_observations": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/shift.RefundSummaryResponse"
+                        "$ref": "#/definitions/shift.QRObservationResponse"
                     }
                 },
-                "state": {
+                "started_at": {
                     "type": "string"
+                },
+                "starter": {
+                    "$ref": "#/definitions/shift.StaffSummary"
                 },
                 "unresolved_post_sale_adjustment_vnd": {
                     "type": "integer"
                 }
             }
         },
-        "shift.OpenShiftCommand": {
+        "shift.RecordCashCountCommand": {
             "type": "object",
             "properties": {
-                "opening_float_vnd": {
+                "counted_cash_vnd": {
                     "type": "integer"
                 },
                 "request_id": {
@@ -9894,31 +10776,16 @@
                 }
             }
         },
-        "shift.RefundSummaryResponse": {
+        "shift.RecordQRObservationCommand": {
             "type": "object",
             "properties": {
-                "amount_vnd": {
+                "observed_received_vnd": {
                     "type": "integer"
                 },
-                "check_id": {
-                    "type": "string"
+                "observed_refunded_vnd": {
+                    "type": "integer"
                 },
-                "completed_at": {
-                    "type": "string"
-                },
-                "completed_sale_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "method": {
-                    "type": "string"
-                },
-                "state": {
+                "request_id": {
                     "type": "string"
                 }
             }
@@ -9953,6 +10820,17 @@
                     "type": "string"
                 },
                 "login_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "shift.StartReconciliationCommand": {
+            "type": "object",
+            "properties": {
+                "counted_cash_vnd": {
+                    "type": "integer"
+                },
+                "request_id": {
                     "type": "string"
                 }
             }

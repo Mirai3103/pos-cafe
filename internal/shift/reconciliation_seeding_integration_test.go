@@ -3,92 +3,22 @@
 package shift_test
 
 import (
-	"context"
 	"database/sql"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
-	"github.com/Mirai3103/pos-cafe/internal/shift"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
-// shiftEnv is the fixture world for the Expected Cash read: one open Sales
-// Shift opened through the slice's own handler, a second CLOSED Shift seeded
-// directly, and a service_sessions + checks row pair seeded with direct SQL so
-// Payments have a Check to attach to.
-//
-// internal/sales owns service_sessions, checks, and payments; seeding rows
-// another slice owns with raw SQL follows the precedent Phase 3's tests set
-// when they seeded service_sessions before internal/sales owned them.
-type shiftEnv struct {
-	DB      *sql.DB
-	Queries *sqlc.Queries
-	Runner  *shift.Runner
-
-	Cashier testActor
-
-	// ShiftID is the open Sales Shift the env opened; previousShiftID is a
-	// second, CLOSED Shift whose Payments must never leak into the open
-	// Shift's figure.
-	ShiftID         uuid.UUID
-	previousShiftID uuid.UUID
-
-	// checkID is the open Check every seeded Payment is applied to.
-	checkID uuid.UUID
-}
-
-func newShiftEnv(t *testing.T) *shiftEnv {
-	t.Helper()
-	db, q := openShiftTestDB(t)
-	truncateShiftTables(t, db)
-	runner := shift.NewRunner(db, q)
-
-	cashier := newTestActor(t, q, []string{"CASHIER"}, true)
-
-	_, opened, err := shift.NewOpenShiftHandler(runner).Handle(context.Background(), cashier.actor(),
-		shift.OpenShiftCommand{RequestID: uuid.New(), OpeningFloatVND: int64Ptr(500_000)})
-	require.NoError(t, err)
-
-	// The row is inserted CLOSED because the one-open-Shift invariant is
-	// global: a second OPEN Shift is unrepresentable.
-	var previousID uuid.UUID
-	require.NoError(t, db.QueryRow(
-		`INSERT INTO sales_shifts (state, opened_by_staff_identity_id, opening_float_vnd)
-		 VALUES ('CLOSED', $1, 0) RETURNING id`, cashier.StaffID).Scan(&previousID))
-
-	return &shiftEnv{
-		DB:              db,
-		Queries:         q,
-		Runner:          runner,
-		Cashier:         cashier,
-		ShiftID:         opened.ID,
-		previousShiftID: previousID,
-		checkID:         seedShiftEnvCheck(t, db, opened.ID, cashier.StaffID),
-	}
-}
-
-// seedShiftEnvCheck inserts one service_sessions row plus one checks row with
-// direct SQL and returns the Check's id. The Session is created against the
-// named Sales Shift, which service_sessions.sales_shift_id (NOT NULL since
-// Phase 5A) requires.
-func seedShiftEnvCheck(t *testing.T, db *sql.DB, shiftID, actorID uuid.UUID) uuid.UUID {
-	t.Helper()
-
-	var sessionID uuid.UUID
-	require.NoError(t, db.QueryRow(
-		`INSERT INTO service_sessions (service_number, sequence, sales_shift_id, created_by_staff_identity_id)
-		 VALUES ($1, 1, $2, $3) RETURNING id`,
-		testServiceNumber(), shiftID, actorID).Scan(&sessionID))
-
-	var checkID uuid.UUID
-	require.NoError(t, db.QueryRow(
-		`INSERT INTO checks (service_session_id) VALUES ($1) RETURNING id`,
-		sessionID).Scan(&checkID))
-	return checkID
-}
+// Seeding infrastructure for the reconciliation tests, recovered from the
+// deleted internal/shift/expected_cash_integration_test.go (commit 4c28d04)
+// and adapted. internal/sales owns service_sessions, checks, payments, and
+// refunds; seeding rows another slice owns with raw SQL follows the precedent
+// Phase 3's tests set when they seeded service_sessions before internal/sales
+// owned them. No money assertions live here — Task 1's redaction of this
+// file's Expected Cash assertions is intentional.
 
 // testServiceNumber draws a service_number matching ^[A-Z0-9]{6}$ from a fresh
 // UUID. Uniqueness is only required among one Shift's Sessions (ADR-011), and
@@ -98,33 +28,90 @@ func testServiceNumber() string {
 	return strings.ToUpper(strings.ReplaceAll(uuid.NewString(), "-", ""))[:6]
 }
 
-// currentShift runs the slice's own current-Shift read and returns its
-// response with ExpectedCashVND.
-func (e *shiftEnv) currentShift(t *testing.T) *shift.CurrentSalesShiftResponse {
+// seedActiveServiceSession inserts one ACTIVE Service Session with direct SQL
+// and returns its id. It is the minimal active-Session closure blocker.
+func seedActiveServiceSession(t *testing.T, db *sql.DB, shiftID, actorID uuid.UUID) uuid.UUID {
 	t.Helper()
-	res, err := shift.NewCurrentShiftHandler(e.Runner).Handle(context.Background(), e.Cashier.actor())
+
+	var sessionID uuid.UUID
+	require.NoError(t, db.QueryRow(
+		`INSERT INTO service_sessions (service_number, sequence, sales_shift_id, created_by_staff_identity_id)
+		 VALUES ($1,
+		         (SELECT COALESCE(MAX(sequence), 0) + 1
+		          FROM service_sessions WHERE sales_shift_id = $2),
+		         $2, $3)
+		 RETURNING id`,
+		testServiceNumber(), shiftID, actorID).Scan(&sessionID))
+	return sessionID
+}
+
+// seedSettledCheck inserts one CLOSED Service Session carrying one SETTLED
+// Check (with the four settlement-evidence columns the
+// check_settlement_evidence_valid constraint demands) and returns the Check's
+// id. Payments and Refunds need a Check to attach to, and a settled Check on a
+// closed Session trips no closure blocker: the unsettled-Check blocker reads
+// only OPEN Checks and the active-Session blocker only ACTIVE Sessions.
+func seedSettledCheck(t *testing.T, db *sql.DB, shiftID, actorID, sessionID uuid.UUID) uuid.UUID {
+	t.Helper()
+
+	var createdSession uuid.UUID
+	require.NoError(t, db.QueryRow(
+		`INSERT INTO service_sessions (service_number, sequence, state, sales_shift_id, created_by_staff_identity_id)
+		 VALUES ($1,
+		         (SELECT COALESCE(MAX(sequence), 0) + 1
+		          FROM service_sessions WHERE sales_shift_id = $2),
+		         'CLOSED', $2, $3)
+		 RETURNING id`,
+		testServiceNumber(), shiftID, actorID).Scan(&createdSession))
+
+	var checkID uuid.UUID
+	require.NoError(t, db.QueryRow(`
+		INSERT INTO checks (service_session_id, state, settled_at,
+		                    settled_by_staff_identity_id, settled_during_sales_shift_id,
+		                    settled_staff_access_session_id)
+		VALUES ($1, 'SETTLED', now(), $2, $3, $4) RETURNING id`,
+		createdSession, actorID, shiftID, sessionID).Scan(&checkID))
+	return checkID
+}
+
+// settleCheck moves one Check to SETTLED with the evidence the database
+// constraint requires, so a correction chain stops blocking as an unsettled
+// Check without losing the rows the correction queries read.
+func settleCheck(t *testing.T, db *sql.DB, checkID, actorID, shiftID, sessionID uuid.UUID) {
+	t.Helper()
+	_, err := db.Exec(`
+		UPDATE checks
+		SET state = 'SETTLED', settled_at = now(),
+		    settled_by_staff_identity_id = $2, settled_during_sales_shift_id = $3,
+		    settled_staff_access_session_id = $4
+		WHERE id = $1`,
+		checkID, actorID, shiftID, sessionID)
 	require.NoError(t, err)
-	require.NotNil(t, res)
-	return res
 }
 
-// insertPayment records one Payment against the open Shift and returns its
-// id, so a later Payment Void can name it. For CASH the tendered/change
-// columns are written; for MANUAL_QR they stay NULL, because
-// payment_method_facts_valid rejects QR rows that carry cash facts.
-func (e *shiftEnv) insertPayment(t *testing.T, method string, appliedVND, tenderedVND int64) uuid.UUID {
+// reopenCheck moves a settled Check back to OPEN, clearing the settlement
+// evidence the check_settlement_evidence_valid constraint pairs with that
+// state. It turns a correction chain back into the unsettled-Check blocker.
+func reopenCheck(t *testing.T, db *sql.DB, checkID uuid.UUID) {
 	t.Helper()
-	return e.insertPaymentForShift(t, e.ShiftID, method, appliedVND, tenderedVND)
+	_, err := db.Exec(`
+		UPDATE checks
+		SET state = 'OPEN', settled_at = NULL, settled_by_staff_identity_id = NULL,
+		    settled_during_sales_shift_id = NULL, settled_staff_access_session_id = NULL
+		WHERE id = $1`, checkID)
+	require.NoError(t, err)
 }
 
-// insertPaymentForShift records one Payment against the named Shift, so tests
-// can plant Payments that must not leak into the open Shift's figure.
-func (e *shiftEnv) insertPaymentForShift(t *testing.T, shiftID uuid.UUID,
-	method string, appliedVND, tenderedVND int64,
-) uuid.UUID {
+// closeCheckSession closes the Service Session owning a Check, so a seeded
+// correction chain stops reporting the active-Session blocker once its
+// financial obligation is resolved and a start is expected to succeed.
+func closeCheckSession(t *testing.T, db *sql.DB, checkID uuid.UUID) {
 	t.Helper()
-	return seedPayment(t, e.DB, e.checkID, shiftID, e.Cashier.StaffID, e.Cashier.SessionID,
-		method, appliedVND, tenderedVND)
+	_, err := db.Exec(`
+		UPDATE service_sessions
+		SET state = 'CLOSED'
+		WHERE id = (SELECT service_session_id FROM checks WHERE id = $1)`, checkID)
+	require.NoError(t, err)
 }
 
 // seedPayment inserts one Payment against the named Check and Shift and
@@ -183,7 +170,8 @@ type seededCorrection struct {
 // seedCorrectionCheck inserts a fresh Service Session, Check, and the whole
 // submission chain behind one single-unit Charge Allocation. The reconciliation
 // query derives the base charge as quantity * unit_price_vnd, so unitPriceVND
-// is the full original charge of this Check.
+// is the full original charge of this Check. The Check is born OPEN, so tests
+// that must not trip the unsettled-Check blocker settle it with settleCheck.
 func seedCorrectionCheck(t *testing.T, db *sql.DB, shiftID, actorID, sessionID uuid.UUID,
 	unitPriceVND int64,
 ) seededCorrection {
@@ -263,9 +251,9 @@ func seedCorrectionCheck(t *testing.T, db *sql.DB, shiftID, actorID, sessionID u
 	return seededCorrection{CheckID: checkID, AllocationID: allocationID, UnitID: unitID}
 }
 
-// seedLiveAdjustment records a LIVE_CHECK Charge Adjustment attributed to the
-// named Shift: the attribution that makes the Check part of that Shift's
-// owed-back obligation.
+// seedLiveAdjustment records a LIVE_CHECK Cancellation Charge Adjustment, the
+// second shape of the unresolved-correction blocker: it raises the Check's
+// live obligation without taking the Check out of settlement scope.
 func seedLiveAdjustment(t *testing.T, db *sql.DB, c seededCorrection, shiftID uuid.UUID,
 	amountVND int64,
 ) uuid.UUID {
@@ -280,17 +268,19 @@ func seedLiveAdjustment(t *testing.T, db *sql.DB, c seededCorrection, shiftID uu
 }
 
 // seedCompletedSale freezes a fresh Service Session into a Completed Sale, so
-// a POST_SALE Charge Adjustment has a sale to name.
+// a POST_SALE Charge Adjustment has a sale to name. The Session is born CLOSED
+// because completing a sale ends it; an ACTIVE sale Session would otherwise
+// trip the active-Session blocker in tests that expect a start to succeed.
 func seedCompletedSale(t *testing.T, db *sql.DB, shiftID, actorID, sessionID uuid.UUID) uuid.UUID {
 	t.Helper()
 	var session uuid.UUID
 	require.NoError(t, db.QueryRow(`
-		INSERT INTO service_sessions (service_number, sequence, sales_shift_id,
+		INSERT INTO service_sessions (service_number, sequence, state, sales_shift_id,
 		                              created_by_staff_identity_id)
 		VALUES ($1,
 		        (SELECT COALESCE(MAX(sequence), 0) + 1
 		         FROM service_sessions WHERE sales_shift_id = $2),
-		        $2, $3)
+		        'CLOSED', $2, $3)
 		RETURNING id`,
 		testServiceNumber(), shiftID, actorID).Scan(&session))
 
@@ -358,9 +348,10 @@ func seedRefund(t *testing.T, db *sql.DB, checkID, shiftID, actorID, sessionID u
 	return id
 }
 
-// seedRefundAdjustmentAllocation allocates part of a completed Refund against
-// a POST_SALE Charge Adjustment, consuming that adjustment's refundable
-// capacity.
+// seedRefundAdjustmentAllocation records a completed Refund's allocation to one
+// Charge Adjustment, so the adjustment's unresolved obligation shrinks by
+// exactly that amount (spec 8's POST_SALE term; the LIVE_CHECK term reads
+// completed live Refunds directly).
 func seedRefundAdjustmentAllocation(t *testing.T, db *sql.DB, refundID, adjustmentID uuid.UUID,
 	amountVND int64,
 ) {
@@ -369,64 +360,4 @@ func seedRefundAdjustmentAllocation(t *testing.T, db *sql.DB, refundID, adjustme
 		INSERT INTO refund_adjustment_allocations (refund_id, charge_adjustment_id, amount_vnd)
 		VALUES ($1, $2, $3)`, refundID, adjustmentID, amountVND)
 	require.NoError(t, err)
-}
-
-func TestExpectedCashCountsCashPayments(t *testing.T) {
-	env := newShiftEnv(t)
-
-	before := env.currentShift(t).ExpectedCashVND
-
-	t.Run("a cash payment raises the figure by the applied amount", func(t *testing.T) {
-		env.insertPayment(t, "CASH", 85_000, 100_000)
-		require.Equal(t, before+85_000, env.currentShift(t).ExpectedCashVND,
-			"the applied amount, not the tendered amount, is the net cash effect")
-	})
-
-	t.Run("a manual QR payment does not change it", func(t *testing.T) {
-		current := env.currentShift(t).ExpectedCashVND
-		env.insertPayment(t, "MANUAL_QR", 50_000, 0)
-		require.Equal(t, current, env.currentShift(t).ExpectedCashVND)
-	})
-
-	t.Run("a payment attributed to another shift does not leak in", func(t *testing.T) {
-		current := env.currentShift(t).ExpectedCashVND
-		env.insertPaymentForShift(t, env.previousShiftID, "CASH", 70_000, 70_000)
-		require.Equal(t, current, env.currentShift(t).ExpectedCashVND)
-	})
-}
-
-func TestExpectedCashExcludesVoidsAndPendingRefunds(t *testing.T) {
-	env := newShiftEnv(t)
-	actor := env.Cashier
-
-	before := env.currentShift(t)
-	require.NotNil(t, before.Refunds, "an empty Refund list must still be an array")
-	require.Empty(t, before.Refunds)
-
-	// A voided Payment keeps its original amount in the payment term but is
-	// removed whole by the void term.
-	voidedPayment := env.insertPayment(t, "CASH", 90_000, 90_000)
-	seedPaymentVoid(t, env.DB, voidedPayment, env.ShiftID, actor.StaffID, actor.SessionID)
-	env.insertPayment(t, "CASH", 120_000, 200_000)
-
-	current := env.currentShift(t)
-	require.Equal(t, int64(210_000), current.CashPaymentVND,
-		"the payment term counts original applied amounts")
-	require.Equal(t, int64(90_000), current.CashPaymentVoidVND,
-		"the void term removes the source Payment's whole amount")
-	require.Equal(t, before.ExpectedCashVND+120_000, current.ExpectedCashVND,
-		"only the non-voided Payment reaches the drawer")
-
-	// A completed Cash Refund has left the drawer; a Refund without its
-	// completion has not.
-	completedAt := time.Now().UTC()
-	seedRefund(t, env.DB, env.checkID, env.ShiftID, actor.StaffID, actor.SessionID,
-		"CASH", 30_000, nil, completedAt.Add(-time.Minute), &completedAt)
-	seedRefund(t, env.DB, env.checkID, env.ShiftID, actor.StaffID, actor.SessionID,
-		"CASH", 10_000, nil, time.Now().UTC(), nil)
-
-	current = env.currentShift(t)
-	require.Equal(t, int64(30_000), current.CashRefundVND,
-		"only a completed Cash Refund has left the drawer")
-	require.Equal(t, before.ExpectedCashVND+120_000-30_000, current.ExpectedCashVND)
 }

@@ -5,8 +5,8 @@ package shift_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
@@ -73,7 +73,8 @@ func TestCashMovementRecordsPayInAndPayOut(t *testing.T) {
 		f.command(shift.MethodPayIn, shift.ReasonAddChangeFund, 100000, nil))
 	require.NoError(t, err)
 	assert.Equal(t, 201, status)
-	assert.Equal(t, int64(600000), payIn.ExpectedCashVND, "500000 float + 100000 pay in")
+	assert.Equal(t, int64(100000), payIn.Movement.AmountVND)
+	assert.Equal(t, shift.MethodPayIn, payIn.Movement.Method)
 	assert.Equal(t, f.Cashier.StaffID, payIn.Movement.Initiator.ID)
 	assert.Equal(t, f.Manager.StaffID, payIn.Movement.Approver.ID)
 	assert.Nil(t, payIn.Movement.Note)
@@ -81,13 +82,18 @@ func TestCashMovementRecordsPayInAndPayOut(t *testing.T) {
 	_, payOut, err := f.Movement.Handle(ctx, f.Cashier.actor(),
 		f.command(shift.MethodPayOut, shift.ReasonSafeDrop, 150000, nil))
 	require.NoError(t, err)
-	assert.Equal(t, int64(450000), payOut.ExpectedCashVND, "600000 - 150000 pay out")
+	assert.Equal(t, int64(150000), payOut.Movement.AmountVND)
 
 	// Movements accumulate rather than replacing one another.
 	_, third, err := f.Movement.Handle(ctx, f.Cashier.actor(),
 		f.command(shift.MethodPayOut, shift.ReasonRemoveExcessFloat, 50000, nil))
 	require.NoError(t, err)
-	assert.Equal(t, int64(400000), third.ExpectedCashVND)
+	assert.Equal(t, int64(50000), third.Movement.AmountVND)
+
+	var recorded int
+	require.NoError(t, f.DB.QueryRow(
+		`SELECT count(*) FROM cash_movements WHERE sales_shift_id = $1`, f.Shift.ID).Scan(&recorded))
+	assert.Equal(t, 3, recorded, "all three movements are stored against the Shift")
 }
 
 func TestCashMovementRequiresNoteForReasonOther(t *testing.T) {
@@ -225,6 +231,22 @@ func TestCashMovementAllowsManagerSelfApproval(t *testing.T) {
 	assert.Equal(t, manager.StaffID, res.Movement.Approver.ID)
 }
 
+// assertReplayReturnsStoredResponse verifies that a replayed mutation returns
+// the stored response. The comparison runs at the JSON level — the exact form
+// the executor persists — because the two structs carry the same instants in
+// different time.Locations: pgx scans OccurredAt's timestamptz as time.Local,
+// while the stored JSON decodes as UTC (a UTC-offset server re-anchors it to
+// time.Local, so a struct-level assert.Equal passes locally but rejects the
+// location alone on a UTC runner such as CI).
+func assertReplayReturnsStoredResponse(t *testing.T, first, replay shift.CashMovementResult, msg string) {
+	t.Helper()
+	firstJSON, err := json.Marshal(first)
+	require.NoError(t, err)
+	replayJSON, err := json.Marshal(replay)
+	require.NoError(t, err)
+	require.JSONEq(t, string(firstJSON), string(replayJSON), msg)
+}
+
 func TestCashMovementIsIdempotent(t *testing.T) {
 	f := newShiftFixture(t)
 	ctx := context.Background()
@@ -237,8 +259,7 @@ func TestCashMovementIsIdempotent(t *testing.T) {
 	status, replay, err := f.Movement.Handle(ctx, f.Cashier.actor(), cmd)
 	require.NoError(t, err)
 	assert.Equal(t, 201, status)
-	assert.Equal(t, first.Movement.ID, replay.Movement.ID)
-	assert.Equal(t, first.ExpectedCashVND, replay.ExpectedCashVND)
+	assertReplayReturnsStoredResponse(t, first, replay, "a replay returns the stored response unchanged")
 
 	var recorded int
 	require.NoError(t, f.DB.QueryRow(
@@ -289,34 +310,12 @@ func TestCashMovementFingerprintExcludesManagerPin(t *testing.T) {
 	status, replay, err := f.Movement.Handle(ctx, f.Cashier.actor(), cmd)
 	require.NoError(t, err)
 	assert.Equal(t, 201, status)
-	assert.Equal(t, first.Movement.ID, replay.Movement.ID)
-	assert.Equal(t, first.ExpectedCashVND, replay.ExpectedCashVND)
+	assertReplayReturnsStoredResponse(t, first, replay, "a PIN-insensitive replay returns the stored response")
 
 	var recorded int
 	require.NoError(t, f.DB.QueryRow(
 		`SELECT count(*) FROM cash_movements WHERE sales_shift_id = $1`, f.Shift.ID).Scan(&recorded))
 	assert.Equal(t, 1, recorded, "a PIN-insensitive replay must not record a second movement")
-}
-
-func TestCashMovementExpectedCashIncludesReconciliationTerms(t *testing.T) {
-	f := newShiftFixture(t)
-	ctx := context.Background()
-	checkID := seedShiftEnvCheck(t, f.DB, f.Shift.ID, f.Cashier.StaffID)
-
-	// A voided Cash Payment cancels out of Expected Cash, and a completed
-	// Cash Refund has left the drawer. The new movement lands on top.
-	voided := seedPayment(t, f.DB, checkID, f.Shift.ID, f.Cashier.StaffID, f.Cashier.SessionID,
-		"CASH", 100_000, 100_000)
-	seedPaymentVoid(t, f.DB, voided, f.Shift.ID, f.Cashier.StaffID, f.Cashier.SessionID)
-	completedAt := time.Now().UTC()
-	seedRefund(t, f.DB, checkID, f.Shift.ID, f.Cashier.StaffID, f.Cashier.SessionID,
-		"CASH", 10_000, nil, completedAt.Add(-time.Minute), &completedAt)
-
-	_, result, err := f.Movement.Handle(ctx, f.Cashier.actor(),
-		f.command(shift.MethodPayIn, shift.ReasonAddChangeFund, 50_000, nil))
-	require.NoError(t, err)
-	require.Equal(t, int64(540_000), result.ExpectedCashVND,
-		"500000 float - 10000 completed refund + 50000 pay in; the voided payment cancels out")
 }
 
 func TestCashMovementPinNeverPersisted(t *testing.T) {
