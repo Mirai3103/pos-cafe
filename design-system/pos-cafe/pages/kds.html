@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<!--
+  Reading this as: Kitchen / Barista Display System (KDS) for cafe barista team, with a fast-paced, high-legibility operations language, leaning toward Crisp Light Mode with emerald/indigo/amber/rose accents, high-contrast typography (Outfit + JetBrains Mono), tactile 48px+ touch targets, and resilient real-time state.
+  DESIGN_VARIANCE: 4 | MOTION_INTENSITY: 4 | VISUAL_DENSITY: 7
+-->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POS Cafe - Màn hình Điều phối Pha chế (KDS)</title>
+
+  <!-- Google Fonts: Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            emerald: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              300: '#6ee7b7',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            }
+          },
+          boxShadow: {
+            '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            'card': '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)',
+            'card-hover': '0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- POS Cafe Shared Cross-Tab Sync Bus -->
+  <script src="../shared/pos-bus.js"></script>
+
+  <style>
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    * { -webkit-tap-highlight-color: transparent; }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    @keyframes cardEntrance {
+      0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .animate-card-in {
+      animation: cardEntrance 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .animate-card-in,
+      .animate-pulse {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="h-[100dvh] w-full bg-slate-50 text-slate-900 flex flex-col font-sans antialiased select-none overflow-hidden">
+
+  <!-- Station Switcher Click-outside Backdrop -->
+  <div id="station-switcher-backdrop" class="fixed inset-0 z-40 hidden" onclick="toggleStationSwitcher(false)"></div>
+
+  <!-- Top Navigation & Control Bar -->
+  <header class="relative z-50 h-16 w-full border-b border-slate-200 bg-white/95 backdrop-blur px-4 sm:px-6 flex items-center justify-between gap-3 flex-shrink-0">
+    <!-- Left: Station Switcher & Cafe Brand -->
+    <div class="flex items-center gap-3">
+      <!-- Station Switcher Dropdown Anchor -->
+      <div class="relative">
+        <button id="btn-station-switcher" type="button" onclick="toggleStationSwitcher()"
+          class="min-h-[48px] min-w-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 transition flex items-center gap-2 select-none shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          title="Chuyển trạm làm việc (F0, F10 hoặc click)" aria-expanded="false" aria-haspopup="true">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/60">
+            <i data-lucide="coffee" class="w-4 h-4"></i>
+          </div>
+          <div class="flex flex-col text-left">
+            <span class="text-xs font-bold text-slate-900 leading-tight">Trạm làm việc</span>
+            <span class="text-[10px] font-medium text-emerald-600 leading-tight">Pha chế KDS</span>
+          </div>
+          <i id="station-switcher-chevron" data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 ml-0.5 transition-transform duration-200"></i>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div id="station-switcher-dropdown" class="hidden absolute top-14 left-0 z-50 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 flex flex-col gap-1 backdrop-blur-md">
+          <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between mb-1">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Chọn trạm làm việc</span>
+            <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">F0 / F10</span>
+          </div>
+
+          <!-- F1: Thu ngân -->
+          <a href="../index.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Quầy thu ngân</span>
+                <span class="text-[10px] text-slate-400">Order & Thanh toán</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F1</span>
+          </a>
+
+          <!-- F3: Pha chế KDS (Current Active) -->
+          <div class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm bg-emerald-50/80 border border-emerald-200/80 text-emerald-900 font-semibold select-none">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                <i data-lucide="coffee" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-emerald-950">Pha chế KDS</span>
+                <span class="text-[10px] text-emerald-700">Màn hình Barista & Bếp</span>
+              </div>
+            </div>
+            <span class="flex h-2 w-2 relative">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          </div>
+
+          <!-- F4: Quản lý Ca -->
+          <a href="shift.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Quản lý Ca</span>
+                <span class="text-[10px] text-slate-400">Giao ca & Kiểm quỹ</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F4</span>
+          </a>
+
+          <!-- F5: Sơ đồ Bàn -->
+          <a href="tables.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="table-2" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Sơ đồ Bàn</span>
+                <span class="text-[10px] text-slate-400">Khu vực & Đặt bàn</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F5</span>
+          </a>
+
+          <!-- F6: Lịch sử đơn -->
+          <a href="history.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="receipt" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Lịch sử đơn</span>
+                <span class="text-[10px] text-slate-400">Hóa đơn & Tra cứu</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F6</span>
+          </a>
+
+          <!-- F7: Cài đặt món -->
+          <a href="settings.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Cài đặt món</span>
+                <span class="text-[10px] text-slate-400">Bật / Tắt món bán</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F7</span>
+          </a>
+
+          <div class="h-[1px] bg-slate-100 my-1"></div>
+
+          <!-- Khóa phiên trạm -->
+          <a href="auth.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="lock" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Khóa phiên trạm</span>
+                <span class="text-[10px] text-slate-400">Đăng nhập PIN</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">Esc</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Cafe Brand Tagline -->
+      <div class="hidden lg:flex flex-col">
+        <span class="text-sm font-bold text-slate-900 leading-tight">The Coffee Workshop</span>
+        <span class="text-[11px] font-medium text-slate-500 leading-tight">Màn hình Điều phối Pha chế (KDS)</span>
+      </div>
+    </div>
+
+    <!-- Center: Station Filter Pills (Touch Targets >= 48px) -->
+    <div class="hidden md:flex items-center gap-2 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80">
+      <button id="filter-station-all" type="button" onclick="setStationFilter('all')"
+        class="min-h-[48px] h-12 px-4 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs bg-white text-slate-900 border border-slate-200">
+        <i data-lucide="layers" class="w-4 h-4 text-emerald-600"></i>
+        <span>Tất cả</span>
+        <span id="badge-count-all" class="font-mono text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200/60">0</span>
+      </button>
+
+      <button id="filter-station-bar" type="button" onclick="setStationFilter('bar')"
+        class="min-h-[48px] h-12 px-4 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-white/60">
+        <i data-lucide="coffee" class="w-4 h-4 text-slate-500"></i>
+        <span>Quầy Bar - Cà phê & Trà</span>
+        <span id="badge-count-bar" class="font-mono text-xs px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 font-bold">0</span>
+      </button>
+
+      <button id="filter-station-bakery" type="button" onclick="setStationFilter('bakery')"
+        class="min-h-[48px] h-12 px-4 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-white/60">
+        <i data-lucide="utensils" class="w-4 h-4 text-slate-500"></i>
+        <span>Bếp Bánh & Điểm tâm</span>
+        <span id="badge-count-bakery" class="font-mono text-xs px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 font-bold">0</span>
+      </button>
+    </div>
+
+    <!-- Right: Operational Metric Badges & Action Controls (All >= 48px) -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <!-- Average Fulfillment Time Metric -->
+      <div class="hidden xl:flex items-center gap-2 px-3.5 min-h-[48px] h-12 rounded-xl bg-slate-50 border border-slate-200" title="Thời gian hoàn thành trung bình mỗi đơn">
+        <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+        <div class="flex flex-col text-left">
+          <span class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold leading-tight">Thời gian TB</span>
+          <span id="avg-fulfillment-time" class="font-mono text-xs font-bold text-slate-900 leading-tight">2.4 phút/đơn</span>
+        </div>
+      </div>
+
+      <!-- Real-time Digital Clock in JetBrains Mono -->
+      <div class="flex items-center gap-2 px-3.5 min-h-[48px] h-12 rounded-xl bg-slate-50 border border-slate-200" title="Đồng hồ hệ thống thời gian thực">
+        <i data-lucide="clock" class="w-4 h-4 text-slate-500"></i>
+        <span id="clock-display" class="font-mono text-sm font-bold text-slate-900 tabular-nums">17:00:00</span>
+      </div>
+
+      <!-- Audio Alert Toggle Button (>= 48px) -->
+      <button id="btn-audio-toggle" type="button" onclick="toggleAudioAlert()"
+        class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-emerald-600 transition flex items-center justify-center cursor-pointer shadow-2xs"
+        title="Bật/Tắt chuông báo đơn mới (Nhấn phím M)">
+        <i id="icon-audio" data-lucide="volume-2" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Keyboard Shortcuts Help (>= 48px) -->
+      <button id="btn-shortcuts-help" type="button" onclick="openShortcutsModal()"
+        class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 transition flex items-center justify-center cursor-pointer shadow-2xs"
+        title="Phím tắt điều khiển (Nhấn phím ?)">
+        <i data-lucide="help-circle" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Jump to Cashier Screen (F1, >= 48px) -->
+      <a href="../index.html"
+        class="hidden sm:flex min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 transition items-center gap-2 cursor-pointer shadow-2xs"
+        title="Chuyển sang Quầy Thu ngân (F1)">
+        <i data-lucide="shopping-cart" class="w-4 h-4 text-slate-500"></i>
+        <span class="text-xs font-bold text-slate-800">Thu ngân</span>
+        <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F1</span>
+      </a>
+
+      <!-- Quick Lock Button (Esc, >= 48px) -->
+      <a href="auth.html"
+        class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 active:scale-[0.98] text-slate-600 transition flex items-center justify-center cursor-pointer shadow-2xs"
+        title="Khóa màn hình làm việc (Esc)">
+        <i data-lucide="lock" class="w-5 h-5"></i>
+      </a>
+    </div>
+  </header>
+
+  <!-- Mobile Station Filter Bar (< md screen) -->
+  <div class="md:hidden bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-2 overflow-x-auto">
+    <button id="mobile-filter-all" type="button" onclick="setStationFilter('all')"
+      class="min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-slate-900 text-white flex-shrink-0">
+      <span>Tất cả</span>
+      <span id="mobile-count-all" class="font-mono text-xs px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-200">0</span>
+    </button>
+    <button id="mobile-filter-bar" type="button" onclick="setStationFilter('bar')"
+      class="min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer bg-slate-100 text-slate-700 flex-shrink-0">
+      <i data-lucide="coffee" class="w-3.5 h-3.5"></i>
+      <span>Quầy Bar</span>
+      <span id="mobile-count-bar" class="font-mono text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700">0</span>
+    </button>
+    <button id="mobile-filter-bakery" type="button" onclick="setStationFilter('bakery')"
+      class="min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer bg-slate-100 text-slate-700 flex-shrink-0">
+      <i data-lucide="utensils" class="w-3.5 h-3.5"></i>
+      <span>Bếp Bánh</span>
+      <span id="mobile-count-bakery" class="font-mono text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700">0</span>
+    </button>
+  </div>
+
+  <!-- Main 3-Column Kanban Board -->
+  <main class="flex-1 min-h-0 p-3 sm:p-4 md:p-6 bg-slate-50 overflow-hidden">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 h-full min-h-0">
+
+      <!-- Column 1: Chờ pha (Queued) -->
+      <section class="flex flex-col h-full min-h-0 bg-slate-100/80 rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-2xs">
+        <!-- Column Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200/90 flex-shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+              <i data-lucide="hourglass" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="font-bold text-sm sm:text-base text-slate-900 leading-none">Chờ pha</h2>
+                <span id="col-count-queued" class="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/70">0</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-0.5">Đơn mới từ quầy thu ngân</p>
+            </div>
+          </div>
+          <span class="hidden sm:inline-flex font-mono text-[10px] bg-white text-slate-500 px-2 py-1 rounded-md border border-slate-200 font-medium">Phím Space</span>
+        </div>
+
+        <!-- Scrollable Cards Container -->
+        <div id="col-container-queued" class="flex-1 min-h-0 overflow-y-auto pt-3 pr-1 space-y-3.5">
+          <!-- Dynamically populated tickets or empty state -->
+        </div>
+      </section>
+
+      <!-- Column 2: Đang pha (In Preparation) -->
+      <section class="flex flex-col h-full min-h-0 bg-slate-100/80 rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-2xs">
+        <!-- Column Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200/90 flex-shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+              <i data-lucide="flame" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="font-bold text-sm sm:text-base text-slate-900 leading-none">Đang pha</h2>
+                <span id="col-count-preparing" class="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/70">0</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-0.5">Đang thao tác tại quầy</p>
+            </div>
+          </div>
+          <span class="hidden sm:inline-flex font-mono text-[10px] bg-white text-slate-500 px-2 py-1 rounded-md border border-slate-200 font-medium">Phím Enter</span>
+        </div>
+
+        <!-- Scrollable Cards Container -->
+        <div id="col-container-preparing" class="flex-1 min-h-0 overflow-y-auto pt-3 pr-1 space-y-3.5">
+          <!-- Dynamically populated tickets or empty state -->
+        </div>
+      </section>
+
+      <!-- Column 3: Đã xong (Ready for Pickup) -->
+      <section class="flex flex-col h-full min-h-0 bg-slate-100/80 rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-2xs">
+        <!-- Column Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200/90 flex-shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold">
+              <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="font-bold text-sm sm:text-base text-slate-900 leading-none">Đã xong</h2>
+                <span id="col-count-ready" class="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200/70">0</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-0.5">Sẵn sàng gọi khách hoặc bưng bàn</p>
+            </div>
+          </div>
+          <span class="font-mono text-[10px] bg-white text-slate-500 px-2 py-1 rounded-md border border-slate-200 font-medium">Chờ giao</span>
+        </div>
+
+        <!-- Scrollable Cards Container -->
+        <div id="col-container-ready" class="flex-1 min-h-0 overflow-y-auto pt-3 pr-1 space-y-3.5">
+          <!-- Dynamically populated tickets or empty state -->
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Bottom Operational Status Strip -->
+  <footer class="h-10 border-t border-slate-200 bg-white px-4 md:px-6 flex items-center justify-between text-xs text-slate-500 font-medium flex-shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span class="font-semibold text-slate-700">Hệ thống KDS kết nối thời gian thực</span>
+      </div>
+      <span class="text-slate-300 hidden sm:inline">|</span>
+      <span class="hidden sm:inline">Tổng đơn đang pha chế: <strong id="footer-total-active" class="font-mono text-slate-900 font-bold">0</strong></span>
+      <span class="text-slate-300 hidden md:inline">|</span>
+      <span class="hidden md:inline">Đã hoàn thành trong ca: <strong id="footer-total-completed" class="font-mono text-emerald-700 font-bold">0</strong></span>
+    </div>
+
+    <!-- Quick shortcuts reminder -->
+    <div class="hidden lg:flex items-center gap-4 text-[11px] text-slate-400">
+      <span><kbd class="font-mono bg-slate-100 text-slate-600 px-1 py-0.5 rounded border border-slate-200">Space</kbd> Bắt đầu làm</span>
+      <span><kbd class="font-mono bg-slate-100 text-slate-600 px-1 py-0.5 rounded border border-slate-200">Enter</kbd> Xong món</span>
+      <span><kbd class="font-mono bg-slate-100 text-slate-600 px-1 py-0.5 rounded border border-slate-200">M</kbd> Bật/Tắt âm</span>
+      <span><kbd class="font-mono bg-slate-100 text-slate-600 px-1 py-0.5 rounded border border-slate-200">F0 / F10</kbd> Chuyển trạm</span>
+    </div>
+  </footer>
+
+  <!-- Toast Notification Alert Box -->
+  <div id="toast-container" class="fixed bottom-14 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Modal: Shortage / Ingredient Out of Stock (Báo thiếu / Hết nguyên liệu) -->
+  <div id="modal-shortage" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200/80">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-900 text-base">Báo thiếu / Hết món</h3>
+            <p class="text-xs text-slate-500">Đồng bộ cảnh báo tới quầy thu ngân</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeShortageModal()"
+          class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center cursor-pointer transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Chọn mặt hàng hoặc nguyên liệu đang tạm hết để quầy thu ngân ngừng nhận order:
+      </p>
+
+      <div class="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+        <button type="button" onclick="reportShortageItem('cfsd', 'Cà phê sữa đá')"
+          class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-left text-xs font-semibold text-slate-800 transition flex items-center gap-2">
+          <i data-lucide="coffee" class="w-4 h-4 text-slate-500 flex-shrink-0"></i>
+          <span class="truncate">Cà phê sữa đá</span>
+        </button>
+        <button type="button" onclick="reportShortageItem('bacxiu', 'Bạc xỉu')"
+          class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-left text-xs font-semibold text-slate-800 transition flex items-center gap-2">
+          <i data-lucide="coffee" class="w-4 h-4 text-slate-500 flex-shrink-0"></i>
+          <span class="truncate">Bạc xỉu</span>
+        </button>
+        <button type="button" onclick="reportShortageItem('croissant_bt', 'Croissant bơ tỏi')"
+          class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-left text-xs font-semibold text-slate-800 transition flex items-center gap-2">
+          <i data-lucide="utensils" class="w-4 h-4 text-slate-500 flex-shrink-0"></i>
+          <span class="truncate">Croissant bơ tỏi</span>
+        </button>
+        <button type="button" onclick="reportShortageItem('tiramisu', 'Tiramisu')"
+          class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-left text-xs font-semibold text-slate-800 transition flex items-center gap-2">
+          <i data-lucide="utensils" class="w-4 h-4 text-slate-500 flex-shrink-0"></i>
+          <span class="truncate">Tiramisu</span>
+        </button>
+        <button type="button" onclick="reportShortageItem('suatuoi', 'Sữa tươi thanh trùng')"
+          class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-left text-xs font-semibold text-slate-800 transition flex items-center gap-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
+          <span class="truncate">Sữa tươi thanh trùng</span>
+        </button>
+        <button type="button" onclick="reportShortageItem('davien', 'Đá viên')"
+          class="min-h-[48px] p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-left text-xs font-semibold text-slate-800 transition flex items-center gap-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
+          <span class="truncate">Đá viên</span>
+        </button>
+      </div>
+
+      <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeShortageModal()"
+          class="min-h-[48px] px-5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-xs font-bold text-slate-700 transition">
+          Đóng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Keyboard Shortcuts Help -->
+  <div id="modal-shortcuts" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/80">
+            <i data-lucide="keyboard" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-900 text-base">Phím tắt thao tác nhanh</h3>
+            <p class="text-xs text-slate-500">Tối ưu tốc độ thao tác cho Barista</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeShortcutsModal()"
+          class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center cursor-pointer transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2.5 text-xs text-slate-700">
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span class="font-medium">Chuyển đơn đầu tiên sang Đang pha</span>
+          <kbd class="font-mono bg-white text-slate-800 px-2 py-1 rounded-md border border-slate-200 font-bold shadow-2xs">Space</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span class="font-medium">Hoàn tất đơn đầu tiên (Xong món)</span>
+          <kbd class="font-mono bg-white text-slate-800 px-2 py-1 rounded-md border border-slate-200 font-bold shadow-2xs">Enter</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span class="font-medium">Bật / Tắt âm thanh thông báo</span>
+          <kbd class="font-mono bg-white text-slate-800 px-2 py-1 rounded-md border border-slate-200 font-bold shadow-2xs">M</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span class="font-medium">Bật menu chọn trạm làm việc</span>
+          <kbd class="font-mono bg-white text-slate-800 px-2 py-1 rounded-md border border-slate-200 font-bold shadow-2xs">F0 / F10 / `</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span class="font-medium">Chuyển sang Quầy Thu ngân</span>
+          <kbd class="font-mono bg-white text-slate-800 px-2 py-1 rounded-md border border-slate-200 font-bold shadow-2xs">F1</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span class="font-medium">Khóa phiên màn hình PIN</span>
+          <kbd class="font-mono bg-white text-slate-800 px-2 py-1 rounded-md border border-slate-200 font-bold shadow-2xs">Esc</kbd>
+        </div>
+      </div>
+
+      <div class="pt-2 flex items-center justify-end">
+        <button type="button" onclick="closeShortcutsModal()"
+          class="min-h-[48px] px-5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-xs font-bold text-white transition">
+          Đã hiểu
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Core KDS Application Logic -->
+  <script>
+    'use strict';
+
+    /* =========================================================================
+       1. Application State & Storage Defaults
+       ========================================================================= */
+    var audioEnabled = true;
+    var currentStationFilter = 'all'; // 'all' | 'bar' | 'bakery'
+    var itemCheckStatusMap = {}; // { 'orderId_itemIndex': boolean }
+    var localOrders = [];
+    var audioCtx = null;
+
+    // Realistic cafe fallback seed orders if none exist
+    var INITIAL_FALLBACK_ORDERS = [
+      {
+        id: 'ORD-014',
+        orderId: 'ORD-014',
+        serviceNumber: 14,
+        mode: 'dinein',
+        table: { id: 'T02', name: 'Bàn 02', zone: 'Tầng 1' },
+        status: 'queued',
+        timestamp: new Date(Date.now() - 1.2 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân',
+        items: [
+          {
+            name: 'Cà phê sữa đá',
+            sizeName: 'Size M',
+            quantity: 2,
+            category: 'coffee',
+            modifiers: [
+              { name: '100% đường' },
+              { name: '100% đá' }
+            ],
+            preparationNote: 'Đậm vị cà phê'
+          },
+          {
+            name: 'Bạc xỉu',
+            sizeName: 'Size L',
+            quantity: 1,
+            category: 'coffee',
+            modifiers: [
+              { name: '70% đường' },
+              { name: 'Ít đá' }
+            ],
+            preparationNote: 'Ít sữa đặc'
+          }
+        ]
+      },
+      {
+        id: 'ORD-015',
+        orderId: 'ORD-015',
+        serviceNumber: 15,
+        mode: 'takeaway',
+        table: null,
+        status: 'queued',
+        timestamp: new Date(Date.now() - 0.4 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân',
+        items: [
+          {
+            name: 'Trà đào cam sả',
+            sizeName: 'Size L',
+            quantity: 1,
+            category: 'tea',
+            modifiers: [
+              { name: '70% đường' },
+              { name: '100% đá' }
+            ],
+            preparationNote: 'Để đá riêng mang đi'
+          },
+          {
+            name: 'Croissant bơ tỏi',
+            sizeName: '',
+            quantity: 2,
+            category: 'bakery',
+            modifiers: [],
+            preparationNote: 'Hâm nóng giòn'
+          }
+        ]
+      },
+      {
+        id: 'ORD-012',
+        orderId: 'ORD-012',
+        serviceNumber: 12,
+        mode: 'takeaway',
+        table: null,
+        status: 'preparing',
+        timestamp: new Date(Date.now() - 3.8 * 60 * 1000).toISOString(), // 3.8 min -> Amber timer
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân',
+        items: [
+          {
+            name: 'Trà đào cam sả',
+            sizeName: 'Size L',
+            quantity: 2,
+            category: 'tea',
+            modifiers: [
+              { name: '70% đường' },
+              { name: '100% đá' }
+            ],
+            preparationNote: 'Nhiều đào miếng'
+          }
+        ]
+      },
+      {
+        id: 'ORD-016',
+        orderId: 'ORD-016',
+        serviceNumber: 16,
+        mode: 'dinein',
+        table: { id: 'T05', name: 'Bàn 05', zone: 'Tầng 2' },
+        status: 'preparing',
+        isRemake: true,
+        timestamp: new Date(Date.now() - 5.6 * 60 * 1000).toISOString(), // > 5 min -> Rose timer pulse
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân',
+        items: [
+          {
+            name: 'Cà phê muối',
+            sizeName: 'Size M',
+            quantity: 1,
+            category: 'coffee',
+            modifiers: [
+              { name: '100% đá' }
+            ],
+            preparationNote: 'Pha lại do đổi size cho khách'
+          },
+          {
+            name: 'Tiramisu',
+            sizeName: '',
+            quantity: 1,
+            category: 'bakery',
+            modifiers: [],
+            preparationNote: ''
+          }
+        ]
+      },
+      {
+        id: 'ORD-013',
+        orderId: 'ORD-013',
+        serviceNumber: 13,
+        mode: 'dinein',
+        table: { id: 'T04', name: 'Bàn 04', zone: 'Tầng 1' },
+        status: 'ready',
+        timestamp: new Date(Date.now() - 2.1 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân',
+        items: [
+          {
+            name: 'Freeze trà xanh',
+            sizeName: 'Size M',
+            quantity: 1,
+            category: 'tea',
+            modifiers: [
+              { name: '100% đường' },
+              { name: '100% đá' }
+            ],
+            preparationNote: 'Thêm thạch'
+          },
+          {
+            name: 'Tiramisu',
+            sizeName: '',
+            quantity: 1,
+            category: 'bakery',
+            modifiers: [],
+            preparationNote: ''
+          }
+        ]
+      }
+    ];
+
+    /* =========================================================================
+       2. Web Audio API Synthesis Engine
+       ========================================================================= */
+    function getAudioContext() {
+      if (!audioCtx) {
+        var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    // 2.1 Tap Click Chirp (800Hz sine wave, 30ms)
+    function playTapChirp() {
+      if (!audioEnabled) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.03);
+      } catch (err) {
+        console.warn('[Audio] Tap chirp error:', err);
+      }
+    }
+
+    // 2.2 New Order Incoming Chime (Bell sound: 659Hz -> 880Hz)
+    function playNewOrderChime() {
+      if (!audioEnabled) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var now = ctx.currentTime;
+        var tones = [659, 880];
+        for (var i = 0; i < tones.length; i++) {
+          (function (freq, offset) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + offset);
+            gain.gain.setValueAtTime(0, now + offset);
+            gain.gain.linearRampToValueAtTime(0.2, now + offset + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.35);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.35);
+          })(tones[i], i * 0.18);
+        }
+      } catch (err) {
+        console.warn('[Audio] New order chime error:', err);
+      }
+    }
+
+    // 2.3 Order Completed Chime (Ascending triad: 523Hz -> 659Hz -> 784Hz)
+    function playOrderCompletedChime() {
+      if (!audioEnabled) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var now = ctx.currentTime;
+        var tones = [523, 659, 784];
+        for (var i = 0; i < tones.length; i++) {
+          (function (freq, offset) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + offset);
+            gain.gain.setValueAtTime(0, now + offset);
+            gain.gain.linearRampToValueAtTime(0.22, now + offset + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.32);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.32);
+          })(tones[i], i * 0.14);
+        }
+      } catch (err) {
+        console.warn('[Audio] Order completed chime error:', err);
+      }
+    }
+
+    function toggleAudioAlert() {
+      audioEnabled = !audioEnabled;
+      var btn = document.getElementById('btn-audio-toggle');
+      var icon = document.getElementById('icon-audio');
+      if (audioEnabled) {
+        playTapChirp();
+        btn.classList.remove('text-slate-400');
+        btn.classList.add('text-emerald-600');
+        icon.setAttribute('data-lucide', 'volume-2');
+        showToast('Âm thanh thông báo: Bật');
+      } else {
+        btn.classList.remove('text-emerald-600');
+        btn.classList.add('text-slate-400');
+        icon.setAttribute('data-lucide', 'volume-x');
+        showToast('Âm thanh thông báo: Tắt');
+      }
+      lucide.createIcons();
+    }
+
+    /* =========================================================================
+       3. Station Filtering & Categorization Logic
+       ========================================================================= */
+    function isBakeryItem(item) {
+      if (!item) return false;
+      var cat = (item.category || item.categoryId || '').toLowerCase();
+      if (cat === 'bakery' || cat === 'food' || cat === 'snack') return true;
+      var name = (item.name || '').toLowerCase();
+      return name.indexOf('croissant') !== -1 ||
+             name.indexOf('tiramisu') !== -1 ||
+             name.indexOf('bánh') !== -1 ||
+             name.indexOf('cheesecake') !== -1 ||
+             name.indexOf('muffin') !== -1;
+    }
+
+    function orderMatchesStation(order, station) {
+      if (station === 'all') return true;
+      if (!order.items || order.items.length === 0) return true;
+
+      var hasBar = false;
+      var hasBakery = false;
+
+      for (var i = 0; i < order.items.length; i++) {
+        if (isBakeryItem(order.items[i])) {
+          hasBakery = true;
+        } else {
+          hasBar = true;
+        }
+      }
+
+      if (station === 'bar') return hasBar;
+      if (station === 'bakery') return hasBakery;
+      return true;
+    }
+
+    function setStationFilter(station) {
+      playTapChirp();
+      currentStationFilter = station;
+
+      // Update Desktop Button Styles
+      var allBtn = document.getElementById('filter-station-all');
+      var barBtn = document.getElementById('filter-station-bar');
+      var bakeryBtn = document.getElementById('filter-station-bakery');
+
+      var activeClass = ['bg-white', 'text-slate-900', 'border', 'border-slate-200', 'shadow-xs', 'font-bold'];
+      var inactiveClass = ['text-slate-600', 'hover:text-slate-900', 'hover:bg-white/60', 'font-semibold'];
+
+      [allBtn, barBtn, bakeryBtn].forEach(function (b) {
+        if (b) {
+          b.classList.remove.apply(b.classList, activeClass);
+          b.classList.remove.apply(b.classList, inactiveClass);
+        }
+      });
+
+      if (station === 'all' && allBtn) {
+        allBtn.classList.add.apply(allBtn.classList, activeClass);
+        barBtn.classList.add.apply(barBtn.classList, inactiveClass);
+        bakeryBtn.classList.add.apply(bakeryBtn.classList, inactiveClass);
+      } else if (station === 'bar' && barBtn) {
+        barBtn.classList.add.apply(barBtn.classList, activeClass);
+        allBtn.classList.add.apply(allBtn.classList, inactiveClass);
+        bakeryBtn.classList.add.apply(bakeryBtn.classList, inactiveClass);
+      } else if (station === 'bakery' && bakeryBtn) {
+        bakeryBtn.classList.add.apply(bakeryBtn.classList, activeClass);
+        allBtn.classList.add.apply(allBtn.classList, inactiveClass);
+        barBtn.classList.add.apply(barBtn.classList, inactiveClass);
+      }
+
+      // Update Mobile Button Styles
+      var mobAll = document.getElementById('mobile-filter-all');
+      var mobBar = document.getElementById('mobile-filter-bar');
+      var mobBakery = document.getElementById('mobile-filter-bakery');
+
+      if (mobAll && mobBar && mobBakery) {
+        mobAll.className = (station === 'all' ? 'min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-slate-900 text-white flex-shrink-0' : 'min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer bg-slate-100 text-slate-700 flex-shrink-0');
+        mobBar.className = (station === 'bar' ? 'min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-slate-900 text-white flex-shrink-0' : 'min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer bg-slate-100 text-slate-700 flex-shrink-0');
+        mobBakery.className = (station === 'bakery' ? 'min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-slate-900 text-white flex-shrink-0' : 'min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer bg-slate-100 text-slate-700 flex-shrink-0');
+      }
+
+      renderKanbanBoard();
+    }
+
+    /* =========================================================================
+       4. Elapsed Timer Escalation Engine (Every Second)
+       ========================================================================= */
+    function getElapsedSeconds(isoString) {
+      if (!isoString) return 0;
+      var created = new Date(isoString).getTime();
+      if (isNaN(created)) return 0;
+      return Math.max(0, Math.floor((Date.now() - created) / 1000));
+    }
+
+    function formatTimerDisplay(seconds) {
+      var m = Math.floor(seconds / 60);
+      var s = seconds % 60;
+      var mm = m < 10 ? '0' + m : String(m);
+      var ss = s < 10 ? '0' + s : String(s);
+      return mm + ':' + ss;
+    }
+
+    function getTimerBadgeClass(seconds) {
+      // Escalation logic per brief:
+      // < 3 phút: text-emerald-700 bg-emerald-50 border border-emerald-200
+      // 3 - 5 phút: text-amber-700 bg-amber-50 border border-amber-200
+      // > 5 phút: text-rose-700 bg-rose-50 border border-rose-300 animate-pulse
+      if (seconds < 180) {
+        return 'text-emerald-700 bg-emerald-50 border border-emerald-200';
+      } else if (seconds <= 300) {
+        return 'text-amber-700 bg-amber-50 border border-amber-200';
+      } else {
+        return 'text-rose-700 bg-rose-50 border border-rose-300 animate-pulse font-bold';
+      }
+    }
+
+    function updateLiveTimers() {
+      var timerBadges = document.querySelectorAll('.live-timer-badge');
+      for (var i = 0; i < timerBadges.length; i++) {
+        var el = timerBadges[i];
+        var timestamp = el.getAttribute('data-timestamp');
+        if (!timestamp) continue;
+        var seconds = getElapsedSeconds(timestamp);
+        el.className = 'live-timer-badge font-mono text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs ' + getTimerBadgeClass(seconds);
+        var labelEl = el.querySelector('.timer-text');
+        if (labelEl) {
+          labelEl.textContent = formatTimerDisplay(seconds);
+        }
+      }
+
+      // Update Top Digital Clock
+      var now = new Date();
+      var hh = String(now.getHours()).padStart(2, '0');
+      var mm = String(now.getMinutes()).padStart(2, '0');
+      var ss = String(now.getSeconds()).padStart(2, '0');
+      var clockEl = document.getElementById('clock-display');
+      if (clockEl) {
+        clockEl.textContent = hh + ':' + mm + ':' + ss;
+      }
+    }
+
+    /* =========================================================================
+       5. Orders Management & Synchronization Layer
+       ========================================================================= */
+    function loadInitialOrders() {
+      var orders = [];
+      if (window.POS_BUS && typeof window.POS_BUS.getOrders === 'function') {
+        orders = window.POS_BUS.getOrders();
+      }
+
+      // Ensure we have active queued & preparing tickets to showcase the KDS flow
+      var hasActiveOrders = false;
+      if (orders && Array.isArray(orders)) {
+        for (var i = 0; i < orders.length; i++) {
+          var st = orders[i].status;
+          if (st === 'queued' || st === 'pending' || st === 'preparing' || st === 'ready') {
+            hasActiveOrders = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasActiveOrders) {
+        // Merge fallback seed orders
+        orders = INITIAL_FALLBACK_ORDERS.concat(orders || []);
+        if (window.POS_BUS && typeof window.POS_BUS.saveOrder === 'function') {
+          for (var j = 0; j < INITIAL_FALLBACK_ORDERS.length; j++) {
+            window.POS_BUS.saveOrder(INITIAL_FALLBACK_ORDERS[j], false);
+          }
+        }
+      }
+
+      localOrders = orders;
+      renderKanbanBoard();
+      updateStationCounts();
+    }
+
+    function updateStationCounts() {
+      var activeOrders = localOrders.filter(function (o) {
+        return o.status === 'queued' || o.status === 'pending' || o.status === 'preparing' || o.status === 'ready';
+      });
+
+      var countAll = activeOrders.length;
+      var countBar = 0;
+      var countBakery = 0;
+
+      for (var i = 0; i < activeOrders.length; i++) {
+        var ord = activeOrders[i];
+        if (orderMatchesStation(ord, 'bar')) countBar++;
+        if (orderMatchesStation(ord, 'bakery')) countBakery++;
+      }
+
+      var elAll = document.getElementById('badge-count-all');
+      var elBar = document.getElementById('badge-count-bar');
+      var elBakery = document.getElementById('badge-count-bakery');
+      if (elAll) elAll.textContent = String(countAll);
+      if (elBar) elBar.textContent = String(countBar);
+      if (elBakery) elBakery.textContent = String(countBakery);
+
+      var mobAll = document.getElementById('mobile-count-all');
+      var mobBar = document.getElementById('mobile-count-bar');
+      var mobBakery = document.getElementById('mobile-count-bakery');
+      if (mobAll) mobAll.textContent = String(countAll);
+      if (mobBar) mobBar.textContent = String(countBar);
+      if (mobBakery) mobBakery.textContent = String(countBakery);
+
+      // Average fulfillment time metric
+      var completedOrders = localOrders.filter(function (o) {
+        return o.status === 'completed' || o.status === 'fulfilled';
+      });
+      var completedEl = document.getElementById('footer-total-completed');
+      if (completedEl) completedEl.textContent = String(completedOrders.length);
+
+      var activeEl = document.getElementById('footer-total-active');
+      if (activeEl) activeEl.textContent = String(countAll);
+    }
+
+    /* =========================================================================
+       6. Ticket Card Rendering
+       ========================================================================= */
+    function renderKanbanBoard() {
+      var queuedCol = document.getElementById('col-container-queued');
+      var preparingCol = document.getElementById('col-container-preparing');
+      var readyCol = document.getElementById('col-container-ready');
+
+      if (!queuedCol || !preparingCol || !readyCol) return;
+
+      var queuedList = [];
+      var preparingList = [];
+      var readyList = [];
+
+      for (var i = 0; i < localOrders.length; i++) {
+        var o = localOrders[i];
+        if (!orderMatchesStation(o, currentStationFilter)) continue;
+
+        if (o.status === 'queued' || o.status === 'pending') {
+          queuedList.push(o);
+        } else if (o.status === 'preparing') {
+          preparingList.push(o);
+        } else if (o.status === 'ready') {
+          readyList.push(o);
+        }
+      }
+
+      // Update Column Count Badges
+      var cQueued = document.getElementById('col-count-queued');
+      var cPreparing = document.getElementById('col-count-preparing');
+      var cReady = document.getElementById('col-count-ready');
+      if (cQueued) cQueued.textContent = String(queuedList.length);
+      if (cPreparing) cPreparing.textContent = String(preparingList.length);
+      if (cReady) cReady.textContent = String(readyList.length);
+
+      // Render Each Column
+      queuedCol.innerHTML = queuedList.length > 0
+        ? queuedList.map(function (ticket) { return createTicketCardHTML(ticket, 'queued'); }).join('')
+        : createEmptyColumnHTML('hourglass', 'Không có đơn chờ pha', 'Đơn mới từ quầy thu ngân sẽ tự động xuất hiện tại đây.');
+
+      preparingCol.innerHTML = preparingList.length > 0
+        ? preparingList.map(function (ticket) { return createTicketCardHTML(ticket, 'preparing'); }).join('')
+        : createEmptyColumnHTML('flame', 'Không có đơn đang pha', 'Bấm "Bắt đầu làm" trên đơn chờ để chuyển vào cột này.');
+
+      readyCol.innerHTML = readyList.length > 0
+        ? readyList.map(function (ticket) { return createTicketCardHTML(ticket, 'ready'); }).join('')
+        : createEmptyColumnHTML('check-circle-2', 'Chưa có đơn chờ giao', 'Các đơn hoàn thành pha chế sẽ xuất hiện tại đây.');
+
+      lucide.createIcons();
+    }
+
+    function createEmptyColumnHTML(iconName, title, subtitle) {
+      return '<div class="h-48 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center p-6 text-center space-y-2 select-none">' +
+        '<div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">' +
+          '<i data-lucide="' + iconName + '" class="w-5 h-5"></i>' +
+        '</div>' +
+        '<h4 class="text-xs font-bold text-slate-700">' + title + '</h4>' +
+        '<p class="text-[11px] text-slate-400 max-w-[24ch] leading-relaxed">' + subtitle + '</p>' +
+      '</div>';
+    }
+
+    function createTicketCardHTML(ticket, columnType) {
+      var id = ticket.id || ticket.orderId || ('ORD-' + ticket.serviceNumber);
+      var serviceNum = ticket.serviceNumber || id.replace('ORD-', '');
+      var isTakeaway = ticket.mode === 'takeaway';
+      var tableText = ticket.table && ticket.table.name ? ticket.table.name : (ticket.table && ticket.table.id ? ticket.table.id : '');
+      var tableZone = ticket.table && ticket.table.zone ? ' (' + ticket.table.zone + ')' : '';
+
+      var headerIdLabel = isTakeaway
+        ? 'Đơn #' + serviceNum
+        : (tableText ? tableText + tableZone : 'Đơn #' + serviceNum);
+
+      var serviceBadgeHTML = isTakeaway
+        ? '<span class="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5"><i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i>Mang đi</span>'
+        : '<span class="text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5"><i data-lucide="table-2" class="w-3.5 h-3.5"></i>Tại bàn</span>';
+
+      var elapsedSeconds = getElapsedSeconds(ticket.timestamp);
+      var timerBadgeClass = getTimerBadgeClass(elapsedSeconds);
+      var timerText = formatTimerDisplay(elapsedSeconds);
+
+      var remakeBadgeHTML = ticket.isRemake
+        ? '<span class="bg-rose-100 text-rose-800 border border-rose-300 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide inline-flex items-center gap-1"><i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>PHA LẠI</span>'
+        : '';
+
+      var borderClass = ticket.isRemake
+        ? 'border-rose-300 ring-2 ring-rose-200/60'
+        : 'border-slate-200';
+
+      // Checklist Items HTML
+      var itemsHTML = '';
+      if (ticket.items && Array.isArray(ticket.items)) {
+        itemsHTML = ticket.items.map(function (item, idx) {
+          var itemKey = id + '_' + idx;
+          var isDone = !!itemCheckStatusMap[itemKey];
+
+          var modifiersHTML = '';
+          if (item.modifiers && Array.isArray(item.modifiers) && item.modifiers.length > 0) {
+            modifiersHTML = '<div class="flex flex-wrap gap-1 mt-1">' +
+              item.modifiers.map(function (m) {
+                var val = m.value || m.name || '';
+                return '<span class="text-[11px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">' + val + '</span>';
+              }).join('') +
+            '</div>';
+          }
+
+          var noteHTML = '';
+          if (item.preparationNote) {
+            noteHTML = '<div class="mt-1">' +
+              '<span class="text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md inline-flex items-center gap-1">' +
+                '<i data-lucide="info" class="w-3 h-3 text-amber-600"></i>' + item.preparationNote +
+              '</span>' +
+            '</div>';
+          }
+
+          var sizeBadge = item.sizeName ? '<span class="text-xs font-normal text-slate-500">(' + item.sizeName + ')</span>' : '';
+          var itemDoneClass = isDone ? 'line-through text-slate-400' : 'text-slate-900';
+
+          return '<div class="min-h-[48px] py-1 flex items-center gap-3 group cursor-pointer" onclick="toggleItemCheck(\'' + itemKey + '\')">' +
+            '<div class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border ' + (isDone ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white group-hover:border-emerald-500 text-transparent') + ' flex items-center justify-center transition flex-shrink-0">' +
+              '<i data-lucide="check" class="w-5 h-5"></i>' +
+            '</div>' +
+            '<div class="flex-1 min-w-0">' +
+              '<div class="flex items-center gap-1.5 flex-wrap">' +
+                '<span class="font-mono font-bold text-xs bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">x' + (item.quantity || 1) + '</span>' +
+                '<span class="font-semibold text-sm leading-snug ' + itemDoneClass + '">' + item.name + ' ' + sizeBadge + '</span>' +
+              '</div>' +
+              modifiersHTML +
+              noteHTML +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      // Action Buttons per Column (All Touch Targets >= 48px)
+      var actionButtonsHTML = '';
+      if (columnType === 'queued') {
+        actionButtonsHTML = '<div class="pt-2 flex items-center gap-2">' +
+          '<button type="button" onclick="advanceTicket(\'' + id + '\', \'preparing\')" ' +
+            'class="min-h-[48px] h-12 flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer transition">' +
+            '<i data-lucide="play" class="w-4 h-4"></i>' +
+            '<span>Bắt đầu làm</span>' +
+          '</button>' +
+          '<button type="button" onclick="openShortageModal()" ' +
+            'class="min-h-[48px] min-w-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition" title="Báo thiếu nguyên liệu">' +
+            '<i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i>' +
+            '<span class="hidden sm:inline">Báo thiếu</span>' +
+          '</button>' +
+          '<button type="button" onclick="reprintTicket(\'' + id + '\')" ' +
+            'class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-slate-700 flex items-center justify-center cursor-pointer transition" title="In lại tem nhãn">' +
+            '<i data-lucide="printer" class="w-4 h-4"></i>' +
+          '</button>' +
+        '</div>';
+      } else if (columnType === 'preparing') {
+        actionButtonsHTML = '<div class="pt-2 flex items-center gap-2">' +
+          '<button type="button" onclick="advanceTicket(\'' + id + '\', \'ready\')" ' +
+            'class="min-h-[48px] h-12 flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer transition">' +
+            '<i data-lucide="check" class="w-4 h-4"></i>' +
+            '<span>Xong món</span>' +
+          '</button>' +
+          '<button type="button" onclick="toggleRemakeTicket(\'' + id + '\')" ' +
+            'class="min-h-[48px] min-w-[48px] h-12 px-3 rounded-xl border ' + (ticket.isRemake ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 bg-slate-50 hover:bg-rose-50 text-slate-700') + ' active:scale-[0.98] text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition" title="Đánh dấu cần pha lại">' +
+            '<i data-lucide="rotate-ccw" class="w-4 h-4 text-rose-600"></i>' +
+            '<span class="hidden sm:inline">Pha lại</span>' +
+          '</button>' +
+          '<button type="button" onclick="reprintTicket(\'' + id + '\')" ' +
+            'class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-slate-700 flex items-center justify-center cursor-pointer transition" title="In lại tem nhãn">' +
+            '<i data-lucide="printer" class="w-4 h-4"></i>' +
+          '</button>' +
+        '</div>';
+      } else if (columnType === 'ready') {
+        actionButtonsHTML = '<div class="pt-2 flex items-center gap-2">' +
+          '<button type="button" onclick="advanceTicket(\'' + id + '\', \'completed\')" ' +
+            'class="min-h-[48px] h-12 flex-1 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-xs sm:text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer transition">' +
+            '<i data-lucide="check-check" class="w-4 h-4"></i>' +
+            '<span>Đã giao khách</span>' +
+          '</button>' +
+          '<button type="button" onclick="callCustomerChime(\'' + id + '\', \'' + serviceNum + '\')" ' +
+            'class="min-h-[48px] min-w-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition" title="Rung chuông / Gọi khách">' +
+            '<i data-lucide="bell" class="w-4 h-4 text-indigo-600"></i>' +
+            '<span class="hidden sm:inline">Gọi khách</span>' +
+          '</button>' +
+        '</div>';
+      }
+
+      return '<div id="card-' + id + '" class="animate-card-in bg-white rounded-2xl border ' + borderClass + ' shadow-card hover:shadow-card-hover p-4 space-y-3 transition duration-200">' +
+        // Card Header Row
+        '<div class="flex items-center justify-between gap-2">' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<span class="font-mono text-base font-bold text-slate-900 tracking-tight">' + headerIdLabel + '</span>' +
+            serviceBadgeHTML +
+            remakeBadgeHTML +
+          '</div>' +
+          '<div class="live-timer-badge font-mono text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs ' + timerBadgeClass + '" data-timestamp="' + ticket.timestamp + '">' +
+            '<i data-lucide="clock" class="w-3.5 h-3.5"></i>' +
+            '<span class="timer-text">' + timerText + '</span>' +
+          '</div>' +
+        '</div>' +
+
+        // Subtitle Info Row
+        '<div class="flex items-center justify-between text-[11px] text-slate-400">' +
+          '<span>Đơn #' + serviceNum + ' · Thu ngân: ' + (ticket.cashierName || 'Quầy thu ngân') + '</span>' +
+          '<span class="font-mono">' + new Date(ticket.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + '</span>' +
+        '</div>' +
+
+        // Checklist of items
+        '<div class="border-t border-b border-slate-100 py-2 space-y-1.5">' +
+          itemsHTML +
+        '</div>' +
+
+        // Action Buttons Row
+        actionButtonsHTML +
+      '</div>';
+    }
+
+    /* =========================================================================
+       7. Ticket State Transitions & Sync Logic
+       ========================================================================= */
+    function advanceTicket(orderId, newStatus) {
+      playTapChirp();
+
+      var targetOrder = null;
+      for (var i = 0; i < localOrders.length; i++) {
+        if (localOrders[i].id === orderId || localOrders[i].orderId === orderId) {
+          targetOrder = localOrders[i];
+          break;
+        }
+      }
+
+      if (!targetOrder) return;
+
+      targetOrder.status = newStatus;
+      targetOrder.updatedAt = new Date().toISOString();
+
+      if (newStatus === 'ready') {
+        playOrderCompletedChime();
+        showToast('Đơn #' + (targetOrder.serviceNumber || targetOrder.id) + ' đã hoàn thành pha chế!');
+      } else if (newStatus === 'completed') {
+        showToast('Đơn #' + (targetOrder.serviceNumber || targetOrder.id) + ' đã giao khách thành công!');
+      } else if (newStatus === 'preparing') {
+        showToast('Bắt đầu pha chế Đơn #' + (targetOrder.serviceNumber || targetOrder.id));
+      }
+
+      // Sync with POS_BUS
+      if (window.POS_BUS) {
+        window.POS_BUS.updateOrderStatus(orderId, newStatus);
+        window.POS_BUS.publish('ORDER_STATUS_CHANGED', {
+          orderId: orderId,
+          status: newStatus,
+          order: targetOrder
+        });
+      }
+
+      renderKanbanBoard();
+      updateStationCounts();
+    }
+
+    function toggleRemakeTicket(orderId) {
+      playTapChirp();
+      for (var i = 0; i < localOrders.length; i++) {
+        if (localOrders[i].id === orderId || localOrders[i].orderId === orderId) {
+          localOrders[i].isRemake = !localOrders[i].isRemake;
+          if (localOrders[i].isRemake) {
+            showToast('Đã gắn cờ PHA LẠI cho Đơn #' + (localOrders[i].serviceNumber || localOrders[i].id));
+          } else {
+            showToast('Đã gỡ cờ Pha lại');
+          }
+          if (window.POS_BUS) {
+            window.POS_BUS.saveOrder(localOrders[i]);
+          }
+          break;
+        }
+      }
+      renderKanbanBoard();
+    }
+
+    function toggleItemCheck(itemKey) {
+      playTapChirp();
+      itemCheckStatusMap[itemKey] = !itemCheckStatusMap[itemKey];
+      renderKanbanBoard();
+    }
+
+    function reprintTicket(orderId) {
+      playTapChirp();
+      showToast('Đã gửi lệnh in tem cho Đơn #' + orderId);
+    }
+
+    function callCustomerChime(orderId, serviceNum) {
+      playNewOrderChime();
+      showToast('Đang gọi nhận món: Đơn #' + serviceNum + ' tại quầy giao!');
+    }
+
+    /* =========================================================================
+       8. Real-time POS_BUS Subscriptions
+       ========================================================================= */
+    function initBusSubscriptions() {
+      if (!window.POS_BUS) return;
+
+      // 8.1 When Cashier creates a new order
+      window.POS_BUS.subscribe('NEW_ORDER', function (order) {
+        if (!order) return;
+        playNewOrderChime();
+
+        // KDS starts incoming tickets in 'queued'
+        var cloned = JSON.parse(JSON.stringify(order));
+        cloned.status = 'queued';
+
+        // Check if exists
+        var existingIdx = -1;
+        for (var i = 0; i < localOrders.length; i++) {
+          if (localOrders[i].id === cloned.id || localOrders[i].orderId === cloned.id) {
+            existingIdx = i;
+            break;
+          }
+        }
+
+        if (existingIdx >= 0) {
+          localOrders[existingIdx] = cloned;
+        } else {
+          localOrders.unshift(cloned);
+        }
+
+        showToast('Đơn mới: #' + (cloned.serviceNumber || cloned.id) + ' vừa gửi quầy pha chế!');
+        renderKanbanBoard();
+        updateStationCounts();
+      });
+
+      // 8.2 When order status updates from another tab
+      window.POS_BUS.subscribe('ORDER_STATUS_CHANGED', function (payload) {
+        if (!payload || !payload.orderId) return;
+        for (var i = 0; i < localOrders.length; i++) {
+          if (localOrders[i].id === payload.orderId || localOrders[i].orderId === payload.orderId) {
+            localOrders[i].status = payload.status;
+            break;
+          }
+        }
+        renderKanbanBoard();
+        updateStationCounts();
+      });
+
+      // 8.3 Cross-tab storage sync
+      window.POS_BUS.subscribe('STORAGE_ORDERS_SYNC', function (orders) {
+        if (orders && Array.isArray(orders)) {
+          localOrders = orders;
+          renderKanbanBoard();
+          updateStationCounts();
+        }
+      });
+    }
+
+    /* =========================================================================
+       9. Keyboard Shortcuts Engine
+       ========================================================================= */
+    function initKeyboardShortcuts() {
+      window.addEventListener('keydown', function (e) {
+        // Do not intercept input inside text boxes if any
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+          return;
+        }
+
+        // Space: advance oldest queued ticket to preparing
+        if (e.code === 'Space') {
+          e.preventDefault();
+          advanceOldestTicket('queued', 'preparing');
+          return;
+        }
+
+        // Enter: advance oldest preparing ticket to ready
+        if (e.code === 'Enter') {
+          e.preventDefault();
+          advanceOldestTicket('preparing', 'ready');
+          return;
+        }
+
+        // F0 / F10 / ` : Toggle station switcher
+        if (e.key === 'F10' || e.key === 'F0' || e.key === '`') {
+          e.preventDefault();
+          toggleStationSwitcher();
+          return;
+        }
+
+        // F1: Cashier screen
+        if (e.key === 'F1') {
+          e.preventDefault();
+          window.location.href = '../index.html';
+          return;
+        }
+
+        // M: Audio toggle
+        if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          toggleAudioAlert();
+          return;
+        }
+
+        // ?: Shortcuts help modal
+        if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+          e.preventDefault();
+          openShortcutsModal();
+          return;
+        }
+
+        // Esc: Close modal or lock screen to auth.html
+        if (e.key === 'Escape') {
+          var modalShortage = document.getElementById('modal-shortage');
+          var modalShortcuts = document.getElementById('modal-shortcuts');
+          var switcher = document.getElementById('station-switcher-dropdown');
+
+          if (modalShortage && !modalShortage.classList.contains('hidden')) {
+            closeShortageModal();
+            return;
+          }
+          if (modalShortcuts && !modalShortcuts.classList.contains('hidden')) {
+            closeShortcutsModal();
+            return;
+          }
+          if (switcher && !switcher.classList.contains('hidden')) {
+            toggleStationSwitcher(false);
+            return;
+          }
+
+          // Otherwise navigate to auth.html
+          window.location.href = 'auth.html';
+          return;
+        }
+      });
+    }
+
+    function advanceOldestTicket(fromStatus, toStatus) {
+      var candidate = null;
+      for (var i = localOrders.length - 1; i >= 0; i--) {
+        var o = localOrders[i];
+        if (orderMatchesStation(o, currentStationFilter) && (o.status === fromStatus || (fromStatus === 'queued' && o.status === 'pending'))) {
+          candidate = o;
+          break;
+        }
+      }
+
+      if (candidate) {
+        advanceTicket(candidate.id || candidate.orderId, toStatus);
+      } else {
+        if (fromStatus === 'queued') {
+          showToast('Không có đơn trong hàng chờ pha');
+        } else if (fromStatus === 'preparing') {
+          showToast('Không có đơn đang pha chế');
+        }
+      }
+    }
+
+    /* =========================================================================
+       10. UI Helpers: Modals, Toasts & Station Switcher
+       ========================================================================= */
+    function toggleStationSwitcher(force) {
+      playTapChirp();
+      var dropdown = document.getElementById('station-switcher-dropdown');
+      var backdrop = document.getElementById('station-switcher-backdrop');
+      var chevron = document.getElementById('station-switcher-chevron');
+      var btn = document.getElementById('btn-station-switcher');
+
+      if (!dropdown) return;
+      var isCurrentlyOpen = !dropdown.classList.contains('hidden');
+      var willOpen = typeof force === 'boolean' ? force : !isCurrentlyOpen;
+
+      if (willOpen) {
+        dropdown.classList.remove('hidden');
+        backdrop.classList.remove('hidden');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+      } else {
+        dropdown.classList.add('hidden');
+        backdrop.classList.add('hidden');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    function openShortcutsModal() {
+      playTapChirp();
+      var modal = document.getElementById('modal-shortcuts');
+      if (modal) modal.classList.remove('hidden');
+      if (modal) modal.classList.add('flex');
+    }
+
+    function closeShortcutsModal() {
+      playTapChirp();
+      var modal = document.getElementById('modal-shortcuts');
+      if (modal) modal.classList.add('hidden');
+      if (modal) modal.classList.remove('flex');
+    }
+
+    function openShortageModal() {
+      playTapChirp();
+      var modal = document.getElementById('modal-shortage');
+      if (modal) modal.classList.remove('hidden');
+      if (modal) modal.classList.add('flex');
+    }
+
+    function closeShortageModal() {
+      playTapChirp();
+      var modal = document.getElementById('modal-shortage');
+      if (modal) modal.classList.add('hidden');
+      if (modal) modal.classList.remove('flex');
+    }
+
+    function reportShortageItem(itemId, itemName) {
+      playTapChirp();
+      if (window.POS_BUS && typeof window.POS_BUS.setItemAvailable === 'function') {
+        window.POS_BUS.setItemAvailable(itemId, false);
+      }
+      showToast('Đã báo hết: ' + itemName + ' tới Quầy Thu ngân!');
+      closeShortageModal();
+    }
+
+    function showToast(message) {
+      var container = document.getElementById('toast-container');
+      if (!container) return;
+
+      var toast = document.createElement('div');
+      toast.className = 'bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-800 flex items-center gap-2.5 text-xs font-semibold animate-card-in pointer-events-auto';
+      toast.innerHTML = '<i data-lucide="bell" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i><span>' + message + '</span>';
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      setTimeout(function () {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        toast.style.transition = 'all 0.3s ease-out';
+        setTimeout(function () {
+          if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 300);
+      }, 3200);
+    }
+
+    /* =========================================================================
+       11. Initialization
+       ========================================================================= */
+    document.addEventListener('DOMContentLoaded', function () {
+      loadInitialOrders();
+      initBusSubscriptions();
+      initKeyboardShortcuts();
+
+      // Start live timer loop
+      updateLiveTimers();
+      setInterval(updateLiveTimers, 1000);
+
+      // Render Lucide icons
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

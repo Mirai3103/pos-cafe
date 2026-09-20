@@ -1,0 +1,2967 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<!--
+  Reading this as: Order History, Transaction Ledger, and Manager Audit screen for cafe cashier/management operations, with a high-trust, high-legibility operations language, leaning toward Crisp Light Mode with emerald/indigo/amber/rose accents, high-contrast typography (Outfit + JetBrains Mono), tactile >= 48px touch targets, and resilient real-time state.
+  DESIGN_VARIANCE: 4 | MOTION_INTENSITY: 4 | VISUAL_DENSITY: 7
+-->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POS Cafe - Lịch sử Đơn & Kiểm toán Hóa đơn (Order History & Audit)</title>
+
+  <!-- Google Fonts: Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            emerald: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              300: '#6ee7b7',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            }
+          },
+          boxShadow: {
+            '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            'card': '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)',
+            'card-hover': '0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+            'modal': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- POS Cafe Shared Cross-Tab Sync Bus -->
+  <script src="../shared/pos-bus.js"></script>
+
+  <style>
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    * { -webkit-tap-highlight-color: transparent; }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    @keyframes cardEntrance {
+      0% { opacity: 0; transform: translateY(8px) scale(0.99); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .animate-card-in {
+      animation: cardEntrance 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes pinShake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+
+    .animate-pin-shake {
+      animation: pinShake 0.35s ease-in-out;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .animate-card-in,
+      .animate-pin-shake,
+      .animate-pulse,
+      .animate-ping {
+        animation: none !important;
+      }
+    }
+
+    /* K80 Thermal Receipt Dedicated Print Styles */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #modal-receipt-print,
+      #modal-receipt-print * {
+        visibility: visible !important;
+      }
+      #modal-receipt-print {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+        backdrop-filter: none !important;
+        display: block !important;
+        z-index: 99999 !important;
+      }
+      #receipt-paper-container {
+        position: static !important;
+        box-shadow: none !important;
+        border: none !important;
+        width: 80mm !important;
+        max-width: 80mm !important;
+        margin: 0 !important;
+        padding: 3mm 2mm !important;
+        border-radius: 0 !important;
+        color: #0f172a !important;
+        background: white !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+      }
+      #receipt-modal-header,
+      #receipt-actions-bar,
+      #pos-toast,
+      #btn-station-switcher,
+      #station-switcher-dropdown,
+      #drawer-order-details,
+      #modal-void-order,
+      #modal-refund-order,
+      #modal-shortcuts-help {
+        display: none !important;
+      }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+
+<body class="h-[100dvh] w-full bg-slate-50 text-slate-900 flex flex-col font-sans antialiased select-none overflow-hidden">
+
+  <!-- Station Switcher Click-outside Backdrop -->
+  <div id="station-switcher-backdrop" class="fixed inset-0 z-40 hidden" onclick="toggleStationSwitcher(false)"></div>
+
+  <!-- Reusable Modal Backdrop Overlay -->
+  <div id="modal-backdrop-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden transition-opacity duration-200"></div>
+
+  <!-- Toast Notification Container -->
+  <div id="pos-toast" class="fixed bottom-6 right-6 z-50 pointer-events-none transform translate-y-24 opacity-0 transition-all duration-300 ease-out">
+    <div class="min-h-[48px] px-4 py-3 bg-slate-900 text-white rounded-xl shadow-xl flex items-center gap-3 border border-slate-700/80 text-xs sm:text-sm font-medium">
+      <div id="toast-icon-wrapper" class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+      </div>
+      <span id="toast-message" class="text-slate-100 font-sans">Thông báo từ hệ thống</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 1. TOP HEADER & CONTROL BAR                                               -->
+  <!-- ========================================================================= -->
+  <header class="relative z-40 h-16 w-full border-b border-slate-200 bg-white/95 backdrop-blur px-4 sm:px-6 flex items-center justify-between gap-3 flex-shrink-0">
+    
+    <!-- Left: Station Switcher & Brand Info -->
+    <div class="flex items-center gap-3">
+      <!-- Station Switcher Dropdown Anchor -->
+      <div class="relative">
+        <button id="btn-station-switcher" type="button" onclick="toggleStationSwitcher()"
+          class="min-h-[48px] min-w-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 transition flex items-center gap-2 select-none shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          title="Chuyển trạm làm việc (F0, F10 hoặc click)" aria-expanded="false" aria-haspopup="true">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/60">
+            <i data-lucide="receipt" class="w-4 h-4"></i>
+          </div>
+          <div class="flex flex-col text-left">
+            <span class="text-xs font-bold text-slate-900 leading-tight">Trạm làm việc</span>
+            <span class="text-[10px] font-medium text-emerald-600 leading-tight">Lịch sử & Kiểm toán</span>
+          </div>
+          <i id="station-switcher-chevron" data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 ml-0.5 transition-transform duration-200"></i>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div id="station-switcher-dropdown" class="hidden absolute top-14 left-0 z-50 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 flex flex-col gap-1 backdrop-blur-md">
+          <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between mb-1">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Chọn trạm làm việc</span>
+            <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">F0 / F10</span>
+          </div>
+
+          <!-- F1: Quầy thu ngân -->
+          <a href="../index.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Quầy thu ngân</span>
+                <span class="text-[10px] text-slate-400">Order & Thanh toán</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F1</span>
+          </a>
+
+          <!-- F3: Pha chế KDS -->
+          <a href="kds.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="coffee" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Pha chế KDS</span>
+                <span class="text-[10px] text-slate-400">Màn hình Barista & Bếp</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F3</span>
+          </a>
+
+          <!-- F4: Quản lý Ca & Quỹ -->
+          <a href="shift.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Quản lý Ca & Quỹ</span>
+                <span class="text-[10px] text-slate-400">Kiểm két & Báo cáo Z</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F4</span>
+          </a>
+
+          <!-- F5: Sơ đồ Bàn -->
+          <a href="tables.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="table-2" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Sơ đồ Bàn</span>
+                <span class="text-[10px] text-slate-400">Khu vực & Đặt bàn</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F5</span>
+          </a>
+
+          <!-- F6: Lịch sử đơn (Active Current) -->
+          <a href="history.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm bg-emerald-50/80 border border-emerald-200/80 text-emerald-900 font-semibold select-none">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                <i data-lucide="receipt" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-emerald-950">Lịch sử đơn</span>
+                <span class="text-[10px] text-emerald-700">Hóa đơn & Kiểm toán</span>
+              </div>
+            </div>
+            <span class="flex h-2 w-2 relative">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          </a>
+
+          <!-- F7: Cài đặt món -->
+          <a href="settings.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Cài đặt món</span>
+                <span class="text-[10px] text-slate-400">Bật / Tắt món bán</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F7</span>
+          </a>
+
+          <div class="h-[1px] bg-slate-100 my-1"></div>
+
+          <!-- Esc: Khóa phiên trạm -->
+          <a href="auth.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="lock" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Khóa phiên trạm</span>
+                <span class="text-[10px] text-slate-400">Đăng nhập PIN</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">Esc</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Cafe Title & Subtitle -->
+      <div class="hidden sm:flex flex-col">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-bold text-slate-900 tracking-tight">The Coffee Workshop</span>
+          <span class="text-slate-300 font-normal">/</span>
+          <span class="text-xs text-slate-600 font-medium">Lịch sử Giao dịch & Kiểm toán Hóa đơn</span>
+        </div>
+        <span class="text-[11px] text-slate-400">Tra cứu, in lại phiếu tính tiền và quản lý hủy/hoàn tiền</span>
+      </div>
+    </div>
+
+    <!-- Center: Staff Profile Badge -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <div class="h-10 px-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium flex items-center gap-2 shadow-2xs">
+        <i data-lucide="user-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+        <span id="header-staff-name" class="font-semibold text-slate-800">Nhân viên: Nguyễn Văn Lan</span>
+      </div>
+    </div>
+
+    <!-- Right: Digital Clock, Sound Toggle, Keyboard Help -->
+    <div class="flex items-center gap-2">
+      <!-- Real-time Digital Clock -->
+      <div class="hidden md:flex items-center gap-1.5 px-3 h-10 rounded-xl bg-slate-100/80 border border-slate-200 text-slate-700 font-mono text-xs font-semibold">
+        <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span id="live-digital-clock" class="tabular-nums">17:30:00</span>
+      </div>
+
+      <!-- Sound Toggle Button -->
+      <button id="btn-sound-toggle" type="button" onclick="toggleSoundAlert()"
+        class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 flex items-center justify-center cursor-pointer transition shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+        title="Bật/Tắt âm thanh thao tác" aria-label="Âm thanh">
+        <i id="sound-toggle-icon" data-lucide="volume-2" class="w-4 h-4 text-emerald-600"></i>
+      </button>
+
+      <!-- Keyboard Shortcuts Help Button -->
+      <button id="btn-shortcuts-help" type="button" onclick="openShortcutsModal()"
+        class="min-h-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs focus:outline-none"
+        title="Hướng dẫn phím tắt (F0, F1, Esc, Ctrl+P)">
+        <i data-lucide="help-circle" class="w-4 h-4 text-slate-500"></i>
+        <span class="hidden sm:inline">Phím tắt</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- 2. MAIN SCROLLABLE CONTENT AREA                                           -->
+  <!-- ========================================================================= -->
+  <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+
+    <!-- 2.1 Financial Summary KPI Banner (High-Density Top Summary Strip) -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      
+      <!-- KPI 1: Tổng số đơn -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-card p-4 space-y-2 relative overflow-hidden group hover:shadow-card-hover transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">1. Tổng số đơn</span>
+          <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200">
+            <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="space-y-0.5">
+          <div id="kpi-total-orders" class="font-mono text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">24 đơn</div>
+          <div id="kpi-total-orders-sub" class="text-[11px] text-slate-500 font-sans">Đơn hàng trong kỳ</div>
+        </div>
+      </div>
+
+      <!-- KPI 2: Tổng doanh thu (Net Sales) -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-card p-4 space-y-2 relative overflow-hidden group hover:shadow-card-hover transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">2. Tổng doanh thu</span>
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/60">
+            <i data-lucide="dollar-sign" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="space-y-0.5">
+          <div id="kpi-total-revenue" class="font-mono text-xl sm:text-2xl font-bold text-emerald-700 tracking-tight">2.450.000 đ</div>
+          <div class="text-[11px] text-emerald-600 font-sans font-medium">Doanh thu thực nhận</div>
+        </div>
+      </div>
+
+      <!-- KPI 3: Tiền mặt (Cash Sales) -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-card p-4 space-y-2 relative overflow-hidden group hover:shadow-card-hover transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">3. Tiền mặt (Cash)</span>
+          <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200/60">
+            <i data-lucide="banknote" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="space-y-0.5">
+          <div id="kpi-cash-revenue" class="font-mono text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">1.350.000 đ</div>
+          <div id="kpi-cash-count" class="text-[11px] text-slate-500 font-sans">14 giao dịch</div>
+        </div>
+      </div>
+
+      <!-- KPI 4: Chuyển khoản VietQR -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-card p-4 space-y-2 relative overflow-hidden group hover:shadow-card-hover transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">4. VietQR / Bank</span>
+          <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center border border-indigo-200/60">
+            <i data-lucide="qr-code" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="space-y-0.5">
+          <div id="kpi-qr-revenue" class="font-mono text-xl sm:text-2xl font-bold text-indigo-700 tracking-tight">1.100.000 đ</div>
+          <div id="kpi-qr-count" class="text-[11px] text-slate-500 font-sans">10 giao dịch</div>
+        </div>
+      </div>
+
+      <!-- KPI 5: Đã hủy / Hoàn tiền -->
+      <div class="col-span-2 sm:col-span-3 lg:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-card p-4 space-y-2 relative overflow-hidden group hover:shadow-card-hover transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">5. Đã hủy / Hoàn</span>
+          <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center border border-rose-200/60">
+            <i data-lucide="shield-alert" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="space-y-0.5">
+          <div id="kpi-void-refund" class="font-mono text-xl sm:text-2xl font-bold text-rose-700 tracking-tight">2 đơn</div>
+          <div id="kpi-void-refund-sub" class="text-[11px] text-rose-600 font-sans">1 Hủy | 1 Hoàn tiền</div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 2.2 Search & Filter Bar (All Controls >= 48px Touch Targets) -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-card p-4 sm:p-5 space-y-4">
+      
+      <!-- Top Row: Search Input & Quick Filter Stats -->
+      <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        
+        <!-- Search Input (>= 48px height) -->
+        <div class="relative flex-1">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <i data-lucide="search" class="w-5 h-5"></i>
+          </div>
+          <input id="input-order-search" type="text" oninput="handleSearchInput(this.value)"
+            placeholder="Tìm theo Mã đơn (#14), Bàn (Bàn 02), Món hoặc Thu ngân..."
+            class="min-h-[48px] h-12 w-full pl-11 pr-10 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-sm text-slate-900 transition placeholder:text-slate-400">
+          <button id="btn-clear-search" type="button" onclick="clearSearchInput()"
+            class="min-h-[48px] min-w-[48px] h-12 w-12 absolute inset-y-0 right-0 hidden flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
+            title="Xóa tìm kiếm">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Filter Count & Quick Clear Button -->
+        <div class="flex items-center justify-between sm:justify-end gap-2 flex-shrink-0">
+          <div id="filter-matching-badge" class="h-10 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 border border-slate-200">
+            <i data-lucide="filter" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span id="filter-match-count">Hiển thị 24 đơn</span>
+          </div>
+
+          <button id="btn-reset-filters" type="button" onclick="resetAllFilters()"
+            class="min-h-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>Đặt lại bộ lọc</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Divider line -->
+      <div class="h-[1px] bg-slate-100"></div>
+
+      <!-- Filter Controls Cluster (Date Range, Payment Method, Status Pills) -->
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        
+        <!-- Filter Group 1: Date Range Pills (>= 48px touch height) -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1 hidden sm:inline">Thời gian:</span>
+          
+          <button id="filter-date-today" type="button" onclick="setDateFilter('today')"
+            class="filter-date-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-slate-900 border-slate-900 text-white shadow-2xs">
+            <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+            <span>Hôm nay</span>
+            <span id="badge-count-today" class="ml-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-white/20 text-white">24</span>
+          </button>
+
+          <button id="filter-date-yesterday" type="button" onclick="setDateFilter('yesterday')"
+            class="filter-date-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs">
+            <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>Hôm qua</span>
+            <span id="badge-count-yesterday" class="ml-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-slate-100 text-slate-600">0</span>
+          </button>
+
+          <button id="filter-date-week" type="button" onclick="setDateFilter('week')"
+            class="filter-date-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs">
+            <i data-lucide="calendar-range" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>7 ngày qua</span>
+            <span id="badge-count-week" class="ml-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-slate-100 text-slate-600">24</span>
+          </button>
+        </div>
+
+        <!-- Filter Group 2: Payment Method Pills (>= 48px touch height) -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1 hidden sm:inline">Thanh toán:</span>
+          
+          <button id="filter-pay-all" type="button" onclick="setPaymentFilter('all')"
+            class="filter-pay-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-slate-900 border-slate-900 text-white shadow-2xs">
+            <span>Tất cả</span>
+          </button>
+
+          <button id="filter-pay-cash" type="button" onclick="setPaymentFilter('cash')"
+            class="filter-pay-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs">
+            <i data-lucide="banknote" class="w-3.5 h-3.5 text-blue-600"></i>
+            <span>Tiền mặt</span>
+          </button>
+
+          <button id="filter-pay-qr" type="button" onclick="setPaymentFilter('qr')"
+            class="filter-pay-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs">
+            <i data-lucide="qr-code" class="w-3.5 h-3.5 text-indigo-600"></i>
+            <span>VietQR</span>
+          </button>
+        </div>
+
+        <!-- Filter Group 3: Status Pills (>= 48px touch height) -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1 hidden sm:inline">Trạng thái:</span>
+          
+          <button id="filter-status-all" type="button" onclick="setStatusFilter('all')"
+            class="filter-status-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-slate-900 border-slate-900 text-white shadow-2xs">
+            <span>Tất cả</span>
+          </button>
+
+          <button id="filter-status-completed" type="button" onclick="setStatusFilter('completed')"
+            class="filter-status-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Đã thanh toán</span>
+          </button>
+
+          <button id="filter-status-void" type="button" onclick="setStatusFilter('void')"
+            class="filter-status-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            <span>Đã hủy (Void)</span>
+          </button>
+
+          <button id="filter-status-refunded" type="button" onclick="setStatusFilter('refunded')"
+            class="filter-status-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span>Hoàn tiền</span>
+          </button>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- 2.3 Order History Table -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+      
+      <!-- Table Header Bar -->
+      <div class="px-5 py-4 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="list-ordered" class="w-4 h-4 text-slate-500"></i>
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Danh sách hóa đơn giao dịch</span>
+        </div>
+        <span id="table-summary-count" class="text-xs text-slate-500 font-mono">Hiển thị 24 / 24 đơn</span>
+      </div>
+
+      <!-- Responsive Table Container -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <th class="py-3.5 px-4 font-mono">Mã đơn</th>
+              <th class="py-3.5 px-4">Thời gian</th>
+              <th class="py-3.5 px-4">Phục vụ</th>
+              <th class="py-3.5 px-4">Chi tiết món</th>
+              <th class="py-3.5 px-4">Thu ngân</th>
+              <th class="py-3.5 px-4">Thanh toán</th>
+              <th class="py-3.5 px-4 text-right">Tổng tiền</th>
+              <th class="py-3.5 px-4 text-center">Trạng thái</th>
+              <th class="py-3.5 px-4 text-center">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="order-table-body" class="divide-y divide-slate-100 text-xs sm:text-sm text-slate-800">
+            <!-- Dynamically populated via renderOrderTable() -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State Container -->
+      <div id="table-empty-state" class="hidden p-12 text-center flex flex-col items-center justify-center space-y-3">
+        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center">
+          <i data-lucide="inbox" class="w-6 h-6"></i>
+        </div>
+        <div class="space-y-1">
+          <h4 class="text-sm font-bold text-slate-800">Không tìm thấy hóa đơn phù hợp</h4>
+          <p class="text-xs text-slate-500">Hãy thử thay đổi từ khóa tìm kiếm hoặc bấm đặt lại toàn bộ bộ lọc.</p>
+        </div>
+        <button type="button" onclick="resetAllFilters()"
+          class="min-h-[48px] h-12 px-4 rounded-xl bg-slate-900 hover:bg-slate-950 active:scale-[0.98] text-white text-xs font-semibold flex items-center gap-2 cursor-pointer transition shadow-2xs">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          <span>Đặt lại bộ lọc</span>
+        </button>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- 3. ORDER DETAILS SLIDE-OVER DRAWER                                        -->
+  <!-- ========================================================================= -->
+  <div id="drawer-backdrop" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden transition-opacity duration-200" onclick="closeOrderDrawer()"></div>
+
+  <aside id="drawer-order-details" class="fixed top-0 right-0 z-50 h-full w-full sm:w-[500px] lg:w-[560px] bg-white border-l border-slate-200 shadow-2xl transform translate-x-full transition-transform duration-300 ease-out flex flex-col justify-between overflow-hidden" aria-label="Chi tiết hóa đơn">
+    
+    <!-- Drawer Header -->
+    <div class="h-16 px-5 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200 font-mono font-bold text-xs" id="drawer-order-id-badge">
+          #14
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-2">
+            <span id="drawer-order-code" class="text-sm sm:text-base font-bold font-mono text-slate-900 tracking-tight">ORD-014</span>
+            <span id="drawer-order-status-pill" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Đã thanh toán</span>
+          </div>
+          <span id="drawer-order-timestamp" class="text-[11px] text-slate-500 font-mono">16:45:20 | 20/09/2026</span>
+        </div>
+      </div>
+
+      <!-- Close Drawer Button (48x48px) -->
+      <button type="button" onclick="closeOrderDrawer()"
+        class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 active:scale-[0.98] flex items-center justify-center cursor-pointer transition focus:outline-none"
+        title="Đóng bảng chi tiết (Esc)">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Drawer Scrollable Body -->
+    <div class="flex-1 overflow-y-auto p-5 space-y-5">
+      
+      <!-- Metadata Strip -->
+      <div class="grid grid-cols-2 gap-2.5 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+        <div>
+          <span class="text-slate-400 block text-[11px]">Hình thức phục vụ:</span>
+          <span id="drawer-order-mode" class="font-semibold text-slate-800">Tại bàn: Bàn 02 (Tầng 1)</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block text-[11px]">Thu ngân phụ trách:</span>
+          <span id="drawer-order-cashier" class="font-semibold text-slate-800">Nguyễn Văn Lan</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block text-[11px]">Ca bán hàng:</span>
+          <span id="drawer-order-shift" class="font-semibold text-slate-800 font-mono">Ca #04</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block text-[11px]">Phương thức trả:</span>
+          <span id="drawer-order-payment" class="font-semibold text-slate-800">Tiền mặt</span>
+        </div>
+      </div>
+
+      <!-- Audit Notice Box (If Voided or Refunded) -->
+      <div id="drawer-audit-box" class="hidden p-4 rounded-xl border space-y-2 text-xs">
+        <div class="flex items-center gap-2 font-bold" id="drawer-audit-title">
+          <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+          <span>Thông tin kiểm toán hủy / hoàn tiền</span>
+        </div>
+        <div class="space-y-1 text-slate-700">
+          <div><span class="text-slate-500">Lý do:</span> <span id="drawer-audit-reason" class="font-medium">Hết nguyên liệu</span></div>
+          <div><span class="text-slate-500">Ghi chú:</span> <span id="drawer-audit-note" class="font-medium">Không có</span></div>
+          <div><span class="text-slate-500">Người phê duyệt:</span> <span id="drawer-audit-approver" class="font-medium">Quản lý (PIN 8888)</span></div>
+          <div><span class="text-slate-500">Thời gian duyệt:</span> <span id="drawer-audit-time" class="font-mono">16:50:12</span></div>
+        </div>
+      </div>
+
+      <!-- Itemized Manifest -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Danh mục món đã gọi</span>
+          <span id="drawer-item-count" class="text-xs text-slate-400 font-mono">2 món</span>
+        </div>
+
+        <div id="drawer-items-list" class="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Financial Totals Box -->
+      <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs sm:text-sm">
+        <div class="flex justify-between text-slate-600">
+          <span>Tạm tính:</span>
+          <span id="drawer-subtotal" class="font-mono font-medium">109.000 đ</span>
+        </div>
+        <div class="flex justify-between text-slate-600">
+          <span>Giảm giá:</span>
+          <span id="drawer-discount" class="font-mono font-medium">0 đ</span>
+        </div>
+        <div class="h-[1px] bg-slate-200 my-1"></div>
+        <div class="flex justify-between items-baseline text-slate-900 font-bold">
+          <span class="text-sm">TỔNG CỘNG:</span>
+          <span id="drawer-grandtotal" class="font-mono text-xl text-emerald-700">109.000 đ</span>
+        </div>
+        <div class="h-[1px] bg-slate-200 my-1"></div>
+        <div class="flex justify-between text-slate-500 text-xs">
+          <span>Tiền khách đưa:</span>
+          <span id="drawer-tendered" class="font-mono">150.000 đ</span>
+        </div>
+        <div class="flex justify-between text-slate-500 text-xs">
+          <span>Tiền thối lại:</span>
+          <span id="drawer-change" class="font-mono">41.000 đ</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Drawer Footer Actions Bar (All >= 48px Height) -->
+    <div class="p-4 border-t border-slate-200 bg-white flex flex-col gap-2.5 flex-shrink-0">
+      
+      <!-- Primary Action: In lại hóa đơn K80 -->
+      <button id="btn-drawer-reprint" type="button" onclick="triggerDrawerReprint()"
+        class="min-h-[48px] h-12 w-full px-4 rounded-xl bg-slate-900 hover:bg-slate-950 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition shadow-2xs">
+        <i data-lucide="printer" class="w-4 h-4 text-emerald-400"></i>
+        <span>IN LẠI HÓA ĐƠN K80 (Ctrl+P)</span>
+      </button>
+
+      <!-- Secondary Row: Void & Refund Actions -->
+      <div class="grid grid-cols-2 gap-2.5">
+        
+        <!-- Void Order Button -->
+        <button id="btn-drawer-void" type="button" onclick="triggerDrawerVoid()"
+          class="min-h-[48px] h-12 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 active:scale-[0.98] text-rose-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-2xs">
+          <i data-lucide="slash" class="w-4 h-4 text-rose-600"></i>
+          <span>HỦY HÓA ĐƠN (VOID)</span>
+        </button>
+
+        <!-- Refund Order Button -->
+        <button id="btn-drawer-refund" type="button" onclick="triggerDrawerRefund()"
+          class="min-h-[48px] h-12 px-3 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 active:scale-[0.98] text-amber-900 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-2xs">
+          <i data-lucide="rotate-ccw" class="w-4 h-4 text-amber-600"></i>
+          <span>HOÀN TIỀN (REFUND)</span>
+        </button>
+
+      </div>
+
+    </div>
+
+  </aside>
+
+  <!-- ========================================================================= -->
+  <!-- 4. VOID ORDER CONFIRMATION MODAL (Manager PIN 8888)                      -->
+  <!-- ========================================================================= -->
+  <div id="modal-void-order" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-modal overflow-hidden flex flex-col animate-card-in">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-rose-100 bg-rose-50/80 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center border border-rose-200">
+            <i data-lucide="alert-octagon" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-rose-950">Xác nhận Hủy hóa đơn (Void Order)</h3>
+            <span class="text-[11px] text-rose-700">Yêu cầu mã PIN Quản lý để phê duyệt hủy bỏ</span>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-void-order')" class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4">
+        
+        <!-- Order Summary Strip -->
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+          <div>
+            <span class="text-slate-400 block text-[11px]">Đơn hàng được chọn:</span>
+            <span id="void-modal-order-id" class="font-mono font-bold text-slate-900 text-sm">#14 (ORD-014)</span>
+          </div>
+          <div class="text-right">
+            <span class="text-slate-400 block text-[11px]">Tổng giá trị:</span>
+            <span id="void-modal-grandtotal" class="font-mono font-bold text-rose-700 text-sm">109.000 đ</span>
+          </div>
+        </div>
+
+        <!-- Void Reason Selector (>= 48px height) -->
+        <div class="space-y-1.5">
+          <label for="void-reason-select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+            1. Chọn lý do hủy hóa đơn <span class="text-rose-600">*</span>
+          </label>
+          <select id="void-reason-select" class="min-h-[48px] h-12 w-full px-3.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 cursor-pointer">
+            <option value="Hết nguyên liệu">Hết nguyên liệu pha chế</option>
+            <option value="Khách đổi ý">Khách đổi ý không lấy món</option>
+            <option value="Lỗi nhân viên nhập sai">Lỗi nhân viên nhập sai thông tin</option>
+            <option value="Khác">Khác (bắt buộc nhập ghi chú chi tiết)</option>
+          </select>
+        </div>
+
+        <!-- Optional Reason Notes -->
+        <div class="space-y-1.5">
+          <label for="void-reason-note" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+            2. Ghi chú bổ sung
+          </label>
+          <textarea id="void-reason-note" rows="2" placeholder="Nhập chi tiết nguyên nhân hủy hóa đơn để phục vụ kiểm toán..."
+            class="w-full p-3 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 placeholder:text-slate-400"></textarea>
+        </div>
+
+        <!-- Manager PIN Input & On-Screen Keypad -->
+        <div class="space-y-2 pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <label for="void-manager-pin" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              3. Mã PIN Quản lý xác nhận (Mặc định: 8888) <span class="text-rose-600">*</span>
+            </label>
+            <span id="void-pin-error" class="hidden text-xs text-rose-600 font-bold">Mã PIN không đúng (8888)!</span>
+          </div>
+
+          <div class="relative">
+            <input id="void-manager-pin" type="password" maxlength="4" placeholder="Nhập PIN 4 số..."
+              class="min-h-[48px] h-12 w-full text-center font-mono text-xl tracking-[0.4em] font-bold rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 text-slate-900">
+          </div>
+
+          <!-- Quick Touch Keypad for POS Touchscreens (All >= 48px buttons) -->
+          <div class="grid grid-cols-3 gap-1.5 pt-1">
+            <button type="button" onclick="appendVoidPin('1')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">1</button>
+            <button type="button" onclick="appendVoidPin('2')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">2</button>
+            <button type="button" onclick="appendVoidPin('3')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">3</button>
+            <button type="button" onclick="appendVoidPin('4')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">4</button>
+            <button type="button" onclick="appendVoidPin('5')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">5</button>
+            <button type="button" onclick="appendVoidPin('6')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">6</button>
+            <button type="button" onclick="appendVoidPin('7')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">7</button>
+            <button type="button" onclick="appendVoidPin('8')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">8</button>
+            <button type="button" onclick="appendVoidPin('9')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">9</button>
+            <button type="button" onclick="clearVoidPin()" class="min-h-[48px] h-12 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 text-xs font-bold active:scale-[0.98]">Xóa</button>
+            <button type="button" onclick="appendVoidPin('0')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">0</button>
+            <button type="button" onclick="backspaceVoidPin()" class="min-h-[48px] h-12 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 flex items-center justify-center active:scale-[0.98]"><i data-lucide="delete" class="w-4 h-4"></i></button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
+        <button type="button" onclick="closeModal('modal-void-order')"
+          class="min-h-[48px] h-12 px-5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs sm:text-sm font-semibold cursor-pointer transition">
+          Hủy bỏ
+        </button>
+        <button type="button" onclick="confirmVoidOrder()"
+          class="min-h-[48px] h-12 px-6 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition shadow-xs">
+          <i data-lucide="slash" class="w-4 h-4"></i>
+          <span>XÁC NHẬN HỦY ĐƠN</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 5. REFUND ORDER MODAL (Manager PIN 8888)                                  -->
+  <!-- ========================================================================= -->
+  <div id="modal-refund-order" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-modal overflow-hidden flex flex-col animate-card-in">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-amber-100 bg-amber-50/80 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center border border-amber-200">
+            <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-amber-950">Xử lý Hoàn tiền Hóa đơn (Refund Order)</h3>
+            <span class="text-[11px] text-amber-800">Trả lại tiền cho khách hàng có xác nhận Quản lý</span>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-refund-order')" class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4">
+        
+        <!-- Order Info Strip -->
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+          <div>
+            <span class="text-slate-400 block text-[11px]">Đơn hàng hoàn tiền:</span>
+            <span id="refund-modal-order-id" class="font-mono font-bold text-slate-900 text-sm">#14 (ORD-014)</span>
+          </div>
+          <div class="text-right">
+            <span class="text-slate-400 block text-[11px]">Giá trị gốc:</span>
+            <span id="refund-modal-original-total" class="font-mono font-bold text-slate-900 text-sm">109.000 đ</span>
+          </div>
+        </div>
+
+        <!-- Refund Amount Input (>= 48px height) -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label for="refund-amount-input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              1. Số tiền hoàn trả (VNĐ) <span class="text-rose-600">*</span>
+            </label>
+            <button type="button" onclick="setRefundFullAmount()" class="min-h-[48px] px-3 py-1 text-xs text-amber-700 hover:text-amber-800 font-bold underline cursor-pointer">
+              Hoàn toàn bộ (100%)
+            </button>
+          </div>
+          <div class="relative">
+            <input id="refund-amount-input" type="number" step="1000" min="1000"
+              class="min-h-[48px] h-12 w-full px-3.5 rounded-xl border border-slate-200 bg-white font-mono text-base font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+          </div>
+        </div>
+
+        <!-- Refund Reason Selector -->
+        <div class="space-y-1.5">
+          <label for="refund-reason-select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+            2. Lý do hoàn tiền <span class="text-rose-600">*</span>
+          </label>
+          <select id="refund-reason-select" class="min-h-[48px] h-12 w-full px-3.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer">
+            <option value="Khách không hài lòng chất lượng món">Khách không hài lòng chất lượng đồ uống/món ăn</option>
+            <option value="Đổi trả món do lỗi pha chế">Đổi trả món do lỗi quầy bar/pha chế</option>
+            <option value="Thu nhầm tiền từ khách">Thu nhầm số tiền thanh toán</option>
+            <option value="Khác">Khác (có ghi chú chi tiết)</option>
+          </select>
+        </div>
+
+        <!-- Optional Reason Notes -->
+        <div class="space-y-1.5">
+          <label for="refund-reason-note" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+            3. Ghi chú hoàn tiền
+          </label>
+          <textarea id="refund-reason-note" rows="2" placeholder="Ghi chú thêm về món hoàn, hình thức trả tiền..."
+            class="w-full p-3 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 placeholder:text-slate-400"></textarea>
+        </div>
+
+        <!-- Manager PIN Input & Keypad -->
+        <div class="space-y-2 pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <label for="refund-manager-pin" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              4. Mã PIN Quản lý phê duyệt (Mặc định: 8888) <span class="text-rose-600">*</span>
+            </label>
+            <span id="refund-pin-error" class="hidden text-xs text-rose-600 font-bold">Mã PIN không đúng (8888)!</span>
+          </div>
+
+          <div class="relative">
+            <input id="refund-manager-pin" type="password" maxlength="4" placeholder="Nhập PIN 4 số..."
+              class="min-h-[48px] h-12 w-full text-center font-mono text-xl tracking-[0.4em] font-bold rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-slate-900">
+          </div>
+
+          <!-- Touch Keypad (All >= 48px buttons) -->
+          <div class="grid grid-cols-3 gap-1.5 pt-1">
+            <button type="button" onclick="appendRefundPin('1')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">1</button>
+            <button type="button" onclick="appendRefundPin('2')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">2</button>
+            <button type="button" onclick="appendRefundPin('3')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">3</button>
+            <button type="button" onclick="appendRefundPin('4')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">4</button>
+            <button type="button" onclick="appendRefundPin('5')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">5</button>
+            <button type="button" onclick="appendRefundPin('6')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">6</button>
+            <button type="button" onclick="appendRefundPin('7')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">7</button>
+            <button type="button" onclick="appendRefundPin('8')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">8</button>
+            <button type="button" onclick="appendRefundPin('9')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">9</button>
+            <button type="button" onclick="clearRefundPin()" class="min-h-[48px] h-12 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 text-xs font-bold active:scale-[0.98]">Xóa</button>
+            <button type="button" onclick="appendRefundPin('0')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-base active:scale-[0.98]">0</button>
+            <button type="button" onclick="backspaceRefundPin()" class="min-h-[48px] h-12 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 flex items-center justify-center active:scale-[0.98]"><i data-lucide="delete" class="w-4 h-4"></i></button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
+        <button type="button" onclick="closeModal('modal-refund-order')"
+          class="min-h-[48px] h-12 px-5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs sm:text-sm font-semibold cursor-pointer transition">
+          Hủy bỏ
+        </button>
+        <button type="button" onclick="confirmRefundOrder()"
+          class="min-h-[48px] h-12 px-6 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition shadow-xs">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          <span>XÁC NHẬN HOÀN TIỀN</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 6. K80 THERMAL RECEIPT RE-PRINT MODAL                                     -->
+  <!-- ========================================================================= -->
+  <div id="modal-receipt-print" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-modal overflow-hidden flex flex-col my-auto animate-card-in">
+      
+      <!-- Modal Header (Screen Only) -->
+      <div id="receipt-modal-header" class="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
+            <i data-lucide="printer" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-bold text-slate-900 uppercase">Xem trước Hóa đơn K80 (80mm)</h3>
+            <span class="text-[11px] text-slate-400">Phiếu tính tiền liên in lại</span>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-receipt-print')" class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Thermal Paper Container (Printed at exactly 80mm continuous paper) -->
+      <div class="p-6 bg-slate-100 flex justify-center">
+        <div id="receipt-paper-container" class="w-[80mm] bg-white border border-slate-300 shadow-sm p-4 font-mono text-[11px] leading-tight text-slate-900 space-y-3">
+          
+          <!-- Store Header -->
+          <div class="text-center space-y-1">
+            <div class="font-bold text-sm tracking-wider uppercase">THE COFFEE WORKSHOP</div>
+            <div class="text-[10px]">Cà phê & Trà thủ công</div>
+            <div class="text-[9px]">120 Hoàng Hoa Thám, Tây Hồ, Hà Nội</div>
+            <div class="text-[9px]">Hotline: 0987 654 321</div>
+            <div class="text-[9px]">WiFi: TheCoffeeWorkshop / Pass: caphedenda</div>
+          </div>
+
+          <!-- Cutline -->
+          <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+          <!-- Receipt Title & Meta -->
+          <div class="text-center space-y-0.5">
+            <div class="font-bold text-xs">HÓA ĐƠN THANH TOÁN (IN LẠI)</div>
+            <div class="text-[9px] text-slate-600">DUPLICATE RECEIPT</div>
+          </div>
+
+          <!-- Void/Refund Watermark if applicable -->
+          <div id="receipt-status-banner" class="hidden text-center py-1 px-2 border border-dashed text-[10px] font-bold">
+            <!-- Populated via JS -->
+          </div>
+
+          <div class="space-y-0.5 text-[10px] pt-1">
+            <div class="flex justify-between">
+              <span>Mã đơn:</span>
+              <span id="rcpt-order-code" class="font-bold">ORD-014</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Số phiếu:</span>
+              <span id="rcpt-service-num" class="font-bold">#14</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Thời gian:</span>
+              <span id="rcpt-timestamp">20/09/2026 16:45</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Thu ngân:</span>
+              <span id="rcpt-cashier">Nguyễn Văn Lan</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Khu vực:</span>
+              <span id="rcpt-mode">Bàn 02 (Tầng 1)</span>
+            </div>
+          </div>
+
+          <!-- Cutline -->
+          <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+          <!-- Items Table -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between font-bold text-[10px] border-b border-slate-200 pb-1">
+              <span>Tên món</span>
+              <span>SL x Giá</span>
+              <span>T.Tiền</span>
+            </div>
+            <div id="rcpt-items-list" class="space-y-1 text-[10px]">
+              <!-- Populated via JS -->
+            </div>
+          </div>
+
+          <!-- Cutline -->
+          <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+          <!-- Totals Breakdown -->
+          <div class="space-y-1 text-[10px]">
+            <div class="flex justify-between">
+              <span>Tạm tính:</span>
+              <span id="rcpt-subtotal">109.000 đ</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Giảm giá:</span>
+              <span id="rcpt-discount">0 đ</span>
+            </div>
+            <div class="flex justify-between font-bold text-xs border-t border-slate-300 pt-1">
+              <span>TỔNG CỘNG:</span>
+              <span id="rcpt-grandtotal">109.000 đ</span>
+            </div>
+            <div class="flex justify-between pt-1">
+              <span>Hình thức:</span>
+              <span id="rcpt-payment-method">Tiền mặt</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Tiền khách đưa:</span>
+              <span id="rcpt-tendered">150.000 đ</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Tiền thối lại:</span>
+              <span id="rcpt-change">41.000 đ</span>
+            </div>
+          </div>
+
+          <!-- Cutline -->
+          <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+          <!-- Receipt Footer / QR Code / Barcode -->
+          <div class="text-center space-y-2 pt-1">
+            <div class="text-[9px] text-slate-500">Quét mã để tra cứu hóa đơn điện tử</div>
+            <div class="flex justify-center py-1">
+              <!-- SVG QR Code Representation -->
+              <div class="w-20 h-20 bg-white border border-slate-400 p-1 flex items-center justify-center">
+                <svg viewBox="0 0 100 100" class="w-full h-full">
+                  <rect x="0" y="0" width="100" height="100" fill="white"/>
+                  <rect x="10" y="10" width="25" height="25" fill="#0f172a"/>
+                  <rect x="15" y="15" width="15" height="15" fill="white"/>
+                  <rect x="18" y="18" width="9" height="9" fill="#0f172a"/>
+                  <rect x="65" y="10" width="25" height="25" fill="#0f172a"/>
+                  <rect x="70" y="15" width="15" height="15" fill="white"/>
+                  <rect x="73" y="18" width="9" height="9" fill="#0f172a"/>
+                  <rect x="10" y="65" width="25" height="25" fill="#0f172a"/>
+                  <rect x="15" y="70" width="15" height="15" fill="white"/>
+                  <rect x="18" y="73" width="9" height="9" fill="#0f172a"/>
+                  <rect x="42" y="15" width="16" height="6" fill="#0f172a"/>
+                  <rect x="42" y="30" width="8" height="18" fill="#0f172a"/>
+                  <rect x="56" y="28" width="12" height="12" fill="#0f172a"/>
+                  <rect x="42" y="55" width="15" height="10" fill="#0f172a"/>
+                  <rect x="62" y="50" width="8" height="22" fill="#0f172a"/>
+                  <rect x="42" y="72" width="26" height="16" fill="#0f172a"/>
+                  <rect x="75" y="75" width="12" height="12" fill="#0f172a"/>
+                </svg>
+              </div>
+            </div>
+            <div class="text-[9px] font-bold">CẢM ƠN QUÝ KHÁCH & HẸN GẶP LẠI!</div>
+            <div class="text-[8px] text-slate-400">Hệ thống POS Cafe v2.4 | Mã đối soát: <span id="rcpt-audit-id">AUD-9021</span></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Action Buttons Bar (Screen Only, >= 48px Height) -->
+      <div id="receipt-actions-bar" class="p-4 border-t border-slate-200 bg-white flex items-center justify-end gap-3">
+        <button type="button" onclick="closeModal('modal-receipt-print')"
+          class="min-h-[48px] h-12 px-5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs sm:text-sm font-semibold cursor-pointer transition">
+          Đóng
+        </button>
+        <button type="button" onclick="printReceipt()"
+          class="min-h-[48px] h-12 px-6 rounded-xl bg-slate-900 hover:bg-slate-950 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition shadow-xs">
+          <i data-lucide="printer" class="w-4 h-4 text-emerald-400"></i>
+          <span>IN BILL (Ctrl+P)</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 7. KEYBOARD SHORTCUTS MODAL                                               -->
+  <!-- ========================================================================= -->
+  <div id="modal-shortcuts-help" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-modal overflow-hidden flex flex-col animate-card-in">
+      <div class="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <i data-lucide="keyboard" class="w-4 h-4 text-slate-700"></i>
+          <h3 class="text-xs sm:text-sm font-bold text-slate-900 uppercase">Phím tắt thao tác nhanh</h3>
+        </div>
+        <button type="button" onclick="closeModal('modal-shortcuts-help')" class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-3 text-xs">
+        <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
+          <span class="text-slate-600">Mở Trạm làm việc (Station Switcher)</span>
+          <span class="font-mono bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200 font-bold">F0 / F10 / `</span>
+        </div>
+        <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
+          <span class="text-slate-600">Chuyển sang Quầy thu ngân</span>
+          <span class="font-mono bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200 font-bold">F1</span>
+        </div>
+        <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
+          <span class="text-slate-600">In lại hóa đơn (khi xem chi tiết/bill)</span>
+          <span class="font-mono bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200 font-bold">Ctrl + P</span>
+        </div>
+        <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
+          <span class="text-slate-600">Đóng cửa sổ / Khóa phiên làm việc</span>
+          <span class="font-mono bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200 font-bold">Esc</span>
+        </div>
+      </div>
+      <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+        <button type="button" onclick="closeModal('modal-shortcuts-help')" class="min-h-[48px] h-12 px-5 rounded-xl bg-slate-900 text-white font-semibold text-xs cursor-pointer">Đã hiểu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 8. JAVASCRIPT LOGIC & STATE ENGINE                                        -->
+  <!-- ========================================================================= -->
+  <script>
+    'use strict';
+
+    /* =========================================================================
+       1. Global State Variables & Seed Data
+       ========================================================================= */
+    var isSoundMuted = false;
+    try {
+      isSoundMuted = localStorage.getItem('POS_SOUND_MUTED') === 'true';
+    } catch (e) {}
+
+    var allOrders = [];
+    var filteredOrders = [];
+    var selectedOrder = null;
+
+    var filterState = {
+      search: '',
+      dateRange: 'today', // 'today', 'yesterday', 'week'
+      paymentMethod: 'all', // 'all', 'cash', 'qr'
+      status: 'all' // 'all', 'completed', 'void', 'refunded'
+    };
+
+    // Realistic default seed orders for rich ledger & audit testing
+    var SEED_ORDERS_HISTORY = [
+      {
+        id: 'ORD-024',
+        orderId: 'ORD-024',
+        serviceNumber: 24,
+        mode: 'dinein',
+        table: { id: 'T02', name: 'Bàn 02', area: 'Tầng 1' },
+        status: 'completed',
+        items: [
+          { name: 'Cold Brew cam sả', sizeName: 'Size L', quantity: 2, unitPrice: 52000, lineTotalVND: 104000, modifiers: [{ group: 'sugar', name: 'Đường', value: '70%' }, { group: 'ice', name: 'Đá', value: '100% đá' }], preparationNote: 'Cam sả tươi' },
+          { name: 'Croissant bơ tỏi', sizeName: '', quantity: 1, unitPrice: 35000, lineTotalVND: 35000, modifiers: [], preparationNote: 'Làm nóng giòn' }
+        ],
+        subtotalVND: 139000,
+        discountVND: 0,
+        grandTotalVND: 139000,
+        paymentMethod: 'qr',
+        tenderedVND: 139000,
+        changeDueVND: 0,
+        timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Văn Lan'
+      },
+      {
+        id: 'ORD-023',
+        orderId: 'ORD-023',
+        serviceNumber: 23,
+        mode: 'takeaway',
+        table: null,
+        status: 'completed',
+        items: [
+          { name: 'Cà phê sữa đá', sizeName: 'Size M', quantity: 2, unitPrice: 35000, lineTotalVND: 70000, modifiers: [{ group: 'sugar', name: 'Đường', value: '100%' }, { group: 'ice', name: 'Đá', value: '100% đá' }], preparationNote: '' }
+        ],
+        subtotalVND: 70000,
+        discountVND: 0,
+        grandTotalVND: 70000,
+        paymentMethod: 'cash',
+        tenderedVND: 100000,
+        changeDueVND: 30000,
+        timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Văn Lan'
+      },
+      {
+        id: 'ORD-022',
+        orderId: 'ORD-022',
+        serviceNumber: 22,
+        mode: 'dinein',
+        table: { id: 'T05', name: 'Bàn 05', area: 'Tầng 1' },
+        status: 'void',
+        items: [
+          { name: 'Trà đào cam sả', sizeName: 'Size L', quantity: 1, unitPrice: 49000, lineTotalVND: 49000, modifiers: [{ group: 'sugar', name: 'Đường', value: '70%' }, { group: 'ice', name: 'Đá', value: '100% đá' }], preparationNote: '' },
+          { name: 'Bạc xỉu', sizeName: 'Size M', quantity: 1, unitPrice: 39000, lineTotalVND: 39000, modifiers: [{ group: 'sugar', name: 'Đường', value: '70%' }, { group: 'ice', name: 'Đá', value: 'Ít đá' }], preparationNote: '' }
+        ],
+        subtotalVND: 88000,
+        discountVND: 0,
+        grandTotalVND: 88000,
+        paymentMethod: 'cash',
+        tenderedVND: 100000,
+        changeDueVND: 12000,
+        timestamp: new Date(Date.now() - 48 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Văn Lan',
+        voidReason: 'Khách đổi ý',
+        voidNote: 'Khách bận đột xuất rời quán trước khi pha chế',
+        voidedAt: new Date(Date.now() - 44 * 60 * 1000).toISOString(),
+        voidApprovedBy: 'Quản lý (PIN 8888)'
+      },
+      {
+        id: 'ORD-021',
+        orderId: 'ORD-021',
+        serviceNumber: 21,
+        mode: 'dinein',
+        table: { id: 'T01', name: 'Bàn 01', area: 'Tầng 1' },
+        status: 'refunded',
+        items: [
+          { name: 'Freeze trà xanh', sizeName: 'Size L', quantity: 2, unitPrice: 59000, lineTotalVND: 118000, modifiers: [{ group: 'sugar', name: 'Đường', value: '100%' }, { group: 'ice', name: 'Đá', value: '100% đá' }], preparationNote: 'Thêm thạch matcha' }
+        ],
+        subtotalVND: 118000,
+        discountVND: 0,
+        grandTotalVND: 118000,
+        paymentMethod: 'qr',
+        tenderedVND: 118000,
+        changeDueVND: 0,
+        timestamp: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân',
+        refundAmount: 118000,
+        refundReason: 'Khách không hài lòng chất lượng món',
+        refundNote: 'Trà xanh bị đắng do máy xay quá lâu, đã xin lỗi và hoàn trả',
+        refundedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        refundApprovedBy: 'Quản lý (PIN 8888)'
+      },
+      {
+        id: 'ORD-020',
+        orderId: 'ORD-020',
+        serviceNumber: 20,
+        mode: 'takeaway',
+        table: null,
+        status: 'completed',
+        items: [
+          { name: 'Espresso Double', sizeName: '', quantity: 1, unitPrice: 38000, lineTotalVND: 38000, modifiers: [], preparationNote: 'Uống tại quầy' },
+          { name: 'Tiramisu', sizeName: '', quantity: 1, unitPrice: 40000, lineTotalVND: 40000, modifiers: [], preparationNote: '' }
+        ],
+        subtotalVND: 78000,
+        discountVND: 0,
+        grandTotalVND: 78000,
+        paymentMethod: 'cash',
+        tenderedVND: 100000,
+        changeDueVND: 22000,
+        timestamp: new Date(Date.now() - 95 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-019',
+        orderId: 'ORD-019',
+        serviceNumber: 19,
+        mode: 'dinein',
+        table: { id: 'T08', name: 'Bàn 08', area: 'Tầng 1' },
+        status: 'completed',
+        items: [
+          { name: 'Trà lài hạt sen', sizeName: 'Size M', quantity: 2, unitPrice: 45000, lineTotalVND: 90000, modifiers: [{ group: 'sugar', name: 'Đường', value: '50%' }], preparationNote: 'Ít ngọt' },
+          { name: 'Cà phê đen đá', sizeName: 'Size M', quantity: 1, unitPrice: 32000, lineTotalVND: 32000, modifiers: [{ group: 'sugar', name: 'Đường', value: 'Không đường' }], preparationNote: '' }
+        ],
+        subtotalVND: 122000,
+        discountVND: 0,
+        grandTotalVND: 122000,
+        paymentMethod: 'qr',
+        tenderedVND: 122000,
+        changeDueVND: 0,
+        timestamp: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-018',
+        orderId: 'ORD-018',
+        serviceNumber: 18,
+        mode: 'dinein',
+        table: { id: 'T11', name: 'Bàn 11', area: 'Tầng 2' },
+        status: 'completed',
+        items: [
+          { name: 'Cappuccino nóng', sizeName: 'Size M', quantity: 1, unitPrice: 48000, lineTotalVND: 48000, modifiers: [], preparationNote: 'Tạo hình tulip' },
+          { name: 'Croissant phô mai', sizeName: '', quantity: 1, unitPrice: 38000, lineTotalVND: 38000, modifiers: [], preparationNote: '' }
+        ],
+        subtotalVND: 86000,
+        discountVND: 0,
+        grandTotalVND: 86000,
+        paymentMethod: 'cash',
+        tenderedVND: 100000,
+        changeDueVND: 14000,
+        timestamp: new Date(Date.now() - 150 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-017',
+        orderId: 'ORD-017',
+        serviceNumber: 17,
+        mode: 'takeaway',
+        table: null,
+        status: 'completed',
+        items: [
+          { name: 'Trà đào cam sả', sizeName: 'Size L', quantity: 3, unitPrice: 49000, lineTotalVND: 147000, modifiers: [{ group: 'ice', name: 'Đá', value: '100% đá' }], preparationNote: 'Để riêng đá mang về' }
+        ],
+        subtotalVND: 147000,
+        discountVND: 0,
+        grandTotalVND: 147000,
+        paymentMethod: 'qr',
+        tenderedVND: 147000,
+        changeDueVND: 0,
+        timestamp: new Date(Date.now() - 175 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-016',
+        orderId: 'ORD-016',
+        serviceNumber: 16,
+        mode: 'dinein',
+        table: { id: 'T04', name: 'Bàn 04', area: 'Tầng 1' },
+        status: 'completed',
+        items: [
+          { name: 'Cold Brew truyền thống', sizeName: 'Size M', quantity: 1, unitPrice: 42000, lineTotalVND: 42000, modifiers: [], preparationNote: '' },
+          { name: 'Bạc xỉu', sizeName: 'Size M', quantity: 1, unitPrice: 39000, lineTotalVND: 39000, modifiers: [{ group: 'sugar', name: 'Đường', value: '70%' }], preparationNote: '' }
+        ],
+        subtotalVND: 81000,
+        discountVND: 0,
+        grandTotalVND: 81000,
+        paymentMethod: 'cash',
+        tenderedVND: 100000,
+        changeDueVND: 19000,
+        timestamp: new Date(Date.now() - 200 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-015',
+        orderId: 'ORD-015',
+        serviceNumber: 15,
+        mode: 'takeaway',
+        table: null,
+        status: 'completed',
+        items: [
+          { name: 'Cà phê sữa đá', sizeName: 'Size M', quantity: 4, unitPrice: 35000, lineTotalVND: 140000, modifiers: [{ group: 'sugar', name: 'Đường', value: '100%' }], preparationNote: 'Khay 4 ly' }
+        ],
+        subtotalVND: 140000,
+        discountVND: 0,
+        grandTotalVND: 140000,
+        paymentMethod: 'qr',
+        tenderedVND: 140000,
+        changeDueVND: 0,
+        timestamp: new Date(Date.now() - 230 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-014',
+        orderId: 'ORD-014',
+        serviceNumber: 14,
+        mode: 'dinein',
+        table: { id: 'T02', name: 'Bàn 02', area: 'Tầng 1' },
+        status: 'completed',
+        items: [
+          { name: 'Cà phê sữa đá', sizeName: 'Size M', quantity: 1, unitPrice: 35000, lineTotalVND: 35000, modifiers: [{ group: 'sugar', name: 'Đường', value: '100%' }], preparationNote: '' },
+          { name: 'Bạc xỉu', sizeName: 'Size M', quantity: 1, unitPrice: 39000, lineTotalVND: 39000, modifiers: [{ group: 'sugar', name: 'Đường', value: '70%' }], preparationNote: 'Ít sữa đặc' },
+          { name: 'Croissant bơ tỏi', sizeName: '', quantity: 1, unitPrice: 35000, lineTotalVND: 35000, modifiers: [], preparationNote: '' }
+        ],
+        subtotalVND: 109000,
+        discountVND: 0,
+        grandTotalVND: 109000,
+        paymentMethod: 'cash',
+        tenderedVND: 150000,
+        changeDueVND: 41000,
+        timestamp: new Date(Date.now() - 260 * 60 * 1000).toISOString(),
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Văn Lan'
+      },
+      {
+        id: 'ORD-013',
+        orderId: 'ORD-013',
+        serviceNumber: 13,
+        mode: 'dinein',
+        table: { id: 'T04', name: 'Bàn 04', area: 'Tầng 1' },
+        status: 'completed',
+        items: [
+          { name: 'Freeze trà xanh', sizeName: 'Size M', quantity: 1, unitPrice: 52000, lineTotalVND: 52000, modifiers: [], preparationNote: '' },
+          { name: 'Tiramisu', sizeName: '', quantity: 1, unitPrice: 40000, lineTotalVND: 40000, modifiers: [], preparationNote: '' }
+        ],
+        subtotalVND: 92000,
+        discountVND: 0,
+        grandTotalVND: 92000,
+        paymentMethod: 'cash',
+        tenderedVND: 100000,
+        changeDueVND: 8000,
+        timestamp: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
+        shiftCode: 'Ca #03',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-012',
+        orderId: 'ORD-012',
+        serviceNumber: 12,
+        mode: 'takeaway',
+        table: null,
+        status: 'completed',
+        items: [
+          { name: 'Trà đào cam sả', sizeName: 'Size L', quantity: 2, unitPrice: 49000, lineTotalVND: 98000, modifiers: [{ group: 'sugar', name: 'Đường', value: '70%' }], preparationNote: 'Nhiều đào miếng' }
+        ],
+        subtotalVND: 98000,
+        discountVND: 0,
+        grandTotalVND: 98000,
+        paymentMethod: 'qr',
+        tenderedVND: 98000,
+        changeDueVND: 0,
+        timestamp: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
+        shiftCode: 'Ca #03',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-011',
+        orderId: 'ORD-011',
+        serviceNumber: 11,
+        mode: 'dinein',
+        table: { id: 'T01', name: 'Bàn 01', area: 'Tầng 1' },
+        status: 'completed',
+        items: [
+          { name: 'Cà phê sữa đá', sizeName: 'Size M', quantity: 1, unitPrice: 35000, lineTotalVND: 35000, modifiers: [], preparationNote: '' },
+          { name: 'Bạc xỉu', sizeName: 'Size M', quantity: 1, unitPrice: 39000, lineTotalVND: 39000, modifiers: [], preparationNote: '' }
+        ],
+        subtotalVND: 74000,
+        discountVND: 0,
+        grandTotalVND: 74000,
+        paymentMethod: 'cash',
+        tenderedVND: 100000,
+        changeDueVND: 26000,
+        timestamp: new Date(Date.now() - 72 * 3600 * 1000).toISOString(),
+        shiftCode: 'Ca #02',
+        cashierName: 'Nguyễn Thu Ngân'
+      },
+      {
+        id: 'ORD-010',
+        orderId: 'ORD-010',
+        serviceNumber: 10,
+        mode: 'takeaway',
+        table: null,
+        status: 'completed',
+        items: [
+          { name: 'Cold Brew cam sả', sizeName: 'Size M', quantity: 1, unitPrice: 45000, lineTotalVND: 45000, modifiers: [], preparationNote: '' }
+        ],
+        subtotalVND: 45000,
+        discountVND: 0,
+        grandTotalVND: 45000,
+        paymentMethod: 'cash',
+        tenderedVND: 50000,
+        changeDueVND: 5000,
+        timestamp: new Date(Date.now() - 96 * 3600 * 1000).toISOString(),
+        shiftCode: 'Ca #01',
+        cashierName: 'Nguyễn Thu Ngân'
+      }
+    ];
+
+    /* =========================================================================
+       2. Web Audio API Synthesis Engine
+       ========================================================================= */
+    var audioCtx = null;
+    function getAudioContext() {
+      if (!audioCtx) {
+        var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    // 2.1 Tap Click Chirp (800Hz sine wave, 30ms)
+    function playTapChirp() {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.03);
+      } catch (err) {}
+    }
+
+    // 2.2 Reprint Chime (587Hz -> 880Hz two-tone)
+    function playReprintChime() {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var now = ctx.currentTime;
+        var tones = [587, 880];
+        for (var i = 0; i < tones.length; i++) {
+          (function (freq, offset) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + offset);
+            gain.gain.setValueAtTime(0, now + offset);
+            gain.gain.linearRampToValueAtTime(0.18, now + offset + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.22);
+          })(tones[i], i * 0.1);
+        }
+      } catch (err) {}
+    }
+
+    // 2.3 Void / Refund Alert Chime (784Hz -> 659Hz -> 523Hz descending cautionary triad)
+    function playVoidRefundChime() {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var now = ctx.currentTime;
+        var tones = [784, 659, 523];
+        for (var i = 0; i < tones.length; i++) {
+          (function (freq, offset) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + offset);
+            gain.gain.setValueAtTime(0, now + offset);
+            gain.gain.linearRampToValueAtTime(0.2, now + offset + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.25);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.28);
+          })(tones[i], i * 0.1);
+        }
+      } catch (err) {}
+    }
+
+    // 2.4 Error Buzz (150Hz sawtooth, 120ms)
+    function playErrorBuzz() {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.14);
+      } catch (err) {}
+    }
+
+    function toggleSoundAlert() {
+      isSoundMuted = !isSoundMuted;
+      try {
+        localStorage.setItem('POS_SOUND_MUTED', isSoundMuted ? 'true' : 'false');
+      } catch (e) {}
+      updateSoundButtonUI();
+      if (!isSoundMuted) {
+        playTapChirp();
+        showToast('Đã bật âm thanh thao tác');
+      } else {
+        showToast('Đã tắt âm thanh thao tác');
+      }
+    }
+
+    function updateSoundButtonUI() {
+      var icon = document.getElementById('sound-toggle-icon');
+      if (!icon) return;
+      if (isSoundMuted) {
+        icon.setAttribute('data-lucide', 'volume-x');
+        icon.className = 'w-4 h-4 text-slate-400';
+      } else {
+        icon.setAttribute('data-lucide', 'volume-2');
+        icon.className = 'w-4 h-4 text-emerald-600';
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* =========================================================================
+       3. Utility Formatters & Toast Notification
+       ========================================================================= */
+    function formatVND(amount) {
+      var num = Math.round(Number(amount) || 0);
+      return num.toLocaleString('vi-VN') + ' đ';
+    }
+
+    function formatTime(isoStr) {
+      if (!isoStr) return '';
+      try {
+        var d = new Date(isoStr);
+        return d.toLocaleTimeString('vi-VN', { hour12: false });
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function formatDateTime(isoStr) {
+      if (!isoStr) return '';
+      try {
+        var d = new Date(isoStr);
+        var time = d.toLocaleTimeString('vi-VN', { hour12: false });
+        var date = d.toLocaleDateString('vi-VN');
+        return time + ' ' + date;
+      } catch (e) {
+        return '';
+      }
+    }
+
+    var toastTimer = null;
+    function showToast(message, isError) {
+      var toastEl = document.getElementById('pos-toast');
+      var toastMsg = document.getElementById('toast-message');
+      var iconWrap = document.getElementById('toast-icon-wrapper');
+      if (!toastEl || !toastMsg) return;
+
+      toastMsg.textContent = message;
+      if (isError) {
+        iconWrap.className = 'w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center flex-shrink-0';
+        iconWrap.innerHTML = '<i data-lucide="alert-triangle" class="w-4 h-4"></i>';
+      } else {
+        iconWrap.className = 'w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0';
+        iconWrap.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i>';
+      }
+      if (window.lucide) window.lucide.createIcons();
+
+      toastEl.classList.remove('translate-y-24', 'opacity-0');
+      toastEl.classList.add('translate-y-0', 'opacity-100');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toastEl.classList.remove('translate-y-0', 'opacity-100');
+        toastEl.classList.add('translate-y-24', 'opacity-0');
+      }, 2800);
+    }
+
+    /* =========================================================================
+       4. Real-time Clock & Station Switcher
+       ========================================================================= */
+    function updateDigitalClock() {
+      var clockEl = document.getElementById('live-digital-clock');
+      if (!clockEl) return;
+      var now = new Date();
+      clockEl.textContent = now.toLocaleTimeString('vi-VN', { hour12: false });
+    }
+    setInterval(updateDigitalClock, 1000);
+    updateDigitalClock();
+
+    function toggleStationSwitcher(forceOpen) {
+      playTapChirp();
+      var dropdown = document.getElementById('station-switcher-dropdown');
+      var backdrop = document.getElementById('station-switcher-backdrop');
+      var chevron = document.getElementById('station-switcher-chevron');
+      var btn = document.getElementById('btn-station-switcher');
+      if (!dropdown || !backdrop) return;
+
+      var willOpen = typeof forceOpen === 'boolean' ? forceOpen : dropdown.classList.contains('hidden');
+      if (willOpen) {
+        dropdown.classList.remove('hidden');
+        backdrop.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+      } else {
+        dropdown.classList.add('hidden');
+        backdrop.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    /* =========================================================================
+       5. Orders Loading & Seeding
+       ========================================================================= */
+    function loadOrders() {
+      var storedOrders = [];
+      if (window.POS_BUS && typeof window.POS_BUS.getOrders === 'function') {
+        storedOrders = window.POS_BUS.getOrders();
+      } else {
+        try {
+          var raw = localStorage.getItem('POS_ORDERS');
+          if (raw) storedOrders = JSON.parse(raw);
+        } catch (e) {}
+      }
+
+      // If stored orders are fewer than 8, combine with rich seed orders
+      if (!storedOrders || !Array.isArray(storedOrders) || storedOrders.length < 5) {
+        var mergedMap = {};
+        for (var i = 0; i < SEED_ORDERS_HISTORY.length; i++) {
+          var seedOrd = SEED_ORDERS_HISTORY[i];
+          mergedMap[seedOrd.id] = seedOrd;
+        }
+        if (Array.isArray(storedOrders)) {
+          for (var j = 0; j < storedOrders.length; j++) {
+            var exist = storedOrders[j];
+            var existId = exist.id || exist.orderId || ('ORD-' + (exist.serviceNumber || j));
+            mergedMap[existId] = exist;
+          }
+        }
+        var mergedList = Object.values(mergedMap);
+        // Sort descending by serviceNumber or timestamp
+        mergedList.sort(function (a, b) {
+          var numA = a.serviceNumber || parseInt((a.id || '').replace(/\D/g, ''), 10) || 0;
+          var numB = b.serviceNumber || parseInt((b.id || '').replace(/\D/g, ''), 10) || 0;
+          return numB - numA;
+        });
+
+        allOrders = mergedList;
+        try {
+          localStorage.setItem('POS_ORDERS', JSON.stringify(allOrders));
+        } catch (e) {}
+      } else {
+        allOrders = storedOrders;
+      }
+
+      // Update current staff badge if available
+      if (window.POS_BUS && typeof window.POS_BUS.getCurrentStaff === 'function') {
+        var staff = window.POS_BUS.getCurrentStaff();
+        if (staff && staff.name) {
+          var staffEl = document.getElementById('header-staff-name');
+          if (staffEl) staffEl.textContent = 'Nhân viên: ' + staff.name;
+        }
+      }
+
+      applyFilters();
+    }
+
+    /* =========================================================================
+       6. Search & Filters Engine
+       ========================================================================= */
+    function handleSearchInput(query) {
+      filterState.search = (query || '').trim().toLowerCase();
+      var clearBtn = document.getElementById('btn-clear-search');
+      if (clearBtn) {
+        if (filterState.search.length > 0) {
+          clearBtn.classList.remove('hidden');
+        } else {
+          clearBtn.classList.add('hidden');
+        }
+      }
+      applyFilters();
+    }
+
+    function clearSearchInput() {
+      playTapChirp();
+      var input = document.getElementById('input-order-search');
+      if (input) input.value = '';
+      filterState.search = '';
+      var clearBtn = document.getElementById('btn-clear-search');
+      if (clearBtn) clearBtn.classList.add('hidden');
+      applyFilters();
+    }
+
+    function setDateFilter(range) {
+      playTapChirp();
+      filterState.dateRange = range;
+      updateFilterButtonsUI();
+      applyFilters();
+    }
+
+    function setPaymentFilter(method) {
+      playTapChirp();
+      filterState.paymentMethod = method;
+      updateFilterButtonsUI();
+      applyFilters();
+    }
+
+    function setStatusFilter(status) {
+      playTapChirp();
+      filterState.status = status;
+      updateFilterButtonsUI();
+      applyFilters();
+    }
+
+    function resetAllFilters() {
+      playTapChirp();
+      filterState.search = '';
+      filterState.dateRange = 'today';
+      filterState.paymentMethod = 'all';
+      filterState.status = 'all';
+
+      var input = document.getElementById('input-order-search');
+      if (input) input.value = '';
+      var clearBtn = document.getElementById('btn-clear-search');
+      if (clearBtn) clearBtn.classList.add('hidden');
+
+      updateFilterButtonsUI();
+      applyFilters();
+      showToast('Đã đặt lại bộ lọc');
+    }
+
+    function updateFilterButtonsUI() {
+      // Date buttons
+      var dateBtns = {
+        today: document.getElementById('filter-date-today'),
+        yesterday: document.getElementById('filter-date-yesterday'),
+        week: document.getElementById('filter-date-week')
+      };
+      for (var d in dateBtns) {
+        var btn = dateBtns[d];
+        if (!btn) continue;
+        if (filterState.dateRange === d) {
+          btn.className = 'filter-date-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-slate-900 border-slate-900 text-white shadow-2xs';
+        } else {
+          btn.className = 'filter-date-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs';
+        }
+      }
+
+      // Payment buttons
+      var payBtns = {
+        all: document.getElementById('filter-pay-all'),
+        cash: document.getElementById('filter-pay-cash'),
+        qr: document.getElementById('filter-pay-qr')
+      };
+      for (var p in payBtns) {
+        var pBtn = payBtns[p];
+        if (!pBtn) continue;
+        if (filterState.paymentMethod === p) {
+          pBtn.className = 'filter-pay-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-slate-900 border-slate-900 text-white shadow-2xs';
+        } else {
+          pBtn.className = 'filter-pay-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs';
+        }
+      }
+
+      // Status buttons
+      var statBtns = {
+        all: document.getElementById('filter-status-all'),
+        completed: document.getElementById('filter-status-completed'),
+        void: document.getElementById('filter-status-void'),
+        refunded: document.getElementById('filter-status-refunded')
+      };
+      for (var s in statBtns) {
+        var sBtn = statBtns[s];
+        if (!sBtn) continue;
+        if (filterState.status === s) {
+          sBtn.className = 'filter-status-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-slate-900 border-slate-900 text-white shadow-2xs';
+        } else {
+          sBtn.className = 'filter-status-btn min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer active:scale-[0.98] bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs';
+        }
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function applyFilters() {
+      var now = new Date();
+      var startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      var startOfYesterday = startOfToday - 24 * 60 * 60 * 1000;
+      var startOfWeek = startOfToday - 6 * 24 * 60 * 60 * 1000;
+
+      var countToday = 0;
+      var countYesterday = 0;
+      var countWeek = 0;
+
+      // Count dates across all orders
+      for (var i = 0; i < allOrders.length; i++) {
+        var ordTime = new Date(allOrders[i].timestamp || Date.now()).getTime();
+        if (ordTime >= startOfToday) {
+          countToday++;
+          countWeek++;
+        } else if (ordTime >= startOfYesterday && ordTime < startOfToday) {
+          countYesterday++;
+          countWeek++;
+        } else if (ordTime >= startOfWeek) {
+          countWeek++;
+        }
+      }
+
+      var badgeToday = document.getElementById('badge-count-today');
+      var badgeYesterday = document.getElementById('badge-count-yesterday');
+      var badgeWeek = document.getElementById('badge-count-week');
+      if (badgeToday) badgeToday.textContent = countToday;
+      if (badgeYesterday) badgeYesterday.textContent = countYesterday;
+      if (badgeWeek) badgeWeek.textContent = countWeek;
+
+      // Filter array
+      var results = allOrders.filter(function (order) {
+        var ordTime = new Date(order.timestamp || Date.now()).getTime();
+
+        // 1. Date Range
+        if (filterState.dateRange === 'today') {
+          if (ordTime < startOfToday) return false;
+        } else if (filterState.dateRange === 'yesterday') {
+          if (ordTime < startOfYesterday || ordTime >= startOfToday) return false;
+        } else if (filterState.dateRange === 'week') {
+          if (ordTime < startOfWeek) return false;
+        }
+
+        // 2. Payment Method
+        if (filterState.paymentMethod === 'cash') {
+          if (order.paymentMethod !== 'cash') return false;
+        } else if (filterState.paymentMethod === 'qr') {
+          if (order.paymentMethod !== 'qr' && order.paymentMethod !== 'transfer') return false;
+        }
+
+        // 3. Status
+        if (filterState.status === 'completed') {
+          if (order.status !== 'completed' && order.status !== 'ready' && order.status !== 'preparing' && order.status !== 'paid') return false;
+        } else if (filterState.status === 'void') {
+          if (order.status !== 'void' && order.status !== 'cancelled') return false;
+        } else if (filterState.status === 'refunded') {
+          if (order.status !== 'refunded') return false;
+        }
+
+        // 4. Free text search
+        if (filterState.search) {
+          var query = filterState.search;
+          var orderCode = (order.id || order.orderId || '').toLowerCase();
+          var sNum = '#' + (order.serviceNumber || '');
+          var cashier = (order.cashierName || '').toLowerCase();
+          var tableName = (order.table && order.table.name ? order.table.name : '').toLowerCase();
+          var itemsText = (order.items || []).map(function (it) { return it.name; }).join(' ').toLowerCase();
+
+          var match = orderCode.indexOf(query) >= 0 ||
+                      sNum.indexOf(query) >= 0 ||
+                      cashier.indexOf(query) >= 0 ||
+                      tableName.indexOf(query) >= 0 ||
+                      itemsText.indexOf(query) >= 0;
+          if (!match) return false;
+        }
+
+        return true;
+      });
+
+      filteredOrders = results;
+      recalculateKPIs();
+      renderOrderTable();
+    }
+
+    /* =========================================================================
+       7. Financial KPI Summary Calculation
+       ========================================================================= */
+    function recalculateKPIs() {
+      // Calculate based on current filtered cohort or all orders matching active date
+      var targetOrders = filteredOrders;
+
+      var totalCount = targetOrders.length;
+      var totalRevenue = 0;
+      var cashRevenue = 0;
+      var cashCount = 0;
+      var qrRevenue = 0;
+      var qrCount = 0;
+      var voidCount = 0;
+      var refundCount = 0;
+
+      for (var i = 0; i < targetOrders.length; i++) {
+        var ord = targetOrders[i];
+        var isVoid = ord.status === 'void' || ord.status === 'cancelled';
+        var isRefunded = ord.status === 'refunded';
+
+        if (isVoid) {
+          voidCount++;
+          continue; // Voided orders do not add to revenue
+        }
+
+        if (isRefunded) {
+          refundCount++;
+          // If refund amount is tracked, subtract or omit from net revenue
+          var grand = Number(ord.grandTotalVND) || 0;
+          var refAmt = Number(ord.refundAmount) || grand;
+          var net = Math.max(0, grand - refAmt);
+          totalRevenue += net;
+          if (ord.paymentMethod === 'cash') {
+            cashRevenue += net;
+            cashCount++;
+          } else {
+            qrRevenue += net;
+            qrCount++;
+          }
+          continue;
+        }
+
+        // Completed / Paid orders
+        var amount = Number(ord.grandTotalVND) || 0;
+        totalRevenue += amount;
+
+        if (ord.paymentMethod === 'cash') {
+          cashRevenue += amount;
+          cashCount++;
+        } else {
+          qrRevenue += amount;
+          qrCount++;
+        }
+      }
+
+      // Update KPI DOM
+      var elTotalOrders = document.getElementById('kpi-total-orders');
+      var elTotalRevenue = document.getElementById('kpi-total-revenue');
+      var elCashRevenue = document.getElementById('kpi-cash-revenue');
+      var elCashCount = document.getElementById('kpi-cash-count');
+      var elQrRevenue = document.getElementById('kpi-qr-revenue');
+      var elQrCount = document.getElementById('kpi-qr-count');
+      var elVoidRefund = document.getElementById('kpi-void-refund');
+      var elVoidRefundSub = document.getElementById('kpi-void-refund-sub');
+
+      if (elTotalOrders) elTotalOrders.textContent = totalCount + ' đơn';
+      if (elTotalRevenue) elTotalRevenue.textContent = formatVND(totalRevenue);
+      if (elCashRevenue) elCashRevenue.textContent = formatVND(cashRevenue);
+      if (elCashCount) elCashCount.textContent = cashCount + ' giao dịch';
+      if (elQrRevenue) elQrRevenue.textContent = formatVND(qrRevenue);
+      if (elQrCount) elQrCount.textContent = qrCount + ' giao dịch';
+      if (elVoidRefund) elVoidRefund.textContent = (voidCount + refundCount) + ' đơn';
+      if (elVoidRefundSub) elVoidRefundSub.textContent = voidCount + ' Hủy | ' + refundCount + ' Hoàn tiền';
+
+      // Update Matching Count Badge
+      var matchBadge = document.getElementById('filter-match-count');
+      var tableSummary = document.getElementById('table-summary-count');
+      if (matchBadge) matchBadge.textContent = 'Hiển thị ' + totalCount + ' đơn';
+      if (tableSummary) tableSummary.textContent = 'Hiển thị ' + totalCount + ' / ' + allOrders.length + ' đơn';
+    }
+
+    /* =========================================================================
+       8. Table Rendering
+       ========================================================================= */
+    function renderOrderTable() {
+      var tbody = document.getElementById('order-table-body');
+      var emptyState = document.getElementById('table-empty-state');
+      if (!tbody) return;
+
+      if (!filteredOrders || filteredOrders.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+
+      var html = '';
+      for (var i = 0; i < filteredOrders.length; i++) {
+        var ord = filteredOrders[i];
+        var sNum = ord.serviceNumber ? ('#' + ord.serviceNumber) : (ord.id || ord.orderId);
+        var orderCode = ord.orderId || ord.id || ('ORD-' + ord.serviceNumber);
+        var timeFormatted = formatTime(ord.timestamp);
+        
+        // Mode badge
+        var modeBadge = '';
+        if (ord.mode === 'takeaway' || !ord.table) {
+          modeBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80"><i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i> Mang đi</span>';
+        } else {
+          var tName = (ord.table && ord.table.name) || 'Tại bàn';
+          var tArea = (ord.table && ord.table.area) ? (' (' + ord.table.area + ')') : '';
+          modeBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80"><i data-lucide="table-2" class="w-3.5 h-3.5"></i> ' + tName + tArea + '</span>';
+        }
+
+        // Items Summary
+        var itemCount = (ord.items || []).reduce(function (sum, it) { return sum + (it.quantity || 1); }, 0);
+        var itemNames = (ord.items || []).map(function (it) {
+          return it.name + (it.quantity > 1 ? (' x' + it.quantity) : '');
+        }).join(', ');
+        var itemTruncated = itemNames.length > 34 ? (itemNames.slice(0, 34) + '...') : itemNames;
+
+        // Payment Method Icon
+        var payIcon = '';
+        if (ord.paymentMethod === 'cash') {
+          payIcon = '<span class="inline-flex items-center gap-1 text-slate-700"><i data-lucide="banknote" class="w-3.5 h-3.5 text-blue-600"></i> Tiền mặt</span>';
+        } else {
+          payIcon = '<span class="inline-flex items-center gap-1 text-slate-700"><i data-lucide="qr-code" class="w-3.5 h-3.5 text-indigo-600"></i> VietQR</span>';
+        }
+
+        // Status Tag
+        var statusTag = '';
+        if (ord.status === 'void' || ord.status === 'cancelled') {
+          statusTag = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200"><i data-lucide="slash" class="w-3 h-3"></i> Đã hủy (Void)</span>';
+        } else if (ord.status === 'refunded') {
+          statusTag = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200"><i data-lucide="rotate-ccw" class="w-3 h-3"></i> Hoàn tiền</span>';
+        } else {
+          statusTag = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200"><i data-lucide="check" class="w-3 h-3"></i> Đã thanh toán</span>';
+        }
+
+        // Row background & styling with >= 48px touch target height
+        var trClass = 'hover:bg-slate-50/90 transition-colors cursor-pointer min-h-[56px]';
+        if (ord.status === 'void' || ord.status === 'cancelled') {
+          trClass += ' bg-rose-50/20';
+        } else if (ord.status === 'refunded') {
+          trClass += ' bg-amber-50/20';
+        }
+
+        html += '<tr class="' + trClass + '" onclick="openOrderDrawer(\'' + (ord.id || ord.orderId) + '\')">' +
+          '<td class="py-3.5 px-4">' +
+            '<div class="flex flex-col">' +
+              '<span class="font-mono font-bold text-slate-900 text-sm sm:text-base">' + sNum + '</span>' +
+              '<span class="font-mono text-[10px] text-slate-400">' + orderCode + '</span>' +
+            '</div>' +
+          '</td>' +
+          '<td class="py-3.5 px-4 font-mono text-xs text-slate-600">' + timeFormatted + '</td>' +
+          '<td class="py-3.5 px-4">' + modeBadge + '</td>' +
+          '<td class="py-3.5 px-4">' +
+            '<div class="flex flex-col">' +
+              '<span class="font-medium text-slate-900 text-xs sm:text-sm">' + itemTruncated + '</span>' +
+              '<span class="text-[10px] text-slate-400">' + itemCount + ' sản phẩm</span>' +
+            '</div>' +
+          '</td>' +
+          '<td class="py-3.5 px-4 text-slate-700 text-xs font-medium">' + (ord.cashierName || 'Thu ngân') + '</td>' +
+          '<td class="py-3.5 px-4">' + payIcon + '</td>' +
+          '<td class="py-3.5 px-4 text-right font-mono font-bold text-slate-900 text-xs sm:text-sm">' + formatVND(ord.grandTotalVND) + '</td>' +
+          '<td class="py-3.5 px-4 text-center">' + statusTag + '</td>' +
+          '<td class="py-3.5 px-4 text-center" onclick="event.stopPropagation()">' +
+            '<button type="button" onclick="openOrderDrawer(\'' + (ord.id || ord.orderId) + '\')" ' +
+              'class="min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-700 hover:text-slate-900 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition shadow-2xs">' +
+              '<i data-lucide="eye" class="w-3.5 h-3.5 text-slate-500"></i>' +
+              '<span>Chi tiết</span>' +
+            '</button>' +
+          '</td>' +
+        '</tr>';
+      }
+
+      tbody.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* =========================================================================
+       9. Order Details Slide-Over Drawer
+       ========================================================================= */
+    function openOrderDrawer(orderId) {
+      playTapChirp();
+      var order = allOrders.find(function (o) {
+        return (o.id === orderId) || (o.orderId === orderId) || (String(o.serviceNumber) === String(orderId));
+      });
+      if (!order) return;
+      selectedOrder = order;
+
+      // Populate Header
+      var sNum = order.serviceNumber ? ('#' + order.serviceNumber) : (order.id || order.orderId);
+      var badgeEl = document.getElementById('drawer-order-id-badge');
+      var codeEl = document.getElementById('drawer-order-code');
+      var timeEl = document.getElementById('drawer-order-timestamp');
+      var statusPill = document.getElementById('drawer-order-status-pill');
+
+      if (badgeEl) badgeEl.textContent = sNum;
+      if (codeEl) codeEl.textContent = order.orderId || order.id || ('ORD-' + order.serviceNumber);
+      if (timeEl) timeEl.textContent = formatDateTime(order.timestamp);
+
+      // Status Pill Styling
+      if (statusPill) {
+        if (order.status === 'void' || order.status === 'cancelled') {
+          statusPill.textContent = 'Đã hủy (Void)';
+          statusPill.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300';
+        } else if (order.status === 'refunded') {
+          statusPill.textContent = 'Đã hoàn tiền';
+          statusPill.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300';
+        } else {
+          statusPill.textContent = 'Đã thanh toán';
+          statusPill.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
+        }
+      }
+
+      // Metadata
+      var modeEl = document.getElementById('drawer-order-mode');
+      var cashierEl = document.getElementById('drawer-order-cashier');
+      var shiftEl = document.getElementById('drawer-order-shift');
+      var payEl = document.getElementById('drawer-order-payment');
+
+      if (modeEl) {
+        if (order.mode === 'takeaway' || !order.table) {
+          modeEl.textContent = 'Mang đi (Takeaway)';
+        } else {
+          var area = order.table.area ? (' - ' + order.table.area) : '';
+          modeEl.textContent = (order.table.name || 'Tại bàn') + area;
+        }
+      }
+      if (cashierEl) cashierEl.textContent = order.cashierName || 'Nguyễn Văn Lan';
+      if (shiftEl) shiftEl.textContent = order.shiftCode || 'Ca #04';
+      if (payEl) {
+        payEl.textContent = order.paymentMethod === 'cash' ? 'Tiền mặt (Cash)' : 'Chuyển khoản VietQR';
+      }
+
+      // Audit Box (if voided or refunded)
+      var auditBox = document.getElementById('drawer-audit-box');
+      var auditTitle = document.getElementById('drawer-audit-title');
+      var auditReason = document.getElementById('drawer-audit-reason');
+      var auditNote = document.getElementById('drawer-audit-note');
+      var auditApprover = document.getElementById('drawer-audit-approver');
+      var auditTime = document.getElementById('drawer-audit-time');
+
+      if (auditBox) {
+        if (order.status === 'void' || order.status === 'cancelled') {
+          auditBox.classList.remove('hidden');
+          auditBox.className = 'p-4 rounded-xl border border-rose-200 bg-rose-50/70 space-y-2 text-xs text-rose-950';
+          if (auditTitle) auditTitle.innerHTML = '<i data-lucide="slash" class="w-4 h-4 text-rose-600"></i><span>Hóa đơn đã bị HỦY (Voided)</span>';
+          if (auditReason) auditReason.textContent = order.voidReason || 'Lý do khác';
+          if (auditNote) auditNote.textContent = order.voidNote || 'Không có ghi chú thêm';
+          if (auditApprover) auditApprover.textContent = order.voidApprovedBy || 'Quản lý (PIN 8888)';
+          if (auditTime) auditTime.textContent = formatDateTime(order.voidedAt || order.timestamp);
+        } else if (order.status === 'refunded') {
+          auditBox.classList.remove('hidden');
+          auditBox.className = 'p-4 rounded-xl border border-amber-200 bg-amber-50/70 space-y-2 text-xs text-amber-950';
+          if (auditTitle) auditTitle.innerHTML = '<i data-lucide="rotate-ccw" class="w-4 h-4 text-amber-600"></i><span>Hóa đơn đã HOÀN TIỀN: ' + formatVND(order.refundAmount || order.grandTotalVND) + '</span>';
+          if (auditReason) auditReason.textContent = order.refundReason || 'Hoàn tiền theo yêu cầu';
+          if (auditNote) auditNote.textContent = order.refundNote || 'Không có ghi chú thêm';
+          if (auditApprover) auditApprover.textContent = order.refundApprovedBy || 'Quản lý (PIN 8888)';
+          if (auditTime) auditTime.textContent = formatDateTime(order.refundedAt || order.timestamp);
+        } else {
+          auditBox.classList.add('hidden');
+        }
+      }
+
+      // Manifest Items List
+      var itemsListEl = document.getElementById('drawer-items-list');
+      var itemCountEl = document.getElementById('drawer-item-count');
+      if (itemCountEl) {
+        var totalQty = (order.items || []).reduce(function (sum, it) { return sum + (it.quantity || 1); }, 0);
+        itemCountEl.textContent = totalQty + ' món';
+      }
+
+      if (itemsListEl) {
+        var itemsHtml = '';
+        var items = order.items || [];
+        for (var i = 0; i < items.length; i++) {
+          var item = items[i];
+          var mods = (item.modifiers || []).map(function (m) { return m.value; }).join(', ');
+          var sizeBadge = item.sizeName ? ('<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">' + item.sizeName + '</span>') : '';
+          
+          itemsHtml += '<div class="p-3.5 flex items-start justify-between gap-3 text-xs">' +
+            '<div class="space-y-1">' +
+              '<div class="flex items-center gap-1.5 flex-wrap">' +
+                '<span class="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">x' + (item.quantity || 1) + '</span>' +
+                '<span class="font-bold text-slate-800 text-xs sm:text-sm">' + item.name + '</span>' +
+                sizeBadge +
+              '</div>' +
+              (mods ? ('<div class="text-[11px] text-slate-500 pl-7">' + mods + '</div>') : '') +
+              (item.preparationNote ? ('<div class="text-[11px] text-amber-700 italic pl-7">Ghi chú: ' + item.preparationNote + '</div>') : '') +
+            '</div>' +
+            '<div class="text-right flex-shrink-0">' +
+              '<div class="font-mono font-bold text-slate-900 text-xs sm:text-sm">' + formatVND(item.lineTotalVND || (item.unitPrice * item.quantity)) + '</div>' +
+              '<div class="font-mono text-[10px] text-slate-400">@ ' + formatVND(item.unitPrice) + '</div>' +
+            '</div>' +
+          '</div>';
+        }
+        itemsListEl.innerHTML = itemsHtml;
+      }
+
+      // Financials Breakdown
+      var subtotalEl = document.getElementById('drawer-subtotal');
+      var discountEl = document.getElementById('drawer-discount');
+      var grandtotalEl = document.getElementById('drawer-grandtotal');
+      var tenderedEl = document.getElementById('drawer-tendered');
+      var changeEl = document.getElementById('drawer-change');
+
+      if (subtotalEl) subtotalEl.textContent = formatVND(order.subtotalVND || order.grandTotalVND);
+      if (discountEl) discountEl.textContent = formatVND(order.discountVND || 0);
+      if (grandtotalEl) grandtotalEl.textContent = formatVND(order.grandTotalVND);
+      if (tenderedEl) tenderedEl.textContent = formatVND(order.tenderedVND || order.grandTotalVND);
+      if (changeEl) changeEl.textContent = formatVND(order.changeDueVND || 0);
+
+      // Disable Void/Refund buttons if already Void or Refunded
+      var btnVoid = document.getElementById('btn-drawer-void');
+      var btnRefund = document.getElementById('btn-drawer-refund');
+      var isClosedStatus = order.status === 'void' || order.status === 'cancelled' || order.status === 'refunded';
+
+      if (btnVoid) {
+        btnVoid.disabled = isClosedStatus;
+        if (isClosedStatus) {
+          btnVoid.className = 'min-h-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-60';
+        } else {
+          btnVoid.className = 'min-h-[48px] h-12 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 active:scale-[0.98] text-rose-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-2xs';
+        }
+      }
+
+      if (btnRefund) {
+        btnRefund.disabled = isClosedStatus;
+        if (isClosedStatus) {
+          btnRefund.className = 'min-h-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-60';
+        } else {
+          btnRefund.className = 'min-h-[48px] h-12 px-3 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 active:scale-[0.98] text-amber-900 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-2xs';
+        }
+      }
+
+      // Slide In Drawer
+      var drawer = document.getElementById('drawer-order-details');
+      var backdrop = document.getElementById('drawer-backdrop');
+      if (drawer && backdrop) {
+        backdrop.classList.remove('hidden');
+        drawer.classList.remove('translate-x-full');
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function closeOrderDrawer() {
+      playTapChirp();
+      var drawer = document.getElementById('drawer-order-details');
+      var backdrop = document.getElementById('drawer-backdrop');
+      if (drawer && backdrop) {
+        drawer.classList.add('translate-x-full');
+        setTimeout(function () {
+          backdrop.classList.add('hidden');
+        }, 250);
+      }
+    }
+
+    /* =========================================================================
+       10. Void Order Flow & Manager Approval (PIN 8888)
+       ========================================================================= */
+    function triggerDrawerVoid() {
+      if (!selectedOrder) return;
+      if (selectedOrder.status === 'void' || selectedOrder.status === 'refunded') {
+        showToast('Hóa đơn này đã được hủy hoặc hoàn tiền', true);
+        return;
+      }
+      openVoidModal(selectedOrder.id || selectedOrder.orderId);
+    }
+
+    function openVoidModal(orderId) {
+      playTapChirp();
+      var order = allOrders.find(function (o) {
+        return (o.id === orderId) || (o.orderId === orderId);
+      });
+      if (!order) return;
+      selectedOrder = order;
+
+      var sNum = order.serviceNumber ? ('#' + order.serviceNumber) : (order.id || order.orderId);
+      var idEl = document.getElementById('void-modal-order-id');
+      var totalEl = document.getElementById('void-modal-grandtotal');
+      var pinInput = document.getElementById('void-manager-pin');
+      var pinErr = document.getElementById('void-pin-error');
+      var noteInput = document.getElementById('void-reason-note');
+
+      if (idEl) idEl.textContent = sNum + ' (' + (order.orderId || order.id) + ')';
+      if (totalEl) totalEl.textContent = formatVND(order.grandTotalVND);
+      if (pinInput) pinInput.value = '';
+      if (pinErr) pinErr.classList.add('hidden');
+      if (noteInput) noteInput.value = '';
+
+      openModal('modal-void-order');
+    }
+
+    function appendVoidPin(digit) {
+      playTapChirp();
+      var pinInput = document.getElementById('void-manager-pin');
+      var pinErr = document.getElementById('void-pin-error');
+      if (pinErr) pinErr.classList.add('hidden');
+      if (pinInput && pinInput.value.length < 4) {
+        pinInput.value += digit;
+      }
+    }
+
+    function clearVoidPin() {
+      playTapChirp();
+      var pinInput = document.getElementById('void-manager-pin');
+      if (pinInput) pinInput.value = '';
+    }
+
+    function backspaceVoidPin() {
+      playTapChirp();
+      var pinInput = document.getElementById('void-manager-pin');
+      if (pinInput) pinInput.value = pinInput.value.slice(0, -1);
+    }
+
+    function confirmVoidOrder() {
+      if (!selectedOrder) return;
+
+      var pinInput = document.getElementById('void-manager-pin');
+      var pinErr = document.getElementById('void-pin-error');
+      var reasonSelect = document.getElementById('void-reason-select');
+      var noteInput = document.getElementById('void-reason-note');
+
+      var enteredPin = pinInput ? pinInput.value.trim() : '';
+      if (enteredPin !== '8888') {
+        playErrorBuzz();
+        if (pinErr) pinErr.classList.remove('hidden');
+        if (pinInput) {
+          pinInput.classList.add('animate-pin-shake', 'border-rose-500');
+          setTimeout(function () {
+            pinInput.classList.remove('animate-pin-shake');
+          }, 400);
+        }
+        return;
+      }
+
+      var reason = reasonSelect ? reasonSelect.value : 'Hết nguyên liệu';
+      var note = noteInput ? noteInput.value.trim() : '';
+
+      if (reason.indexOf('Khác') !== -1 && !note) {
+        playErrorBuzz();
+        showToast('Vui lòng nhập ghi chú chi tiết khi chọn lý do Khác!', true);
+        if (noteInput) noteInput.focus();
+        return;
+      }
+
+      // Update Order Model
+      selectedOrder.status = 'void';
+      selectedOrder.voidReason = reason;
+      selectedOrder.voidNote = note;
+      selectedOrder.voidedAt = new Date().toISOString();
+      selectedOrder.voidApprovedBy = 'Quản lý (PIN 8888)';
+
+      // Save to localStorage
+      try {
+        localStorage.setItem('POS_ORDERS', JSON.stringify(allOrders));
+      } catch (e) {}
+
+      // Broadcast via POS_BUS
+      if (window.POS_BUS) {
+        if (typeof window.POS_BUS.publish === 'function') {
+          window.POS_BUS.publish('ORDER_VOIDED', selectedOrder);
+          window.POS_BUS.publish('ORDER_STATUS_CHANGED', { orderId: selectedOrder.id || selectedOrder.orderId, status: 'void', order: selectedOrder });
+        }
+      }
+
+      playVoidRefundChime();
+      closeModal('modal-void-order');
+      showToast('Đã hủy hóa đơn #' + (selectedOrder.serviceNumber || selectedOrder.id) + ' thành công');
+
+      // Refresh Views
+      applyFilters();
+      openOrderDrawer(selectedOrder.id || selectedOrder.orderId);
+    }
+
+    /* =========================================================================
+       11. Refund Order Flow & Manager Approval (PIN 8888)
+       ========================================================================= */
+    function triggerDrawerRefund() {
+      if (!selectedOrder) return;
+      if (selectedOrder.status === 'void' || selectedOrder.status === 'refunded') {
+        showToast('Hóa đơn này đã được hủy hoặc hoàn tiền', true);
+        return;
+      }
+      openRefundModal(selectedOrder.id || selectedOrder.orderId);
+    }
+
+    function openRefundModal(orderId) {
+      playTapChirp();
+      var order = allOrders.find(function (o) {
+        return (o.id === orderId) || (o.orderId === orderId);
+      });
+      if (!order) return;
+      selectedOrder = order;
+
+      var sNum = order.serviceNumber ? ('#' + order.serviceNumber) : (order.id || order.orderId);
+      var idEl = document.getElementById('refund-modal-order-id');
+      var totalEl = document.getElementById('refund-modal-original-total');
+      var amountInput = document.getElementById('refund-amount-input');
+      var pinInput = document.getElementById('refund-manager-pin');
+      var pinErr = document.getElementById('refund-pin-error');
+      var noteInput = document.getElementById('refund-reason-note');
+
+      if (idEl) idEl.textContent = sNum + ' (' + (order.orderId || order.id) + ')';
+      if (totalEl) totalEl.textContent = formatVND(order.grandTotalVND);
+      if (amountInput) amountInput.value = order.grandTotalVND || 0;
+      if (pinInput) pinInput.value = '';
+      if (pinErr) pinErr.classList.add('hidden');
+      if (noteInput) noteInput.value = '';
+
+      openModal('modal-refund-order');
+    }
+
+    function setRefundFullAmount() {
+      playTapChirp();
+      if (!selectedOrder) return;
+      var amountInput = document.getElementById('refund-amount-input');
+      if (amountInput) amountInput.value = selectedOrder.grandTotalVND || 0;
+    }
+
+    function appendRefundPin(digit) {
+      playTapChirp();
+      var pinInput = document.getElementById('refund-manager-pin');
+      var pinErr = document.getElementById('refund-pin-error');
+      if (pinErr) pinErr.classList.add('hidden');
+      if (pinInput && pinInput.value.length < 4) {
+        pinInput.value += digit;
+      }
+    }
+
+    function clearRefundPin() {
+      playTapChirp();
+      var pinInput = document.getElementById('refund-manager-pin');
+      if (pinInput) pinInput.value = '';
+    }
+
+    function backspaceRefundPin() {
+      playTapChirp();
+      var pinInput = document.getElementById('refund-manager-pin');
+      if (pinInput) pinInput.value = pinInput.value.slice(0, -1);
+    }
+
+    function confirmRefundOrder() {
+      if (!selectedOrder) return;
+
+      var pinInput = document.getElementById('refund-manager-pin');
+      var pinErr = document.getElementById('refund-pin-error');
+      var amountInput = document.getElementById('refund-amount-input');
+      var reasonSelect = document.getElementById('refund-reason-select');
+      var noteInput = document.getElementById('refund-reason-note');
+
+      var enteredPin = pinInput ? pinInput.value.trim() : '';
+      if (enteredPin !== '8888') {
+        playErrorBuzz();
+        if (pinErr) pinErr.classList.remove('hidden');
+        if (pinInput) {
+          pinInput.classList.add('animate-pin-shake', 'border-rose-500');
+          setTimeout(function () {
+            pinInput.classList.remove('animate-pin-shake');
+          }, 400);
+        }
+        return;
+      }
+
+      var refundAmt = Number(amountInput ? amountInput.value : selectedOrder.grandTotalVND) || 0;
+      if (refundAmt <= 0 || refundAmt > (selectedOrder.grandTotalVND || 0)) {
+        playErrorBuzz();
+        showToast('Số tiền hoàn trả không hợp lệ (Phải <= ' + formatVND(selectedOrder.grandTotalVND) + ')', true);
+        return;
+      }
+
+      var reason = reasonSelect ? reasonSelect.value : 'Hoàn tiền theo yêu cầu';
+      var note = noteInput ? noteInput.value.trim() : '';
+
+      // Update Order Model
+      selectedOrder.status = 'refunded';
+      selectedOrder.refundAmount = refundAmt;
+      selectedOrder.refundReason = reason;
+      selectedOrder.refundNote = note;
+      selectedOrder.refundedAt = new Date().toISOString();
+      selectedOrder.refundApprovedBy = 'Quản lý (PIN 8888)';
+
+      // Save to localStorage
+      try {
+        localStorage.setItem('POS_ORDERS', JSON.stringify(allOrders));
+      } catch (e) {}
+
+      // Broadcast via POS_BUS
+      if (window.POS_BUS) {
+        if (typeof window.POS_BUS.publish === 'function') {
+          window.POS_BUS.publish('ORDER_REFUNDED', selectedOrder);
+          window.POS_BUS.publish('ORDER_STATUS_CHANGED', { orderId: selectedOrder.id || selectedOrder.orderId, status: 'refunded', order: selectedOrder });
+        }
+      }
+
+      playVoidRefundChime();
+      closeModal('modal-refund-order');
+      showToast('Đã hoàn tiền ' + formatVND(refundAmt) + ' cho đơn #' + (selectedOrder.serviceNumber || selectedOrder.id));
+
+      // Refresh Views
+      applyFilters();
+      openOrderDrawer(selectedOrder.id || selectedOrder.orderId);
+    }
+
+    /* =========================================================================
+       12. K80 Thermal Receipt Re-Print Modal & Print Execution
+       ========================================================================= */
+    function triggerDrawerReprint() {
+      if (!selectedOrder) return;
+      openReceiptModal(selectedOrder.id || selectedOrder.orderId);
+    }
+
+    function openReceiptModal(orderId) {
+      playTapChirp();
+      var order = allOrders.find(function (o) {
+        return (o.id === orderId) || (o.orderId === orderId);
+      });
+      if (!order) return;
+      selectedOrder = order;
+
+      populateReceiptContainer(order);
+      openModal('modal-receipt-print');
+    }
+
+    function populateReceiptContainer(order) {
+      var sNum = order.serviceNumber ? ('#' + order.serviceNumber) : (order.id || order.orderId);
+      var code = order.orderId || order.id || ('ORD-' + order.serviceNumber);
+
+      var elCode = document.getElementById('rcpt-order-code');
+      var elSNum = document.getElementById('rcpt-service-num');
+      var elTime = document.getElementById('rcpt-timestamp');
+      var elCashier = document.getElementById('rcpt-cashier');
+      var elMode = document.getElementById('rcpt-mode');
+
+      if (elCode) elCode.textContent = code;
+      if (elSNum) elSNum.textContent = sNum;
+      if (elTime) elTime.textContent = formatDateTime(order.timestamp);
+      if (elCashier) elCashier.textContent = order.cashierName || 'Nguyễn Văn Lan';
+      if (elMode) {
+        if (order.mode === 'takeaway' || !order.table) {
+          elMode.textContent = 'Mang đi (Takeaway)';
+        } else {
+          var area = order.table.area ? (' - ' + order.table.area) : '';
+          elMode.textContent = (order.table.name || 'Tại bàn') + area;
+        }
+      }
+
+      // Void / Refund Banner on Receipt Paper
+      var bannerEl = document.getElementById('receipt-status-banner');
+      if (bannerEl) {
+        if (order.status === 'void' || order.status === 'cancelled') {
+          bannerEl.classList.remove('hidden');
+          bannerEl.className = 'text-center py-1 px-2 border border-dashed border-rose-600 text-rose-700 font-bold text-[10px] bg-rose-50';
+          bannerEl.innerHTML = '*** ĐƠN ĐÃ HỦY (VOIDED) ***<br>Lý do: ' + (order.voidReason || 'Khác');
+        } else if (order.status === 'refunded') {
+          bannerEl.classList.remove('hidden');
+          bannerEl.className = 'text-center py-1 px-2 border border-dashed border-amber-600 text-amber-800 font-bold text-[10px] bg-amber-50';
+          bannerEl.innerHTML = '*** ĐÃ HOÀN TIỀN: ' + formatVND(order.refundAmount || order.grandTotalVND) + ' ***';
+        } else {
+          bannerEl.classList.add('hidden');
+        }
+      }
+
+      // Receipt Items Manifest
+      var itemsEl = document.getElementById('rcpt-items-list');
+      if (itemsEl) {
+        var html = '';
+        var items = order.items || [];
+        for (var i = 0; i < items.length; i++) {
+          var item = items[i];
+          var qty = item.quantity || 1;
+          var unitP = item.unitPrice || 0;
+          var lineTotal = item.lineTotalVND || (qty * unitP);
+          var size = item.sizeName ? (' (' + item.sizeName + ')') : '';
+          
+          html += '<div class="space-y-0.5">' +
+            '<div class="flex justify-between font-medium">' +
+              '<span class="truncate max-w-[140px]">' + item.name + size + '</span>' +
+              '<span>' + qty + ' x ' + formatVND(unitP) + '</span>' +
+              '<span class="font-bold">' + formatVND(lineTotal) + '</span>' +
+            '</div>';
+          if (item.modifiers && item.modifiers.length > 0) {
+            var mods = item.modifiers.map(function (m) { return m.value; }).join(', ');
+            html += '<div class="text-[9px] text-slate-500 pl-2">' + mods + '</div>';
+          }
+          html += '</div>';
+        }
+        itemsEl.innerHTML = html;
+      }
+
+      // Totals
+      var elSub = document.getElementById('rcpt-subtotal');
+      var elDisc = document.getElementById('rcpt-discount');
+      var elGrand = document.getElementById('rcpt-grandtotal');
+      var elMethod = document.getElementById('rcpt-payment-method');
+      var elTend = document.getElementById('rcpt-tendered');
+      var elChg = document.getElementById('rcpt-change');
+      var elAudit = document.getElementById('rcpt-audit-id');
+
+      if (elSub) elSub.textContent = formatVND(order.subtotalVND || order.grandTotalVND);
+      if (elDisc) elDisc.textContent = formatVND(order.discountVND || 0);
+      if (elGrand) elGrand.textContent = formatVND(order.grandTotalVND);
+      if (elMethod) elMethod.textContent = order.paymentMethod === 'cash' ? 'Tiền mặt (Cash)' : 'VietQR Chuyển khoản';
+      if (elTend) elTend.textContent = formatVND(order.tenderedVND || order.grandTotalVND);
+      if (elChg) elChg.textContent = formatVND(order.changeDueVND || 0);
+      if (elAudit) elAudit.textContent = 'AUD-' + Math.floor(1000 + Math.random() * 9000);
+    }
+
+    function printReceipt() {
+      playReprintChime();
+      showToast('Đang gửi lệnh in hóa đơn K80...');
+      setTimeout(function () {
+        window.print();
+      }, 300);
+    }
+
+    /* =========================================================================
+       13. Reusable Modal Helpers
+       ========================================================================= */
+    function openModal(modalId) {
+      var modal = document.getElementById(modalId);
+      var backdrop = document.getElementById('modal-backdrop-overlay');
+      if (modal && backdrop) {
+        backdrop.classList.remove('hidden');
+        modal.classList.remove('hidden');
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function closeModal(modalId) {
+      playTapChirp();
+      var modal = document.getElementById(modalId);
+      var backdrop = document.getElementById('modal-backdrop-overlay');
+      if (modal) modal.classList.add('hidden');
+      
+      // Check if any other modal is still open
+      var anyOpen = false;
+      var checkModals = ['modal-void-order', 'modal-refund-order', 'modal-receipt-print', 'modal-shortcuts-help'];
+      for (var i = 0; i < checkModals.length; i++) {
+        var m = document.getElementById(checkModals[i]);
+        if (m && !m.classList.contains('hidden')) {
+          anyOpen = true;
+          break;
+        }
+      }
+      if (!anyOpen && backdrop) {
+        backdrop.classList.add('hidden');
+      }
+    }
+
+    function closeAllModals() {
+      var checkModals = ['modal-void-order', 'modal-refund-order', 'modal-receipt-print', 'modal-shortcuts-help'];
+      for (var i = 0; i < checkModals.length; i++) {
+        var m = document.getElementById(checkModals[i]);
+        if (m) m.classList.add('hidden');
+      }
+      var backdrop = document.getElementById('modal-backdrop-overlay');
+      if (backdrop) backdrop.classList.add('hidden');
+    }
+
+    function openShortcutsModal() {
+      playTapChirp();
+      openModal('modal-shortcuts-help');
+    }
+
+    /* =========================================================================
+       14. Real-time POS_BUS Subscriptions
+       ========================================================================= */
+    function initBusSubscriptions() {
+      if (!window.POS_BUS) return;
+
+      // 1. When a new order arrives from Cashier or Table screen
+      window.POS_BUS.subscribe('NEW_ORDER', function (newOrder) {
+        if (!newOrder) return;
+        playTapChirp();
+        showToast('Hóa đơn mới #' + (newOrder.serviceNumber || newOrder.id) + ' vừa phát sinh!');
+
+        // Check if already in list
+        var existingIdx = allOrders.findIndex(function (o) {
+          return (o.id && o.id === newOrder.id) || (o.orderId && o.orderId === newOrder.orderId);
+        });
+        if (existingIdx >= 0) {
+          allOrders[existingIdx] = newOrder;
+        } else {
+          allOrders.unshift(newOrder);
+        }
+
+        applyFilters();
+      });
+
+      // 2. Order status updates (completed, voided, etc.)
+      window.POS_BUS.subscribe('ORDER_STATUS_CHANGED', function (payload) {
+        if (!payload || !payload.orderId) return;
+        var order = allOrders.find(function (o) {
+          return (o.id === payload.orderId) || (o.orderId === payload.orderId);
+        });
+        if (order) {
+          order.status = payload.status;
+          if (payload.order) {
+            Object.assign(order, payload.order);
+          }
+          applyFilters();
+          if (selectedOrder && (selectedOrder.id === payload.orderId || selectedOrder.orderId === payload.orderId)) {
+            openOrderDrawer(order.id || order.orderId);
+          }
+        }
+      });
+
+      // 3. Storage sync from other tabs
+      window.POS_BUS.subscribe('STORAGE_ORDERS_SYNC', function (syncedOrders) {
+        if (Array.isArray(syncedOrders)) {
+          allOrders = syncedOrders;
+          applyFilters();
+        }
+      });
+
+      // 4. Staff update sync
+      window.POS_BUS.subscribe('STORAGE_STAFF_SYNC', function (staff) {
+        if (staff && staff.name) {
+          var staffEl = document.getElementById('header-staff-name');
+          if (staffEl) staffEl.textContent = 'Nhân viên: ' + staff.name;
+        }
+      });
+    }
+
+    /* =========================================================================
+       15. Keyboard Shortcuts (F0, F10, F1, Esc, Ctrl+P)
+       ========================================================================= */
+    document.addEventListener('keydown', function (e) {
+      // F0 or F10 or Backtick (`): Station Switcher
+      if (e.key === 'F10' || e.key === 'F0' || e.key === '`') {
+        e.preventDefault();
+        toggleStationSwitcher();
+        return;
+      }
+
+      // F1: Cashier Screen
+      if (e.key === 'F1') {
+        e.preventDefault();
+        window.location.href = '../index.html';
+        return;
+      }
+
+      // F3: KDS Screen
+      if (e.key === 'F3') {
+        e.preventDefault();
+        window.location.href = 'kds.html';
+        return;
+      }
+
+      // F4: Shift Screen
+      if (e.key === 'F4') {
+        e.preventDefault();
+        window.location.href = 'shift.html';
+        return;
+      }
+
+      // F5: Tables Screen
+      if (e.key === 'F5') {
+        e.preventDefault();
+        window.location.href = 'tables.html';
+        return;
+      }
+
+      // F6: Reload / Focus History
+      if (e.key === 'F6') {
+        e.preventDefault();
+        loadOrders();
+        showToast('Đã làm mới danh sách hóa đơn');
+        return;
+      }
+
+      // Ctrl + P: Print receipt when modal or drawer is open
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        var rcptModal = document.getElementById('modal-receipt-print');
+        var drawer = document.getElementById('drawer-order-details');
+        if (rcptModal && !rcptModal.classList.contains('hidden')) {
+          e.preventDefault();
+          printReceipt();
+          return;
+        }
+        if (drawer && !drawer.classList.contains('translate-x-full') && selectedOrder) {
+          e.preventDefault();
+          openReceiptModal(selectedOrder.id || selectedOrder.orderId);
+          return;
+        }
+      }
+
+      // Esc: Dismiss modals/drawers or lock terminal
+      if (e.key === 'Escape') {
+        var switcher = document.getElementById('station-switcher-dropdown');
+        if (switcher && !switcher.classList.contains('hidden')) {
+          toggleStationSwitcher(false);
+          return;
+        }
+
+        var anyModalOpen = false;
+        var checkModals = ['modal-void-order', 'modal-refund-order', 'modal-receipt-print', 'modal-shortcuts-help'];
+        for (var i = 0; i < checkModals.length; i++) {
+          var m = document.getElementById(checkModals[i]);
+          if (m && !m.classList.contains('hidden')) {
+            anyModalOpen = true;
+            break;
+          }
+        }
+        if (anyModalOpen) {
+          closeAllModals();
+          return;
+        }
+
+        var drawerEl = document.getElementById('drawer-order-details');
+        if (drawerEl && !drawerEl.classList.contains('translate-x-full')) {
+          closeOrderDrawer();
+          return;
+        }
+
+        // Lock terminal to auth screen if nothing is open
+        window.location.href = 'auth.html';
+        return;
+      }
+    });
+
+    /* =========================================================================
+       16. Initialization & DOM Ready
+       ========================================================================= */
+    document.addEventListener('DOMContentLoaded', function () {
+      updateSoundButtonUI();
+      loadOrders();
+      initBusSubscriptions();
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>
