@@ -346,14 +346,22 @@
           <span id="tab-stock-counter" class="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-white/20 text-white border border-white/10">0 tạm hết</span>
         </button>
 
-        <!-- Tab 2: Thông tin Quán & VietQR -->
+        <!-- Tab 2: Quản lý Thực đơn & Topping -->
+        <button id="tab-btn-catalog" type="button" onclick="switchSettingsTab('catalog')" role="tab" aria-selected="false"
+          class="min-h-[48px] h-12 px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2.5 transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer select-none border border-transparent">
+          <i data-lucide="utensils" class="w-4 h-4 text-slate-400"></i>
+          <span>Quản lý Thực đơn & Topping</span>
+          <span id="tab-catalog-counter" class="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">11 món</span>
+        </button>
+
+        <!-- Tab 3: Thông tin Quán & VietQR -->
         <button id="tab-btn-store" type="button" onclick="switchSettingsTab('store')" role="tab" aria-selected="false"
           class="min-h-[48px] h-12 px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2.5 transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer select-none border border-transparent">
           <i data-lucide="store" class="w-4 h-4 text-slate-400"></i>
           <span>Thông tin Quán & VietQR</span>
         </button>
 
-        <!-- Tab 3: Tùy chỉnh In & Hệ thống -->
+        <!-- Tab 4: Tùy chỉnh In & Hệ thống -->
         <button id="tab-btn-system" type="button" onclick="switchSettingsTab('system')" role="tab" aria-selected="false"
           class="min-h-[48px] h-12 px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2.5 transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer select-none border border-transparent">
           <i data-lucide="printer" class="w-4 h-4 text-slate-400"></i>
@@ -499,7 +507,120 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- VIEW 2: TAB 2 - THÔNG TIN QUÁN & VIETQR (STORE SETUP)                   -->
+    <!-- VIEW 2: TAB CATALOG - QUẢN LÝ THỰC ĐƠN & TOPPING (CATALOG STUDIO)       -->
+    <!-- ======================================================================= -->
+    <section id="view-catalog" class="space-y-6 hidden animate-card-in">
+      
+      <!-- Top Hero Action Strip -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-3.5">
+          <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 flex-shrink-0 shadow-2xs">
+            <i data-lucide="utensils" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Trung tâm Quản lý Thực đơn & Nhóm Topping</h2>
+            <p class="text-xs text-slate-500 mt-1">Thiết lập món, định giá đa kích cỡ (S/M/L), nhóm tùy chọn và ma trận gán topping hàng loạt cho quầy thu ngân.</p>
+          </div>
+        </div>
+        <button id="btn-catalog-hero-add-item" type="button" onclick="if(typeof openMenuItemModal==='function'){openMenuItemModal();}else{showToast('Chức năng thêm món mới (Task 3)');}"
+          class="min-h-[48px] h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm cursor-pointer transition select-none flex-shrink-0">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>+ THÊM MÓN MỚI (Ctrl+N)</span>
+        </button>
+      </div>
+
+      <!-- Segmented Navigation Pills Bar (>= 48px Touch Targets) -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-2 sm:p-2.5 shadow-card">
+        <div class="flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Phân hệ thực đơn">
+          <!-- Pill 1: Món & Định giá -->
+          <button id="catalog-pill-items" type="button" onclick="switchCatalogSubView('items')" role="tab" aria-selected="true"
+            class="catalog-nav-pill min-h-[48px] h-12 px-4 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 bg-slate-900 text-white shadow-xs select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="coffee" class="w-4 h-4 text-white"></i>
+            <span>Món & Định giá</span>
+            <span id="pill-badge-items" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/20 text-white border border-white/10">0 món</span>
+          </button>
+
+          <!-- Pill 2: Danh mục món -->
+          <button id="catalog-pill-categories" type="button" onclick="switchCatalogSubView('categories')" role="tab" aria-selected="false"
+            class="catalog-nav-pill min-h-[48px] h-12 px-4 rounded-xl font-semibold text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="layout-grid" class="w-4 h-4 text-slate-400"></i>
+            <span>Danh mục món</span>
+            <span id="pill-badge-categories" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-100 text-slate-600">0 nhóm</span>
+          </button>
+
+          <!-- Pill 3: Nhóm Topping -->
+          <button id="catalog-pill-modifiers" type="button" onclick="switchCatalogSubView('modifiers')" role="tab" aria-selected="false"
+            class="catalog-nav-pill min-h-[48px] h-12 px-4 rounded-xl font-semibold text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
+            <span>Nhóm Topping</span>
+            <span id="pill-badge-modifiers" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-100 text-slate-600">0 nhóm</span>
+          </button>
+
+          <!-- Pill 4: Ma trận Gán Topping (Batch Linker) -->
+          <button id="catalog-pill-linker" type="button" onclick="switchCatalogSubView('linker')" role="tab" aria-selected="false"
+            class="catalog-nav-pill min-h-[48px] h-12 px-4 rounded-xl font-semibold text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="zap" class="w-4 h-4 text-slate-400"></i>
+            <span>Ma trận Gán Topping (Batch Linker)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Subview Container 1: Items & Multi-Size Pricing (#catalog-subview-items) -->
+      <div id="catalog-subview-items" class="space-y-5 animate-card-in">
+        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-card text-center space-y-3">
+          <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100">
+            <i data-lucide="coffee" class="w-7 h-7"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-900">Danh sách Món & Định giá Đa Kích cỡ (S/M/L)</h3>
+          <p class="text-xs text-slate-500 max-w-md mx-auto">
+            Khu vực hiển thị danh sách toàn bộ món uống, cấu hình cỡ ly và nhóm topping đi kèm đang được tải từ bộ dữ liệu Catalog.
+          </p>
+        </div>
+      </div>
+
+      <!-- Subview Container 2: Categories (#catalog-subview-categories) -->
+      <div id="catalog-subview-categories" class="space-y-5 hidden animate-card-in">
+        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-card text-center space-y-3">
+          <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100">
+            <i data-lucide="layout-grid" class="w-7 h-7"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-900">Danh mục Món ăn & Đồ uống</h3>
+          <p class="text-xs text-slate-500 max-w-md mx-auto">
+            Quản lý nhóm phân loại thực đơn, thứ tự hiển thị trên quầy thu ngân và cấu hình nhóm topping kế thừa mặc định.
+          </p>
+        </div>
+      </div>
+
+      <!-- Subview Container 3: Modifiers (#catalog-subview-modifiers) -->
+      <div id="catalog-subview-modifiers" class="space-y-5 hidden animate-card-in">
+        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-card text-center space-y-3">
+          <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100">
+            <i data-lucide="layers" class="w-7 h-7"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-900">Nhóm Topping & Tùy chọn Món</h3>
+          <p class="text-xs text-slate-500 max-w-md mx-auto">
+            Thiết lập các nhóm tùy chọn (Đường, Đá, Topping, Kem Phô Mai), số lượng chọn tối thiểu/tối đa và đơn giá từng loại.
+          </p>
+        </div>
+      </div>
+
+      <!-- Subview Container 4: Batch Linker Matrix (#catalog-subview-linker) -->
+      <div id="catalog-subview-linker" class="space-y-5 hidden animate-card-in">
+        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-card text-center space-y-3">
+          <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100">
+            <i data-lucide="zap" class="w-7 h-7"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-900">Ma trận Gán Topping Hàng loạt (Batch Linker)</h3>
+          <p class="text-xs text-slate-500 max-w-md mx-auto">
+            Công cụ gán hoặc hủy gán nhanh chóng các nhóm topping cho hàng loạt món ăn theo danh mục chỉ với một lần nhấp chuột.
+          </p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW 3: TAB 3 - THÔNG TIN QUÁN & VIETQR (STORE SETUP)                   -->
     <!-- ======================================================================= -->
     <section id="view-store" class="space-y-6 hidden animate-card-in">
       
@@ -1105,7 +1226,7 @@
     /* =========================================================================
        1. Application State & Catalog Mock Data
        ========================================================================= */
-    var currentTab = 'stock'; // 'stock' | 'store' | 'system'
+    var currentTab = 'stock'; // 'stock' | 'catalog' | 'store' | 'system'
     var isSoundMuted = false;
     var stockSearchQuery = '';
     var activeStockCategory = 'all'; // 'all' | 'coffee' | 'tea' | 'freeze' | 'bakery' | 'topping'
@@ -1496,23 +1617,62 @@
     }
 
     /* =========================================================================
-       5. Sub-Navigation Tabs Controller
+       5. Sub-Navigation Tabs Controller & Catalog Studio Shell
        ========================================================================= */
+    var currentCatalogSubView = 'items'; // 'items' | 'categories' | 'modifiers' | 'linker'
+
+    function refreshCatalogCounters() {
+      try {
+        var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+          ? window.POS_BUS.getCatalogData()
+          : null;
+
+        var itemsCount = (catalog && Array.isArray(catalog.items)) ? catalog.items.length : 0;
+        var categoriesCount = (catalog && Array.isArray(catalog.categories)) ? catalog.categories.length : 0;
+        var modifiersCount = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups.length : 0;
+
+        var tabCounter = document.getElementById('tab-catalog-counter');
+        if (tabCounter) {
+          tabCounter.textContent = itemsCount + ' món';
+        }
+
+        var pillItems = document.getElementById('pill-badge-items');
+        if (pillItems) {
+          pillItems.textContent = itemsCount + ' món';
+        }
+
+        var pillCategories = document.getElementById('pill-badge-categories');
+        if (pillCategories) {
+          pillCategories.textContent = categoriesCount + ' nhóm';
+        }
+
+        var pillModifiers = document.getElementById('pill-badge-modifiers');
+        if (pillModifiers) {
+          pillModifiers.textContent = modifiersCount + ' nhóm';
+        }
+      } catch (err) {
+        console.warn('[Catalog] Error refreshing catalog counters:', err);
+      }
+    }
+
     function switchSettingsTab(tabKey) {
-      if (tabKey !== 'stock' && tabKey !== 'store' && tabKey !== 'system') return;
+      if (tabKey !== 'stock' && tabKey !== 'catalog' && tabKey !== 'store' && tabKey !== 'system') return;
       playTapChirp();
       currentTab = tabKey;
 
       var viewStock = document.getElementById('view-stock');
+      var viewCatalog = document.getElementById('view-catalog');
       var viewStore = document.getElementById('view-store');
       var viewSystem = document.getElementById('view-system');
 
       var btnStock = document.getElementById('tab-btn-stock');
+      var btnCatalog = document.getElementById('tab-btn-catalog');
       var btnStore = document.getElementById('tab-btn-store');
       var btnSystem = document.getElementById('tab-btn-system');
 
       // Hide all views
       if (viewStock) viewStock.classList.add('hidden');
+      if (viewCatalog) viewCatalog.classList.add('hidden');
       if (viewStore) viewStore.classList.add('hidden');
       if (viewSystem) viewSystem.classList.add('hidden');
 
@@ -1520,23 +1680,138 @@
       var inactiveClass = 'min-h-[48px] h-12 px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2.5 transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer select-none border border-transparent';
       var activeClass = 'min-h-[48px] h-12 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2.5 transition shadow-xs bg-slate-900 text-white cursor-pointer select-none';
 
-      if (btnStock) btnStock.className = inactiveClass;
-      if (btnStore) btnStore.className = inactiveClass;
-      if (btnSystem) btnSystem.className = inactiveClass;
+      if (btnStock) {
+        btnStock.className = inactiveClass;
+        btnStock.setAttribute('aria-selected', 'false');
+      }
+      if (btnCatalog) {
+        btnCatalog.className = inactiveClass;
+        btnCatalog.setAttribute('aria-selected', 'false');
+      }
+      if (btnStore) {
+        btnStore.className = inactiveClass;
+        btnStore.setAttribute('aria-selected', 'false');
+      }
+      if (btnSystem) {
+        btnSystem.className = inactiveClass;
+        btnSystem.setAttribute('aria-selected', 'false');
+      }
+
+      // Update counter badge color states
+      var catCounter = document.getElementById('tab-catalog-counter');
+      if (catCounter) {
+        catCounter.className = (tabKey === 'catalog')
+          ? 'px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-white/20 text-white border border-white/10'
+          : 'px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200';
+      }
+      var stockCounter = document.getElementById('tab-stock-counter');
+      if (stockCounter) {
+        stockCounter.className = (tabKey === 'stock')
+          ? 'px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-white/20 text-white border border-white/10'
+          : 'px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-slate-100 text-slate-600';
+      }
 
       // Show selected view & highlight button
       if (tabKey === 'stock') {
         if (viewStock) viewStock.classList.remove('hidden');
-        if (btnStock) btnStock.className = activeClass;
+        if (btnStock) {
+          btnStock.className = activeClass;
+          btnStock.setAttribute('aria-selected', 'true');
+        }
         renderStockGrid();
+      } else if (tabKey === 'catalog') {
+        if (viewCatalog) viewCatalog.classList.remove('hidden');
+        if (btnCatalog) {
+          btnCatalog.className = activeClass;
+          btnCatalog.setAttribute('aria-selected', 'true');
+        }
+        refreshCatalogCounters();
+        if (typeof renderCatalogItemsGrid === 'function') {
+          renderCatalogItemsGrid();
+        }
       } else if (tabKey === 'store') {
         if (viewStore) viewStore.classList.remove('hidden');
-        if (btnStore) btnStore.className = activeClass;
+        if (btnStore) {
+          btnStore.className = activeClass;
+          btnStore.setAttribute('aria-selected', 'true');
+        }
         loadStoreSettingsForm();
       } else if (tabKey === 'system') {
         if (viewSystem) viewSystem.classList.remove('hidden');
-        if (btnSystem) btnSystem.className = activeClass;
+        if (btnSystem) {
+          btnSystem.className = activeClass;
+          btnSystem.setAttribute('aria-selected', 'true');
+        }
         loadReceiptTemplateSettings();
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function switchCatalogSubView(subViewName) {
+      if (subViewName !== 'items' && subViewName !== 'categories' && subViewName !== 'modifiers' && subViewName !== 'linker') {
+        return;
+      }
+      playTapChirp();
+      currentCatalogSubView = subViewName;
+
+      var subViews = {
+        items: document.getElementById('catalog-subview-items'),
+        categories: document.getElementById('catalog-subview-categories'),
+        modifiers: document.getElementById('catalog-subview-modifiers'),
+        linker: document.getElementById('catalog-subview-linker')
+      };
+
+      var pills = {
+        items: document.getElementById('catalog-pill-items'),
+        categories: document.getElementById('catalog-pill-categories'),
+        modifiers: document.getElementById('catalog-pill-modifiers'),
+        linker: document.getElementById('catalog-pill-linker')
+      };
+
+      var activePillClass = 'catalog-nav-pill min-h-[48px] h-12 px-4 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 bg-slate-900 text-white shadow-xs select-none cursor-pointer flex-shrink-0';
+      var inactivePillClass = 'catalog-nav-pill min-h-[48px] h-12 px-4 rounded-xl font-semibold text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent select-none cursor-pointer flex-shrink-0';
+
+      // Hide all subviews and reset pills
+      for (var key in subViews) {
+        if (subViews[key]) {
+          subViews[key].classList.add('hidden');
+        }
+        if (pills[key]) {
+          pills[key].className = inactivePillClass;
+          pills[key].setAttribute('aria-selected', 'false');
+          var icon = pills[key].querySelector('i');
+          if (icon) {
+            icon.classList.remove('text-white');
+            icon.classList.add('text-slate-400');
+          }
+        }
+      }
+
+      // Show selected subview and activate pill
+      if (subViews[subViewName]) {
+        subViews[subViewName].classList.remove('hidden');
+      }
+      if (pills[subViewName]) {
+        pills[subViewName].className = activePillClass;
+        pills[subViewName].setAttribute('aria-selected', 'true');
+        var activeIcon = pills[subViewName].querySelector('i');
+        if (activeIcon) {
+          activeIcon.classList.remove('text-slate-400');
+          activeIcon.classList.add('text-white');
+        }
+      }
+
+      refreshCatalogCounters();
+
+      if (subViewName === 'items' && typeof renderCatalogItemsGrid === 'function') {
+        renderCatalogItemsGrid();
+      } else if (subViewName === 'categories' && typeof renderCatalogCategoriesGrid === 'function') {
+        renderCatalogCategoriesGrid();
+      } else if (subViewName === 'modifiers' && typeof renderCatalogModifiersGrid === 'function') {
+        renderCatalogModifiersGrid();
+      } else if (subViewName === 'linker' && typeof renderCatalogLinkerMatrix === 'function') {
+        renderCatalogLinkerMatrix();
       }
 
       if (window.lucide) window.lucide.createIcons();
@@ -2241,6 +2516,26 @@
           if (hdr) hdr.textContent = info.storeName;
         }
       });
+
+      // Sync catalog data changes (items, categories, toppings)
+      window.POS_BUS.subscribe('CATALOG_ITEMS_UPDATED', function (payload) {
+        refreshCatalogCounters();
+        if (currentTab === 'catalog') {
+          if (currentCatalogSubView === 'items' && typeof renderCatalogItemsGrid === 'function') {
+            renderCatalogItemsGrid();
+          } else if (currentCatalogSubView === 'categories' && typeof renderCatalogCategoriesGrid === 'function') {
+            renderCatalogCategoriesGrid();
+          } else if (currentCatalogSubView === 'modifiers' && typeof renderCatalogModifiersGrid === 'function') {
+            renderCatalogModifiersGrid();
+          } else if (currentCatalogSubView === 'linker' && typeof renderCatalogLinkerMatrix === 'function') {
+            renderCatalogLinkerMatrix();
+          }
+        }
+      });
+
+      window.POS_BUS.subscribe('STORAGE_CATALOG_DATA_SYNC', function () {
+        refreshCatalogCounters();
+      });
     }
 
     /* =========================================================================
@@ -2310,6 +2605,18 @@
         return;
       }
 
+      // Ctrl + N: Open new menu item modal or jump to catalog tab
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        switchSettingsTab('catalog');
+        if (typeof openMenuItemModal === 'function') {
+          openMenuItemModal();
+        } else {
+          showToast('Chức năng thêm món mới (Task 3)');
+        }
+        return;
+      }
+
       // Ctrl + S: Save Store Settings Form
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
@@ -2375,6 +2682,7 @@
       renderStockGrid();
       loadStoreSettingsForm();
       initBusSubscriptions();
+      refreshCatalogCounters();
 
       if (window.lucide) {
         window.lucide.createIcons();
