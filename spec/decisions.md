@@ -740,3 +740,19 @@ CREATE TABLE idempotency_keys (
 * The close mutation returns its immutable summary to the initiating Shift operator. Listing closed Shifts by time range and reading a closed Shift by id require current `audit.inspect` authority.
 * **Consequences:**
 * No new history capability or role is introduced. Manager can inspect the complete record; Cashier cannot browse historical Shifts after the close response.
+
+---
+
+## ADR-053: Server-authoritative sales state is not mirrored into client stores
+
+* **Decision Date:** 2026-09-21
+* **Status:** Accepted
+* **Context:** The approved web architecture spec (2026-09-20) allocated `stores/use-pos-store.ts` to hold "cart items, active order, discount" and `stores/use-shift-store.ts` to hold "active shift info". But an Order Draft is not a client cart: it is created, itemized, modified, and committed through `/sales/service-sessions/{id}/draft/*`, and the Sales Shift is likewise server state. A client store holding either would be a second copy of an authoritative fact, free to drift from the server that owns it, with the drift surfacing as a wrong total at the moment money changes hands.
+* **Decision:**
+* Order Draft, Check, Sales Shift, and Preparation Queue live in the react-query cache and are mutated through the API with optimistic updates. No Zustand store holds them.
+* Zustand holds the Staff Access Session and client-local interface state only, such as the open tab or an expanded panel.
+* The web architecture spec's `use-pos-store.ts` and `use-shift-store.ts` are superseded and are not created.
+* **Consequences:**
+* The cashier screen has no local cart to reconcile; a stale draft surfaces as a refetch rather than as a divergent total.
+* Every draft edit costs a round trip. On the staff LAN this is the intended trade: correctness of the money path over interaction latency.
+* Optimistic update and rollback become a shared concern of the feature `api/` seam rather than of a store.
