@@ -1,7 +1,9 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { PosHeader } from "@/components/layout/pos-header";
+import { requireAuthenticated } from "@/lib/guards";
 
 export const Route = createFileRoute("/_app")({
+  beforeLoad: () => requireAuthenticated(),
   component: AppLayout,
 });
 
