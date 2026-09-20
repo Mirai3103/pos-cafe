@@ -83,8 +83,14 @@ export const useSessionStore = create<SessionSnapshot & SessionActions>()((set, 
   applyServerState: (serverState) => {
     // The generated model types `state` as an open string, so anything that is
     // not one of the two live states is treated as signed out rather than
-    // optimistically assumed to be a working session.
-    if (serverState.state !== "authenticated" && serverState.state !== "locked") {
+    // optimistically assumed to be a working session. A live state is also
+    // refused when the store holds no token: without it no request can carry
+    // credentials, and honoring the state would resurrect a dead session
+    // (e.g. a stale 403 resolution landing after sign-out).
+    if (
+      (serverState.state !== "authenticated" && serverState.state !== "locked") ||
+      !get().token
+    ) {
       writeToken(null);
       set({ ...EMPTY });
       return;
@@ -109,9 +115,12 @@ export const useSessionStore = create<SessionSnapshot & SessionActions>()((set, 
     set({ workspace });
   },
 
-  // Lock suspends authority; CONTEXT.md is explicit that it does not end the
-  // Staff Access Session, so the token and identity survive it.
-  lock: () => set({ state: "locked" }),
+  // Lock suspends authority; it does not end the Staff Access Session, so the
+  // token and identity survive it. Locking without a token is refused: the
+  // unlock surface would be unsatisfiable.
+  lock: () => {
+    if (get().token) set({ state: "locked" });
+  },
 
   clear: () => {
     writeToken(null);

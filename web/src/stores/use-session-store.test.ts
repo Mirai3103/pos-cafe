@@ -73,4 +73,24 @@ describe("useSessionStore", () => {
     useSessionStore.getState().lock();
     expect(useSessionStore.getState().hasCapability("sales.operate")).toBe(false);
   });
+
+  it("refuses to lock when there is no token, because the unlock surface would be unsatisfiable", () => {
+    useSessionStore.getState().lock();
+    expect(useSessionStore.getState().state).toBe("signed_out");
+  });
+
+  it("refuses a live server state when the store holds no token", () => {
+    useSessionStore.getState().applyServerState({
+      state: "authenticated",
+      staff_id: "staff-1",
+      display_name: "Nguyen Thu Ngan",
+      login_code: "TN01",
+      roles: ["CASHIER"],
+      capabilities: ["sales.operate"],
+    });
+    const s = useSessionStore.getState();
+    expect(s.state).toBe("signed_out");
+    expect(s.token).toBeNull();
+    expect(s.capabilities).toEqual([]);
+  });
 });
