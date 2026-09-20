@@ -51,6 +51,59 @@
     * { -webkit-tap-highlight-color: transparent; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Thermal Paper Receipt Print Styles (Task 7) */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #receipt-modal-backdrop,
+      #receipt-modal-backdrop * {
+        visibility: visible !important;
+      }
+      #receipt-modal-backdrop {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+        backdrop-filter: none !important;
+        display: block !important;
+      }
+      #receipt-modal-dialog {
+        position: static !important;
+        box-shadow: none !important;
+        border: none !important;
+        width: 80mm !important;
+        max-width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+      }
+      #receipt-modal-header,
+      #receipt-modal-footer,
+      #pos-toast {
+        display: none !important;
+      }
+      #receipt-modal-body {
+        padding: 4mm 2mm !important;
+        background: white !important;
+        color: black !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+        max-height: none !important;
+        overflow: visible !important;
+      }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
   </style>
 </head>
 
@@ -109,7 +162,7 @@
           oninput="filterItems(this.value)">
         <div class="absolute inset-y-0 right-0 pr-1.5 flex items-center gap-1">
           <button id="btn-clear-search" type="button" onclick="clearSearch()"
-            class="hidden text-slate-400 hover:text-slate-600 p-2 min-h-[44px] min-w-[44px] rounded-lg transition flex items-center justify-center"
+            class="hidden text-slate-400 hover:text-slate-600 p-2 min-h-[48px] min-w-[48px] h-12 w-12 rounded-lg transition flex items-center justify-center select-none"
             title="Xóa tìm kiếm">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
@@ -118,8 +171,15 @@
       </div>
     </div>
 
-    <!-- Right Section: Shift Badge & Real-time Clock -->
-    <div class="flex items-center gap-3 md:gap-4">
+    <!-- Right Section: Sound Toggle, Shift Badge & Real-time Clock -->
+    <div class="flex items-center gap-2.5 md:gap-3">
+      <!-- Sound Toggle Button (>= 48px touch target) -->
+      <button id="btn-sound-toggle" type="button" onclick="toggleSound()"
+        class="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl border border-slate-200 bg-emerald-50/50 hover:bg-emerald-100/60 active:scale-95 text-emerald-700 transition flex items-center justify-center select-none shadow-2xs"
+        title="Âm thanh: Bật (Chạm để tắt)" aria-label="Bật/tắt âm thanh" aria-pressed="true">
+        <i id="sound-toggle-icon" data-lucide="volume-2" class="w-5 h-5 text-emerald-600"></i>
+      </button>
+
       <!-- Active Shift Badge -->
       <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100/90 border border-slate-200 text-xs text-slate-700">
         <span class="relative flex h-2 w-2">
@@ -1181,7 +1241,19 @@
       },
 
       formatVND: formatVND,
-      removeAccents: removeAccents
+      removeAccents: removeAccents,
+
+      // Task 7: Sound Feedback state & delegates
+      soundEnabled: true,
+      toggleSound() {
+        toggleSound();
+      },
+      playTapChirp() {
+        playTapChirp();
+      },
+      playSuccessChirp() {
+        playSuccessChirp();
+      }
     };
 
     // Proxy wrapper to provide automatic reactivity when properties are modified directly
@@ -1201,6 +1273,7 @@
 
     // 1. Sync Top Bar & Mode Switcher
     function updateTopBarUI(state) {
+      updateSoundToggleUI(state);
       const isTakeaway = state.mode === 'takeaway';
       const btnTakeaway = document.getElementById('btn-mode-takeaway');
       const btnDinein = document.getElementById('btn-mode-dinein');
@@ -2119,7 +2192,7 @@
       }
 
       return `
-        <div class="cart-item-card bg-white rounded-xl border border-slate-200 p-3 shadow-2xs hover:border-slate-300 transition flex flex-col gap-2 select-none" data-cart-item-id="${item.id}">
+        <div class="cart-item-card bg-white rounded-xl border border-slate-200 p-3 shadow-2xs hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition flex flex-col gap-2 select-none" data-cart-item-id="${item.id}" tabindex="0">
           <!-- Item Info & Delete Button -->
           <div class="flex items-start justify-between gap-2">
             <div class="flex-1 min-w-0">
@@ -3154,42 +3227,121 @@
       }
     }
 
-    function playSuccessChirp() {
+    /* =========================================================================
+       3.4 Web Audio API Synthesizers & Sound Feedback Engine (Task 7)
+       ========================================================================= */
+    let sharedAudioCtx = null;
+
+    function getAudioContext() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
-        if (ctx.state === 'suspended') {
-          ctx.resume();
+        if (!AudioCtx) return null;
+        if (!sharedAudioCtx) {
+          sharedAudioCtx = new AudioCtx();
         }
+        if (sharedAudioCtx.state === 'suspended') {
+          sharedAudioCtx.resume();
+        }
+        return sharedAudioCtx;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    // Subtle 800Hz 30ms sine click for tactile keypress and button taps
+    function playTapChirp() {
+      if (!window.POS_STATE || window.POS_STATE.soundEnabled === false) return;
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, now);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.03);
+      } catch (err) {
+        // Silently catch audio errors in headless/unsupported environments
+      }
+    }
+
+    // Authentic cash register chime (two-tone melodic chime: D5->A5 chime + D6 sparkle)
+    function playSuccessChirp() {
+      if (!window.POS_STATE || window.POS_STATE.soundEnabled === false) return;
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
         const now = ctx.currentTime;
 
-        // Tone 1: 587.33 Hz (D5) to 880 Hz (A5)
+        // Tone 1: 587.33 Hz (D5) rising to 880 Hz (A5)
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.type = 'sine';
         osc1.frequency.setValueAtTime(587.33, now);
         osc1.frequency.exponentialRampToValueAtTime(880, now + 0.1);
         gain1.gain.setValueAtTime(0.18, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
         osc1.connect(gain1);
         gain1.connect(ctx.destination);
         osc1.start(now);
-        osc1.stop(now + 0.3);
+        osc1.stop(now + 0.35);
 
-        // Tone 2: 1174.66 Hz (D6) chime
+        // Tone 2: 1174.66 Hz (D6) chime triangle wave sparkle
         const osc2 = ctx.createOscillator();
         const gain2 = ctx.createGain();
         osc2.type = 'triangle';
         osc2.frequency.setValueAtTime(1174.66, now + 0.08);
-        gain2.gain.setValueAtTime(0.12, now + 0.08);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        gain2.gain.setValueAtTime(0.14, now + 0.08);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
         osc2.connect(gain2);
         gain2.connect(ctx.destination);
         osc2.start(now + 0.08);
-        osc2.stop(now + 0.35);
+        osc2.stop(now + 0.45);
       } catch (err) {
-        console.warn('Audio play error:', err);
+        // Silently catch audio errors
+      }
+    }
+
+    const playCashRegisterChime = playSuccessChirp;
+
+    function toggleSound() {
+      const state = window.POS_STATE;
+      if (!state) return;
+      state.soundEnabled = state.soundEnabled === undefined ? false : !state.soundEnabled;
+      updateSoundToggleUI(state);
+      if (state.soundEnabled) {
+        playTapChirp();
+        showToast('Đã bật âm thanh phản hồi');
+      } else {
+        showToast('Đã tắt âm thanh phản hồi');
+      }
+    }
+
+    function updateSoundToggleUI(state = window.POS_STATE) {
+      const btn = document.getElementById('btn-sound-toggle');
+      const icon = document.getElementById('sound-toggle-icon');
+      if (!btn || !icon) return;
+
+      const isEnabled = state.soundEnabled !== false;
+      btn.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+      if (isEnabled) {
+        btn.title = 'Âm thanh: Bật (Chạm để tắt)';
+        btn.className = 'w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl border border-slate-200 bg-emerald-50/50 hover:bg-emerald-100/60 active:scale-95 text-emerald-700 transition flex items-center justify-center select-none shadow-2xs';
+        icon.setAttribute('data-lucide', 'volume-2');
+        icon.className = 'w-5 h-5 text-emerald-600';
+      } else {
+        btn.title = 'Âm thanh: Tắt (Chạm để bật)';
+        btn.className = 'w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-400 transition flex items-center justify-center select-none shadow-2xs';
+        icon.setAttribute('data-lucide', 'volume-x');
+        icon.className = 'w-5 h-5 text-slate-400';
+      }
+      if (window.lucide) {
+        window.lucide.createIcons();
       }
     }
 
@@ -3231,6 +3383,7 @@
         tenderedVND: collectedAmount,
         changeDueVND: changeDue,
         timestamp: new Date(),
+        shiftCode: (state.activeShift && state.activeShift.shiftCode) || 'Ca #04',
         cashierName: (state.activeShift && state.activeShift.cashierName) || 'Nguyễn Thu Ngân'
       };
 
@@ -3288,28 +3441,42 @@
       const body = document.getElementById('receipt-modal-body');
       if (!modal || !body) return;
 
-      const dateStr = orderSummary.timestamp
-        ? new Date(orderSummary.timestamp).toLocaleString('vi-VN')
-        : new Date().toLocaleString('vi-VN');
+      const ts = orderSummary.timestamp ? new Date(orderSummary.timestamp) : new Date();
+      const day = String(ts.getDate()).padStart(2, '0');
+      const month = String(ts.getMonth() + 1).padStart(2, '0');
+      const year = ts.getFullYear();
+      const hours = String(ts.getHours()).padStart(2, '0');
+      const mins = String(ts.getMinutes()).padStart(2, '0');
+      const formattedDateTime = `${day}/${month}/${year} ${hours}:${mins}`;
 
-      const orderType = orderSummary.mode === 'takeaway'
-        ? 'MANG ĐI'
-        : `TẠI BÀN (${(orderSummary.table && (orderSummary.table.name || orderSummary.table.id)) || 'Chưa chọn bàn'})`;
+      let orderContext = '';
+      if (orderSummary.mode === 'takeaway') {
+        orderContext = `Mã đơn: #${orderSummary.serviceNumber} (Mang đi)`;
+      } else {
+        let table = orderSummary.table;
+        if (typeof table === 'string') {
+          const found = (window.POS_STATE?.tables || []).find(t => t.id === table);
+          table = found || { id: table, zone: 'Tầng 1' };
+        }
+        const tableId = (table && table.id) || 'T01';
+        const zoneName = (table && table.zone) ? ` (${table.zone})` : '';
+        orderContext = `Bàn: ${tableId}${zoneName}`;
+      }
 
       const itemsHtml = (orderSummary.items || []).map(it => {
         const sizePart = it.sizeName ? ` (${it.sizeName})` : '';
         const modsSummary = formatModifiersSummary(it);
-        const modsPart = modsSummary ? `<div class="text-[10px] text-slate-500 pl-2 font-normal">${escapeHtml(modsSummary)}</div>` : '';
+        const modsPart = modsSummary ? `<div class="text-[10px] text-slate-500 pl-7 font-normal">${escapeHtml(modsSummary)}</div>` : '';
         const notePart = (it.preparationNote && !modsSummary.includes(it.preparationNote))
-          ? `<div class="text-[10px] text-slate-500 pl-2 font-normal">Ghi chú: ${escapeHtml(it.preparationNote)}</div>`
+          ? `<div class="text-[10px] text-slate-500 pl-7 font-normal">Ghi chú: ${escapeHtml(it.preparationNote)}</div>`
           : '';
 
         return `
-          <div class="py-1 border-b border-slate-200/60 border-dashed">
+          <div class="py-1 border-b border-dashed border-slate-200">
             <div class="flex items-start justify-between">
-              <span class="font-bold flex-1 pr-2">${escapeHtml(it.name)}${sizePart}</span>
-              <span class="w-8 text-center">${it.quantity}</span>
-              <span class="w-20 text-right font-bold">${formatVND(it.lineTotalVND)}</span>
+              <span class="w-7 text-left font-bold text-slate-800">${it.quantity}x</span>
+              <span class="flex-1 px-1 font-bold text-slate-900 leading-tight">${escapeHtml(it.name)}${sizePart}</span>
+              <span class="w-20 text-right font-bold tabular-nums text-slate-900">${formatVND(it.lineTotalVND)}</span>
             </div>
             ${modsPart}
             ${notePart}
@@ -3318,17 +3485,17 @@
       }).join('');
 
       const paymentMethodLabel = orderSummary.paymentMethod === 'qr'
-        ? 'Chuyển khoản VietQR (MB Bank)'
+        ? 'Chuyển khoản VietQR'
         : 'Tiền mặt (Cash)';
 
       const cashDetailHtml = orderSummary.paymentMethod === 'cash' ? `
         <div class="flex justify-between py-0.5">
           <span>Tiền khách đưa:</span>
-          <span class="font-bold">${formatVND(orderSummary.tenderedVND)}</span>
+          <span class="font-bold tabular-nums text-slate-900">${formatVND(orderSummary.tenderedVND)}</span>
         </div>
         <div class="flex justify-between py-0.5 text-emerald-800 font-bold text-sm">
-          <span>Tiền thừa trả khách:</span>
-          <span>${formatVND(orderSummary.changeDueVND)}</span>
+          <span>Tiền thừa:</span>
+          <span class="tabular-nums">${formatVND(orderSummary.changeDueVND)}</span>
         </div>
       ` : `
         <div class="flex justify-between py-0.5 text-blue-700">
@@ -3342,29 +3509,31 @@
       `;
 
       body.innerHTML = `
-        <div class="text-center space-y-1 pb-2 border-b border-slate-300 border-dashed">
-          <div class="text-base font-bold tracking-tight text-slate-900">POS CAFE</div>
-          <div class="text-[11px] text-slate-500">123 Đường Cà Phê, Quận 1, TP.HCM</div>
-          <div class="text-[11px] text-slate-500">Hotline: 1900 8888</div>
-          <div class="text-sm font-bold text-slate-900 pt-1">HÓA ĐƠN BÁN HÀNG</div>
-          <div class="text-xs font-semibold text-emerald-700">Đơn #${orderSummary.serviceNumber} • ${orderType}</div>
+        <!-- Store Header -->
+        <div class="text-center space-y-1 pb-2.5">
+          <div class="text-base font-extrabold tracking-tight text-slate-900">POS CAFE</div>
+          <div class="text-[11px] text-slate-600">123 Nguyen Hue, Quan 1, TP.HCM</div>
+          <div class="text-[11px] text-slate-600">Hotline: 028.3822.9999</div>
+          <div class="text-sm font-bold text-slate-900 pt-1 tracking-wide">HÓA ĐƠN THANH TOÁN</div>
         </div>
 
-        <div class="text-[11px] space-y-0.5 py-2 border-b border-slate-300 border-dashed text-slate-600">
-          <div class="flex justify-between">
-            <span>Thời gian:</span>
-            <span class="font-semibold text-slate-800">${dateStr}</span>
+        <!-- Meta Information -->
+        <div class="text-[11px] space-y-1 py-2 border-t border-b border-dashed border-slate-400 text-slate-700">
+          <div class="flex justify-between items-center">
+            <span>Số ca: <strong class="text-slate-900">${escapeHtml(orderSummary.shiftCode || 'Ca #04')}</strong></span>
+            <span>Thu ngân: <strong class="text-slate-900">${escapeHtml(orderSummary.cashierName || 'Nguyễn Thu Ngân')}</strong></span>
           </div>
-          <div class="flex justify-between">
-            <span>Thu ngân:</span>
-            <span class="font-semibold text-slate-800">${escapeHtml(orderSummary.cashierName)}</span>
+          <div class="flex justify-between items-center">
+            <span>Ngày: <strong class="text-slate-900">${formattedDateTime}</strong></span>
+            <span class="font-bold text-slate-900">${orderContext}</span>
           </div>
         </div>
 
-        <div class="py-2">
-          <div class="flex items-center justify-between pb-1 text-[11px] font-bold text-slate-600 border-b border-slate-200">
-            <span class="flex-1">Tên món</span>
-            <span class="w-8 text-center">SL</span>
+        <!-- Line Items Table -->
+        <div class="py-1">
+          <div class="flex items-center justify-between pb-1 text-[11px] font-bold text-slate-700 border-b border-dashed border-slate-400">
+            <span class="w-7 text-left">SL</span>
+            <span class="flex-1 px-1">Tên món</span>
             <span class="w-20 text-right">T.Tiền</span>
           </div>
           <div class="space-y-1 pt-1">
@@ -3372,24 +3541,31 @@
           </div>
         </div>
 
-        <div class="pt-2 border-t border-slate-300 border-dashed space-y-1 text-xs">
+        <!-- Financial Totals -->
+        <div class="pt-2 border-t border-dashed border-slate-400 space-y-1 text-xs text-slate-700">
           <div class="flex justify-between">
             <span>Tạm tính:</span>
-            <span class="font-semibold">${formatVND(orderSummary.subtotalVND)}</span>
+            <span class="font-semibold tabular-nums text-slate-900">${formatVND(orderSummary.subtotalVND)}</span>
           </div>
           ${orderSummary.discountVND > 0 ? `
             <div class="flex justify-between text-emerald-700">
               <span>Giảm giá:</span>
-              <span class="font-semibold">-${formatVND(orderSummary.discountVND)}</span>
+              <span class="font-semibold tabular-nums">-${formatVND(orderSummary.discountVND)}</span>
             </div>
-          ` : ''}
-          <div class="flex justify-between font-bold text-sm text-slate-900 pt-1 border-t border-slate-200">
+          ` : `
+            <div class="flex justify-between text-slate-500">
+              <span>Giảm giá:</span>
+              <span class="font-semibold tabular-nums">0 đ</span>
+            </div>
+          `}
+          <div class="flex justify-between font-bold text-sm text-slate-900 pt-1.5 border-t border-dashed border-slate-300">
             <span>TỔNG CỘNG:</span>
-            <span class="text-emerald-700 font-extrabold text-base">${formatVND(orderSummary.grandTotalVND)}</span>
+            <span class="text-emerald-700 font-extrabold text-base tabular-nums">${formatVND(orderSummary.grandTotalVND)}</span>
           </div>
         </div>
 
-        <div class="pt-2 border-t border-slate-300 border-dashed space-y-1 text-xs">
+        <!-- Payment Details -->
+        <div class="pt-2 border-t border-dashed border-slate-400 space-y-1 text-xs text-slate-700">
           <div class="flex justify-between">
             <span>Hình thức thanh toán:</span>
             <span class="font-semibold text-slate-900">${paymentMethodLabel}</span>
@@ -3397,9 +3573,56 @@
           ${cashDetailHtml}
         </div>
 
-        <div class="text-center pt-3 border-t border-slate-300 border-dashed space-y-1 text-slate-500">
-          <p class="font-bold text-slate-800">Cảm ơn Quý khách &amp; Hẹn gặp lại!</p>
-          <p class="text-[10px]">Đơn hàng đã được chuyển tới quầy Barista pha chế.</p>
+        <!-- Footer Barcode & QR Illustration -->
+        <div class="pt-3 border-t border-dashed border-slate-400 text-center space-y-2">
+          <div class="flex flex-col items-center justify-center">
+            <svg class="w-48 h-9 mx-auto" viewBox="0 0 200 40" fill="#0f172a" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="0" width="3" height="40"/>
+              <rect x="5" y="0" width="1" height="40"/>
+              <rect x="8" y="0" width="4" height="40"/>
+              <rect x="15" y="0" width="2" height="40"/>
+              <rect x="19" y="0" width="1" height="40"/>
+              <rect x="23" y="0" width="3" height="40"/>
+              <rect x="28" y="0" width="2" height="40"/>
+              <rect x="33" y="0" width="4" height="40"/>
+              <rect x="39" y="0" width="1" height="40"/>
+              <rect x="43" y="0" width="2" height="40"/>
+              <rect x="47" y="0" width="3" height="40"/>
+              <rect x="53" y="0" width="1" height="40"/>
+              <rect x="56" y="0" width="4" height="40"/>
+              <rect x="63" y="0" width="2" height="40"/>
+              <rect x="67" y="0" width="1" height="40"/>
+              <rect x="71" y="0" width="3" height="40"/>
+              <rect x="77" y="0" width="2" height="40"/>
+              <rect x="82" y="0" width="4" height="40"/>
+              <rect x="88" y="0" width="1" height="40"/>
+              <rect x="92" y="0" width="3" height="40"/>
+              <rect x="97" y="0" width="2" height="40"/>
+              <rect x="101" y="0" width="4" height="40"/>
+              <rect x="108" y="0" width="1" height="40"/>
+              <rect x="112" y="0" width="3" height="40"/>
+              <rect x="117" y="0" width="2" height="40"/>
+              <rect x="122" y="0" width="1" height="40"/>
+              <rect x="125" y="0" width="4" height="40"/>
+              <rect x="132" y="0" width="2" height="40"/>
+              <rect x="136" y="0" width="3" height="40"/>
+              <rect x="142" y="0" width="1" height="40"/>
+              <rect x="145" y="0" width="4" height="40"/>
+              <rect x="152" y="0" width="2" height="40"/>
+              <rect x="156" y="0" width="3" height="40"/>
+              <rect x="162" y="0" width="1" height="40"/>
+              <rect x="166" y="0" width="2" height="40"/>
+              <rect x="171" y="0" width="4" height="40"/>
+              <rect x="177" y="0" width="1" height="40"/>
+              <rect x="181" y="0" width="3" height="40"/>
+              <rect x="186" y="0" width="2" height="40"/>
+              <rect x="190" y="0" width="4" height="40"/>
+              <rect x="196" y="0" width="2" height="40"/>
+            </svg>
+            <div class="text-[10px] tracking-widest text-slate-500 font-mono mt-1">*POS-CAFE-${orderSummary.serviceNumber || '001'}*</div>
+          </div>
+          <p class="font-bold text-slate-900 text-xs">Cảm ơn quý khách và hẹn gặp lại!</p>
+          <p class="text-[10px] text-slate-500">Hotline: 028.3822.9999</p>
         </div>
       `;
 
@@ -3410,6 +3633,7 @@
     }
 
     function closeReceiptModal() {
+      playTapChirp();
       const modal = document.getElementById('receipt-modal-backdrop');
       if (modal) {
         modal.classList.add('hidden');
@@ -3417,8 +3641,13 @@
     }
 
     function printReceipt() {
+      playTapChirp();
       showToast('Đang gửi lệnh in tới máy in nhiệt K80...');
-      closeReceiptModal();
+      try {
+        window.print();
+      } catch (err) {
+        console.warn('window.print error:', err);
+      }
     }
 
     /* =========================================================================
@@ -3504,14 +3733,14 @@
         const receiptBackdrop = document.getElementById('receipt-modal-backdrop');
         const isReceiptOpen = receiptBackdrop && !receiptBackdrop.classList.contains('hidden');
 
-        // Receipt Modal Active Shortcuts
+        // 1. Receipt Modal Active Shortcuts
         if (isReceiptOpen) {
           if (e.key === 'Escape') {
             e.preventDefault();
             closeReceiptModal();
             return;
           }
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' || (e.ctrlKey && (e.key === 'p' || e.key === 'P'))) {
             e.preventDefault();
             printReceipt();
             return;
@@ -3519,7 +3748,7 @@
           return;
         }
 
-        // Clear Cart Modal Active Shortcuts
+        // 2. Clear Cart Modal Active Shortcuts
         if (isClearCartOpen) {
           if (e.key === 'Escape') {
             e.preventDefault();
@@ -3534,7 +3763,7 @@
           return;
         }
 
-        // Modal Active Shortcuts
+        // 3. Modifier Modal Active Shortcuts
         if (isModalOpen) {
           // Esc: Cancel & close modal without adding
           if (e.key === 'Escape') {
@@ -3569,11 +3798,11 @@
           return;
         }
 
-        const isInputActive = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+        const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
         const searchInput = document.getElementById('quick-search-input');
         const isSearchActive = document.activeElement === searchInput;
 
-        // Enter: Fast 1-Tap Checkout if enabled (allowed even when focused in custom tendered input)
+        // Enter: Context-sensitive checkout submission (when not focused in search)
         if (e.key === 'Enter' && !isSearchActive) {
           const ctaBtn = document.getElementById('btn-checkout-cta');
           if (ctaBtn && !ctaBtn.disabled) {
@@ -3583,14 +3812,37 @@
           }
         }
 
-        // F1: Mang đi (Takeaway)
+        // Delete / Backspace: Remove focused cart item or last cart item (when not inside inputs and no modals open)
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !isInputActive) {
+          const focusedCard = document.activeElement?.closest?.('[data-cart-item-id]');
+          const focusedId = focusedCard?.getAttribute('data-cart-item-id');
+          const state = window.POS_STATE;
+          if (focusedId) {
+            e.preventDefault();
+            playTapChirp();
+            removeCartItem(focusedId);
+            return;
+          } else if (state && state.cart && state.cart.length > 0) {
+            e.preventDefault();
+            playTapChirp();
+            const lastItem = state.cart[state.cart.length - 1];
+            if (lastItem) {
+              removeCartItem(lastItem.id);
+            }
+            return;
+          }
+        }
+
+        // F1: Switch to Takeaway mode (clears table selection if any, sets mode to 'takeaway')
         if (e.key === 'F1') {
           e.preventDefault();
+          playTapChirp();
           window.POS_STATE.setMode('takeaway');
         }
-        // F2: Tại bàn (Dine-in)
+        // F2: Switch to Dine-in mode (renders floor plan / toggles view)
         else if (e.key === 'F2') {
           e.preventDefault();
+          playTapChirp();
           if (window.POS_STATE.mode === 'dinein') {
             window.POS_STATE.toggleDineInView();
           } else {
@@ -3600,16 +3852,22 @@
         // / or Ctrl+K: Quick search focus (guard when typing in inputs/textareas)
         else if ((e.key === '/' || (e.ctrlKey && e.key.toLowerCase() === 'k')) && !isInputActive) {
           e.preventDefault();
+          playTapChirp();
           if (searchInput) {
             searchInput.focus();
             searchInput.select();
           }
         }
-        // Escape: Blur search input
+        // Escape: Blur search input or active input
         else if (e.key === 'Escape') {
-          if (document.activeElement === searchInput) {
-            searchInput.blur();
+          if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
           }
+        }
+        // Ctrl+P: Intercept when pressed outside receipt modal
+        else if (e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
+          e.preventDefault();
+          showToast('Chỉ có thể in khi hóa đơn thanh toán đang mở');
         }
       });
     }
@@ -3662,6 +3920,10 @@
     window.printReceipt = printReceipt;
     window.calculateSuggestedDenominations = calculateSuggestedDenominations;
     window.playSuccessChirp = playSuccessChirp;
+    window.playCashRegisterChime = playCashRegisterChime;
+    window.playTapChirp = playTapChirp;
+    window.toggleSound = toggleSound;
+    window.updateSoundToggleUI = updateSoundToggleUI;
 
     // Task 6: Floor Plan & Dine-in table management public bindings
     window.renderFloorPlan = renderFloorPlan;
@@ -3681,6 +3943,14 @@
 
       // 2. Initialize keyboard shortcuts
       initKeyboardShortcuts();
+
+      // 2b. Attach tactile click chirp to button taps
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button, [role="button"]');
+        if (btn) {
+          playTapChirp();
+        }
+      }, true);
 
       // 3. Register UI renderers as state subscribers
       window.POS_STATE.subscribe(updateTopBarUI);
@@ -3809,20 +4079,20 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- 6. RECEIPT PREVIEW MODAL (Task 5)                                          -->
+  <!-- 6. RECEIPT PREVIEW MODAL (Task 7)                                          -->
   <!-- ========================================================================= -->
   <div id="receipt-modal-backdrop" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 hidden animate-in fade-in duration-150">
-    <div id="receipt-modal-dialog" class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title">
+    <div id="receipt-modal-dialog" class="bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-sm overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150 font-mono text-xs" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title">
       
       <!-- Receipt Modal Header -->
-      <div class="h-14 px-5 border-b border-slate-200 flex items-center justify-between flex-shrink-0 bg-white">
+      <div id="receipt-modal-header" class="h-14 px-5 border-b border-slate-200 flex items-center justify-between flex-shrink-0 bg-white">
         <div class="flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
             <i data-lucide="printer" class="w-4 h-4"></i>
           </div>
           <h3 id="receipt-modal-title" class="text-sm font-bold text-slate-900">Hóa đơn thanh toán</h3>
         </div>
-        <button type="button" onclick="closeReceiptModal()"
+        <button id="receipt-modal-close-btn" type="button" onclick="closeReceiptModal()"
           class="h-12 w-12 min-h-[48px] min-w-[48px] rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition flex items-center justify-center select-none"
           title="Đóng (Esc)">
           <i data-lucide="x" class="w-5 h-5"></i>
@@ -3830,20 +4100,20 @@
       </div>
 
       <!-- Receipt Body (Print paper emulation) -->
-      <div id="receipt-modal-body" class="p-5 overflow-y-auto font-mono text-xs text-slate-800 bg-slate-50/50 flex-1 space-y-3">
+      <div id="receipt-modal-body" class="p-6 overflow-y-auto font-mono text-xs text-slate-900 bg-white flex-1 space-y-3 select-text">
         <!-- Rendered dynamically by openReceiptModal(orderSummary) -->
       </div>
 
       <!-- Receipt Modal Footer -->
-      <div class="border-t border-slate-200 bg-white p-3.5 flex items-center justify-between gap-2.5 flex-shrink-0">
-        <button type="button" onclick="closeReceiptModal()"
+      <div id="receipt-modal-footer" class="border-t border-slate-200 bg-white p-3.5 flex items-center justify-between gap-2.5 flex-shrink-0">
+        <button id="receipt-modal-btn-close" type="button" onclick="closeReceiptModal()"
           class="min-h-[48px] h-12 px-4 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs md:text-sm transition flex items-center justify-center select-none flex-1">
           <span>Đóng (Esc)</span>
         </button>
-        <button type="button" onclick="printReceipt()"
+        <button id="receipt-modal-btn-print" type="button" onclick="printReceipt()"
           class="min-h-[48px] h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs md:text-sm transition flex items-center justify-center gap-2 shadow-xs select-none flex-1">
           <i data-lucide="printer" class="w-4 h-4"></i>
-          <span>In hóa đơn (Enter)</span>
+          <span>In hóa đơn (Ctrl+P)</span>
         </button>
       </div>
 
