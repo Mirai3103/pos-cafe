@@ -133,8 +133,8 @@ web/
 │   │   └── generated/              # Output from `orval` (TanStack Query hooks, types)
 │   │
 │   ├── stores/                     # Zustand Global Stores
-│   │   ├── use-pos-store.ts        # Cart items, active order, discount
-│   │   └── use-shift-store.ts      # Active shift info, staff info, drawer status
+│   │   ├── use-pos-store.ts        # SUPERSEDED by ADR-053, not created
+│   │   └── use-shift-store.ts      # SUPERSEDED by ADR-053, not created
 │   │
 │   └── types/                      # Common Shared Types
 │       └── index.ts
