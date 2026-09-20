@@ -567,15 +567,63 @@
 
       <!-- Subview Container 1: Items & Multi-Size Pricing (#catalog-subview-items) -->
       <div id="catalog-subview-items" class="space-y-5 animate-card-in">
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-card text-center space-y-3">
-          <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100">
-            <i data-lucide="coffee" class="w-7 h-7"></i>
+        
+        <!-- Filter & Search Action Bar -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-card flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4">
+          
+          <!-- Left: Search & Category Filter Controls -->
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+            
+            <!-- Search Input with Vietnamese Acronym Support -->
+            <div class="relative flex-1">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="search" class="w-4 h-4"></i>
+              </div>
+              <input type="text" id="catalog-items-search-input" oninput="handleCatalogItemsSearch(this.value)"
+                placeholder="Tìm món nhanh (tên món, viết tắt: cfsd, tdcs)..."
+                class="w-full min-h-[48px] h-12 pl-10 pr-10 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400">
+              <button id="btn-clear-items-search" type="button" onclick="clearCatalogItemsSearch()"
+                class="absolute inset-y-0 right-0 pr-3 min-h-[48px] min-w-[48px] flex items-center justify-center text-slate-400 hover:text-slate-700 transition cursor-pointer hidden"
+                aria-label="Xóa tìm kiếm">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <!-- Category Filter Dropdown -->
+            <div class="w-full sm:w-56 flex-shrink-0">
+              <select id="catalog-items-category-filter" onchange="handleCatalogCategoryFilterChange(this.value)"
+                class="w-full min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-semibold text-slate-700 outline-none cursor-pointer transition">
+                <option value="all">Tất cả danh mục</option>
+              </select>
+            </div>
           </div>
-          <h3 class="text-base font-bold text-slate-900">Danh sách Món & Định giá Đa Kích cỡ (S/M/L)</h3>
-          <p class="text-xs text-slate-500 max-w-md mx-auto">
-            Khu vực hiển thị danh sách toàn bộ món uống, cấu hình cỡ ly và nhóm topping đi kèm đang được tải từ bộ dữ liệu Catalog.
-          </p>
+
+          <!-- Right: Add New Item CTA -->
+          <button id="btn-catalog-items-add-item" type="button" onclick="openMenuItemModal()"
+            class="min-h-[48px] h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer transition select-none flex-shrink-0">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>+ THÊM MÓN MỚI (Ctrl+N)</span>
+          </button>
         </div>
+
+        <!-- Realtime Info & Results Counter Bar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1 text-xs text-slate-500">
+          <div class="flex items-center gap-2">
+            <span>Hiển thị:</span>
+            <span id="catalog-items-count-display" class="font-bold font-mono text-slate-900 text-xs sm:text-sm">0 món</span>
+            <span id="catalog-items-filter-label" class="text-[11px] text-slate-400"></span>
+          </div>
+          <div class="flex items-center gap-2 text-[11px] text-slate-400">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Đồng bộ thực đơn tự động với Quầy thu ngân & KDS</span>
+          </div>
+        </div>
+
+        <!-- Responsive Cards Grid (#catalog-items-grid) -->
+        <div id="catalog-items-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <!-- Dynamic item cards will be rendered here by renderCatalogItemsGrid() -->
+        </div>
+
       </div>
 
       <!-- Subview Container 2: Categories (#catalog-subview-categories) -->
@@ -1217,6 +1265,248 @@
     </div>
   </div>
 
+  <!-- Modal C: 2-Column Menu Item Creation & Editing Form Modal -->
+  <div id="modal-item-form" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 hidden overflow-y-auto">
+    <div class="w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-modal my-auto max-h-[92vh] flex flex-col animate-card-in" role="dialog" aria-modal="true" aria-labelledby="modal-item-form-title">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div id="modal-item-icon-box" class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 flex-shrink-0 shadow-2xs">
+            <i data-lucide="coffee" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="modal-item-form-title" class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Thêm món mới vào thực đơn</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Thiết lập cấu hình món, ma trận kích cỡ giá bán và liên kết nhóm tùy chọn topping.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeMenuItemModal()"
+          class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer flex-shrink-0"
+          aria-label="Đóng">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (2 Columns Scrollable) -->
+      <div class="overflow-y-auto p-4 sm:p-6 flex-1 space-y-6">
+        <form id="form-menu-item" onsubmit="saveMenuItemForm(event)" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <input type="hidden" id="item-form-id" value="">
+
+          <!-- LEFT COLUMN: Basic Info & Sizes Pricing (7 cols) -->
+          <div class="lg:col-span-7 space-y-5">
+            
+            <!-- Row 1: Name and Acronym -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <div class="sm:col-span-8 space-y-1.5">
+                <label for="item-form-name" class="block text-xs font-bold text-slate-700">Tên món ăn / đồ uống <span class="text-rose-500">*</span></label>
+                <input type="text" id="item-form-name" required oninput="handleItemNameInput(this.value)"
+                  placeholder="Ví dụ: Trà đào cam sả"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-semibold text-slate-900 outline-none transition">
+              </div>
+              <div class="sm:col-span-4 space-y-1.5">
+                <label for="item-form-acronym" class="block text-xs font-bold text-slate-700">Mã viết tắt (Acronym)</label>
+                <input type="text" id="item-form-acronym" oninput="handleItemAcronymManualInput(this.value)"
+                  placeholder="tdcs"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 font-mono text-xs sm:text-sm uppercase font-bold text-emerald-700 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+              </div>
+            </div>
+
+            <!-- Row 2: Category Selector -->
+            <div class="space-y-1.5">
+              <label for="item-form-category" class="block text-xs font-bold text-slate-700">Danh mục thực đơn <span class="text-rose-500">*</span></label>
+              <select id="item-form-category" required onchange="handleItemCategoryChange(this.value)"
+                class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-semibold text-slate-900 outline-none cursor-pointer transition">
+              </select>
+            </div>
+
+            <!-- Row 3: Multi-size Switch Toggle & Pricing Table -->
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <span class="text-xs font-bold text-slate-900">Định giá Đa Kích cỡ (S / M / L)</span>
+                  <p class="text-[11px] text-slate-500">Bật nếu món có nhiều kích cỡ khác nhau với các mức giá riêng biệt.</p>
+                </div>
+                <button id="btn-toggle-multi-size" type="button" onclick="toggleItemMultiSize()"
+                  class="min-h-[48px] h-12 px-3.5 rounded-xl border flex items-center gap-2 cursor-pointer transition select-none bg-emerald-50 border-emerald-300 text-emerald-700 font-bold text-xs">
+                  <span id="toggle-multi-size-label">Đang BẬT</span>
+                  <div id="toggle-multi-size-indicator" class="w-8 h-4 rounded-full bg-emerald-600 relative transition-colors flex items-center p-0.5">
+                    <div class="w-3 h-3 rounded-full bg-white ml-auto"></div>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Single Price Mode Container (when multi-size OFF) -->
+              <div id="item-single-price-container" class="space-y-1.5 hidden">
+                <label for="item-form-base-price" class="block text-xs font-bold text-slate-700">Đơn giá bán (VND) <span class="text-rose-500">*</span></label>
+                <div class="relative">
+                  <input type="number" id="item-form-base-price" min="0" step="1000" oninput="updateItemPricePreview()"
+                    placeholder="35000"
+                    class="w-full min-h-[48px] h-12 pl-4 pr-14 rounded-xl border border-slate-300 font-mono text-base font-bold text-emerald-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+                  <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-xs font-bold text-slate-400 font-mono">VND</div>
+                </div>
+              </div>
+
+              <!-- Dynamic Sizes Table (when multi-size ON) -->
+              <div id="item-multi-size-container" class="space-y-3">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span>Danh sách Kích cỡ & Giá bán</span>
+                  <button id="btn-add-size-row" type="button" onclick="addItemSizeRow()"
+                    class="min-h-[48px] h-12 px-3.5 rounded-xl bg-white hover:bg-emerald-50 active:scale-[0.98] border border-dashed border-emerald-300 text-emerald-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    <span>+ Thêm kích cỡ</span>
+                  </button>
+                </div>
+
+                <div id="item-sizes-list" class="space-y-2">
+                  <!-- Dynamic size rows generated by renderItemSizesTable() -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 4: Image URL & Preset Chips -->
+            <div class="space-y-2">
+              <label for="item-form-image" class="block text-xs font-bold text-slate-700">Ảnh món (URL hình ảnh)</label>
+              <div class="flex items-center gap-3">
+                <div class="relative flex-1">
+                  <input type="url" id="item-form-image" oninput="handleItemImageInput(this.value)"
+                    placeholder="https://placewaifu.com/image/300/200?id=1"
+                    class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 text-xs font-mono text-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+                </div>
+                <div id="item-form-image-preview-thumb" class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+                  <i data-lucide="image" class="w-5 h-5 text-slate-400"></i>
+                </div>
+              </div>
+              
+              <!-- Preset Image Chips -->
+              <div class="space-y-1">
+                <div class="text-[11px] font-semibold text-slate-400">Gợi ý ảnh mẫu Placewaifu:</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <button type="button" onclick="selectItemPresetImage('https://placewaifu.com/image/300/200?id=1')"
+                    class="min-h-[48px] h-12 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 text-xs font-medium cursor-pointer transition select-none flex items-center gap-1">Cà phê sữa</button>
+                  <button type="button" onclick="selectItemPresetImage('https://placewaifu.com/image/300/200?id=2')"
+                    class="min-h-[48px] h-12 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 text-xs font-medium cursor-pointer transition select-none flex items-center gap-1">Cà phê đen</button>
+                  <button type="button" onclick="selectItemPresetImage('https://placewaifu.com/image/300/200?id=3')"
+                    class="min-h-[48px] h-12 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 text-xs font-medium cursor-pointer transition select-none flex items-center gap-1">Bạc xỉu</button>
+                  <button type="button" onclick="selectItemPresetImage('https://placewaifu.com/image/300/200?id=7')"
+                    class="min-h-[48px] h-12 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 text-xs font-medium cursor-pointer transition select-none flex items-center gap-1">Trà đào</button>
+                  <button type="button" onclick="selectItemPresetImage('https://placewaifu.com/image/300/200?id=8')"
+                    class="min-h-[48px] h-12 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 text-xs font-medium cursor-pointer transition select-none flex items-center gap-1">Trà vải</button>
+                  <button type="button" onclick="selectItemPresetImage('https://placewaifu.com/image/300/200?id=9')"
+                    class="min-h-[48px] h-12 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 text-xs font-medium cursor-pointer transition select-none flex items-center gap-1">Freeze đá xay</button>
+                  <button type="button" onclick="selectItemPresetImage('https://placewaifu.com/image/300/200?id=10')"
+                    class="min-h-[48px] h-12 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 text-xs font-medium cursor-pointer transition select-none flex items-center gap-1">Bánh ngọt</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 5: Marketing Badge Selector -->
+            <div class="space-y-1.5">
+              <label class="block text-xs font-bold text-slate-700">Huy hiệu Tiếp thị (Marketing Badge)</label>
+              <div class="flex flex-wrap gap-2" id="item-marketing-badge-container">
+                <button type="button" onclick="selectItemMarketingBadge('')" data-badge=""
+                  class="badge-opt-btn min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer select-none">Không có</button>
+                <button type="button" onclick="selectItemMarketingBadge('Bán chạy')" data-badge="Bán chạy"
+                  class="badge-opt-btn min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer select-none">Bán chạy</button>
+                <button type="button" onclick="selectItemMarketingBadge('Món hot')" data-badge="Món hot"
+                  class="badge-opt-btn min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer select-none">Món hot</button>
+                <button type="button" onclick="selectItemMarketingBadge('Mới')" data-badge="Mới"
+                  class="badge-opt-btn min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer select-none">Mới</button>
+                <button type="button" onclick="selectItemMarketingBadge('Đặc trưng')" data-badge="Đặc trưng"
+                  class="badge-opt-btn min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer select-none">Đặc trưng</button>
+                <button type="button" onclick="selectItemMarketingBadge('Chef Pick')" data-badge="Chef Pick"
+                  class="badge-opt-btn min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer select-none">Chef Pick</button>
+              </div>
+              <input type="hidden" id="item-form-badge" value="">
+            </div>
+
+            <!-- Row 6: Description Textarea -->
+            <div class="space-y-1.5">
+              <label for="item-form-description" class="block text-xs font-bold text-slate-700">Mô tả món ăn</label>
+              <textarea id="item-form-description" rows="2"
+                placeholder="Ghi chú thành phần, hương vị đặc trưng..."
+                class="w-full min-h-[72px] p-3 rounded-xl border border-slate-300 text-xs text-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition resize-none"></textarea>
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: Modifier Groups & Price Preview (5 cols) -->
+          <div class="lg:col-span-5 space-y-5 flex flex-col justify-between">
+            <div class="space-y-5">
+              
+              <!-- 1. Category Inherited Modifier Groups -->
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div class="flex items-center gap-2 text-xs font-bold text-slate-900">
+                  <i data-lucide="git-branch" class="w-4 h-4 text-emerald-600"></i>
+                  <span>Nhóm tùy chọn Kế thừa từ Danh mục</span>
+                </div>
+                <div id="item-inherited-modifiers-list" class="space-y-2">
+                  <!-- Dynamic inherited modifier list with exclude toggles -->
+                </div>
+              </div>
+
+              <!-- 2. Additional Modifier Groups Selector -->
+              <div class="space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <label class="block text-xs font-bold text-slate-900">Nhóm Topping & Tùy chọn Bổ sung</label>
+                  <span class="text-[11px] text-slate-400">1 chạm để bật/tắt</span>
+                </div>
+                <div id="item-additional-modifiers-list" class="space-y-2">
+                  <!-- Dynamic additional modifier chips/cards -->
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Live Price Preview Calculation -->
+            <div class="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 space-y-2.5 mt-auto">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-emerald-950 flex items-center gap-1.5">
+                  <i data-lucide="calculator" class="w-4 h-4 text-emerald-600"></i>
+                  <span>Ước tính Giá & Cấu hình</span>
+                </span>
+                <span id="item-preview-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-600 text-white">Sẵn sàng</span>
+              </div>
+              <div class="text-xs space-y-1.5 text-slate-600">
+                <div class="flex justify-between items-center">
+                  <span>Đơn giá chuẩn (MĐ):</span>
+                  <span id="item-preview-base-price" class="font-mono font-bold text-slate-900">0 đ</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span>Số nhóm tùy chọn:</span>
+                  <span id="item-preview-groups-count" class="font-mono font-bold text-slate-900">0 nhóm</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span>Dải giá kích cỡ:</span>
+                  <span id="item-preview-sizes-range" class="font-mono font-bold text-emerald-700">0 đ</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Modal Action Footer -->
+      <div class="border-t border-slate-200 p-4 sm:p-5 bg-slate-50 rounded-b-2xl flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
+        <div>
+          <button id="btn-item-form-delete" type="button" onclick="deleteMenuItemConfirmed(currentItemModalId)"
+            class="min-h-[48px] h-12 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-[0.98] text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer select-none transition hidden">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-600"></i>
+            <span>Xóa món ăn</span>
+          </button>
+        </div>
+        <div class="flex items-center gap-3 ml-auto">
+          <button type="button" onclick="closeMenuItemModal()"
+            class="min-h-[48px] h-12 px-5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-700 border border-slate-200 font-bold text-xs sm:text-sm cursor-pointer select-none transition">
+            <span>Hủy bỏ</span>
+          </button>
+          <button id="btn-item-form-save" type="button" onclick="saveMenuItemForm(event)"
+            class="min-h-[48px] h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm cursor-pointer select-none transition">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            <span>LƯU MÓN ĂN (Ctrl+S)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ========================================================================= -->
   <!-- 5. JAVASCRIPT CONTROLLERS & EVENT SUBSYSTEM                                -->
   <!-- ========================================================================= -->
@@ -1529,6 +1819,16 @@
       return num.toLocaleString('vi-VN') + ' đ';
     }
 
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     var toastTimer = null;
     function showToast(message, isError) {
       var toastEl = document.getElementById('pos-toast');
@@ -1815,6 +2115,983 @@
       }
 
       if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* =========================================================================
+       5.1 Catalog Menu Items Grid & 2-Column Item Modal Subsystem (Task 3)
+       ========================================================================= */
+    var catalogItemsSearchQuery = '';
+    var catalogItemsCategoryFilter = 'all';
+    var currentItemModalId = null;
+    var isItemMultiSize = true;
+    var currentItemSizes = [];
+    var currentItemDefaultSizeId = 'M';
+    var currentExcludedModifierGroupIds = [];
+    var currentAssignedModifierGroupIds = [];
+    var isAcronymUserModified = false;
+    var catalogPreFocusedItemId = null;
+
+    /* Helper to strip Vietnamese diacritics for search and acronym matching */
+    function removeAccents(str) {
+      if (!str) return '';
+      return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLowerCase()
+        .trim();
+    }
+
+    /* Vietnamese cafe acronym generator: e.g. "Cà phê sữa đá" -> "cfsd", "Trà đào cam sả" -> "tdcs" */
+    function generateVietnameseAcronym(name) {
+      if (!name) return '';
+      var clean = removeAccents(name);
+      var words = clean.split(/\s+/).filter(Boolean);
+      if (words.length === 0) return '';
+
+      // Special Vietnamese cafe convention: 'ca' + 'phe' -> 'cf'
+      if (words.length >= 2 && words[0] === 'ca' && words[1] === 'phe') {
+        return ('cf' + words.slice(2).map(function (w) { return w[0]; }).join('')).toLowerCase();
+      }
+      return words.map(function (w) { return w[0]; }).join('').toLowerCase();
+    }
+
+    /* Multi-factor Vietnamese search matcher: substring, token match, stored acronym & dynamic acronym */
+    function matchesCatalogItemSearch(item, query) {
+      if (!query) return true;
+      var q = removeAccents(query).trim().toLowerCase();
+      if (!q) return true;
+
+      var nameClean = removeAccents(item.name || '').toLowerCase();
+      var catClean = removeAccents(item.categoryName || '').toLowerCase();
+
+      // 1. Direct substring in name or category
+      if (nameClean.indexOf(q) !== -1 || catClean.indexOf(q) !== -1) return true;
+
+      // 2. Multi-word token match: e.g. "tra dao" in "tra dao cam sa"
+      var tokens = q.split(/\s+/).filter(Boolean);
+      if (tokens.length > 1) {
+        var allMatch = true;
+        for (var i = 0; i < tokens.length; i++) {
+          if (nameClean.indexOf(tokens[i]) === -1) {
+            allMatch = false;
+            break;
+          }
+        }
+        if (allMatch) return true;
+      }
+
+      // 3. Stored acronym match (e.g. 'cfsd', 'cfdd', 'bx', 'tdcs')
+      var itemAcronym = (item.acronym || '').toLowerCase();
+      if (itemAcronym && (itemAcronym === q || itemAcronym.indexOf(q) !== -1 || q.indexOf(itemAcronym) !== -1)) {
+        return true;
+      }
+
+      // 4. Dynamic acronym generation from item name
+      var dynAcronym = generateVietnameseAcronym(item.name);
+      if (dynAcronym && (dynAcronym === q || dynAcronym.indexOf(q) !== -1 || q.indexOf(dynAcronym) !== -1)) {
+        return true;
+      }
+
+      return false;
+    }
+
+    /* Populates the Category Filter Dropdown in Items Subview */
+    function populateCatalogCategoryDropdown() {
+      var select = document.getElementById('catalog-items-category-filter');
+      if (!select) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+
+      var currentVal = select.value || catalogItemsCategoryFilter || 'all';
+      var html = '<option value="all">Tất cả danh mục (' + (catalog && catalog.items ? catalog.items.length : 0) + ')</option>';
+      for (var i = 0; i < categories.length; i++) {
+        var cat = categories[i];
+        var count = 0;
+        if (catalog && Array.isArray(catalog.items)) {
+          count = catalog.items.filter(function (it) { return it.categoryId === cat.id; }).length;
+        }
+        html += '<option value="' + escapeHtml(cat.id) + '">' + escapeHtml(cat.name) + ' (' + count + ')</option>';
+      }
+      select.innerHTML = html;
+      select.value = currentVal;
+    }
+
+    /* Renders the Catalog Menu Items Grid with Responsive Cards */
+    function renderCatalogItemsGrid() {
+      populateCatalogCategoryDropdown();
+
+      var grid = document.getElementById('catalog-items-grid');
+      var countDisplay = document.getElementById('catalog-items-count-display');
+      var filterLabel = document.getElementById('catalog-items-filter-label');
+      if (!grid) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+
+      var allItems = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+      var modifierGroups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+
+      // Filter items by category & search query
+      var filtered = allItems.filter(function (item) {
+        if (catalogItemsCategoryFilter !== 'all' && item.categoryId !== catalogItemsCategoryFilter) {
+          return false;
+        }
+        return matchesCatalogItemSearch(item, catalogItemsSearchQuery);
+      });
+
+      if (countDisplay) {
+        countDisplay.textContent = filtered.length + ' món';
+      }
+      if (filterLabel) {
+        var filterText = [];
+        if (catalogItemsCategoryFilter !== 'all') {
+          var activeCat = categories.find(function (c) { return c.id === catalogItemsCategoryFilter; });
+          if (activeCat) filterText.push('Danh mục: ' + activeCat.name);
+        }
+        if (catalogItemsSearchQuery.trim()) {
+          filterText.push('Tìm: "' + catalogItemsSearchQuery.trim() + '"');
+        }
+        filterLabel.textContent = filterText.length > 0 ? '(' + filterText.join(' | ') + ')' : '';
+      }
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '<div class="col-span-full bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-4">' +
+          '<div class="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100 shadow-2xs">' +
+            '<i data-lucide="coffee" class="w-8 h-8"></i>' +
+          '</div>' +
+          '<div class="space-y-1">' +
+            '<h4 class="text-base font-bold text-slate-900">Không tìm thấy món ăn nào</h4>' +
+            '<p class="text-xs text-slate-500 max-w-sm mx-auto">Thử tìm kiếm với từ khóa khác (vd: cfsd, bac, tdcs) hoặc chọn danh mục khác.</p>' +
+          '</div>' +
+          '<div class="pt-2">' +
+            '<button type="button" onclick="openMenuItemModal()" class="min-h-[48px] h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm inline-flex items-center gap-2 shadow-sm cursor-pointer transition select-none">' +
+              '<i data-lucide="plus-circle" class="w-4 h-4"></i>' +
+              '<span>+ THÊM MÓN MỚI (Ctrl+N)</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < filtered.length; i++) {
+        var item = filtered[i];
+        var cat = categories.find(function (c) { return c.id === item.categoryId; });
+        var catIcon = (cat && cat.icon) ? cat.icon : 'coffee';
+        var catName = (cat && cat.name) ? cat.name : (item.categoryName || 'Món uống');
+
+        // Marketing badge styling
+        var badgeHtml = '';
+        if (item.badge) {
+          var badgeClass = 'bg-slate-900 text-white';
+          if (item.badge === 'Bán chạy') badgeClass = 'bg-amber-500 text-white';
+          else if (item.badge === 'Món hot') badgeClass = 'bg-rose-500 text-white';
+          else if (item.badge === 'Mới') badgeClass = 'bg-emerald-600 text-white';
+          else if (item.badge === 'Đặc trưng') badgeClass = 'bg-indigo-600 text-white';
+          else if (item.badge === 'Chef Pick') badgeClass = 'bg-teal-600 text-white';
+          badgeHtml = '<span class="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg font-bold text-[10px] sm:text-[11px] shadow-2xs ' + badgeClass + '">' + escapeHtml(item.badge) + '</span>';
+        }
+
+        // Acronym badge
+        var acronymText = item.acronym ? item.acronym.toUpperCase() : generateVietnameseAcronym(item.name).toUpperCase();
+        var acronymBadge = acronymText ? '<span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-900/85 text-white font-mono text-[11px] font-bold tracking-wider backdrop-blur-xs border border-white/10 shadow-2xs">' + escapeHtml(acronymText) + '</span>' : '';
+
+        // Multi-size price pills
+        var sizesPillsHtml = '';
+        if (Array.isArray(item.sizes) && item.sizes.length > 0) {
+          for (var s = 0; s < item.sizes.length; s++) {
+            var sizeObj = item.sizes[s];
+            var isDef = (sizeObj.id === item.defaultSize || sizeObj.isDefault);
+            if (isDef) {
+              sizesPillsHtml += '<span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-xs font-bold shadow-2xs">' +
+                escapeHtml(sizeObj.name || ('Size ' + sizeObj.id)) + ': ' + formatVND(sizeObj.price) +
+                ' <span class="text-[9px] font-sans px-1 py-0.5 rounded bg-emerald-600 text-white ml-0.5">MĐ</span>' +
+              '</span>';
+            } else {
+              sizesPillsHtml += '<span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 font-mono text-xs font-semibold">' +
+                escapeHtml(sizeObj.name || ('Size ' + sizeObj.id)) + ': ' + formatVND(sizeObj.price) +
+              '</span>';
+            }
+          }
+        } else {
+          sizesPillsHtml = '<span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-xs font-bold shadow-2xs">Giá bán: ' + formatVND(item.basePrice || 0) + '</span>';
+        }
+
+        // Resolve assigned topping group chips
+        // Effective modifier groups = (category default groups - excluded) + assignedModifierGroupIds
+        var effectiveGroupIds = [];
+        if (cat && Array.isArray(cat.defaultGroupIds)) {
+          var excluded = Array.isArray(item.excludedModifierGroupIds) ? item.excludedModifierGroupIds : [];
+          for (var g = 0; g < cat.defaultGroupIds.length; g++) {
+            if (excluded.indexOf(cat.defaultGroupIds[g]) === -1 && effectiveGroupIds.indexOf(cat.defaultGroupIds[g]) === -1) {
+              effectiveGroupIds.push(cat.defaultGroupIds[g]);
+            }
+          }
+        }
+        if (Array.isArray(item.assignedModifierGroupIds)) {
+          for (var a = 0; a < item.assignedModifierGroupIds.length; a++) {
+            if (effectiveGroupIds.indexOf(item.assignedModifierGroupIds[a]) === -1) {
+              effectiveGroupIds.push(item.assignedModifierGroupIds[a]);
+            }
+          }
+        }
+
+        var toppingChipsHtml = '';
+        if (effectiveGroupIds.length > 0) {
+          for (var eg = 0; eg < effectiveGroupIds.length; eg++) {
+            var grp = modifierGroups.find(function (m) { return m.id === effectiveGroupIds[eg]; });
+            if (grp) {
+              toppingChipsHtml += '<span class="px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200 text-[11px] font-medium flex items-center gap-1">+ ' + escapeHtml(grp.name) + '</span>';
+            }
+          }
+        }
+        if (!toppingChipsHtml) {
+          toppingChipsHtml = '<span class="text-[11px] text-slate-400 italic">Không có topping</span>';
+        }
+
+        var hasImage = !!item.imageUrl;
+
+        html += '<div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between group">' +
+          '<div>' +
+            '<!-- Top Thumbnail Container -->' +
+            '<div class="relative h-40 w-full rounded-xl overflow-hidden bg-slate-100 mb-3.5 flex items-center justify-center">' +
+              (hasImage ? '<img src="' + escapeHtml(item.imageUrl) + '" alt="' + escapeHtml(item.name) + '" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">' : '') +
+              '<div class="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400" style="' + (hasImage ? 'display:none;' : 'display:flex;') + '">' +
+                '<i data-lucide="' + escapeHtml(catIcon) + '" class="w-10 h-10"></i>' +
+              '</div>' +
+              acronymBadge +
+              badgeHtml +
+            '</div>' +
+
+            '<!-- Category & Stock Status -->' +
+            '<div class="flex items-center justify-between gap-2 text-xs">' +
+              '<span class="text-slate-500 font-medium flex items-center gap-1.5"><i data-lucide="' + escapeHtml(catIcon) + '" class="w-3.5 h-3.5 text-slate-400"></i> ' + escapeHtml(catName) + '</span>' +
+              (item.isAvailable === false ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200">Tạm ngưng</span>' : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Đang bán</span>') +
+            '</div>' +
+
+            '<!-- Item Name -->' +
+            '<h4 class="text-base font-bold text-slate-900 leading-snug mt-1 group-hover:text-emerald-600 transition">' + escapeHtml(item.name) + '</h4>' +
+            (item.description ? '<p class="text-xs text-slate-400 mt-1 line-clamp-1">' + escapeHtml(item.description) + '</p>' : '') +
+
+            '<!-- Sizes Price Pills -->' +
+            '<div class="mt-3 pt-3 border-t border-slate-100 space-y-1.5">' +
+              '<div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Bảng giá kích cỡ:</div>' +
+              '<div class="flex flex-wrap gap-1.5">' + sizesPillsHtml + '</div>' +
+            '</div>' +
+
+            '<!-- Assigned Topping Group Chips -->' +
+            '<div class="mt-2.5 space-y-1.5">' +
+              '<div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Topping đi kèm:</div>' +
+              '<div class="flex flex-wrap gap-1.5">' + toppingChipsHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<!-- Action Buttons -->' +
+          '<div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-2">' +
+            '<button type="button" onclick="openMenuItemModal(\'' + escapeHtml(item.id) + '\')" class="min-h-[48px] h-12 flex-1 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition select-none">' +
+              '<i data-lucide="edit-3" class="w-4 h-4"></i>' +
+              '<span>Chỉnh sửa</span>' +
+            '</button>' +
+            '<button type="button" onclick="jumpToBatchLinker(\'' + escapeHtml(item.id) + '\')" class="min-h-[48px] h-12 flex-1 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-[0.98] text-emerald-700 border border-emerald-200 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition select-none">' +
+              '<i data-lucide="layers" class="w-4 h-4"></i>' +
+              '<span>Gán Topping</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      }
+
+      grid.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Filter search handler */
+    function handleCatalogItemsSearch(val) {
+      catalogItemsSearchQuery = val || '';
+      var clearBtn = document.getElementById('btn-clear-items-search');
+      if (clearBtn) {
+        if (catalogItemsSearchQuery.trim()) {
+          clearBtn.classList.remove('hidden');
+        } else {
+          clearBtn.classList.add('hidden');
+        }
+      }
+      renderCatalogItemsGrid();
+    }
+
+    /* Clear search input */
+    function clearCatalogItemsSearch() {
+      var input = document.getElementById('catalog-items-search-input');
+      if (input) input.value = '';
+      handleCatalogItemsSearch('');
+    }
+
+    /* Filter category dropdown handler */
+    function handleCatalogCategoryFilterChange(catId) {
+      catalogItemsCategoryFilter = catId || 'all';
+      renderCatalogItemsGrid();
+    }
+
+    /* Opens the 2-Column Menu Item Creation / Editing Modal */
+    function openMenuItemModal(itemId) {
+      playTapChirp();
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+
+      // Populate category select in modal
+      var catSelect = document.getElementById('item-form-category');
+      if (catSelect) {
+        var catOptions = '';
+        for (var i = 0; i < categories.length; i++) {
+          catOptions += '<option value="' + escapeHtml(categories[i].id) + '">' + escapeHtml(categories[i].name) + '</option>';
+        }
+        catSelect.innerHTML = catOptions;
+      }
+
+      var modalTitle = document.getElementById('modal-item-form-title');
+      var btnDelete = document.getElementById('btn-item-form-delete');
+
+      if (itemId) {
+        // Edit Mode
+        var item = (catalog && Array.isArray(catalog.items))
+          ? catalog.items.find(function (it) { return it.id === itemId; })
+          : null;
+
+        if (!item) {
+          showToast('Không tìm thấy thông tin món ăn: ' + itemId, true);
+          return;
+        }
+
+        currentItemModalId = item.id;
+        if (modalTitle) modalTitle.textContent = 'Chỉnh sửa món: ' + item.name;
+        if (btnDelete) btnDelete.classList.remove('hidden');
+
+        document.getElementById('item-form-id').value = item.id;
+        document.getElementById('item-form-name').value = item.name || '';
+        document.getElementById('item-form-acronym').value = item.acronym || '';
+        isAcronymUserModified = !!item.acronym;
+
+        if (catSelect) {
+          catSelect.value = item.categoryId || (categories[0] ? categories[0].id : '');
+        }
+
+        // Sizes handling
+        if (Array.isArray(item.sizes) && item.sizes.length > 0) {
+          isItemMultiSize = true;
+          currentItemSizes = JSON.parse(JSON.stringify(item.sizes));
+          currentItemDefaultSizeId = item.defaultSize || (currentItemSizes[0] ? currentItemSizes[0].id : 'M');
+        } else {
+          isItemMultiSize = false;
+          document.getElementById('item-form-base-price').value = item.basePrice || 35000;
+          currentItemSizes = [
+            { id: 'S', name: 'Size S', price: Math.round((item.basePrice || 35000) * 0.85) },
+            { id: 'M', name: 'Size M', price: item.basePrice || 35000, isDefault: true },
+            { id: 'L', name: 'Size L', price: Math.round((item.basePrice || 35000) * 1.2) }
+          ];
+          currentItemDefaultSizeId = 'M';
+        }
+
+        document.getElementById('item-form-image').value = item.imageUrl || '';
+        handleItemImageInput(item.imageUrl || '');
+        selectItemMarketingBadge(item.badge || '');
+        document.getElementById('item-form-description').value = item.description || '';
+
+        currentExcludedModifierGroupIds = (item.excludedModifierGroupIds || []).slice();
+        currentAssignedModifierGroupIds = (item.assignedModifierGroupIds || []).slice();
+
+      } else {
+        // Create Mode
+        currentItemModalId = null;
+        if (modalTitle) modalTitle.textContent = 'Thêm món mới vào thực đơn';
+        if (btnDelete) btnDelete.classList.add('hidden');
+
+        document.getElementById('item-form-id').value = '';
+        document.getElementById('item-form-name').value = '';
+        document.getElementById('item-form-acronym').value = '';
+        isAcronymUserModified = false;
+
+        if (catSelect && categories.length > 0) {
+          catSelect.value = categories[0].id;
+        }
+
+        isItemMultiSize = true;
+        currentItemSizes = [
+          { id: 'S', name: 'Size S', price: 29000 },
+          { id: 'M', name: 'Size M', price: 35000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 42000 }
+        ];
+        currentItemDefaultSizeId = 'M';
+        document.getElementById('item-form-base-price').value = 35000;
+
+        document.getElementById('item-form-image').value = '';
+        handleItemImageInput('');
+        selectItemMarketingBadge('');
+        document.getElementById('item-form-description').value = '';
+
+        currentExcludedModifierGroupIds = [];
+        currentAssignedModifierGroupIds = [];
+      }
+
+      // Update UI toggles and tables
+      updateMultiSizeUI();
+      renderItemSizesTable();
+      renderItemInheritedModifiers();
+      renderItemAdditionalModifiers();
+      updateItemPricePreview();
+
+      openModal('modal-item-form');
+      setTimeout(function () {
+        var nameInput = document.getElementById('item-form-name');
+        if (nameInput) nameInput.focus();
+      }, 100);
+    }
+
+    /* Closes the 2-Column Menu Item Modal */
+    function closeMenuItemModal() {
+      closeModal('modal-item-form');
+    }
+
+    /* Name input change with auto-acronym generation */
+    function handleItemNameInput(name) {
+      if (!isAcronymUserModified) {
+        var acronym = generateVietnameseAcronym(name);
+        var acronymInput = document.getElementById('item-form-acronym');
+        if (acronymInput) {
+          acronymInput.value = acronym;
+        }
+      }
+    }
+
+    /* Acronym manual input */
+    function handleItemAcronymManualInput(val) {
+      isAcronymUserModified = (val && val.trim().length > 0);
+    }
+
+    /* Category selection change */
+    function handleItemCategoryChange(catId) {
+      renderItemInheritedModifiers();
+      renderItemAdditionalModifiers();
+      updateItemPricePreview();
+    }
+
+    /* Toggle multi-size switch */
+    function toggleItemMultiSize(forcedState) {
+      playTapChirp();
+      if (typeof forcedState === 'boolean') {
+        isItemMultiSize = forcedState;
+      } else {
+        isItemMultiSize = !isItemMultiSize;
+      }
+      updateMultiSizeUI();
+      updateItemPricePreview();
+    }
+
+    /* Update multi-size toggle switch visual state */
+    function updateMultiSizeUI() {
+      var toggleBtn = document.getElementById('btn-toggle-multi-size');
+      var toggleLabel = document.getElementById('toggle-multi-size-label');
+      var indicator = document.getElementById('toggle-multi-size-indicator');
+      var singleContainer = document.getElementById('item-single-price-container');
+      var multiContainer = document.getElementById('item-multi-size-container');
+
+      if (isItemMultiSize) {
+        if (toggleBtn) {
+          toggleBtn.className = 'min-h-[48px] h-12 px-3.5 rounded-xl border flex items-center gap-2 cursor-pointer transition select-none bg-emerald-50 border-emerald-300 text-emerald-700 font-bold text-xs';
+        }
+        if (toggleLabel) toggleLabel.textContent = 'Đang BẬT';
+        if (indicator) {
+          indicator.className = 'w-8 h-4 rounded-full bg-emerald-600 relative transition-colors flex items-center p-0.5';
+          indicator.innerHTML = '<div class="w-3 h-3 rounded-full bg-white ml-auto"></div>';
+        }
+        if (singleContainer) singleContainer.classList.add('hidden');
+        if (multiContainer) multiContainer.classList.remove('hidden');
+      } else {
+        if (toggleBtn) {
+          toggleBtn.className = 'min-h-[48px] h-12 px-3.5 rounded-xl border flex items-center gap-2 cursor-pointer transition select-none bg-slate-100 border-slate-300 text-slate-600 font-bold text-xs';
+        }
+        if (toggleLabel) toggleLabel.textContent = 'Đang TẮT';
+        if (indicator) {
+          indicator.className = 'w-8 h-4 rounded-full bg-slate-300 relative transition-colors flex items-center p-0.5';
+          indicator.innerHTML = '<div class="w-3 h-3 rounded-full bg-white mr-auto"></div>';
+        }
+        if (singleContainer) singleContainer.classList.remove('hidden');
+        if (multiContainer) multiContainer.classList.add('hidden');
+      }
+    }
+
+    /* Render Dynamic Sizes Table */
+    function renderItemSizesTable() {
+      var list = document.getElementById('item-sizes-list');
+      if (!list) return;
+
+      var html = '';
+      for (var i = 0; i < currentItemSizes.length; i++) {
+        var s = currentItemSizes[i];
+        var isDef = (s.id === currentItemDefaultSizeId || s.isDefault);
+
+        html += '<div class="flex items-center gap-2 bg-white p-2 rounded-xl border ' + (isDef ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200') + '">' +
+          '<!-- Size Name -->' +
+          '<div class="w-28 flex-shrink-0">' +
+            '<input type="text" value="' + escapeHtml(s.name) + '" onchange="handleSizeNameChange(' + i + ', this.value)" placeholder="Size M" class="w-full min-h-[48px] h-12 px-3 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500">' +
+          '</div>' +
+          '<!-- Price Input -->' +
+          '<div class="flex-1 relative">' +
+            '<input type="number" min="0" step="1000" value="' + s.price + '" onchange="handleSizePriceChange(' + i + ', this.value)" oninput="handleSizePriceChange(' + i + ', this.value)" placeholder="35000" class="w-full min-h-[48px] h-12 pl-3 pr-10 rounded-lg border border-slate-300 font-mono text-sm font-bold text-emerald-700 outline-none focus:border-emerald-500">' +
+            '<div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[11px] font-mono font-bold text-slate-400">VND</div>' +
+          '</div>' +
+          '<!-- Default Radio Button -->' +
+          '<button type="button" onclick="selectItemDefaultSize(' + i + ')" class="min-h-[48px] h-12 px-3 rounded-lg border flex items-center gap-1.5 text-xs font-bold transition select-none cursor-pointer ' +
+            (isDef ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100') + '">' +
+            (isDef ? '<i data-lucide="check" class="w-3.5 h-3.5"></i>' : '<div class="w-3.5 h-3.5 rounded-full border border-slate-300"></div>') +
+            '<span>Mặc định</span>' +
+          '</button>' +
+          '<!-- Delete Size Button -->' +
+          '<button type="button" onclick="removeItemSizeRow(' + i + ')" class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer ' + (currentItemSizes.length <= 1 ? 'opacity-40 pointer-events-none' : '') + '" title="Xóa kích cỡ này">' +
+            '<i data-lucide="trash-2" class="w-4 h-4"></i>' +
+          '</button>' +
+        '</div>';
+      }
+
+      list.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function handleSizeNameChange(index, val) {
+      if (currentItemSizes[index]) {
+        currentItemSizes[index].name = val.trim();
+        if (!currentItemSizes[index].id) {
+          currentItemSizes[index].id = val.trim().replace(/^Size\s*/i, '') || ('S' + index);
+        }
+      }
+    }
+
+    function handleSizePriceChange(index, val) {
+      if (currentItemSizes[index]) {
+        currentItemSizes[index].price = Math.max(0, parseInt(val, 10) || 0);
+        updateItemPricePreview();
+      }
+    }
+
+    function selectItemDefaultSize(index) {
+      playTapChirp();
+      for (var i = 0; i < currentItemSizes.length; i++) {
+        currentItemSizes[i].isDefault = (i === index);
+      }
+      if (currentItemSizes[index]) {
+        currentItemDefaultSizeId = currentItemSizes[index].id;
+      }
+      renderItemSizesTable();
+      updateItemPricePreview();
+    }
+
+    function addItemSizeRow(customName, customPrice, customId, isDefault) {
+      playTapChirp();
+      var idx = currentItemSizes.length;
+      var name = customName || ('Size ' + (idx === 0 ? 'S' : idx === 1 ? 'M' : idx === 2 ? 'L' : 'XL'));
+      var id = customId || (name.replace(/^Size\s*/i, '') || ('S' + idx));
+      var price = (typeof customPrice === 'number') ? customPrice : 35000;
+
+      currentItemSizes.push({
+        id: id,
+        name: name,
+        price: price,
+        isDefault: !!isDefault
+      });
+
+      if (isDefault || currentItemSizes.length === 1) {
+        currentItemDefaultSizeId = id;
+        currentItemSizes[currentItemSizes.length - 1].isDefault = true;
+      }
+
+      renderItemSizesTable();
+      updateItemPricePreview();
+    }
+
+    function removeItemSizeRow(index) {
+      if (currentItemSizes.length <= 1) return;
+      playTapChirp();
+      var removed = currentItemSizes.splice(index, 1)[0];
+      if (removed && (removed.id === currentItemDefaultSizeId || removed.isDefault)) {
+        if (currentItemSizes.length > 0) {
+          currentItemSizes[0].isDefault = true;
+          currentItemDefaultSizeId = currentItemSizes[0].id;
+        }
+      }
+      renderItemSizesTable();
+      updateItemPricePreview();
+    }
+
+    /* Image preview handler */
+    function handleItemImageInput(val) {
+      var preview = document.getElementById('item-form-image-preview-thumb');
+      if (!preview) return;
+
+      var url = (val || '').trim();
+      if (url) {
+        preview.innerHTML = '<img src="' + escapeHtml(url) + '" onerror="this.onerror=null; this.parentElement.innerHTML=\'<i data-lucide=\\\'image-off\\\' class=\\\'w-5 h-5 text-slate-400\\\'></i>\';" class="w-full h-full object-cover">';
+      } else {
+        preview.innerHTML = '<i data-lucide="image" class="w-5 h-5 text-slate-400"></i>';
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Select preset image chip */
+    function selectItemPresetImage(url) {
+      playTapChirp();
+      var imgInput = document.getElementById('item-form-image');
+      if (imgInput) {
+        imgInput.value = url;
+        handleItemImageInput(url);
+      }
+    }
+
+    /* Select marketing badge */
+    function selectItemMarketingBadge(badgeText) {
+      playTapChirp();
+      var hidden = document.getElementById('item-form-badge');
+      if (hidden) hidden.value = badgeText || '';
+
+      var container = document.getElementById('item-marketing-badge-container');
+      if (container) {
+        var btns = container.querySelectorAll('.badge-opt-btn');
+        btns.forEach(function (btn) {
+          var b = btn.getAttribute('data-badge') || '';
+          if (b === (badgeText || '')) {
+            btn.className = 'badge-opt-btn min-h-[48px] h-12 px-3.5 rounded-xl border-2 border-emerald-600 bg-emerald-50 text-emerald-900 font-bold text-xs shadow-2xs transition cursor-pointer select-none';
+          } else {
+            btn.className = 'badge-opt-btn min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer select-none';
+          }
+        });
+      }
+    }
+
+    /* Render Category Inherited Modifiers in Right Column */
+    function renderItemInheritedModifiers() {
+      var list = document.getElementById('item-inherited-modifiers-list');
+      if (!list) return;
+
+      var catSelect = document.getElementById('item-form-category');
+      var catId = catSelect ? catSelect.value : 'coffee_vn';
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+      var modifierGroups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      var cat = categories.find(function (c) { return c.id === catId; });
+
+      if (!cat || !Array.isArray(cat.defaultGroupIds) || cat.defaultGroupIds.length === 0) {
+        list.innerHTML = '<div class="text-xs text-slate-500 italic p-3 bg-white rounded-xl border border-slate-200 text-center">Danh mục này không có nhóm tùy chọn mặc định nào.</div>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < cat.defaultGroupIds.length; i++) {
+        var gid = cat.defaultGroupIds[i];
+        var grp = modifierGroups.find(function (m) { return m.id === gid; });
+        if (!grp) continue;
+
+        var isExcluded = (currentExcludedModifierGroupIds.indexOf(gid) !== -1);
+        var optionsCount = Array.isArray(grp.options) ? grp.options.length : 0;
+
+        html += '<div class="p-3 rounded-xl border transition flex items-center justify-between gap-3 ' +
+          (isExcluded ? 'bg-slate-100/70 border-slate-200 opacity-60' : 'bg-white border-emerald-200 shadow-2xs') + '">' +
+          '<div>' +
+            '<div class="flex items-center gap-2">' +
+              '<span class="text-xs font-bold ' + (isExcluded ? 'text-slate-400 line-through' : 'text-slate-900') + '">' + escapeHtml(grp.name) + '</span>' +
+              (isExcluded ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200">Đã loại trừ</span>' : '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Kế thừa</span>') +
+            '</div>' +
+            '<div class="text-[11px] text-slate-400 mt-0.5">' + (grp.selectionType === 'single' ? 'Đơn chọn' : 'Đa chọn') + ' (' + optionsCount + ' tùy chọn)</div>' +
+          '</div>' +
+          '<button type="button" onclick="toggleItemExcludedModifierGroup(\'' + escapeHtml(gid) + '\')" class="min-h-[48px] px-3.5 h-12 rounded-xl text-xs font-bold transition cursor-pointer select-none border ' +
+            (isExcluded ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300' : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200') + '">' +
+            (isExcluded ? 'Khôi phục' : 'Loại trừ') +
+          '</button>' +
+        '</div>';
+      }
+
+      list.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Toggle exclude inherited modifier group */
+    function toggleItemExcludedModifierGroup(groupId) {
+      playTapChirp();
+      var idx = currentExcludedModifierGroupIds.indexOf(groupId);
+      if (idx !== -1) {
+        currentExcludedModifierGroupIds.splice(idx, 1);
+      } else {
+        currentExcludedModifierGroupIds.push(groupId);
+      }
+      renderItemInheritedModifiers();
+      updateItemPricePreview();
+    }
+
+    /* Render Additional Modifier Groups */
+    function renderItemAdditionalModifiers() {
+      var list = document.getElementById('item-additional-modifiers-list');
+      if (!list) return;
+
+      var catSelect = document.getElementById('item-form-category');
+      var catId = catSelect ? catSelect.value : 'coffee_vn';
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+      var modifierGroups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      var cat = categories.find(function (c) { return c.id === catId; });
+      var catDefaultIds = (cat && Array.isArray(cat.defaultGroupIds)) ? cat.defaultGroupIds : [];
+
+      var html = '';
+      for (var i = 0; i < modifierGroups.length; i++) {
+        var grp = modifierGroups[i];
+        var isCategoryDefault = (catDefaultIds.indexOf(grp.id) !== -1);
+        if (isCategoryDefault) continue;
+
+        var isAssigned = (currentAssignedModifierGroupIds.indexOf(grp.id) !== -1);
+        var optionsCount = Array.isArray(grp.options) ? grp.options.length : 0;
+
+        html += '<button type="button" onclick="toggleItemModifierGroup(\'' + escapeHtml(grp.id) + '\')" class="w-full text-left min-h-[48px] p-3 rounded-xl border-2 transition cursor-pointer select-none flex items-center justify-between gap-3 ' +
+          (isAssigned ? 'bg-emerald-50/70 border-emerald-600 shadow-2xs' : 'bg-white border-dashed border-slate-200 hover:border-slate-400') + '">' +
+          '<div>' +
+            '<div class="flex items-center gap-2">' +
+              '<span class="text-xs font-bold ' + (isAssigned ? 'text-emerald-950' : 'text-slate-700') + '">' + escapeHtml(grp.name) + '</span>' +
+              (isAssigned ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-white">Đã gán</span>' : '') +
+            '</div>' +
+            '<div class="text-[11px] text-slate-400 mt-0.5">' + (grp.selectionType === 'single' ? 'Đơn chọn' : 'Đa chọn') + ' (' + optionsCount + ' tùy chọn)</div>' +
+          '</div>' +
+          '<div class="w-8 h-8 rounded-lg flex items-center justify-center ' + (isAssigned ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400') + '">' +
+            '<i data-lucide="' + (isAssigned ? 'check' : 'plus') + '" class="w-4 h-4"></i>' +
+          '</div>' +
+        '</button>';
+      }
+
+      if (!html) {
+        html = '<div class="text-xs text-slate-400 italic p-3 bg-white rounded-xl border border-slate-200 text-center">Toàn bộ nhóm tùy chọn đã được kế thừa từ danh mục.</div>';
+      }
+
+      list.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Toggle assigned modifier group */
+    function toggleItemModifierGroup(groupId) {
+      playTapChirp();
+      var idx = currentAssignedModifierGroupIds.indexOf(groupId);
+      if (idx !== -1) {
+        currentAssignedModifierGroupIds.splice(idx, 1);
+      } else {
+        currentAssignedModifierGroupIds.push(groupId);
+      }
+      renderItemAdditionalModifiers();
+      updateItemPricePreview();
+    }
+
+    /* Live Price Preview Calculation */
+    function updateItemPricePreview() {
+      var basePriceEl = document.getElementById('item-preview-base-price');
+      var groupsCountEl = document.getElementById('item-preview-groups-count');
+      var sizesRangeEl = document.getElementById('item-preview-sizes-range');
+
+      var catSelect = document.getElementById('item-form-category');
+      var catId = catSelect ? catSelect.value : '';
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+      var cat = categories.find(function (c) { return c.id === catId; });
+
+      // Effective modifier groups count
+      var effectiveCount = 0;
+      if (cat && Array.isArray(cat.defaultGroupIds)) {
+        for (var i = 0; i < cat.defaultGroupIds.length; i++) {
+          if (currentExcludedModifierGroupIds.indexOf(cat.defaultGroupIds[i]) === -1) {
+            effectiveCount++;
+          }
+        }
+      }
+      effectiveCount += currentAssignedModifierGroupIds.length;
+
+      if (groupsCountEl) {
+        groupsCountEl.textContent = effectiveCount + ' nhóm';
+      }
+
+      if (isItemMultiSize && currentItemSizes.length > 0) {
+        var def = currentItemSizes.find(function (s) { return s.id === currentItemDefaultSizeId || s.isDefault; }) || currentItemSizes[0];
+        var prices = currentItemSizes.map(function (s) { return s.price; });
+        var minP = Math.min.apply(null, prices);
+        var maxP = Math.max.apply(null, prices);
+
+        if (basePriceEl) {
+          basePriceEl.textContent = formatVND(def.price) + ' (' + (def.name || def.id) + ')';
+        }
+        if (sizesRangeEl) {
+          sizesRangeEl.textContent = (minP === maxP) ? formatVND(minP) : (formatVND(minP) + ' - ' + formatVND(maxP));
+        }
+      } else {
+        var singleP = parseInt(document.getElementById('item-form-base-price').value, 10) || 0;
+        if (basePriceEl) {
+          basePriceEl.textContent = formatVND(singleP);
+        }
+        if (sizesRangeEl) {
+          sizesRangeEl.textContent = formatVND(singleP);
+        }
+      }
+    }
+
+    /* Save Menu Item Form Handler */
+    function saveMenuItemForm(event) {
+      if (event) event.preventDefault();
+
+      var nameInput = document.getElementById('item-form-name');
+      var name = nameInput ? nameInput.value.trim() : '';
+      if (!name) {
+        showToast('Vui lòng nhập tên món ăn', true);
+        if (nameInput) nameInput.focus();
+        return;
+      }
+
+      var catSelect = document.getElementById('item-form-category');
+      var catId = catSelect ? catSelect.value : '';
+      if (!catId) {
+        showToast('Vui lòng chọn danh mục thực đơn', true);
+        return;
+      }
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+      var cat = categories.find(function (c) { return c.id === catId; });
+      var catName = cat ? cat.name : 'Món uống';
+
+      var acronymInput = document.getElementById('item-form-acronym');
+      var acronym = acronymInput ? acronymInput.value.trim().toLowerCase() : '';
+      if (!acronym) {
+        acronym = generateVietnameseAcronym(name);
+      }
+
+      var sizes = [];
+      var defaultSize = '';
+      var basePrice = 0;
+
+      if (isItemMultiSize) {
+        if (currentItemSizes.length === 0) {
+          showToast('Vui lòng thêm ít nhất một kích cỡ giá bán', true);
+          return;
+        }
+        sizes = JSON.parse(JSON.stringify(currentItemSizes));
+        var def = sizes.find(function (s) { return s.id === currentItemDefaultSizeId || s.isDefault; });
+        if (!def) {
+          def = sizes[0];
+          def.isDefault = true;
+        }
+        defaultSize = def.id;
+        basePrice = def.price;
+        if (basePrice <= 0) {
+          showToast('Giá bán kích cỡ mặc định phải lớn hơn 0', true);
+          return;
+        }
+      } else {
+        var pInput = document.getElementById('item-form-base-price');
+        basePrice = parseInt(pInput ? pInput.value : 0, 10) || 0;
+        if (basePrice <= 0) {
+          showToast('Đơn giá bán phải lớn hơn 0', true);
+          if (pInput) pInput.focus();
+          return;
+        }
+        sizes = [];
+        defaultSize = '';
+      }
+
+      var imageUrl = (document.getElementById('item-form-image').value || '').trim();
+      var badge = (document.getElementById('item-form-badge').value || '').trim();
+      var description = (document.getElementById('item-form-description').value || '').trim();
+
+      var itemObj = {
+        id: currentItemModalId || ('item_' + Date.now()),
+        name: name,
+        categoryId: catId,
+        categoryName: catName,
+        basePrice: basePrice,
+        imageUrl: imageUrl,
+        hasModifiers: true,
+        sizes: sizes,
+        defaultSize: defaultSize,
+        acronym: acronym,
+        badge: badge,
+        description: description,
+        assignedModifierGroupIds: currentAssignedModifierGroupIds.slice(),
+        excludedModifierGroupIds: currentExcludedModifierGroupIds.slice(),
+        isAvailable: true
+      };
+
+      if (window.POS_BUS && typeof window.POS_BUS.saveMenuItem === 'function') {
+        window.POS_BUS.saveMenuItem(itemObj);
+      }
+
+      playCashChime();
+      showToast('Đã lưu thông tin món: ' + itemObj.name);
+      closeMenuItemModal();
+      renderCatalogItemsGrid();
+      refreshCatalogCounters();
+    }
+
+    /* Delete Menu Item Confirmation Handler */
+    function deleteMenuItemConfirmed(itemId) {
+      var targetId = itemId || currentItemModalId;
+      if (!targetId) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var item = (catalog && Array.isArray(catalog.items))
+        ? catalog.items.find(function (it) { return it.id === targetId; })
+        : null;
+
+      var itemName = item ? item.name : targetId;
+      if (!confirm('Bạn có chắc chắn muốn xóa món "' + itemName + '" khỏi thực đơn?')) {
+        return;
+      }
+
+      if (window.POS_BUS && typeof window.POS_BUS.deleteMenuItem === 'function') {
+        window.POS_BUS.deleteMenuItem(targetId);
+      }
+
+      playTapChirp();
+      showToast('Đã xóa món "' + itemName + '" khỏi thực đơn');
+      closeMenuItemModal();
+      renderCatalogItemsGrid();
+      refreshCatalogCounters();
+    }
+
+    /* Jump to Batch Linker with this item pre-focused */
+    function jumpToBatchLinker(itemId) {
+      playTapChirp();
+      catalogPreFocusedItemId = itemId;
+      switchCatalogSubView('linker');
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var item = (catalog && Array.isArray(catalog.items))
+        ? catalog.items.find(function (it) { return it.id === itemId; })
+        : null;
+      var itemName = item ? item.name : itemId;
+      showToast('Đã chọn món "' + itemName + '" cho ma trận gán Topping');
     }
 
     /* =========================================================================
@@ -2465,7 +3742,7 @@
       var backdrop = document.getElementById('modal-backdrop-overlay');
       if (modal) modal.classList.add('hidden');
 
-      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help'];
+      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form'];
       var anyOpen = false;
       for (var i = 0; i < checkModals.length; i++) {
         var m = document.getElementById(checkModals[i]);
@@ -2480,7 +3757,7 @@
     }
 
     function closeAllModals() {
-      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help'];
+      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form'];
       for (var i = 0; i < checkModals.length; i++) {
         var m = document.getElementById(checkModals[i]);
         if (m) m.classList.add('hidden');
@@ -2617,10 +3894,15 @@
         return;
       }
 
-      // Ctrl + S: Save Store Settings Form
+      // Ctrl + S: Save Store Settings Form or Save Menu Item Form
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
-        saveStoreSettingsForm();
+        var itemModal = document.getElementById('modal-item-form');
+        if (itemModal && !itemModal.classList.contains('hidden')) {
+          saveMenuItemForm();
+        } else {
+          saveStoreSettingsForm();
+        }
         return;
       }
 
@@ -2640,7 +3922,7 @@
         }
 
         var anyModalOpen = false;
-        var checkModals = ['modal-manager-reset', 'modal-shortcuts-help'];
+        var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form'];
         for (var i = 0; i < checkModals.length; i++) {
           var m = document.getElementById(checkModals[i]);
           if (m && !m.classList.contains('hidden')) {
@@ -2683,6 +3965,7 @@
       loadStoreSettingsForm();
       initBusSubscriptions();
       refreshCatalogCounters();
+      renderCatalogItemsGrid();
 
       if (window.lucide) {
         window.lucide.createIcons();
