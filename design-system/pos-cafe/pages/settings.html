@@ -1,0 +1,2385 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<!--
+  Reading this as: Store Setup, VietQR Configuration, K80 Receipt Customizer, and Real-Time Catalog Stock Toggle screen for cafe manager / cashier operations, with a Crisp Light Mode language, leaning toward Tailwind CSS + Outfit/JetBrains Mono + tactile >= 48px touch targets + zero-dependency standalone HTML5.
+  DESIGN_VARIANCE: 4 | MOTION_INTENSITY: 4 | VISUAL_DENSITY: 7
+-->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POS Cafe - Cài đặt Cửa hàng & Quản lý Thực đơn (Settings & Stock)</title>
+
+  <!-- Google Fonts: Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            emerald: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              300: '#6ee7b7',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            }
+          },
+          boxShadow: {
+            '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            'card': '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)',
+            'card-hover': '0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+            'modal': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- POS Cafe Shared Cross-Tab Sync Bus -->
+  <script src="../shared/pos-bus.js"></script>
+
+  <style>
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    * { -webkit-tap-highlight-color: transparent; }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    @keyframes cardEntrance {
+      0% { opacity: 0; transform: translateY(6px) scale(0.99); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .animate-card-in {
+      animation: cardEntrance 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes pinShake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+
+    .animate-pin-shake {
+      animation: pinShake 0.35s ease-in-out;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .animate-card-in,
+      .animate-pin-shake,
+      .animate-pulse,
+      .animate-ping {
+        animation: none !important;
+      }
+    }
+
+    /* K80 Thermal Receipt Dedicated Print Styles */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #receipt-paper-printable,
+      #receipt-paper-printable * {
+        visibility: visible !important;
+      }
+      #receipt-paper-printable {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 4mm 2mm !important;
+        background: white !important;
+        display: block !important;
+        z-index: 99999 !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+        color: #0f172a !important;
+      }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+
+<body class="h-[100dvh] w-full bg-slate-50 text-slate-900 flex flex-col font-sans antialiased select-none overflow-hidden">
+
+  <!-- Station Switcher Click-outside Backdrop -->
+  <div id="station-switcher-backdrop" class="fixed inset-0 z-40 hidden" onclick="toggleStationSwitcher(false)"></div>
+
+  <!-- Reusable Modal Backdrop Overlay -->
+  <div id="modal-backdrop-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden transition-opacity duration-200"></div>
+
+  <!-- Toast Notification Container -->
+  <div id="pos-toast" class="fixed bottom-6 right-6 z-50 pointer-events-none transform translate-y-24 opacity-0 transition-all duration-300 ease-out">
+    <div class="min-h-[48px] px-4 py-3 bg-slate-900 text-white rounded-xl shadow-xl flex items-center gap-3 border border-slate-700/80 text-xs sm:text-sm font-medium">
+      <div id="toast-icon-wrapper" class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+      </div>
+      <span id="toast-message" class="text-slate-100 font-sans">Cập nhật cấu hình thành công</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 1. TOP HEADER & CONTROL BAR                                               -->
+  <!-- ========================================================================= -->
+  <header class="relative z-40 h-16 w-full border-b border-slate-200 bg-white/95 backdrop-blur px-4 sm:px-6 flex items-center justify-between gap-3 flex-shrink-0">
+    
+    <!-- Left: Station Switcher & Brand Info -->
+    <div class="flex items-center gap-3">
+      <!-- Station Switcher Dropdown Anchor -->
+      <div class="relative">
+        <button id="btn-station-switcher" type="button" onclick="toggleStationSwitcher()"
+          class="min-h-[48px] min-w-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 transition flex items-center gap-2 select-none shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          title="Chuyển trạm làm việc (F0, F10 hoặc click)" aria-expanded="false" aria-haspopup="true">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/60">
+            <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+          </div>
+          <div class="flex flex-col text-left">
+            <span class="text-xs font-bold text-slate-900 leading-tight">Trạm làm việc</span>
+            <span class="text-[10px] font-medium text-emerald-600 leading-tight">Cài đặt & Thực đơn</span>
+          </div>
+          <i id="station-switcher-chevron" data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 ml-0.5 transition-transform duration-200"></i>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div id="station-switcher-dropdown" class="hidden absolute top-14 left-0 z-50 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 flex flex-col gap-1 backdrop-blur-md">
+          <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between mb-1">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Chọn trạm làm việc</span>
+            <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">F0 / F10</span>
+          </div>
+
+          <!-- F1: Quầy thu ngân -->
+          <a href="../index.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Quầy thu ngân</span>
+                <span class="text-[10px] text-slate-400">Order & Thanh toán</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F1</span>
+          </a>
+
+          <!-- F3: Pha chế KDS -->
+          <a href="kds.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="coffee" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Pha chế KDS</span>
+                <span class="text-[10px] text-slate-400">Màn hình Barista & Bếp</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F3</span>
+          </a>
+
+          <!-- F4: Quản lý Ca & Quỹ -->
+          <a href="shift.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Quản lý Ca & Quỹ</span>
+                <span class="text-[10px] text-slate-400">Kiểm két & Báo cáo Z</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F4</span>
+          </a>
+
+          <!-- F5: Sơ đồ Bàn -->
+          <a href="tables.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="table-2" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Sơ đồ Bàn</span>
+                <span class="text-[10px] text-slate-400">Khu vực & Đặt bàn</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F5</span>
+          </a>
+
+          <!-- F6: Lịch sử đơn -->
+          <a href="history.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="receipt" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Lịch sử đơn</span>
+                <span class="text-[10px] text-slate-400">Hóa đơn & Kiểm toán</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">F6</span>
+          </a>
+
+          <!-- F7: Cài đặt món & Kho (Active Current) -->
+          <a href="settings.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm bg-emerald-50/80 border border-emerald-200/80 text-emerald-900 font-semibold select-none">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-emerald-950">Cài đặt & Thực đơn</span>
+                <span class="text-[10px] text-emerald-700">Bật / Tắt món & Quán</span>
+              </div>
+            </div>
+            <span class="flex h-2 w-2 relative">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          </a>
+
+          <div class="h-[1px] bg-slate-100 my-1"></div>
+
+          <!-- Esc: Khóa phiên trạm -->
+          <a href="auth.html" class="min-h-[48px] h-12 px-3 py-2 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100/80 active:scale-[0.98] transition-all">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <i data-lucide="lock" class="w-4 h-4"></i>
+              </div>
+              <div class="flex flex-col text-left">
+                <span class="font-semibold text-slate-900">Khóa phiên trạm</span>
+                <span class="text-[10px] text-slate-400">Đăng nhập PIN</span>
+              </div>
+            </div>
+            <span class="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">Esc</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Cafe Title & Subtitle -->
+      <div class="hidden sm:flex flex-col">
+        <div class="flex items-center gap-2">
+          <span id="header-store-name" class="text-sm font-bold text-slate-900 tracking-tight">The Coffee Workshop</span>
+          <span class="text-slate-300 font-normal">/</span>
+          <span class="text-xs text-slate-600 font-medium">Cài đặt Cửa hàng & Quản lý Thực đơn (Settings & Stock)</span>
+        </div>
+        <span class="text-[11px] text-slate-400">Bật tắt món tức thì, cấu hình ngân hàng VietQR và tùy chỉnh in K80</span>
+      </div>
+    </div>
+
+    <!-- Center: Staff Profile Badge -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <div class="h-10 px-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium flex items-center gap-2 shadow-2xs">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+        <span id="header-staff-name" class="font-semibold text-slate-800">Quản lý: Nguyễn Văn Lan</span>
+      </div>
+    </div>
+
+    <!-- Right: Digital Clock, Sound Toggle, Keyboard Help -->
+    <div class="flex items-center gap-2">
+      <!-- Real-time Digital Clock -->
+      <div class="hidden md:flex items-center gap-1.5 px-3 h-10 rounded-xl bg-slate-100/80 border border-slate-200 text-slate-700 font-mono text-xs font-semibold">
+        <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span id="live-digital-clock" class="tabular-nums">17:30:00</span>
+      </div>
+
+      <!-- Sound Toggle Button -->
+      <button id="btn-sound-toggle" type="button" onclick="toggleSoundAlert()"
+        class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 flex items-center justify-center cursor-pointer transition shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+        title="Bật / Tắt âm thanh thao tác" aria-label="Âm thanh">
+        <i id="sound-toggle-icon" data-lucide="volume-2" class="w-4 h-4 text-emerald-600"></i>
+      </button>
+
+      <!-- Keyboard Shortcuts Help Button -->
+      <button id="btn-shortcuts-help" type="button" onclick="openShortcutsModal()"
+        class="min-h-[48px] h-12 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs focus:outline-none"
+        title="Hướng dẫn phím tắt (F0, F1, Esc, Ctrl+S)">
+        <i data-lucide="help-circle" class="w-4 h-4 text-slate-500"></i>
+        <span class="hidden sm:inline">Phím tắt</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- 2. MAIN SUB-NAV TABS BAR (>= 48px Touch Targets)                          -->
+  <!-- ========================================================================= -->
+  <div class="w-full bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex-shrink-0">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 overflow-x-auto">
+      <nav class="flex items-center gap-2 sm:gap-3" role="tablist" aria-label="Cài đặt">
+        <!-- Tab 1: Kho & Món Tạm Hết -->
+        <button id="tab-btn-stock" type="button" onclick="switchSettingsTab('stock')" role="tab" aria-selected="true"
+          class="min-h-[48px] h-12 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2.5 transition shadow-xs bg-slate-900 text-white cursor-pointer select-none">
+          <i data-lucide="package-x" class="w-4 h-4"></i>
+          <span>Kho & Món Tạm Hết</span>
+          <span id="tab-stock-counter" class="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-white/20 text-white border border-white/10">0 tạm hết</span>
+        </button>
+
+        <!-- Tab 2: Thông tin Quán & VietQR -->
+        <button id="tab-btn-store" type="button" onclick="switchSettingsTab('store')" role="tab" aria-selected="false"
+          class="min-h-[48px] h-12 px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2.5 transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer select-none border border-transparent">
+          <i data-lucide="store" class="w-4 h-4 text-slate-400"></i>
+          <span>Thông tin Quán & VietQR</span>
+        </button>
+
+        <!-- Tab 3: Tùy chỉnh In & Hệ thống -->
+        <button id="tab-btn-system" type="button" onclick="switchSettingsTab('system')" role="tab" aria-selected="false"
+          class="min-h-[48px] h-12 px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2.5 transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer select-none border border-transparent">
+          <i data-lucide="printer" class="w-4 h-4 text-slate-400"></i>
+          <span>Tùy chỉnh In & Hệ thống</span>
+        </button>
+      </nav>
+
+      <!-- Quick Action Right in Tab Bar: Jump to Cashier -->
+      <div class="hidden md:flex items-center gap-2">
+        <a href="../index.html" class="min-h-[48px] h-12 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-xs font-semibold text-slate-700 flex items-center gap-2 shadow-2xs transition">
+          <i data-lucide="arrow-left" class="w-4 h-4 text-slate-500"></i>
+          <span>Về Quầy thu ngân</span>
+          <kbd class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-100 text-slate-500 border border-slate-200">F1</kbd>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 3. MAIN SCROLLABLE CONTENT VIEWPORTS                                      -->
+  <!-- ========================================================================= -->
+  <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+
+    <!-- ======================================================================= -->
+    <!-- VIEW 1: TAB 1 - KHO & MÓN TẠM HẾT (STOCK TOGGLES)                       -->
+    <!-- ======================================================================= -->
+    <section id="view-stock" class="space-y-5 animate-card-in">
+      
+      <!-- Top Overview Stats & Bulk Actions Bar -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <!-- Card 1: Tổng số sản phẩm -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card flex items-center justify-between">
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Tổng danh mục</span>
+            <div id="stat-total-items" class="text-2xl font-bold font-mono text-slate-900 mt-0.5">16</div>
+            <span class="text-xs text-slate-500">12 món + 4 topping</span>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center border border-slate-200">
+            <i data-lucide="coffee" class="w-5 h-5"></i>
+          </div>
+        </div>
+
+        <!-- Card 2: Đang sẵn sàng phục vụ -->
+        <div class="bg-white rounded-2xl border border-emerald-200 p-4 shadow-card flex items-center justify-between">
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Đang còn hàng</span>
+            <div id="stat-instock-count" class="text-2xl font-bold font-mono text-emerald-600 mt-0.5">14</div>
+            <span class="text-xs text-emerald-700 font-medium">Bình thường tại quầy</span>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+          </div>
+        </div>
+
+        <!-- Card 3: Đang tạm hết hàng -->
+        <div class="bg-white rounded-2xl border border-rose-200 p-4 shadow-card flex items-center justify-between">
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-rose-700">Tạm hết hàng</span>
+            <div id="stat-outstock-count" class="text-2xl font-bold font-mono text-rose-600 mt-0.5">2</div>
+            <span class="text-xs text-rose-600 font-medium">Khóa chọn trên POS</span>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-200">
+            <i data-lucide="alert-octagon" class="w-5 h-5"></i>
+          </div>
+        </div>
+
+        <!-- Card 4: Quick Bulk Action -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-card flex flex-col justify-center gap-2">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Thao tác kho nhanh</span>
+          <button type="button" onclick="restoreAllInStock()"
+            class="min-h-[48px] h-12 px-4 rounded-xl font-bold text-xs sm:text-sm text-emerald-800 bg-emerald-50 hover:bg-emerald-100 active:scale-[0.98] border border-emerald-300 transition flex items-center justify-center gap-2 select-none cursor-pointer">
+            <i data-lucide="refresh-cw" class="w-4 h-4 text-emerald-700"></i>
+            <span>Khôi phục tất cả Còn hàng</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Search Bar, Category Filters & Status Filters -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card space-y-3">
+        <div class="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          <!-- Search Input (min-h-[48px]) -->
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="search" class="w-4 h-4"></i>
+            </div>
+            <input id="stock-search-input" type="text" oninput="handleStockSearch(this.value)"
+              placeholder="Tìm theo tên món hoặc mã (cfsd, bạc xỉu, trà đào, topping...)"
+              class="w-full min-h-[48px] h-12 pl-10 pr-10 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900 placeholder-slate-400 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+            <button id="btn-clear-stock-search" type="button" onclick="clearStockSearch()"
+              class="hidden absolute inset-y-0 right-0 min-h-[48px] min-w-[48px] h-12 w-12 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
+              aria-label="Xóa tìm kiếm">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Out-of-stock only toggle filter -->
+          <button id="btn-toggle-filter-outstock" type="button" onclick="toggleOnlyOutStockFilter()"
+            class="min-h-[48px] h-12 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 select-none cursor-pointer transition shadow-2xs">
+            <i data-lucide="filter" class="w-4 h-4 text-slate-400"></i>
+            <span id="filter-outstock-label">Chỉ xem món Tạm hết</span>
+          </button>
+        </div>
+
+        <!-- Category Filter Pills (>= 48px touch targets) -->
+        <div class="flex items-center gap-2 overflow-x-auto pt-1 pb-1" role="tablist" aria-label="Danh mục">
+          <button type="button" onclick="setStockCategory('all')" data-stock-cat="all"
+            class="stock-cat-pill min-h-[48px] h-12 px-4 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 bg-slate-900 text-white shadow-xs select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="layout-grid" class="w-4 h-4"></i>
+            <span>Tất cả</span>
+          </button>
+          <button type="button" onclick="setStockCategory('coffee')" data-stock-cat="coffee"
+            class="stock-cat-pill min-h-[48px] h-12 px-4 rounded-xl font-medium text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="coffee" class="w-4 h-4"></i>
+            <span>Cà phê</span>
+          </button>
+          <button type="button" onclick="setStockCategory('tea')" data-stock-cat="tea"
+            class="stock-cat-pill min-h-[48px] h-12 px-4 rounded-xl font-medium text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="cup-soda" class="w-4 h-4"></i>
+            <span>Trà</span>
+          </button>
+          <button type="button" onclick="setStockCategory('freeze')" data-stock-cat="freeze"
+            class="stock-cat-pill min-h-[48px] h-12 px-4 rounded-xl font-medium text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span>Đá xay</span>
+          </button>
+          <button type="button" onclick="setStockCategory('bakery')" data-stock-cat="bakery"
+            class="stock-cat-pill min-h-[48px] h-12 px-4 rounded-xl font-medium text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="cake" class="w-4 h-4"></i>
+            <span>Bánh</span>
+          </button>
+          <button type="button" onclick="setStockCategory('topping')" data-stock-cat="topping"
+            class="stock-cat-pill min-h-[48px] h-12 px-4 rounded-xl font-medium text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 select-none cursor-pointer flex-shrink-0">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+            <span>Topping</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Stock Catalog Grid -->
+      <div id="stock-items-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+        <!-- Dynamic Cards rendered via renderStockGrid() -->
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW 2: TAB 2 - THÔNG TIN QUÁN & VIETQR (STORE SETUP)                   -->
+    <!-- ======================================================================= -->
+    <section id="view-store" class="space-y-6 hidden animate-card-in">
+      
+      <!-- Top Helper Strip -->
+      <div class="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-4 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+            <i data-lucide="qr-code" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold leading-tight">Cấu hình Cửa hàng & Thanh toán Tự động VietQR</h2>
+            <p class="text-xs text-emerald-800 mt-0.5">Thông tin lưu tại đây sẽ đồng bộ tức thời sang màn hình Quầy thu ngân, Mã QR thanh toán và Mẫu in hóa đơn K80.</p>
+          </div>
+        </div>
+        <button type="button" onclick="saveStoreSettingsForm()"
+          class="min-h-[48px] h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md cursor-pointer transition select-none flex-shrink-0">
+          <i data-lucide="save" class="w-4 h-4"></i>
+          <span>LƯU CẤU HÌNH CỬA HÀNG (Ctrl+S)</span>
+        </button>
+      </div>
+
+      <!-- 2-Column Responsive Layout: Form on Left, Live VietQR on Right -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left: Store Profile & VietQR Configuration Form -->
+        <div class="lg:col-span-7 space-y-6">
+          
+          <!-- Section A: Store Profile -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-card space-y-4">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200">
+                <i data-lucide="store" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 leading-tight">Hồ sơ Cửa hàng (Store Profile)</h3>
+                <p class="text-[11px] text-slate-400">Tên thương hiệu, địa chỉ và thông tin liên hệ hiển thị trên hóa đơn</p>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <!-- Tên quán -->
+              <div class="space-y-1.5">
+                <label for="input-store-name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Tên quán / Thương hiệu</label>
+                <input id="input-store-name" type="text" oninput="handleStoreFormInput()"
+                  placeholder="Ví dụ: The Coffee Workshop"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+              </div>
+
+              <!-- Slogan / Lời chào -->
+              <div class="space-y-1.5">
+                <label for="input-store-tagline" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Slogan / Lời chào thương hiệu</label>
+                <input id="input-store-tagline" type="text" oninput="handleStoreFormInput()"
+                  placeholder="Ví dụ: Cà phê Đặc sản & Rang mộc Thủ công"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+              </div>
+
+              <!-- Địa chỉ quán -->
+              <div class="space-y-1.5">
+                <label for="input-store-address" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Địa chỉ kinh doanh</label>
+                <input id="input-store-address" type="text" oninput="handleStoreFormInput()"
+                  placeholder="Ví dụ: 120 Hoàng Hoa Thám, Ba Đình, Hà Nội"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+              </div>
+
+              <!-- Hotline & Mật khẩu Wi-Fi -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="space-y-1.5">
+                  <label for="input-store-hotline" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Hotline hỗ trợ</label>
+                  <input id="input-store-hotline" type="text" oninput="handleStoreFormInput()"
+                    placeholder="0988 123 456"
+                    class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 font-mono text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+                </div>
+                <div class="space-y-1.5">
+                  <label for="input-store-wifi-pass" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Mật khẩu Wi-Fi quán</label>
+                  <input id="input-store-wifi-pass" type="text" oninput="handleStoreFormInput()"
+                    placeholder="workshop2026"
+                    class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 font-mono text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+                </div>
+              </div>
+
+              <!-- Tên mạng Wi-Fi (SSID) -->
+              <div class="space-y-1.5">
+                <label for="input-store-wifi-ssid" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Tên mạng Wi-Fi (SSID)</label>
+                <input id="input-store-wifi-ssid" type="text" oninput="handleStoreFormInput()"
+                  placeholder="The Coffee Workshop 5G"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Section B: VietQR Settlement Configuration -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-card space-y-4">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+              <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/60">
+                <i data-lucide="credit-card" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 leading-tight">Cấu hình Thụ hưởng VietQR (Bank Setup)</h3>
+                <p class="text-[11px] text-slate-400">Tự động phát sinh mã QR thanh toán chuẩn Napas 24/7 cho từng đơn</p>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <!-- Ngân hàng thụ hưởng -->
+              <div class="space-y-1.5">
+                <label for="select-vietqr-bank" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Ngân hàng thụ hưởng</label>
+                <div class="relative">
+                  <select id="select-vietqr-bank" onchange="handleStoreFormInput()"
+                    class="w-full min-h-[48px] h-12 px-4 pr-10 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition cursor-pointer appearance-none">
+                    <option value="MB" data-bin="970422">MB Bank (Ngân hàng Quân Đội) - BIN: 970422</option>
+                    <option value="VCB" data-bin="970436">Vietcombank (Ngoại thương Việt Nam) - BIN: 970436</option>
+                    <option value="TCB" data-bin="970407">Techcombank (Kỹ thương Việt Nam) - BIN: 970407</option>
+                    <option value="BIDV" data-bin="970418">BIDV (Đầu tư & Phát triển) - BIN: 970418</option>
+                    <option value="ACB" data-bin="970416">ACB (Á Châu) - BIN: 970416</option>
+                  </select>
+                  <div class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                    <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Số tài khoản & Tên chủ tài khoản -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="space-y-1.5">
+                  <label for="input-vietqr-account-no" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Số tài khoản nhận tiền</label>
+                  <input id="input-vietqr-account-no" type="text" oninput="handleStoreFormInput()"
+                    placeholder="0987654321"
+                    class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 font-mono text-sm font-bold text-slate-900 tracking-wider focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+                </div>
+                <div class="space-y-1.5">
+                  <label for="input-vietqr-account-name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Tên chủ tài khoản (In hoa)</label>
+                  <input id="input-vietqr-account-name" type="text" oninput="handleStoreFormInput()"
+                    placeholder="CONG TY TNHH THE COFFEE WORKSHOP"
+                    class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 uppercase text-sm font-bold text-slate-900 tracking-wide focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+                </div>
+              </div>
+
+              <!-- Cú pháp ghi chú chuyển khoản -->
+              <div class="space-y-1.5">
+                <label for="input-vietqr-memo" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Cú pháp nội dung chuyển khoản</label>
+                <input id="input-vietqr-memo" type="text" oninput="handleStoreFormInput()"
+                  placeholder="POS{serviceNumber}"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 font-mono text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+                <p class="text-[11px] text-slate-500">Giữ nguyên biến <code class="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-emerald-700 font-bold">{serviceNumber}</code> để hệ thống tự động điền số thứ tự đơn (ví dụ: POS14, POS15).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Live Interactive VietQR Preview Card -->
+        <div class="lg:col-span-5 space-y-4 sticky top-6">
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Xem trước VietQR Thực tế</span>
+              </div>
+              <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Trực quan 24/7</span>
+            </div>
+
+            <!-- VietQR Card Frame -->
+            <div class="rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-b from-emerald-50/50 to-white p-4 shadow-sm space-y-4 text-center">
+              
+              <!-- Bank Header -->
+              <div class="flex items-center justify-between pb-2 border-b border-emerald-100">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs font-mono">
+                    QR
+                  </div>
+                  <div class="text-left">
+                    <span id="preview-bank-name" class="block font-bold text-xs text-slate-900 leading-tight">MB Bank (Quân Đội)</span>
+                    <span class="text-[10px] text-slate-500 font-medium">Chuyển nhanh Napas 24/7</span>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">Chuẩn VietQR</span>
+              </div>
+
+              <!-- Dynamic QR Image Area with SVG Fallback -->
+              <div class="relative w-48 h-48 mx-auto bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-center overflow-hidden">
+                <img id="preview-vietqr-img" alt="VietQR Live Preview"
+                  src="https://api.vietqr.io/image/970422-0987654321-compact2.png?amount=45000&addInfo=POS14&accountName=NGUYEN%20THU%20NGAN"
+                  onerror="this.classList.add('hidden'); document.getElementById('preview-vietqr-fallback').classList.remove('hidden');"
+                  onload="this.classList.remove('hidden'); document.getElementById('preview-vietqr-fallback').classList.add('hidden');"
+                  class="w-full h-full object-contain" />
+                
+                <!-- Fallback Crisp SVG QR Matrix if offline -->
+                <div id="preview-vietqr-fallback" class="hidden w-full h-full flex flex-col items-center justify-center text-slate-900 p-2">
+                  <svg class="w-full h-full text-slate-900" viewBox="0 0 100 100" fill="currentColor">
+                    <rect x="0" y="0" width="30" height="30" fill="currentColor" rx="4"/>
+                    <rect x="6" y="6" width="18" height="18" fill="white" rx="2"/>
+                    <rect x="10" y="10" width="10" height="10" fill="currentColor" rx="1"/>
+                    <rect x="70" y="0" width="30" height="30" fill="currentColor" rx="4"/>
+                    <rect x="76" y="6" width="18" height="18" fill="white" rx="2"/>
+                    <rect x="80" y="10" width="10" height="10" fill="currentColor" rx="1"/>
+                    <rect x="0" y="70" width="30" height="30" fill="currentColor" rx="4"/>
+                    <rect x="6" y="76" width="18" height="18" fill="white" rx="2"/>
+                    <rect x="10" y="80" width="10" height="10" fill="currentColor" rx="1"/>
+                    <rect x="36" y="6" width="8" height="8" fill="currentColor"/>
+                    <rect x="52" y="6" width="8" height="8" fill="currentColor"/>
+                    <rect x="36" y="22" width="8" height="8" fill="currentColor"/>
+                    <rect x="52" y="22" width="8" height="8" fill="currentColor"/>
+                    <rect x="36" y="38" width="24" height="24" fill="currentColor" rx="2"/>
+                    <rect x="42" y="44" width="12" height="12" fill="white" rx="1"/>
+                    <rect x="6" y="38" width="18" height="8" fill="currentColor"/>
+                    <rect x="6" y="54" width="18" height="8" fill="currentColor"/>
+                    <rect x="76" y="38" width="18" height="8" fill="currentColor"/>
+                    <rect x="76" y="54" width="18" height="8" fill="currentColor"/>
+                    <rect x="36" y="70" width="8" height="24" fill="currentColor"/>
+                    <rect x="52" y="70" width="8" height="24" fill="currentColor"/>
+                    <rect x="70" y="70" width="24" height="8" fill="currentColor"/>
+                    <rect x="70" y="86" width="24" height="8" fill="currentColor"/>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Live Card Meta Details -->
+              <div class="space-y-2 text-left bg-white p-3 rounded-xl border border-slate-100 text-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-400">Số tài khoản:</span>
+                  <div class="flex items-center gap-1.5">
+                    <span id="preview-account-no" class="font-mono font-bold text-slate-900 text-sm">0987654321</span>
+                    <button type="button" onclick="copyPreviewAccountNo()" title="Sao chép số tài khoản"
+                      class="min-h-[48px] px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold flex items-center gap-1 transition">
+                      <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-400">Chủ tài khoản:</span>
+                  <span id="preview-account-name" class="font-bold text-slate-900 uppercase">NGUYEN THU NGAN</span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-400">Số tiền mẫu:</span>
+                  <span class="font-mono font-bold text-emerald-700 text-sm">45.000 đ</span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-400">Nội dung mẫu:</span>
+                  <span id="preview-sample-memo" class="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">POS14</span>
+                </div>
+              </div>
+
+              <p class="text-[11px] text-slate-500 italic">Khách hàng quét mã bằng bất kỳ app ngân hàng nào (VNeID/VietQR) để tự động điền đúng số tiền và nội dung đơn.</p>
+            </div>
+
+            <!-- Save Action Button in Card -->
+            <button type="button" onclick="saveStoreSettingsForm()"
+              class="w-full min-h-[48px] h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer transition select-none">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span>LƯU CẤU HÌNH CỬA HÀNG (Ctrl+S)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW 3: TAB 3 - TÙY CHỈNH IN & HỆ THỐNG (PRINTING & SYSTEM)            -->
+    <!-- ======================================================================= -->
+    <section id="view-system" class="space-y-6 hidden animate-card-in">
+      
+      <!-- Top Action Strip -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 leading-tight">Tùy chỉnh Phiếu In Nhiệt K80 & Quản trị Hệ thống</h2>
+          <p class="text-xs text-slate-500 mt-1">Thiết lập dòng tiêu đề, lời chúc chân trang phiếu thanh toán và khôi phục dữ liệu kiểm thử.</p>
+        </div>
+        <button type="button" onclick="printSampleReceipt()"
+          class="min-h-[48px] h-12 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm cursor-pointer transition select-none flex-shrink-0">
+          <i data-lucide="printer" class="w-4 h-4"></i>
+          <span>In Thử Phiếu Mẫu K80 (Ctrl+P)</span>
+        </button>
+      </div>
+
+      <!-- 2-Column Layout: Receipt Form & Live K80 Thermal Preview -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left: Receipt Customization Fields -->
+        <div class="lg:col-span-6 space-y-5">
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-card space-y-4">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+              <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200">
+                <i data-lucide="file-text" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 leading-tight">Tùy biến Mẫu Hóa đơn K80 (Thermal Receipt)</h3>
+                <p class="text-[11px] text-slate-400">Khổ giấy tiêu chuẩn 80mm cho máy in nhiệt quầy bar</p>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <!-- Dòng tiêu đề 1 -->
+              <div class="space-y-1.5">
+                <label for="input-receipt-header1" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Dòng tiêu đề 1 (Tên quán in hoa)</label>
+                <input id="input-receipt-header1" type="text" oninput="handleReceiptCustomizerInput()"
+                  placeholder="THE COFFEE WORKSHOP"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 font-mono text-sm font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition uppercase" />
+              </div>
+
+              <!-- Dòng tiêu đề 2 -->
+              <div class="space-y-1.5">
+                <label for="input-receipt-header2" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Dòng tiêu đề 2 (Địa chỉ & Hotline)</label>
+                <input id="input-receipt-header2" type="text" oninput="handleReceiptCustomizerInput()"
+                  placeholder="120 Hoàng Hoa Thám, Ba Đình, HN · Hotline: 0988 123 456"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+              </div>
+
+              <!-- Lời chúc chân trang -->
+              <div class="space-y-1.5">
+                <label for="input-receipt-footer" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Lời chúc chân trang (Footer Message)</label>
+                <input id="input-receipt-footer" type="text" oninput="handleReceiptCustomizerInput()"
+                  placeholder="Pass Wi-Fi: workshop2026 · Cảm ơn quý khách và hẹn gặp lại!"
+                  class="w-full min-h-[48px] h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition" />
+              </div>
+
+              <!-- Tùy chọn Tự động mở hộp thoại in sau thanh toán -->
+              <div class="pt-2 border-t border-slate-100">
+                <label class="min-h-[48px] flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 cursor-pointer select-none transition">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                      <i data-lucide="printer" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                      <span class="block text-xs font-bold text-slate-900">Tự động mở hộp thoại in sau thanh toán</span>
+                      <span class="text-[11px] text-slate-500">Gửi lệnh in nhiệt ngay khi thu tiền thành công</span>
+                    </div>
+                  </div>
+                  <input id="chk-auto-print" type="checkbox" onchange="toggleAutoPrintSetting(this.checked)"
+                    class="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer" />
+                </label>
+              </div>
+
+              <button type="button" onclick="saveReceiptTemplateSettings()"
+                class="w-full min-h-[48px] h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer transition select-none">
+                <i data-lucide="check" class="w-4 h-4"></i>
+                <span>LƯU MẪU IN HÓA ĐƠN</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Section: Demo Data Management & Reset -->
+          <div class="bg-rose-50/50 rounded-2xl border border-rose-200 p-5 sm:p-6 shadow-card space-y-4">
+            <div class="flex items-center gap-2.5 pb-2 border-b border-rose-100">
+              <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center border border-rose-200">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-rose-950 leading-tight">Quản lý Dữ liệu Thử nghiệm & Khôi phục</h3>
+                <p class="text-[11px] text-rose-700">Xóa dữ liệu phát sinh tạm thời, trả về trạng thái mẫu ban đầu</p>
+              </div>
+            </div>
+
+            <p class="text-xs text-rose-800 leading-relaxed">
+              Khôi phục toàn bộ danh sách đơn hàng mẫu, ca làm việc (#04), trạng thái kho món và thông tin cửa hàng về cấu hình chuẩn ban đầu mà không làm mất cấu trúc dữ liệu.
+            </p>
+
+            <button type="button" onclick="openManagerResetModal()"
+              class="min-h-[48px] h-12 w-full px-5 rounded-xl border border-rose-300 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer transition select-none">
+              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+              <span>Đặt lại Dữ liệu Mẫu (Reset Demo Data)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Live Side-by-Side K80 Thermal Receipt Preview Paper -->
+        <div class="lg:col-span-6 space-y-4">
+          <div class="bg-slate-200/60 p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-inner flex flex-col items-center">
+            
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
+              <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+              <span>Bản in trực tiếp K80 (80mm Thermal Paper Preview)</span>
+            </span>
+
+            <!-- Printable & Preview Paper Roll Container -->
+            <div id="receipt-paper-printable" class="w-full max-w-[340px] bg-white rounded-xl shadow-lg p-5 border border-slate-200 text-slate-900 font-mono text-xs space-y-3">
+              
+              <!-- Store Header -->
+              <div class="text-center space-y-1">
+                <h4 id="preview-rcpt-h1" class="font-bold text-sm tracking-tight text-slate-900">THE COFFEE WORKSHOP</h4>
+                <p id="preview-rcpt-h2" class="text-[10px] text-slate-600">120 Hoàng Hoa Thám, Ba Đình, HN · ĐT: 0988 123 456</p>
+                <div class="border-b border-dashed border-slate-300 pt-1"></div>
+              </div>
+
+              <!-- Bill Meta -->
+              <div class="space-y-1 text-[11px]">
+                <div class="flex justify-between font-bold text-slate-900">
+                  <span>PHIẾU THANH TOÁN</span>
+                  <span>#14</span>
+                </div>
+                <div class="flex justify-between text-slate-500 text-[10px]">
+                  <span>Giờ: 17:30 20/09/2026</span>
+                  <span>Thu ngân: Nguyễn Văn Lan</span>
+                </div>
+                <div class="flex justify-between text-slate-500 text-[10px]">
+                  <span>Loại: Mang đi (Takeaway)</span>
+                  <span>Ca: Ca #04</span>
+                </div>
+                <div class="border-b border-dashed border-slate-300 pt-1"></div>
+              </div>
+
+              <!-- Sample Item Rows -->
+              <div class="space-y-2 text-[11px]">
+                <div class="space-y-0.5">
+                  <div class="flex justify-between font-semibold text-slate-900">
+                    <span>1x Cà phê sữa đá (M)</span>
+                    <span>35.000 đ</span>
+                  </div>
+                  <div class="text-[9px] text-slate-500 pl-2">100% đường, 100% đá</div>
+                </div>
+
+                <div class="space-y-0.5">
+                  <div class="flex justify-between font-semibold text-slate-900">
+                    <span>1x Bạc xỉu (M)</span>
+                    <span>39.000 đ</span>
+                  </div>
+                  <div class="text-[9px] text-slate-500 pl-2">70% đường, ít đá</div>
+                </div>
+
+                <div class="space-y-0.5">
+                  <div class="flex justify-between font-semibold text-slate-900">
+                    <span>1x Trà đào cam sả (L)</span>
+                    <span>45.000 đ</span>
+                  </div>
+                  <div class="text-[9px] text-slate-500 pl-2">+ Thạch đào (10.000 đ)</div>
+                </div>
+                <div class="border-b border-dashed border-slate-300 pt-1"></div>
+              </div>
+
+              <!-- Totals Breakdown -->
+              <div class="space-y-1 text-[11px]">
+                <div class="flex justify-between text-slate-600">
+                  <span>Tạm tính:</span>
+                  <span>119.000 đ</span>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span>Giảm giá:</span>
+                  <span>0 đ</span>
+                </div>
+                <div class="flex justify-between font-bold text-sm text-slate-900 pt-1 border-t border-slate-200">
+                  <span>TỔNG CỘNG:</span>
+                  <span class="text-emerald-700">119.000 đ</span>
+                </div>
+                <div class="flex justify-between text-slate-600 text-[10px] pt-1">
+                  <span>Hình thức:</span>
+                  <span class="font-bold text-slate-900">VietQR Chuyển khoản</span>
+                </div>
+                <div class="border-b border-dashed border-slate-300 pt-1"></div>
+              </div>
+
+              <!-- Footer Message -->
+              <div class="text-center pt-1 space-y-1">
+                <p id="preview-rcpt-footer" class="text-[10px] font-semibold text-slate-800">Pass Wi-Fi: workshop2026 · Cảm ơn quý khách!</p>
+                <p class="text-[9px] text-slate-400">Hóa đơn điện tử khởi tạo từ POS Cafe Suite</p>
+              </div>
+            </div>
+
+            <button type="button" onclick="printSampleReceipt()"
+              class="mt-4 min-h-[48px] h-12 px-6 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs flex items-center gap-2 shadow-xs cursor-pointer select-none transition">
+              <i data-lucide="printer" class="w-4 h-4 text-emerald-600"></i>
+              <span>Kiểm tra lệnh in thực tế qua trình duyệt</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- 4. MODALS & DIALOGS                                                       -->
+  <!-- ========================================================================= -->
+
+  <!-- Modal A: Manager PIN Confirmation for System Reset -->
+  <div id="modal-manager-reset" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+    <div class="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-modal p-6 space-y-5 animate-card-in" role="dialog" aria-modal="true">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-200/60">
+            <i data-lucide="shield-alert" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 leading-tight">Xác thực Quản lý (Manager PIN)</h3>
+            <span class="text-[11px] text-slate-400">Khôi phục dữ liệu mẫu hệ thống</span>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-manager-reset')"
+          class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+          aria-label="Đóng">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Thao tác này sẽ thiết lập lại toàn bộ danh sách đơn hàng, ca thu ngân và trạng thái món về mặc định. Vui lòng nhập mã PIN quản lý để xác nhận:
+        </p>
+
+        <!-- PIN Display Dots -->
+        <div class="flex items-center justify-center gap-3 py-2">
+          <div id="pin-dot-1" class="w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all"></div>
+          <div id="pin-dot-2" class="w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all"></div>
+          <div id="pin-dot-3" class="w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all"></div>
+          <div id="pin-dot-4" class="w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all"></div>
+        </div>
+
+        <div id="pin-error-text" class="text-xs text-rose-600 font-bold text-center min-h-[16px] hidden">
+          Mã PIN quản lý không chính xác (Thử: 8888)
+        </div>
+
+        <!-- Numeric Tactile Keypad (Each button >= 48px) -->
+        <div class="grid grid-cols-3 gap-2 pt-1">
+          <button type="button" onclick="appendManagerPin('1')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">1</button>
+          <button type="button" onclick="appendManagerPin('2')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">2</button>
+          <button type="button" onclick="appendManagerPin('3')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">3</button>
+          <button type="button" onclick="appendManagerPin('4')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">4</button>
+          <button type="button" onclick="appendManagerPin('5')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">5</button>
+          <button type="button" onclick="appendManagerPin('6')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">6</button>
+          <button type="button" onclick="appendManagerPin('7')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">7</button>
+          <button type="button" onclick="appendManagerPin('8')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">8</button>
+          <button type="button" onclick="appendManagerPin('9')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">9</button>
+          <button type="button" onclick="clearManagerPin()" class="min-h-[48px] h-12 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 text-xs font-bold transition flex items-center justify-center">XÓA</button>
+          <button type="button" onclick="appendManagerPin('0')" class="min-h-[48px] h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.96] font-mono text-base font-bold text-slate-800 transition flex items-center justify-center">0</button>
+          <button type="button" onclick="submitManagerReset()" class="min-h-[48px] h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.96] text-white text-xs font-bold transition flex items-center justify-center">ĐẶT LẠI</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal B: Keyboard Shortcuts Help Modal -->
+  <div id="modal-shortcuts-help" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+    <div class="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-modal p-6 space-y-4 animate-card-in" role="dialog" aria-modal="true">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200">
+            <i data-lucide="keyboard" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 leading-tight">Danh sách Phím tắt Thao tác Nhanh</h3>
+            <span class="text-[11px] text-slate-400">Điều hướng trạm và thao tác cài đặt</span>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-shortcuts-help')"
+          class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+          aria-label="Đóng">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Bật / Tắt danh sách chuyển trạm</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">F0 / F10 / `</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Chuyển sang Quầy thu ngân</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">F1</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Chuyển sang Màn hình Pha chế KDS</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">F3</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Chuyển sang Quản lý Ca & Quỹ</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">F4</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Chuyển sang Sơ đồ Bàn</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">F5</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Chuyển sang Lịch sử đơn</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">F6</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Chuyển Tab Kho / Cửa hàng / In</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">F7 / F8 / F9</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Lưu cấu hình cửa hàng</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">Ctrl + S</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">In thử phiếu hóa đơn mẫu K80</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">Ctrl + P</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+          <span class="text-slate-700 font-medium">Đóng hộp thoại hoặc Khóa phiên trạm</span>
+          <kbd class="px-2 py-1 font-mono text-[11px] rounded bg-white border border-slate-200 font-bold">Esc</kbd>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 5. JAVASCRIPT CONTROLLERS & EVENT SUBSYSTEM                                -->
+  <!-- ========================================================================= -->
+  <script>
+    'use strict';
+
+    /* =========================================================================
+       1. Application State & Catalog Mock Data
+       ========================================================================= */
+    var currentTab = 'stock'; // 'stock' | 'store' | 'system'
+    var isSoundMuted = false;
+    var stockSearchQuery = '';
+    var activeStockCategory = 'all'; // 'all' | 'coffee' | 'tea' | 'freeze' | 'bakery' | 'topping'
+    var onlyOutStockFilter = false;
+    var enteredManagerPin = '';
+
+    // Standard Catalog Items (Products + Toppings)
+    var CATALOG_ITEMS = [
+      // 1. Cà phê Việt
+      {
+        id: 'cfsd',
+        name: 'Cà phê sữa đá',
+        code: 'CFSD',
+        categoryGroup: 'coffee',
+        categoryName: 'Cà phê Việt',
+        price: 35000,
+        sizes: 'S / M / L',
+        icon: 'coffee',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=1'
+      },
+      {
+        id: 'cfdd',
+        name: 'Cà phê đen đá',
+        code: 'CFDD',
+        categoryGroup: 'coffee',
+        categoryName: 'Cà phê Việt',
+        price: 30000,
+        sizes: 'S / M / L',
+        icon: 'coffee',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=2'
+      },
+      {
+        id: 'bacxiu',
+        name: 'Bạc xỉu',
+        code: 'BX',
+        categoryGroup: 'coffee',
+        categoryName: 'Cà phê Việt',
+        price: 39000,
+        sizes: 'S / M / L',
+        icon: 'coffee',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=3'
+      },
+      {
+        id: 'cfmuoi',
+        name: 'Cà phê muối',
+        code: 'CPM',
+        categoryGroup: 'coffee',
+        categoryName: 'Cà phê Việt',
+        price: 39000,
+        sizes: 'S / M / L',
+        icon: 'coffee',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=12'
+      },
+      {
+        id: 'coldbrew_cs',
+        name: 'Cold Brew cam sả',
+        code: 'CBCS',
+        categoryGroup: 'coffee',
+        categoryName: 'Cà phê Việt',
+        price: 45000,
+        sizes: 'M / L',
+        icon: 'coffee',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=4'
+      },
+
+      // 2. Cà phê Máy
+      {
+        id: 'espresso',
+        name: 'Espresso',
+        code: 'ESP',
+        categoryGroup: 'coffee',
+        categoryName: 'Cà phê máy',
+        price: 30000,
+        sizes: 'Single / Double',
+        icon: 'coffee',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=5'
+      },
+      {
+        id: 'latte',
+        name: 'Latte',
+        code: 'LT',
+        categoryGroup: 'coffee',
+        categoryName: 'Cà phê máy',
+        price: 48000,
+        sizes: 'S / M / L',
+        icon: 'coffee',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=6'
+      },
+
+      // 3. Trà & Macchiato
+      {
+        id: 'tdcs',
+        name: 'Trà đào cam sả',
+        code: 'TDCS',
+        categoryGroup: 'tea',
+        categoryName: 'Trà & Macchiato',
+        price: 45000,
+        sizes: 'M / L',
+        icon: 'cup-soda',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=7'
+      },
+      {
+        id: 'tvhh',
+        name: 'Trà vải hoa hồng',
+        code: 'TVHH',
+        categoryGroup: 'tea',
+        categoryName: 'Trà & Macchiato',
+        price: 45000,
+        sizes: 'M / L',
+        icon: 'cup-soda',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=8'
+      },
+
+      // 4. Đá xay & Sinh tố
+      {
+        id: 'freeze_tx',
+        name: 'Freeze trà xanh',
+        code: 'FTX',
+        categoryGroup: 'freeze',
+        categoryName: 'Đá xay & Sinh tố',
+        price: 52000,
+        sizes: 'M / L',
+        icon: 'sparkles',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=9'
+      },
+
+      // 5. Bánh & Điểm tâm
+      {
+        id: 'croissant_bt',
+        name: 'Croissant bơ tỏi',
+        code: 'CBT',
+        categoryGroup: 'bakery',
+        categoryName: 'Bánh & Điểm tâm',
+        price: 32000,
+        sizes: '1 chiếc',
+        icon: 'cake',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=10'
+      },
+      {
+        id: 'tiramisu',
+        name: 'Tiramisu',
+        code: 'TMS',
+        categoryGroup: 'bakery',
+        categoryName: 'Bánh & Điểm tâm',
+        price: 40000,
+        sizes: '1 phần',
+        icon: 'cake',
+        imageUrl: 'https://placewaifu.com/image/300/200?id=11'
+      },
+
+      // 6. Topping thêm
+      {
+        id: 'tran_chau_trang',
+        name: 'Trân châu trắng',
+        code: 'TOP-TCT',
+        categoryGroup: 'topping',
+        categoryName: 'Topping thêm',
+        price: 10000,
+        sizes: '1 phần thêm',
+        icon: 'layers',
+        imageUrl: ''
+      },
+      {
+        id: 'thach_dao',
+        name: 'Thạch đào',
+        code: 'TOP-TD',
+        categoryGroup: 'topping',
+        categoryName: 'Topping thêm',
+        price: 10000,
+        sizes: '1 phần thêm',
+        icon: 'layers',
+        imageUrl: ''
+      },
+      {
+        id: 'kem_cheese',
+        name: 'Kem phô mai macchiato',
+        code: 'TOP-KPM',
+        categoryGroup: 'topping',
+        categoryName: 'Topping thêm',
+        price: 12000,
+        sizes: '1 phần thêm',
+        icon: 'layers',
+        imageUrl: ''
+      },
+      {
+        id: 'thach_cf',
+        name: 'Thạch cà phê',
+        code: 'TOP-TCF',
+        categoryGroup: 'topping',
+        categoryName: 'Topping thêm',
+        price: 10000,
+        sizes: '1 phần thêm',
+        icon: 'layers',
+        imageUrl: ''
+      }
+    ];
+
+    /* =========================================================================
+       2. Web Audio API Synthesis Engine (Tap, Toggle, Save, Error)
+       ========================================================================= */
+    var audioCtx = null;
+    function getAudioContext() {
+      if (!audioCtx) {
+        var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playTapChirp() {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.03);
+      } catch (err) {}
+    }
+
+    function playToggleClick(isOn) {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'triangle';
+        var freq = isOn ? 900 : 550;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.04);
+      } catch (err) {}
+    }
+
+    function playSaveChime() {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var now = ctx.currentTime;
+        var notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        for (var i = 0; i < notes.length; i++) {
+          (function (freq, offset) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + offset);
+            gain.gain.setValueAtTime(0, now + offset);
+            gain.gain.linearRampToValueAtTime(0.16, now + offset + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.22);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.24);
+          })(notes[i], i * 0.07);
+        }
+      } catch (err) {}
+    }
+
+    function playErrorBuzz() {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.14);
+      } catch (err) {}
+    }
+
+    /* =========================================================================
+       3. Currency Formatting & General Helpers
+       ========================================================================= */
+    function formatVND(amount) {
+      var num = Math.round(Number(amount) || 0);
+      return num.toLocaleString('vi-VN') + ' đ';
+    }
+
+    var toastTimer = null;
+    function showToast(message, isError) {
+      var toastEl = document.getElementById('pos-toast');
+      var msgEl = document.getElementById('toast-message');
+      var iconWrap = document.getElementById('toast-icon-wrapper');
+      if (!toastEl || !msgEl) return;
+
+      msgEl.textContent = message;
+      if (iconWrap) {
+        if (isError) {
+          iconWrap.className = 'w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center flex-shrink-0';
+          iconWrap.innerHTML = '<i data-lucide="alert-circle" class="w-4 h-4"></i>';
+        } else {
+          iconWrap.className = 'w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0';
+          iconWrap.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i>';
+        }
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      toastEl.classList.remove('translate-y-24', 'opacity-0');
+      toastEl.classList.add('translate-y-0', 'opacity-100');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toastEl.classList.remove('translate-y-0', 'opacity-100');
+        toastEl.classList.add('translate-y-24', 'opacity-0');
+      }, 2800);
+    }
+
+    /* =========================================================================
+       4. Clock & Header UI Controls
+       ========================================================================= */
+    function updateClock() {
+      var clockEl = document.getElementById('live-digital-clock');
+      if (!clockEl) return;
+      var now = new Date();
+      var hh = String(now.getHours()).padStart(2, '0');
+      var mm = String(now.getMinutes()).padStart(2, '0');
+      var ss = String(now.getSeconds()).padStart(2, '0');
+      clockEl.textContent = hh + ':' + mm + ':' + ss;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function toggleSoundAlert() {
+      isSoundMuted = !isSoundMuted;
+      localStorage.setItem('POS_SOUND_MUTED', isSoundMuted ? 'true' : 'false');
+      updateSoundButtonUI();
+      if (!isSoundMuted) playTapChirp();
+      showToast(isSoundMuted ? 'Đã tắt âm thanh thao tác' : 'Đã bật âm thanh thao tác');
+    }
+
+    function updateSoundButtonUI() {
+      var icon = document.getElementById('sound-toggle-icon');
+      var btn = document.getElementById('btn-sound-toggle');
+      if (localStorage.getItem('POS_SOUND_MUTED') === 'true') {
+        isSoundMuted = true;
+      }
+      if (icon) {
+        icon.setAttribute('data-lucide', isSoundMuted ? 'volume-x' : 'volume-2');
+        icon.className = isSoundMuted ? 'w-4 h-4 text-slate-400' : 'w-4 h-4 text-emerald-600';
+      }
+      if (btn) {
+        btn.setAttribute('title', isSoundMuted ? 'Bật âm thanh (hiện đang tắt)' : 'Tắt âm thanh (hiện đang bật)');
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function toggleStationSwitcher(force) {
+      var dropdown = document.getElementById('station-switcher-dropdown');
+      var backdrop = document.getElementById('station-switcher-backdrop');
+      var chevron = document.getElementById('station-switcher-chevron');
+      if (!dropdown || !backdrop) return;
+
+      var willShow = (typeof force === 'boolean') ? force : dropdown.classList.contains('hidden');
+      if (willShow) {
+        playTapChirp();
+        dropdown.classList.remove('hidden');
+        backdrop.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+      } else {
+        dropdown.classList.add('hidden');
+        backdrop.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+      }
+    }
+
+    /* =========================================================================
+       5. Sub-Navigation Tabs Controller
+       ========================================================================= */
+    function switchSettingsTab(tabKey) {
+      if (tabKey !== 'stock' && tabKey !== 'store' && tabKey !== 'system') return;
+      playTapChirp();
+      currentTab = tabKey;
+
+      var viewStock = document.getElementById('view-stock');
+      var viewStore = document.getElementById('view-store');
+      var viewSystem = document.getElementById('view-system');
+
+      var btnStock = document.getElementById('tab-btn-stock');
+      var btnStore = document.getElementById('tab-btn-store');
+      var btnSystem = document.getElementById('tab-btn-system');
+
+      // Hide all views
+      if (viewStock) viewStock.classList.add('hidden');
+      if (viewStore) viewStore.classList.add('hidden');
+      if (viewSystem) viewSystem.classList.add('hidden');
+
+      // Reset button styles
+      var inactiveClass = 'min-h-[48px] h-12 px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2.5 transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer select-none border border-transparent';
+      var activeClass = 'min-h-[48px] h-12 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2.5 transition shadow-xs bg-slate-900 text-white cursor-pointer select-none';
+
+      if (btnStock) btnStock.className = inactiveClass;
+      if (btnStore) btnStore.className = inactiveClass;
+      if (btnSystem) btnSystem.className = inactiveClass;
+
+      // Show selected view & highlight button
+      if (tabKey === 'stock') {
+        if (viewStock) viewStock.classList.remove('hidden');
+        if (btnStock) btnStock.className = activeClass;
+        renderStockGrid();
+      } else if (tabKey === 'store') {
+        if (viewStore) viewStore.classList.remove('hidden');
+        if (btnStore) btnStore.className = activeClass;
+        loadStoreSettingsForm();
+      } else if (tabKey === 'system') {
+        if (viewSystem) viewSystem.classList.remove('hidden');
+        if (btnSystem) btnSystem.className = activeClass;
+        loadReceiptTemplateSettings();
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* =========================================================================
+       6. Tab 1: Catalog Stock Toggles Subsystem
+       ========================================================================= */
+    function getStoredCatalogStatus() {
+      try {
+        var raw = localStorage.getItem('POS_CATALOG_STATUS');
+        if (!raw) return {};
+        var parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+      } catch (err) {
+        return {};
+      }
+    }
+
+    function isItemInStock(statusMap, itemId) {
+      if (!statusMap) return true;
+      var entry = statusMap[itemId];
+      if (entry === undefined || entry === null) return true;
+      if (typeof entry === 'boolean') return entry;
+      if (typeof entry === 'object' && typeof entry.inStock === 'boolean') return entry.inStock;
+      return true;
+    }
+
+    function setStockCategory(catKey) {
+      playTapChirp();
+      activeStockCategory = catKey;
+      var pills = document.querySelectorAll('.stock-cat-pill');
+      pills.forEach(function (pill) {
+        var cat = pill.getAttribute('data-stock-cat');
+        if (cat === catKey) {
+          pill.className = 'stock-cat-pill min-h-[48px] h-12 px-4 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 bg-slate-900 text-white shadow-xs select-none cursor-pointer flex-shrink-0';
+        } else {
+          pill.className = 'stock-cat-pill min-h-[48px] h-12 px-4 rounded-xl font-medium text-xs sm:text-sm transition text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 select-none cursor-pointer flex-shrink-0';
+        }
+      });
+      renderStockGrid();
+    }
+
+    function handleStockSearch(query) {
+      stockSearchQuery = (query || '').trim().toLowerCase();
+      var clearBtn = document.getElementById('btn-clear-stock-search');
+      if (clearBtn) {
+        if (stockSearchQuery) {
+          clearBtn.classList.remove('hidden');
+        } else {
+          clearBtn.classList.add('hidden');
+        }
+      }
+      renderStockGrid();
+    }
+
+    function clearStockSearch() {
+      playTapChirp();
+      var input = document.getElementById('stock-search-input');
+      var clearBtn = document.getElementById('btn-clear-stock-search');
+      if (input) input.value = '';
+      if (clearBtn) clearBtn.classList.add('hidden');
+      stockSearchQuery = '';
+      renderStockGrid();
+    }
+
+    function toggleOnlyOutStockFilter() {
+      playTapChirp();
+      onlyOutStockFilter = !onlyOutStockFilter;
+      var btn = document.getElementById('btn-toggle-filter-outstock');
+      var label = document.getElementById('filter-outstock-label');
+      if (btn && label) {
+        if (onlyOutStockFilter) {
+          btn.className = 'min-h-[48px] h-12 px-4 rounded-xl border-2 border-rose-500 bg-rose-50 text-rose-800 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 select-none cursor-pointer transition shadow-xs';
+          label.textContent = 'Đang lọc: Chỉ món Tạm hết';
+        } else {
+          btn.className = 'min-h-[48px] h-12 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 select-none cursor-pointer transition shadow-2xs';
+          label.textContent = 'Chỉ xem món Tạm hết';
+        }
+      }
+      renderStockGrid();
+    }
+
+    function toggleItemStock(itemId) {
+      var statusMap = getStoredCatalogStatus();
+      var currentAvailable = isItemInStock(statusMap, itemId);
+      var newAvailable = !currentAvailable;
+
+      playToggleClick(newAvailable);
+
+      // Save to localStorage.POS_CATALOG_STATUS ({ [itemId]: { inStock: boolean, updatedAt: string } })
+      statusMap[itemId] = {
+        inStock: newAvailable,
+        updatedAt: new Date().toISOString()
+      };
+      try {
+        localStorage.setItem('POS_CATALOG_STATUS', JSON.stringify(statusMap));
+      } catch (e) {
+        console.error('Error saving POS_CATALOG_STATUS:', e);
+      }
+
+      // Broadcast both CATALOG_STOCK_CHANGED and CATALOG_STATUS_CHANGED via window.POS_BUS
+      if (window.POS_BUS && typeof window.POS_BUS.publish === 'function') {
+        window.POS_BUS.publish('CATALOG_STOCK_CHANGED', {
+          itemId: itemId,
+          inStock: newAvailable,
+          catalogStatus: statusMap
+        });
+        window.POS_BUS.publish('CATALOG_STATUS_CHANGED', {
+          itemId: itemId,
+          isAvailable: newAvailable,
+          inStock: newAvailable,
+          catalogStatus: statusMap
+        });
+      }
+
+      var targetItem = CATALOG_ITEMS.find(function (it) { return it.id === itemId; });
+      var itemName = targetItem ? targetItem.name : itemId;
+      showToast(newAvailable ? ('Đã mở bán lại món "' + itemName + '" (Còn hàng)') : ('Đã đánh dấu "' + itemName + '" TẠM HẾT HÀNG'));
+
+      renderStockGrid();
+    }
+
+    function restoreAllInStock() {
+      playTapChirp();
+      var statusMap = {};
+      CATALOG_ITEMS.forEach(function (item) {
+        statusMap[item.id] = {
+          inStock: true,
+          updatedAt: new Date().toISOString()
+        };
+      });
+
+      try {
+        localStorage.setItem('POS_CATALOG_STATUS', JSON.stringify(statusMap));
+      } catch (e) {}
+
+      if (window.POS_BUS && typeof window.POS_BUS.publish === 'function') {
+        window.POS_BUS.publish('CATALOG_STOCK_CHANGED', {
+          itemId: null,
+          inStock: true,
+          catalogStatus: statusMap
+        });
+        window.POS_BUS.publish('CATALOG_STATUS_CHANGED', {
+          itemId: null,
+          isAvailable: true,
+          catalogStatus: statusMap
+        });
+      }
+
+      playSaveChime();
+      showToast('Đã khôi phục toàn bộ danh mục về trạng thái Còn hàng!');
+      renderStockGrid();
+    }
+
+    function renderStockGrid() {
+      var gridEl = document.getElementById('stock-items-grid');
+      if (!gridEl) return;
+
+      var statusMap = getStoredCatalogStatus();
+
+      // Compute summary stats
+      var totalCount = CATALOG_ITEMS.length;
+      var outStockCount = 0;
+      CATALOG_ITEMS.forEach(function (item) {
+        if (!isItemInStock(statusMap, item.id)) {
+          outStockCount++;
+        }
+      });
+      var inStockCount = totalCount - outStockCount;
+
+      // Update counters in KPI cards & Tab bar
+      var statTotal = document.getElementById('stat-total-items');
+      var statIn = document.getElementById('stat-instock-count');
+      var statOut = document.getElementById('stat-outstock-count');
+      var tabCounter = document.getElementById('tab-stock-counter');
+
+      if (statTotal) statTotal.textContent = totalCount;
+      if (statIn) statIn.textContent = inStockCount;
+      if (statOut) statOut.textContent = outStockCount;
+
+      if (tabCounter) {
+        tabCounter.textContent = outStockCount + ' tạm hết';
+        if (outStockCount > 0) {
+          tabCounter.className = 'px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-rose-600 text-white border border-rose-500 shadow-xs';
+        } else {
+          tabCounter.className = 'px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-600/80 text-white border border-emerald-500/80';
+        }
+      }
+
+      // Filter items
+      var filtered = CATALOG_ITEMS.filter(function (item) {
+        // Category filter
+        if (activeStockCategory !== 'all' && item.categoryGroup !== activeStockCategory) {
+          return false;
+        }
+        // Search filter
+        if (stockSearchQuery) {
+          var matchName = item.name.toLowerCase().includes(stockSearchQuery);
+          var matchCode = item.code.toLowerCase().includes(stockSearchQuery);
+          var matchCat = item.categoryName.toLowerCase().includes(stockSearchQuery);
+          if (!matchName && !matchCode && !matchCat) {
+            return false;
+          }
+        }
+        // Out-of-stock only filter
+        if (onlyOutStockFilter) {
+          if (isItemInStock(statusMap, item.id)) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        gridEl.innerHTML = '<div class="col-span-full py-16 text-center text-slate-400 flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-200 p-8">' +
+          '<div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">' +
+            '<i data-lucide="inbox" class="w-6 h-6 stroke-[1.5]"></i>' +
+          '</div>' +
+          '<p class="text-sm font-bold text-slate-800">Không tìm thấy món hoặc topping phù hợp</p>' +
+          '<p class="text-xs text-slate-400 mt-1 max-w-sm">Thử thay đổi từ khóa tìm kiếm hoặc chọn danh mục khác.</p>' +
+          '<button type="button" onclick="clearStockSearch(); setStockCategory(\'all\');" class="mt-4 min-h-[48px] h-12 px-5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition flex items-center gap-1.5 cursor-pointer select-none">' +
+            '<i data-lucide="rotate-ccw" class="w-4 h-4"></i>' +
+            '<span>Xóa bộ lọc & Hiển thị tất cả</span>' +
+          '</button>' +
+        '</div>';
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < filtered.length; i++) {
+        var it = filtered[i];
+        var inStock = isItemInStock(statusMap, it.id);
+
+        var cardBorderClass = inStock
+          ? 'border-slate-200 hover:border-slate-300 bg-white'
+          : 'border-rose-300 bg-rose-50/40';
+
+        var statusBadge = inStock
+          ? '<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">' +
+              '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>' +
+              '<span>Còn hàng</span>' +
+            '</span>'
+          : '<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">' +
+              '<span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>' +
+              '<span>Tạm hết</span>' +
+            '</span>';
+
+        var toggleTrackClass = inStock
+          ? 'bg-emerald-600 justify-end'
+          : 'bg-slate-300 justify-start';
+
+        var knobTranslate = inStock ? 'translate-x-6' : 'translate-x-0';
+
+        html += '<div class="rounded-2xl border p-4 shadow-card hover:shadow-card-hover transition-all duration-200 flex items-center justify-between gap-3 select-none ' + cardBorderClass + '">' +
+          
+          '<!-- Left: Icon / Thumbnail & Info -->' +
+          '<div class="flex items-center gap-3 min-w-0 flex-1">' +
+            '<div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center flex-shrink-0 relative overflow-hidden">' +
+              (it.imageUrl
+                ? '<img src="' + it.imageUrl + '" alt="' + it.name + '" loading="lazy" class="w-full h-full object-cover" onerror="this.style.display=\'none\'; this.nextElementSibling.classList.remove(\'hidden\');" />' +
+                  '<div class="hidden w-full h-full flex items-center justify-center text-slate-400"><i data-lucide="' + it.icon + '" class="w-6 h-6 stroke-[1.5]"></i></div>'
+                : '<i data-lucide="' + it.icon + '" class="w-6 h-6 text-slate-600 stroke-[1.5]"></i>'
+              ) +
+            '</div>' +
+
+            '<div class="min-w-0 flex-1">' +
+              '<div class="flex items-center gap-1.5">' +
+                '<h4 class="text-sm font-bold text-slate-900 truncate leading-snug">' + it.name + '</h4>' +
+                '<span class="text-[10px] font-mono text-slate-400 font-semibold bg-slate-100 px-1.5 py-0.5 rounded">' + it.code + '</span>' +
+              '</div>' +
+              '<div class="flex items-center gap-2 mt-1">' +
+                '<span class="text-xs font-mono font-bold text-slate-900">' + formatVND(it.price) + '</span>' +
+                '<span class="text-slate-300">·</span>' +
+                '<span class="text-[11px] text-slate-500 truncate">' + it.categoryName + ' (' + it.sizes + ')</span>' +
+              '</div>' +
+              '<div class="mt-1.5">' + statusBadge + '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<!-- Right: Large Tactile 1-Tap Toggle Switch (min-h-[48px] min-w-[56px]) -->' +
+          '<div class="flex flex-col items-center justify-center flex-shrink-0">' +
+            '<button type="button" onclick="toggleItemStock(\'' + it.id + '\')" role="switch" aria-checked="' + (inStock ? 'true' : 'false') + '" ' +
+              'class="min-h-[48px] min-w-[64px] h-12 flex items-center justify-center cursor-pointer group focus:outline-none focus:ring-2 focus:ring-emerald-500/20 rounded-xl" ' +
+              'title="' + (inStock ? 'Nhấn để chuyển sang Tạm hết' : 'Nhấn để bật lại Còn hàng') + '">' +
+              '<div class="w-14 h-8 rounded-full p-1 transition-colors duration-200 flex items-center ' + (inStock ? 'bg-emerald-600' : 'bg-slate-300') + '">' +
+                '<div class="w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 flex items-center justify-center text-[10px] font-bold ' + knobTranslate + '">' +
+                  (inStock ? '<i data-lucide="check" class="w-3.5 h-3.5 text-emerald-700"></i>' : '<i data-lucide="x" class="w-3.5 h-3.5 text-slate-400"></i>') +
+                '</div>' +
+              '</div>' +
+            '</button>' +
+            '<span class="text-[10px] font-mono font-semibold ' + (inStock ? 'text-emerald-700' : 'text-rose-700') + '">' + (inStock ? 'ON' : 'OFF') + '</span>' +
+          '</div>' +
+
+        '</div>';
+      }
+
+      gridEl.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* =========================================================================
+       7. Tab 2: Store Profile & VietQR Configuration Subsystem
+       ========================================================================= */
+    var DEFAULT_STORE_CONFIG = {
+      storeName: 'The Coffee Workshop',
+      storeTagline: 'Cà phê Đặc sản & Rang mộc Thủ công',
+      address: '120 Hoàng Hoa Thám, Ba Đình, Hà Nội',
+      hotline: '0988 123 456',
+      wifiSSID: 'The Coffee Workshop 5G',
+      wifiPass: 'workshop2026',
+      vietqr: {
+        bankId: 'MB',
+        bankName: 'MB Bank (Quân Đội)',
+        bin: '970422',
+        accountNo: '0987654321',
+        accountName: 'CONG TY TNHH THE COFFEE WORKSHOP',
+        memoTemplate: 'POS{serviceNumber}'
+      }
+    };
+
+    function getStoreConfig() {
+      try {
+        var raw = localStorage.getItem('POS_STORE_INFO');
+        if (!raw) return DEFAULT_STORE_CONFIG;
+        var parsed = JSON.parse(raw);
+        return Object.assign({}, DEFAULT_STORE_CONFIG, parsed);
+      } catch (err) {
+        return DEFAULT_STORE_CONFIG;
+      }
+    }
+
+    function loadStoreSettingsForm() {
+      var config = getStoreConfig();
+      var elName = document.getElementById('input-store-name');
+      var elTagline = document.getElementById('input-store-tagline');
+      var elAddr = document.getElementById('input-store-address');
+      var elHotline = document.getElementById('input-store-hotline');
+      var elWifiSsid = document.getElementById('input-store-wifi-ssid');
+      var elWifiPass = document.getElementById('input-store-wifi-pass');
+
+      var elBank = document.getElementById('select-vietqr-bank');
+      var elAccNo = document.getElementById('input-vietqr-account-no');
+      var elAccName = document.getElementById('input-vietqr-account-name');
+      var elMemo = document.getElementById('input-vietqr-memo');
+
+      if (elName) elName.value = config.storeName || '';
+      if (elTagline) elTagline.value = config.storeTagline || '';
+      if (elAddr) elAddr.value = config.address || '';
+      if (elHotline) elHotline.value = config.hotline || '';
+      if (elWifiSsid) elWifiSsid.value = config.wifiSSID || '';
+      if (elWifiPass) elWifiPass.value = config.wifiPass || '';
+
+      var vq = config.vietqr || DEFAULT_STORE_CONFIG.vietqr;
+      if (elBank) elBank.value = vq.bankId || 'MB';
+      if (elAccNo) elAccNo.value = vq.accountNo || '0987654321';
+      if (elAccName) elAccName.value = vq.accountName || 'CONG TY TNHH THE COFFEE WORKSHOP';
+      if (elMemo) elMemo.value = vq.memoTemplate || 'POS{serviceNumber}';
+
+      updateVietQRPreviewCard();
+    }
+
+    function handleStoreFormInput() {
+      updateVietQRPreviewCard();
+    }
+
+    function updateVietQRPreviewCard() {
+      var elBank = document.getElementById('select-vietqr-bank');
+      var elAccNo = document.getElementById('input-vietqr-account-no');
+      var elAccName = document.getElementById('input-vietqr-account-name');
+      var elMemo = document.getElementById('input-vietqr-memo');
+
+      var bankId = elBank ? elBank.value : 'MB';
+      var selectedOption = elBank ? elBank.options[elBank.selectedIndex] : null;
+      var bankBin = selectedOption ? selectedOption.getAttribute('data-bin') : '970422';
+      var bankNameText = selectedOption ? selectedOption.text.split(' - ')[0] : 'MB Bank (Quân Đội)';
+
+      var accountNo = elAccNo ? (elAccNo.value.trim() || '0987654321') : '0987654321';
+      var accountName = elAccName ? (elAccName.value.trim().toUpperCase() || 'CONG TY TNHH THE COFFEE WORKSHOP') : 'CONG TY TNHH THE COFFEE WORKSHOP';
+      var memoTpl = elMemo ? (elMemo.value.trim() || 'POS{serviceNumber}') : 'POS{serviceNumber}';
+      var sampleMemo = memoTpl.replace('{serviceNumber}', '14');
+
+      var prevBank = document.getElementById('preview-bank-name');
+      var prevAccNo = document.getElementById('preview-account-no');
+      var prevAccName = document.getElementById('preview-account-name');
+      var prevMemo = document.getElementById('preview-sample-memo');
+      var prevImg = document.getElementById('preview-vietqr-img');
+
+      if (prevBank) prevBank.textContent = bankNameText;
+      if (prevAccNo) prevAccNo.textContent = accountNo;
+      if (prevAccName) prevAccName.textContent = accountName;
+      if (prevMemo) prevMemo.textContent = sampleMemo;
+
+      if (prevImg) {
+        var qrSrc = 'https://api.vietqr.io/image/' + bankBin + '-' + accountNo + '-compact2.png?amount=45000&addInfo=' + encodeURIComponent(sampleMemo) + '&accountName=' + encodeURIComponent(accountName);
+        if (prevImg.getAttribute('data-last-src') !== qrSrc) {
+          prevImg.setAttribute('data-last-src', qrSrc);
+          prevImg.src = qrSrc;
+        }
+      }
+    }
+
+    function copyPreviewAccountNo() {
+      playTapChirp();
+      var el = document.getElementById('preview-account-no');
+      var num = el ? el.textContent.trim() : '';
+      if (num && navigator.clipboard) {
+        navigator.clipboard.writeText(num).then(function () {
+          showToast('Đã sao chép số tài khoản: ' + num);
+        }).catch(function () {
+          showToast('Số tài khoản: ' + num);
+        });
+      } else {
+        showToast('Số tài khoản: ' + num);
+      }
+    }
+
+    function saveStoreSettingsForm() {
+      var elName = document.getElementById('input-store-name');
+      var elTagline = document.getElementById('input-store-tagline');
+      var elAddr = document.getElementById('input-store-address');
+      var elHotline = document.getElementById('input-store-hotline');
+      var elWifiSsid = document.getElementById('input-store-wifi-ssid');
+      var elWifiPass = document.getElementById('input-store-wifi-pass');
+
+      var elBank = document.getElementById('select-vietqr-bank');
+      var elAccNo = document.getElementById('input-vietqr-account-no');
+      var elAccName = document.getElementById('input-vietqr-account-name');
+      var elMemo = document.getElementById('input-vietqr-memo');
+
+      var selectedOption = elBank ? elBank.options[elBank.selectedIndex] : null;
+      var bankBin = selectedOption ? selectedOption.getAttribute('data-bin') : '970422';
+      var bankNameText = selectedOption ? selectedOption.text.split(' - ')[0] : 'MB Bank (Quân Đội)';
+
+      var storeConfig = {
+        storeName: elName ? elName.value.trim() : 'The Coffee Workshop',
+        storeTagline: elTagline ? elTagline.value.trim() : 'Cà phê Đặc sản & Rang mộc Thủ công',
+        address: elAddr ? elAddr.value.trim() : '120 Hoàng Hoa Thám, Ba Đình, Hà Nội',
+        hotline: elHotline ? elHotline.value.trim() : '0988 123 456',
+        wifiSSID: elWifiSsid ? elWifiSsid.value.trim() : 'The Coffee Workshop 5G',
+        wifiPass: elWifiPass ? elWifiPass.value.trim() : 'workshop2026',
+        vietqr: {
+          bankId: elBank ? elBank.value : 'MB',
+          bankName: bankNameText,
+          bin: bankBin,
+          accountNo: elAccNo ? elAccNo.value.trim() : '0987654321',
+          accountName: elAccName ? elAccName.value.trim().toUpperCase() : 'CONG TY TNHH THE COFFEE WORKSHOP',
+          memoTemplate: elMemo ? elMemo.value.trim() : 'POS{serviceNumber}'
+        }
+      };
+
+      try {
+        localStorage.setItem('POS_STORE_INFO', JSON.stringify(storeConfig));
+      } catch (err) {
+        console.error('Error saving POS_STORE_INFO:', err);
+      }
+
+      // Update header store name
+      var hdrStore = document.getElementById('header-store-name');
+      if (hdrStore) hdrStore.textContent = storeConfig.storeName;
+
+      // Broadcast STORE_INFO_UPDATED via window.POS_BUS
+      if (window.POS_BUS && typeof window.POS_BUS.publish === 'function') {
+        window.POS_BUS.publish('STORE_INFO_UPDATED', storeConfig);
+      }
+
+      playSaveChime();
+      showToast('Đã lưu cấu hình cửa hàng & VietQR thành công!');
+    }
+
+    /* =========================================================================
+       8. Tab 3: Receipt Customizer & Thermal Print Subsystem
+       ========================================================================= */
+    function loadReceiptTemplateSettings() {
+      var storeConfig = getStoreConfig();
+      var elH1 = document.getElementById('input-receipt-header1');
+      var elH2 = document.getElementById('input-receipt-header2');
+      var elFooter = document.getElementById('input-receipt-footer');
+      var chkAuto = document.getElementById('chk-auto-print');
+
+      var customRcpt = {};
+      try {
+        var raw = localStorage.getItem('POS_RECEIPT_SETTINGS');
+        if (raw) customRcpt = JSON.parse(raw);
+      } catch (e) {}
+
+      var defaultH1 = (storeConfig.storeName || 'THE COFFEE WORKSHOP').toUpperCase();
+      var defaultH2 = (storeConfig.address || '120 Hoàng Hoa Thám, Ba Đình, HN') + ' · Hotline: ' + (storeConfig.hotline || '0988 123 456');
+      var defaultFooter = 'Pass Wi-Fi: ' + (storeConfig.wifiPass || 'workshop2026') + ' · Cảm ơn quý khách!';
+
+      if (elH1) elH1.value = customRcpt.header1 || defaultH1;
+      if (elH2) elH2.value = customRcpt.header2 || defaultH2;
+      if (elFooter) elFooter.value = customRcpt.footer || defaultFooter;
+      if (chkAuto) chkAuto.checked = localStorage.getItem('POS_AUTO_PRINT') === 'true';
+
+      updateReceiptPreviewPaper();
+    }
+
+    function handleReceiptCustomizerInput() {
+      updateReceiptPreviewPaper();
+    }
+
+    function updateReceiptPreviewPaper() {
+      var elH1 = document.getElementById('input-receipt-header1');
+      var elH2 = document.getElementById('input-receipt-header2');
+      var elFooter = document.getElementById('input-receipt-footer');
+
+      var p1 = document.getElementById('preview-rcpt-h1');
+      var p2 = document.getElementById('preview-rcpt-h2');
+      var pF = document.getElementById('preview-rcpt-footer');
+
+      if (p1 && elH1) p1.textContent = elH1.value.trim() || 'THE COFFEE WORKSHOP';
+      if (p2 && elH2) p2.textContent = elH2.value.trim() || '120 Hoàng Hoa Thám, Ba Đình, HN';
+      if (pF && elFooter) pF.textContent = elFooter.value.trim() || 'Cảm ơn quý khách và hẹn gặp lại!';
+    }
+
+    function toggleAutoPrintSetting(checked) {
+      playTapChirp();
+      localStorage.setItem('POS_AUTO_PRINT', checked ? 'true' : 'false');
+      showToast(checked ? 'Đã bật tự động in sau khi thanh toán' : 'Đã tắt tự động in');
+    }
+
+    function saveReceiptTemplateSettings() {
+      var elH1 = document.getElementById('input-receipt-header1');
+      var elH2 = document.getElementById('input-receipt-header2');
+      var elFooter = document.getElementById('input-receipt-footer');
+
+      var rcptSettings = {
+        header1: elH1 ? elH1.value.trim() : 'THE COFFEE WORKSHOP',
+        header2: elH2 ? elH2.value.trim() : '120 Hoàng Hoa Thám, Ba Đình, HN',
+        footer: elFooter ? elFooter.value.trim() : 'Cảm ơn quý khách!'
+      };
+
+      try {
+        localStorage.setItem('POS_RECEIPT_SETTINGS', JSON.stringify(rcptSettings));
+      } catch (e) {}
+
+      playSaveChime();
+      showToast('Đã lưu mẫu hóa đơn K80 thành công!');
+    }
+
+    function printSampleReceipt() {
+      playTapChirp();
+      showToast('Đang mở hộp thoại in mẫu K80...');
+      setTimeout(function () {
+        window.print();
+      }, 300);
+    }
+
+    /* =========================================================================
+       9. Manager PIN Reset Modal & Demo Data Factory
+       ========================================================================= */
+    function openManagerResetModal() {
+      playTapChirp();
+      enteredManagerPin = '';
+      updatePinDots();
+      var errText = document.getElementById('pin-error-text');
+      if (errText) errText.classList.add('hidden');
+      openModal('modal-manager-reset');
+    }
+
+    function appendManagerPin(digit) {
+      if (enteredManagerPin.length >= 4) return;
+      playTapChirp();
+      enteredManagerPin += digit;
+      updatePinDots();
+
+      if (enteredManagerPin.length === 4) {
+        setTimeout(submitManagerReset, 180);
+      }
+    }
+
+    function clearManagerPin() {
+      playTapChirp();
+      enteredManagerPin = '';
+      updatePinDots();
+      var errText = document.getElementById('pin-error-text');
+      if (errText) errText.classList.add('hidden');
+    }
+
+    function updatePinDots() {
+      for (var i = 1; i <= 4; i++) {
+        var dot = document.getElementById('pin-dot-' + i);
+        if (dot) {
+          if (i <= enteredManagerPin.length) {
+            dot.className = 'w-4 h-4 rounded-full border-2 border-slate-900 bg-slate-900 transition-all scale-110';
+          } else {
+            dot.className = 'w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all';
+          }
+        }
+      }
+    }
+
+    function submitManagerReset() {
+      // Valid manager PIN: '8888'
+      if (enteredManagerPin === '8888') {
+        playSaveChime();
+        closeModal('modal-manager-reset');
+
+        // Reset demo localStorage states cleanly without breaking schemas
+        localStorage.removeItem('POS_ORDERS');
+        localStorage.removeItem('POS_ACTIVE_SHIFT');
+        localStorage.removeItem('POS_CATALOG_STATUS');
+        localStorage.removeItem('POS_STORE_INFO');
+        localStorage.removeItem('POS_RECEIPT_SETTINGS');
+
+        // Re-seed via POS_BUS
+        if (window.POS_BUS) {
+          var defaultStore = DEFAULT_STORE_CONFIG;
+          window.POS_BUS.publish('STORE_INFO_UPDATED', defaultStore);
+          window.POS_BUS.publish('CATALOG_STOCK_CHANGED', { itemId: null, inStock: true, catalogStatus: {} });
+          window.POS_BUS.publish('CATALOG_STATUS_CHANGED', { itemId: null, isAvailable: true, catalogStatus: {} });
+        }
+
+        showToast('Đã đặt lại dữ liệu mẫu hệ thống thành công!');
+        renderStockGrid();
+        loadStoreSettingsForm();
+        loadReceiptTemplateSettings();
+      } else {
+        playErrorBuzz();
+        var modalBox = document.querySelector('#modal-manager-reset > div');
+        if (modalBox) {
+          modalBox.classList.remove('animate-pin-shake');
+          void modalBox.offsetWidth; // trigger reflow
+          modalBox.classList.add('animate-pin-shake');
+        }
+        var errText = document.getElementById('pin-error-text');
+        if (errText) errText.classList.remove('hidden');
+        enteredManagerPin = '';
+        updatePinDots();
+      }
+    }
+
+    /* =========================================================================
+       10. Reusable Modal Helpers
+       ========================================================================= */
+    function openModal(modalId) {
+      var modal = document.getElementById(modalId);
+      var backdrop = document.getElementById('modal-backdrop-overlay');
+      if (modal && backdrop) {
+        backdrop.classList.remove('hidden');
+        modal.classList.remove('hidden');
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function closeModal(modalId) {
+      playTapChirp();
+      var modal = document.getElementById(modalId);
+      var backdrop = document.getElementById('modal-backdrop-overlay');
+      if (modal) modal.classList.add('hidden');
+
+      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help'];
+      var anyOpen = false;
+      for (var i = 0; i < checkModals.length; i++) {
+        var m = document.getElementById(checkModals[i]);
+        if (m && !m.classList.contains('hidden')) {
+          anyOpen = true;
+          break;
+        }
+      }
+      if (!anyOpen && backdrop) {
+        backdrop.classList.add('hidden');
+      }
+    }
+
+    function closeAllModals() {
+      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help'];
+      for (var i = 0; i < checkModals.length; i++) {
+        var m = document.getElementById(checkModals[i]);
+        if (m) m.classList.add('hidden');
+      }
+      var backdrop = document.getElementById('modal-backdrop-overlay');
+      if (backdrop) backdrop.classList.add('hidden');
+    }
+
+    function openShortcutsModal() {
+      playTapChirp();
+      openModal('modal-shortcuts-help');
+    }
+
+    /* =========================================================================
+       11. Real-time POS_BUS Subscriptions & Cross-Tab Sync
+       ========================================================================= */
+    function initBusSubscriptions() {
+      if (!window.POS_BUS) return;
+
+      // Sync catalog stock from other screens
+      window.POS_BUS.subscribe('CATALOG_STOCK_CHANGED', function (payload) {
+        renderStockGrid();
+      });
+
+      window.POS_BUS.subscribe('CATALOG_STATUS_CHANGED', function (payload) {
+        renderStockGrid();
+      });
+
+      // Sync store info changes
+      window.POS_BUS.subscribe('STORE_INFO_UPDATED', function (info) {
+        if (info && info.storeName) {
+          var hdr = document.getElementById('header-store-name');
+          if (hdr) hdr.textContent = info.storeName;
+        }
+      });
+    }
+
+    /* =========================================================================
+       12. Keyboard Shortcuts (F0, F10, F1-F9, Ctrl+S, Ctrl+P, Esc)
+       ========================================================================= */
+    document.addEventListener('keydown', function (e) {
+      // F0 or F10 or Backtick (`): Station Switcher
+      if (e.key === 'F10' || e.key === 'F0' || e.key === '`') {
+        e.preventDefault();
+        toggleStationSwitcher();
+        return;
+      }
+
+      // F1: Cashier Screen
+      if (e.key === 'F1') {
+        e.preventDefault();
+        window.location.href = '../index.html';
+        return;
+      }
+
+      // F3: KDS Screen
+      if (e.key === 'F3') {
+        e.preventDefault();
+        window.location.href = 'kds.html';
+        return;
+      }
+
+      // F4: Shift Screen
+      if (e.key === 'F4') {
+        e.preventDefault();
+        window.location.href = 'shift.html';
+        return;
+      }
+
+      // F5: Tables Screen
+      if (e.key === 'F5') {
+        e.preventDefault();
+        window.location.href = 'tables.html';
+        return;
+      }
+
+      // F6: History Screen
+      if (e.key === 'F6') {
+        e.preventDefault();
+        window.location.href = 'history.html';
+        return;
+      }
+
+      // F7: Tab 1 (Kho & Món tạm hết)
+      if (e.key === 'F7') {
+        e.preventDefault();
+        switchSettingsTab('stock');
+        return;
+      }
+
+      // F8: Tab 2 (Thông tin Quán & VietQR)
+      if (e.key === 'F8') {
+        e.preventDefault();
+        switchSettingsTab('store');
+        return;
+      }
+
+      // F9: Tab 3 (Tùy chỉnh In & Hệ thống)
+      if (e.key === 'F9') {
+        e.preventDefault();
+        switchSettingsTab('system');
+        return;
+      }
+
+      // Ctrl + S: Save Store Settings Form
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        saveStoreSettingsForm();
+        return;
+      }
+
+      // Ctrl + P: Print Sample Receipt
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        printSampleReceipt();
+        return;
+      }
+
+      // Esc: Dismiss modals or lock terminal to auth screen
+      if (e.key === 'Escape') {
+        var switcher = document.getElementById('station-switcher-dropdown');
+        if (switcher && !switcher.classList.contains('hidden')) {
+          toggleStationSwitcher(false);
+          return;
+        }
+
+        var anyModalOpen = false;
+        var checkModals = ['modal-manager-reset', 'modal-shortcuts-help'];
+        for (var i = 0; i < checkModals.length; i++) {
+          var m = document.getElementById(checkModals[i]);
+          if (m && !m.classList.contains('hidden')) {
+            anyModalOpen = true;
+            break;
+          }
+        }
+        if (anyModalOpen) {
+          closeAllModals();
+          return;
+        }
+
+        // Lock terminal to auth screen
+        window.location.href = 'auth.html';
+        return;
+      }
+
+      // If Manager PIN modal is open, listen to digits & backspace
+      var resetModal = document.getElementById('modal-manager-reset');
+      if (resetModal && !resetModal.classList.contains('hidden')) {
+        if (/^[0-9]$/.test(e.key)) {
+          appendManagerPin(e.key);
+        } else if (e.key === 'Backspace') {
+          if (enteredManagerPin.length > 0) {
+            enteredManagerPin = enteredManagerPin.slice(0, -1);
+            updatePinDots();
+          }
+        } else if (e.key === 'Enter') {
+          submitManagerReset();
+        }
+      }
+    });
+
+    /* =========================================================================
+       13. Initialization & DOM Ready
+       ========================================================================= */
+    document.addEventListener('DOMContentLoaded', function () {
+      updateSoundButtonUI();
+      renderStockGrid();
+      loadStoreSettingsForm();
+      initBusSubscriptions();
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>

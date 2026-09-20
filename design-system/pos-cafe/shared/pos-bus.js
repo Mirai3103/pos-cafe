@@ -340,7 +340,7 @@
         this.updateOrderStatus(payload.orderId, payload.status, false);
       } else if (eventType === 'SHIFT_UPDATED' && payload) {
         writeStorage(STORAGE_KEYS.ACTIVE_SHIFT, payload);
-      } else if (eventType === 'CATALOG_STATUS_CHANGED' && payload && payload.catalogStatus) {
+      } else if ((eventType === 'CATALOG_STATUS_CHANGED' || eventType === 'CATALOG_STOCK_CHANGED') && payload && payload.catalogStatus) {
         writeStorage(STORAGE_KEYS.CATALOG_STATUS, payload.catalogStatus);
       } else if (eventType === 'STAFF_UPDATED' && payload) {
         writeStorage(STORAGE_KEYS.CURRENT_STAFF, payload);
@@ -502,9 +502,11 @@
     setItemAvailable: function (itemId, isAvailable) {
       if (!itemId) return null;
       var status = this.getCatalogStatus();
-      status[itemId] = !!isAvailable;
+      var inStockVal = !!isAvailable;
+      status[itemId] = { inStock: inStockVal, updatedAt: new Date().toISOString() };
       writeStorage(STORAGE_KEYS.CATALOG_STATUS, status);
-      this.publish('CATALOG_STATUS_CHANGED', { itemId: itemId, isAvailable: !!isAvailable, catalogStatus: status });
+      this.publish('CATALOG_STOCK_CHANGED', { itemId: itemId, inStock: inStockVal, catalogStatus: status });
+      this.publish('CATALOG_STATUS_CHANGED', { itemId: itemId, isAvailable: inStockVal, inStock: inStockVal, catalogStatus: status });
       return status;
     },
 

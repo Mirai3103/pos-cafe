@@ -756,6 +756,24 @@
         description: 'Nhiều sữa ít cà phê, béo thơm ngọt dịu dễ uống'
       },
       {
+        id: 'cfmuoi',
+        name: 'Cà phê muối',
+        categoryId: 'coffee_vn',
+        categoryName: 'Cà phê Việt',
+        basePrice: 39000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=12',
+        hasModifiers: true,
+        sizes: [
+          { id: 'S', name: 'Size S', price: 32000 },
+          { id: 'M', name: 'Size M', price: 39000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 46000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'cpm',
+        badge: 'Món hot',
+        description: 'Cà phê phin truyền thống phủ lớp kem muối mặn mà béo ngậy'
+      },
+      {
         id: 'coldbrew_cs',
         name: 'Cold Brew cam sả',
         categoryId: 'coffee_vn',
@@ -1462,6 +1480,12 @@
         }
       });
 
+      window.POS_BUS.subscribe('CATALOG_STOCK_CHANGED', function () {
+        if (typeof renderCatalogItems === 'function' && window.POS_STATE) {
+          renderCatalogItems(window.POS_STATE);
+        }
+      });
+
       // Synchronize serviceNumber when orders are placed in other tabs (Task 1)
       window.POS_BUS.subscribe('NEW_ORDER', function (order) {
         if (!order || !window.POS_STATE) return;
@@ -1736,20 +1760,29 @@
 
       const catalogStatus = (typeof window !== 'undefined' && window.POS_BUS) ? window.POS_BUS.getCatalogStatus() : {};
 
+      function checkItemAvailable(id) {
+        if (!catalogStatus) return true;
+        const entry = catalogStatus[id];
+        if (entry === undefined || entry === null) return true;
+        if (typeof entry === 'boolean') return entry;
+        if (typeof entry === 'object' && typeof entry.inStock === 'boolean') return entry.inStock;
+        return true;
+      }
+
       container.innerHTML = items.map(item => {
-        const isAvailable = catalogStatus[item.id] !== false;
+        const isAvailable = checkItemAvailable(item.id);
         const sizeBadge = item.sizes && item.sizes.length > 0
           ? `<span class="bg-slate-900/70 backdrop-blur-xs text-white px-2 py-0.5 rounded-md text-[10px] font-medium tracking-wide shadow-2xs">${item.sizes.length} cỡ</span>`
           : '';
         const itemBadge = !isAvailable
-          ? `<span class="bg-rose-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-xs">Hết món</span>`
+          ? `<span class="bg-rose-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-xs">Tạm hết</span>`
           : (item.badge
               ? `<span class="bg-white/95 backdrop-blur-xs text-emerald-800 border border-emerald-200/80 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-xs">${item.badge}</span>`
               : '');
         const iconName = getCategoryIcon(item.categoryId);
         const cardClass = isAvailable
-          ? 'group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:border-emerald-500 hover:shadow-md active:scale-[0.98] transition-all duration-200 cursor-pointer select-none min-h-[210px] shadow-xs'
-          : 'group bg-slate-50/80 rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between opacity-60 cursor-not-allowed select-none min-h-[210px] shadow-xs';
+          ? 'group relative bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:border-emerald-500 hover:shadow-md active:scale-[0.98] transition-all duration-200 cursor-pointer select-none min-h-[210px] shadow-xs'
+          : 'group relative bg-slate-100/90 rounded-2xl border border-slate-300 overflow-hidden flex flex-col justify-between opacity-75 cursor-not-allowed select-none min-h-[210px] shadow-xs';
 
         return `
           <div data-item-id="${item.id}" onclick="handleItemClick('${item.id}')"
@@ -1764,6 +1797,14 @@
               </div>
               ${itemBadge ? `<div class="absolute top-2 left-2 z-10">${itemBadge}</div>` : ''}
               ${sizeBadge ? `<div class="absolute bottom-2 right-2 z-10">${sizeBadge}</div>` : ''}
+              ${!isAvailable ? `
+                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px] flex flex-col items-center justify-center z-20 text-white p-2">
+                  <span class="px-3 py-1.5 bg-rose-600/95 text-white rounded-xl text-xs font-bold shadow-md uppercase tracking-wider flex items-center gap-1.5 border border-white/20">
+                    <i data-lucide="slash" class="w-3.5 h-3.5"></i>
+                    <span>Tạm hết hàng</span>
+                  </span>
+                </div>
+              ` : ''}
             </div>
 
             <!-- Product Card Content -->
@@ -1837,9 +1878,15 @@
 
       if (window.POS_BUS) {
         const status = window.POS_BUS.getCatalogStatus();
-        if (status && status[itemId] === false) {
-          showToast('Món "' + item.name + '" hiện đang tạm hết hàng');
-          return;
+        if (status) {
+          const entry = status[itemId];
+          const isAvailable = (entry === undefined || entry === null)
+            ? true
+            : (typeof entry === 'boolean' ? entry : (typeof entry === 'object' && typeof entry.inStock === 'boolean' ? entry.inStock : true));
+          if (!isAvailable) {
+            showToast('Món "' + item.name + '" hiện đang tạm hết hàng');
+            return;
+          }
         }
       }
 
@@ -1971,7 +2018,8 @@
     const MODIFIER_TOPPINGS = [
       { id: 'thach_cf', name: 'Thạch cà phê', price: 10000 },
       { id: 'kem_cheese', name: 'Kem Cheese', price: 12000 },
-      { id: 'tran_chau_trang', name: 'Trân châu trắng', price: 10000 }
+      { id: 'tran_chau_trang', name: 'Trân châu trắng', price: 10000 },
+      { id: 'thach_dao', name: 'Thạch đào', price: 10000 }
     ];
 
     const QUICK_TAGS = ['Ít sữa', 'Pha đậm', 'Để đá riêng'];
