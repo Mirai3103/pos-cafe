@@ -1,8 +1,8 @@
 import { motion, type Transition } from "motion/react"
 import * as React from "react"
 
-import { Button } from "~/components/ui/button"
-import { cn } from "~/lib/utils"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 interface Ripple {
   id: number
@@ -25,7 +25,7 @@ export function RippleButton({
 }: RippleButtonProps) {
   const [ripples, setRipples] = React.useState<Ripple[]>([])
 
-  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleClick: React.ComponentProps<typeof Button>["onClick"] = (event) => {
     const rect = event.currentTarget.getBoundingClientRect()
     const id = Date.now()
     setRipples(prev => [...prev, { id, x: event.clientX - rect.left, y: event.clientY - rect.top }])

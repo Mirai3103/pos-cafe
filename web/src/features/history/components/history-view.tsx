@@ -1,4 +1,3 @@
-import * as React from "react";
 import { PlaceholderPage } from "@/components/feedback/placeholder-page";
 import { Receipt, Search, Filter } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

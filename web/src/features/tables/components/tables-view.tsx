@@ -1,4 +1,3 @@
-import * as React from "react";
 import { PlaceholderPage } from "@/components/feedback/placeholder-page";
 import { Grid2X2, CheckCircle2, AlertCircle, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
