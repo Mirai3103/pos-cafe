@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "codegen": "orval",
     "lint": "oxlint",
+    "test": "bun test",
     "preview": "vite preview"
   },
   "dependencies": {
