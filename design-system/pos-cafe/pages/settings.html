@@ -628,28 +628,72 @@
 
       <!-- Subview Container 2: Categories (#catalog-subview-categories) -->
       <div id="catalog-subview-categories" class="space-y-5 hidden animate-card-in">
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-card text-center space-y-3">
-          <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100">
-            <i data-lucide="layout-grid" class="w-7 h-7"></i>
+        
+        <!-- Action Bar: Title & + THÊM DANH MỤC CTA -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Danh mục Món ăn &amp; Đồ uống</h3>
+            <p class="text-xs text-slate-500 mt-1">Quản lý nhóm phân loại thực đơn, thứ tự hiển thị trên quầy thu ngân và cấu hình nhóm tùy chọn kế thừa mặc định.</p>
           </div>
-          <h3 class="text-base font-bold text-slate-900">Danh mục Món ăn & Đồ uống</h3>
-          <p class="text-xs text-slate-500 max-w-md mx-auto">
-            Quản lý nhóm phân loại thực đơn, thứ tự hiển thị trên quầy thu ngân và cấu hình nhóm topping kế thừa mặc định.
-          </p>
+          <button id="btn-catalog-categories-add-cat" type="button" onclick="openCategoryModal()"
+            class="min-h-[48px] h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer transition select-none flex-shrink-0">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>+ THÊM DANH MỤC</span>
+          </button>
         </div>
+
+        <!-- Realtime Info & Results Counter Bar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1 text-xs text-slate-500">
+          <div class="flex items-center gap-2">
+            <span>Hiển thị:</span>
+            <span id="catalog-categories-count-display" class="font-bold font-mono text-slate-900 text-xs sm:text-sm">0 danh mục</span>
+          </div>
+          <div class="flex items-center gap-2 text-[11px] text-slate-400">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Đồng bộ danh mục tự động với Quầy thu ngân &amp; KDS</span>
+          </div>
+        </div>
+
+        <!-- Responsive Category Cards Grid (#catalog-categories-grid) -->
+        <div id="catalog-categories-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <!-- Dynamic category cards will be rendered here by renderCatalogCategoriesGrid() -->
+        </div>
+
       </div>
 
       <!-- Subview Container 3: Modifiers (#catalog-subview-modifiers) -->
       <div id="catalog-subview-modifiers" class="space-y-5 hidden animate-card-in">
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-card text-center space-y-3">
-          <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100">
-            <i data-lucide="layers" class="w-7 h-7"></i>
+        
+        <!-- Action Bar: Title & + TẠO NHÓM TOPPING CTA -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Nhóm Topping &amp; Tùy chọn Món</h3>
+            <p class="text-xs text-slate-500 mt-1">Thiết lập các nhóm tùy chọn (Đường, Đá, Topping, Kem Phô Mai), số lượng chọn tối thiểu/tối đa và đơn giá từng loại.</p>
           </div>
-          <h3 class="text-base font-bold text-slate-900">Nhóm Topping & Tùy chọn Món</h3>
-          <p class="text-xs text-slate-500 max-w-md mx-auto">
-            Thiết lập các nhóm tùy chọn (Đường, Đá, Topping, Kem Phô Mai), số lượng chọn tối thiểu/tối đa và đơn giá từng loại.
-          </p>
+          <button id="btn-catalog-modifiers-add-group" type="button" onclick="openModifierGroupModal()"
+            class="min-h-[48px] h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer transition select-none flex-shrink-0">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>+ TẠO NHÓM TOPPING</span>
+          </button>
         </div>
+
+        <!-- Realtime Info & Results Counter Bar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1 text-xs text-slate-500">
+          <div class="flex items-center gap-2">
+            <span>Hiển thị:</span>
+            <span id="catalog-modifiers-count-display" class="font-bold font-mono text-slate-900 text-xs sm:text-sm">0 nhóm</span>
+          </div>
+          <div class="flex items-center gap-2 text-[11px] text-slate-400">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Đồng bộ nhóm tùy chọn tự động với Quầy thu ngân &amp; KDS</span>
+          </div>
+        </div>
+
+        <!-- Responsive Modifier Groups Grid (#catalog-modifiers-grid) -->
+        <div id="catalog-modifiers-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <!-- Dynamic modifier group cards will be rendered here by renderCatalogModifierGroupsGrid() -->
+        </div>
+
       </div>
 
       <!-- Subview Container 4: Batch Linker Matrix (#catalog-subview-linker) -->
@@ -1507,6 +1551,212 @@
     </div>
   </div>
 
+  <!-- Modal D: Category Creation & Editing Form Modal (#modal-category-form) -->
+  <div id="modal-category-form" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 hidden overflow-y-auto">
+    <div class="w-full max-w-xl bg-white rounded-2xl border border-slate-200 shadow-modal my-auto max-h-[92vh] flex flex-col animate-card-in" role="dialog" aria-modal="true" aria-labelledby="modal-category-form-title">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div id="modal-category-icon-box" class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 flex-shrink-0 shadow-2xs">
+            <i data-lucide="layout-grid" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="modal-category-form-title" class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Thêm danh mục mới</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Thiết lập phân loại món, thứ tự hiển thị và nhóm tùy chọn mặc định.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeCategoryModal()"
+          class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer flex-shrink-0"
+          aria-label="Đóng">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <form id="form-category" onsubmit="saveCategoryForm(event)" class="overflow-y-auto p-4 sm:p-6 flex-1 space-y-5">
+        <input type="hidden" id="category-form-id" value="">
+        <input type="hidden" id="category-form-icon" value="coffee">
+
+        <!-- Row 1: Name and Order -->
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <div class="sm:col-span-8 space-y-1.5">
+            <label for="category-form-name" class="block text-xs font-bold text-slate-700">Tên danh mục <span class="text-rose-500">*</span></label>
+            <input type="text" id="category-form-name" required placeholder="Ví dụ: Cà phê Việt, Trà &amp; Macchiato..."
+              class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-semibold text-slate-900 outline-none transition">
+          </div>
+          <div class="sm:col-span-4 space-y-1.5">
+            <label for="category-form-order" class="block text-xs font-bold text-slate-700">Thứ tự hiển thị</label>
+            <input type="number" id="category-form-order" min="1" step="1" placeholder="1"
+              class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 font-mono text-xs sm:text-sm font-bold text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+          </div>
+        </div>
+
+        <!-- Row 2: Icon Picker (Grid of 12 Lucide icon buttons) -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-slate-700">Biểu tượng danh mục (Icon)</label>
+          <p class="text-[11px] text-slate-400">Chọn một biểu tượng phù hợp với nhóm đồ uống hoặc món ăn.</p>
+          <div id="category-icon-picker-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+            <button type="button" onclick="selectCategoryIcon('coffee')" data-cat-icon="coffee" data-icon="coffee" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="coffee" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('cup-soda')" data-cat-icon="cup-soda" data-icon="cup-soda" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="cup-soda" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('leaf')" data-cat-icon="leaf" data-icon="leaf" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="leaf" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('sparkles')" data-cat-icon="sparkles" data-icon="sparkles" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="sparkles" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('cake')" data-cat-icon="cake" data-icon="cake" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="cake" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('layers')" data-cat-icon="layers" data-icon="layers" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="layers" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('heart')" data-cat-icon="heart" data-icon="heart" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="heart" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('flame')" data-cat-icon="flame" data-icon="flame" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="flame" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('zap')" data-cat-icon="zap" data-icon="zap" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="zap" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('utensils')" data-cat-icon="utensils" data-icon="utensils" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="utensils" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('milk')" data-cat-icon="milk" data-icon="milk" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="milk" class="w-5 h-5"></i></button>
+            <button type="button" onclick="selectCategoryIcon('citrus')" data-cat-icon="citrus" data-icon="citrus" class="category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border flex items-center justify-center cursor-pointer transition select-none"><i data-lucide="citrus" class="w-5 h-5"></i></button>
+          </div>
+        </div>
+
+        <!-- Row 3: Default Modifier Groups Multi-Select Chips -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-slate-700">Nhóm tùy chọn mặc định (kế thừa tự động cho món mới)</label>
+          <p class="text-[11px] text-slate-400">Các món ăn thuộc danh mục này sẽ tự động kế thừa các nhóm tùy chọn được tích chọn.</p>
+          <div id="category-default-modifiers-chips" class="flex flex-wrap gap-2 pt-1">
+            <!-- Rendered by renderCategoryDefaultModifierChips() -->
+          </div>
+        </div>
+      </form>
+
+      <!-- Modal Footer -->
+      <div class="border-t border-slate-200 p-4 sm:p-5 bg-slate-50 rounded-b-2xl flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
+        <div>
+          <button id="btn-category-form-delete" type="button" onclick="deleteCategoryConfirmed(currentCategoryModalId)"
+            class="min-h-[48px] h-12 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-[0.98] text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer select-none transition hidden">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-600"></i>
+            <span>Xóa danh mục</span>
+          </button>
+        </div>
+        <div class="flex items-center gap-3 ml-auto">
+          <button type="button" onclick="closeCategoryModal()"
+            class="min-h-[48px] h-12 px-5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-700 border border-slate-200 font-bold text-xs sm:text-sm cursor-pointer select-none transition">
+            <span>Hủy bỏ</span>
+          </button>
+          <button id="btn-category-form-save" type="button" onclick="saveCategoryForm(event)"
+            class="min-h-[48px] h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm cursor-pointer select-none transition">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            <span>LƯU DANH MỤC</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal E: Modifier Group Creation & Editing Form Modal (#modal-modifier-group-form) -->
+  <div id="modal-modifier-group-form" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 hidden overflow-y-auto">
+    <div class="w-full max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-modal my-auto max-h-[92vh] flex flex-col animate-card-in" role="dialog" aria-modal="true" aria-labelledby="modal-modifier-group-form-title">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div id="modal-modifier-icon-box" class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 flex-shrink-0 shadow-2xs">
+            <i data-lucide="layers" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="modal-modifier-group-title" class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Tạo nhóm Topping / Tùy chọn mới</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Cấu hình quy tắc chọn (đơn / đa chọn), giới hạn số lượng và danh sách tùy chọn con kèm giá.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModifierGroupModal()"
+          class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer flex-shrink-0"
+          aria-label="Đóng">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <form id="form-modifier-group" onsubmit="saveModifierGroupForm(event)" class="overflow-y-auto p-4 sm:p-6 flex-1 space-y-5">
+        <input type="hidden" id="modifier-group-form-id" value="">
+        <input type="hidden" id="modifier-group-selection-type" value="multiple">
+
+        <!-- Row 1: Group Name -->
+        <div class="space-y-1.5">
+          <label for="modifier-group-form-name" class="block text-xs font-bold text-slate-700">Tên nhóm tùy chọn / Topping <span class="text-rose-500">*</span></label>
+          <input type="text" id="modifier-group-form-name" required placeholder="Ví dụ: Topping Trà Trái Cây, Lớp Kem Cheese, Mức đường..."
+            class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-semibold text-slate-900 outline-none transition">
+        </div>
+
+        <!-- Row 2: Selection Type Radio Switch -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-slate-700">Quy tắc chọn của khách hàng <span class="text-rose-500">*</span></label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="modifier-selection-type-buttons">
+            <button id="btn-mod-type-single" type="button" onclick="setModifierSelectionType('single')"
+              class="min-h-[48px] h-12 px-4 rounded-xl border flex items-center justify-center gap-2 font-bold text-xs sm:text-sm cursor-pointer transition select-none border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+              <i data-lucide="disc" class="w-4 h-4"></i>
+              <span>Chọn 1 duy nhất (Radio)</span>
+            </button>
+            <button id="btn-mod-type-multiple" type="button" onclick="setModifierSelectionType('multiple')"
+              class="min-h-[48px] h-12 px-4 rounded-xl border-2 border-emerald-600 bg-emerald-50 text-emerald-900 shadow-2xs flex items-center justify-center gap-2 font-bold text-xs sm:text-sm cursor-pointer transition select-none">
+              <i data-lucide="check-square" class="w-4 h-4 text-emerald-600"></i>
+              <span>Chọn nhiều (Checkbox)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 3: Min Select & Max Select Inputs -->
+        <div id="modifier-group-limits-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+          <div class="space-y-1.5">
+            <label for="modifier-group-min-select" class="block text-xs font-bold text-slate-700">Số lượng chọn tối thiểu</label>
+            <input type="number" id="modifier-group-min-select" min="0" value="0"
+              class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 font-mono text-sm font-bold text-slate-900 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+            <p class="text-[11px] text-slate-500">Đặt 0 nếu không bắt buộc; đặt 1 nếu bắt buộc phải chọn.</p>
+          </div>
+          <div class="space-y-1.5">
+            <label for="modifier-group-max-select" class="block text-xs font-bold text-slate-700">Số lượng chọn tối đa</label>
+            <input type="number" id="modifier-group-max-select" min="1" value="5"
+              class="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 font-mono text-sm font-bold text-slate-900 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+            <p class="text-[11px] text-slate-500">Giới hạn số topping tối đa được thêm.</p>
+          </div>
+        </div>
+
+        <!-- Row 4: Dynamic Child Options Table -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-slate-900">Danh sách lựa chọn / Topping con</span>
+              <p class="text-[11px] text-slate-400">Nhấn Enter tại ô giá để tự động thêm dòng mới và chuyển con trỏ.</p>
+            </div>
+            <button id="btn-add-modifier-option-row" type="button" onclick="addModifierOptionRow()"
+              class="min-h-[48px] h-12 px-4 rounded-xl bg-white hover:bg-emerald-50 active:scale-[0.98] border border-dashed border-emerald-300 text-emerald-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer select-none">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>+ Thêm dòng Topping</span>
+            </button>
+          </div>
+
+          <div id="modifier-group-options-list" class="space-y-2">
+            <!-- Dynamic option rows rendered by renderModifierOptionsTable() -->
+          </div>
+        </div>
+      </form>
+
+      <!-- Modal Footer -->
+      <div class="border-t border-slate-200 p-4 sm:p-5 bg-slate-50 rounded-b-2xl flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
+        <div>
+          <button id="btn-modifier-group-delete" type="button" onclick="deleteModifierGroupConfirmed(currentModifierGroupModalId)"
+            class="min-h-[48px] h-12 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-[0.98] text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer select-none transition hidden">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-600"></i>
+            <span>Xóa nhóm topping</span>
+          </button>
+        </div>
+        <div class="flex items-center gap-3 ml-auto">
+          <button type="button" onclick="closeModifierGroupModal()"
+            class="min-h-[48px] h-12 px-5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-700 border border-slate-200 font-bold text-xs sm:text-sm cursor-pointer select-none transition">
+            <span>Hủy bỏ</span>
+          </button>
+          <button id="btn-modifier-group-save" type="button" onclick="saveModifierGroupForm(event)"
+            class="min-h-[48px] h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm cursor-pointer select-none transition">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            <span>LƯU NHÓM TOPPING</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ========================================================================= -->
   <!-- 5. JAVASCRIPT CONTROLLERS & EVENT SUBSYSTEM                                -->
   <!-- ========================================================================= -->
@@ -1950,6 +2200,16 @@
         if (pillModifiers) {
           pillModifiers.textContent = modifiersCount + ' nhóm';
         }
+
+        var catCountDisplay = document.getElementById('catalog-categories-count-display');
+        if (catCountDisplay) {
+          catCountDisplay.textContent = categoriesCount + ' danh mục';
+        }
+
+        var modCountDisplay = document.getElementById('catalog-modifiers-count-display');
+        if (modCountDisplay) {
+          modCountDisplay.textContent = modifiersCount + ' nhóm';
+        }
       } catch (err) {
         console.warn('[Catalog] Error refreshing catalog counters:', err);
       }
@@ -2026,7 +2286,13 @@
           btnCatalog.setAttribute('aria-selected', 'true');
         }
         refreshCatalogCounters();
-        if (typeof renderCatalogItemsGrid === 'function') {
+        if (currentCatalogSubView === 'categories' && typeof renderCatalogCategoriesGrid === 'function') {
+          renderCatalogCategoriesGrid();
+        } else if (currentCatalogSubView === 'modifiers' && typeof renderCatalogModifiersGrid === 'function') {
+          renderCatalogModifiersGrid();
+        } else if (currentCatalogSubView === 'linker' && typeof renderCatalogLinkerMatrix === 'function') {
+          renderCatalogLinkerMatrix();
+        } else if (typeof renderCatalogItemsGrid === 'function') {
           renderCatalogItemsGrid();
         }
       } else if (tabKey === 'store') {
@@ -3044,7 +3310,7 @@
         window.POS_BUS.saveMenuItem(itemObj);
       }
 
-      playCashChime();
+      playSaveChime();
       showToast('Đã lưu thông tin món: ' + itemObj.name);
       closeMenuItemModal();
       renderCatalogItemsGrid();
@@ -3092,6 +3358,741 @@
         : null;
       var itemName = item ? item.name : itemId;
       showToast('Đã chọn món "' + itemName + '" cho ma trận gán Topping');
+    }
+
+    /* =========================================================================
+       5.2 Catalog Categories & Modifier Groups Studio Subsystem (Task 4)
+       ========================================================================= */
+    var currentCategoryModalId = null;
+    var selectedCategoryIcon = 'coffee';
+    var selectedCategoryDefaultGroupIds = [];
+
+    var currentModifierGroupModalId = null;
+    var currentModifierSelectionType = 'multiple';
+    var currentModifierOptions = [];
+
+    /* CATEGORIES LOGIC */
+
+    /* Renders Bento Grid of Category Cards */
+    function renderCatalogCategoriesGrid() {
+      var grid = document.getElementById('catalog-categories-grid');
+      var countDisplay = document.getElementById('catalog-categories-count-display');
+      if (!grid) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+      var modifierGroups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+
+      if (countDisplay) {
+        countDisplay.textContent = categories.length + ' danh mục';
+      }
+
+      if (categories.length === 0) {
+        grid.innerHTML = '<div class="col-span-full bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-4">' +
+          '<div class="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100 shadow-2xs">' +
+            '<i data-lucide="layout-grid" class="w-8 h-8"></i>' +
+          '</div>' +
+          '<div class="space-y-1">' +
+            '<h4 class="text-base font-bold text-slate-900">Chưa có danh mục nào</h4>' +
+            '<p class="text-xs text-slate-500 max-w-sm mx-auto">Tạo danh mục mới để phân loại các món ăn và đồ uống trong thực đơn.</p>' +
+          '</div>' +
+          '<div class="pt-2">' +
+            '<button type="button" onclick="openCategoryModal()" class="min-h-[48px] h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm inline-flex items-center gap-2 shadow-sm cursor-pointer transition select-none">' +
+              '<i data-lucide="plus-circle" class="w-4 h-4"></i>' +
+              '<span>+ THÊM DANH MỤC</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < categories.length; i++) {
+        var cat = categories[i];
+        var catItemsCount = items.filter(function (it) { return it.categoryId === cat.id; }).length;
+        var iconName = cat.icon || 'coffee';
+
+        // Default modifier groups tags
+        var tagsHtml = '';
+        var defGroupIds = Array.isArray(cat.defaultGroupIds) ? cat.defaultGroupIds : [];
+        if (defGroupIds.length > 0) {
+          for (var g = 0; g < defGroupIds.length; g++) {
+            var grp = modifierGroups.find(function (m) { return m.id === defGroupIds[g]; });
+            var gName = grp ? grp.name : defGroupIds[g];
+            tagsHtml += '<span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium text-xs border border-slate-200 flex items-center gap-1.5">' +
+              '<i data-lucide="layers" class="w-3 h-3 text-slate-400"></i>' +
+              '<span>' + escapeHtml(gName) + '</span>' +
+            '</span>';
+          }
+        } else {
+          tagsHtml = '<span class="text-xs text-slate-400 italic">Không có nhóm mặc định</span>';
+        }
+
+        html += '<div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between group">' +
+          '<div>' +
+            '<!-- Top Header: Icon, Order & Item Count -->' +
+            '<div class="flex items-start justify-between gap-3">' +
+              '<div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">' +
+                '<i data-lucide="' + escapeHtml(iconName) + '" class="w-6 h-6"></i>' +
+              '</div>' +
+              '<div class="flex items-center gap-2">' +
+                '<span class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 font-mono text-[11px] font-bold">Thứ tự: ' + (cat.order !== undefined ? cat.order : (i + 1)) + '</span>' +
+                '<span class="px-2.5 py-0.5 rounded-full font-mono text-xs font-bold ' + (catItemsCount > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500') + '">' + catItemsCount + ' món</span>' +
+              '</div>' +
+            '</div>' +
+
+            '<!-- Category Name -->' +
+            '<h4 class="text-base font-bold text-slate-900 leading-snug mt-3 group-hover:text-emerald-600 transition">' + escapeHtml(cat.name) + '</h4>' +
+
+            '<!-- Inherited Default Modifier Groups -->' +
+            '<div class="mt-3 pt-3 border-t border-slate-100 space-y-1.5">' +
+              '<div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Nhóm tùy chọn mặc định:</div>' +
+              '<div class="flex flex-wrap gap-1.5">' + tagsHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<!-- Action Buttons -->' +
+          '<div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-2">' +
+            '<button type="button" onclick="openCategoryModal(\'' + escapeHtml(cat.id) + '\')" class="min-h-[48px] h-12 flex-1 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition select-none">' +
+              '<i data-lucide="edit-3" class="w-4 h-4"></i>' +
+              '<span>Chỉnh sửa</span>' +
+            '</button>' +
+            '<button type="button" onclick="deleteCategoryConfirmed(\'' + escapeHtml(cat.id) + '\')" class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-[0.98] text-rose-700 border border-rose-200 flex items-center justify-center cursor-pointer transition select-none" title="Xóa danh mục">' +
+              '<i data-lucide="trash-2" class="w-4 h-4 text-rose-600"></i>' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      }
+
+      grid.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Opens Category Modal in Create or Edit Mode */
+    function openCategoryModal(catId) {
+      playTapChirp();
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+
+      var modalTitle = document.getElementById('modal-category-form-title');
+      var btnDelete = document.getElementById('btn-category-form-delete');
+      var idInput = document.getElementById('category-form-id');
+      var nameInput = document.getElementById('category-form-name');
+      var orderInput = document.getElementById('category-form-order');
+
+      if (catId) {
+        // Edit Mode
+        var cat = categories.find(function (c) { return c.id === catId; });
+        if (!cat) {
+          showToast('Không tìm thấy danh mục: ' + catId, true);
+          return;
+        }
+
+        currentCategoryModalId = cat.id;
+        if (modalTitle) modalTitle.textContent = 'Chỉnh sửa danh mục: ' + cat.name;
+        if (btnDelete) btnDelete.classList.remove('hidden');
+
+        if (idInput) idInput.value = cat.id;
+        if (nameInput) nameInput.value = cat.name || '';
+        if (orderInput) orderInput.value = (cat.order !== undefined) ? cat.order : 1;
+
+        selectedCategoryIcon = cat.icon || 'coffee';
+        selectedCategoryDefaultGroupIds = (cat.defaultGroupIds || []).slice();
+      } else {
+        // Create Mode
+        currentCategoryModalId = null;
+        if (modalTitle) modalTitle.textContent = 'Thêm danh mục mới';
+        if (btnDelete) btnDelete.classList.add('hidden');
+
+        if (idInput) idInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (orderInput) orderInput.value = categories.length + 1;
+
+        selectedCategoryIcon = 'coffee';
+        selectedCategoryDefaultGroupIds = [];
+      }
+
+      selectCategoryIcon(selectedCategoryIcon);
+      renderCategoryDefaultModifierChips();
+
+      openModal('modal-category-form');
+      setTimeout(function () {
+        if (nameInput) nameInput.focus();
+      }, 100);
+    }
+
+    /* Closes Category Modal */
+    function closeCategoryModal() {
+      closeModal('modal-category-form');
+    }
+
+    /* Selects icon in category modal icon picker */
+    function selectCategoryIcon(iconName) {
+      selectedCategoryIcon = iconName || 'coffee';
+      var hiddenInput = document.getElementById('category-form-icon');
+      if (hiddenInput) hiddenInput.value = selectedCategoryIcon;
+
+      var buttons = document.querySelectorAll('#category-icon-picker-grid .category-icon-btn');
+      buttons.forEach(function (btn) {
+        var ic = btn.getAttribute('data-cat-icon');
+        if (ic === selectedCategoryIcon) {
+          btn.className = 'category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border-2 border-emerald-600 bg-emerald-50 text-emerald-700 shadow-2xs scale-[1.02] flex items-center justify-center cursor-pointer transition select-none';
+        } else {
+          btn.className = 'category-icon-btn min-h-[48px] min-w-[48px] h-12 w-full rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex items-center justify-center cursor-pointer transition select-none';
+        }
+      });
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Renders Default Modifier Group Chips in Category Modal */
+    function renderCategoryDefaultModifierChips() {
+      var container = document.getElementById('category-default-modifiers-chips');
+      if (!container) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var modifierGroups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+
+      if (modifierGroups.length === 0) {
+        container.innerHTML = '<div class="text-xs text-slate-400 italic">Chưa có nhóm tùy chọn nào trong hệ thống.</div>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < modifierGroups.length; i++) {
+        var grp = modifierGroups[i];
+        var isSelected = (selectedCategoryDefaultGroupIds.indexOf(grp.id) !== -1);
+
+        html += '<button type="button" onclick="toggleCategoryDefaultModifier(\'' + escapeHtml(grp.id) + '\')" data-group-id="' + escapeHtml(grp.id) + '" class="category-mod-chip min-h-[48px] h-12 px-3.5 rounded-xl border flex items-center gap-2 cursor-pointer transition select-none ' +
+          (isSelected ? 'border-2 border-emerald-600 bg-emerald-50 text-emerald-900 font-bold shadow-2xs' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium') + '">' +
+          '<i data-lucide="' + (isSelected ? 'check-square' : 'square') + '" class="w-4 h-4 ' + (isSelected ? 'text-emerald-600' : 'text-slate-400') + '"></i>' +
+          '<span class="text-xs">' + escapeHtml(grp.name) + '</span>' +
+        '</button>';
+      }
+
+      container.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Toggles selection of a default modifier group in Category Modal */
+    function toggleCategoryDefaultModifier(groupId) {
+      playTapChirp();
+      var idx = selectedCategoryDefaultGroupIds.indexOf(groupId);
+      if (idx !== -1) {
+        selectedCategoryDefaultGroupIds.splice(idx, 1);
+      } else {
+        selectedCategoryDefaultGroupIds.push(groupId);
+      }
+      renderCategoryDefaultModifierChips();
+    }
+
+    /* Saves Category Form */
+    function saveCategoryForm(event) {
+      if (event && typeof event.preventDefault === 'function') event.preventDefault();
+
+      var nameInput = document.getElementById('category-form-name');
+      var name = nameInput ? nameInput.value.trim() : '';
+      if (!name) {
+        showToast('Vui lòng nhập tên danh mục', true);
+        if (nameInput) nameInput.focus();
+        return;
+      }
+
+      var orderInput = document.getElementById('category-form-order');
+      var orderVal = parseInt(orderInput ? orderInput.value : 1, 10);
+      if (isNaN(orderVal) || orderVal < 1) orderVal = 1;
+
+      var iconInput = document.getElementById('category-form-icon');
+      var icon = (iconInput ? iconInput.value : '') || selectedCategoryIcon || 'coffee';
+
+      var catObj = {
+        id: currentCategoryModalId || ('cat_' + Date.now()),
+        name: name,
+        icon: icon,
+        order: orderVal,
+        defaultGroupIds: selectedCategoryDefaultGroupIds.slice()
+      };
+
+      if (window.POS_BUS && typeof window.POS_BUS.saveCategory === 'function') {
+        window.POS_BUS.saveCategory(catObj);
+      }
+
+      playSaveChime();
+      showToast('Đã lưu danh mục: ' + catObj.name);
+      closeCategoryModal();
+      renderCatalogCategoriesGrid();
+      refreshCatalogCounters();
+      populateCatalogCategoryDropdown();
+    }
+
+    /* Deletes a category with confirmation */
+    function deleteCategoryConfirmed(catId) {
+      var targetId = catId || currentCategoryModalId;
+      if (!targetId) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+      var cat = categories.find(function (c) { return c.id === targetId; });
+      var catName = cat ? cat.name : targetId;
+
+      var assignedItems = items.filter(function (it) { return it.categoryId === targetId; });
+      var warning = 'Bạn có chắc chắn muốn xóa danh mục "' + catName + '"?';
+      if (assignedItems.length > 0) {
+        warning += ' (Có ' + assignedItems.length + ' món đang thuộc danh mục này)';
+      }
+      if (!confirm(warning)) {
+        return;
+      }
+
+      if (window.POS_BUS && typeof window.POS_BUS.deleteCategory === 'function') {
+        window.POS_BUS.deleteCategory(targetId);
+      }
+
+      playTapChirp();
+      showToast('Đã xóa danh mục "' + catName + '"');
+      closeCategoryModal();
+      renderCatalogCategoriesGrid();
+      if (typeof renderCatalogItemsGrid === 'function') {
+        renderCatalogItemsGrid();
+      }
+      refreshCatalogCounters();
+      populateCatalogCategoryDropdown();
+    }
+
+
+    /* MODIFIER GROUPS LOGIC */
+
+    /* Renders Responsive Modifier Groups Grid */
+    function renderCatalogModifierGroupsGrid() {
+      var grid = document.getElementById('catalog-modifiers-grid');
+      var countDisplay = document.getElementById('catalog-modifiers-count-display');
+      if (!grid) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+
+      var modifierGroups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+
+      if (countDisplay) {
+        countDisplay.textContent = modifierGroups.length + ' nhóm';
+      }
+
+      if (modifierGroups.length === 0) {
+        grid.innerHTML = '<div class="col-span-full bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-4">' +
+          '<div class="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100 shadow-2xs">' +
+            '<i data-lucide="layers" class="w-8 h-8"></i>' +
+          '</div>' +
+          '<div class="space-y-1">' +
+            '<h4 class="text-base font-bold text-slate-900">Chưa có nhóm tùy chọn nào</h4>' +
+            '<p class="text-xs text-slate-500 max-w-sm mx-auto">Tạo nhóm tùy chọn mới (Đường, Đá, Topping) để khách hàng dễ dàng tùy biến đồ uống.</p>' +
+          '</div>' +
+          '<div class="pt-2">' +
+            '<button type="button" onclick="openModifierGroupModal()" class="min-h-[48px] h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm inline-flex items-center gap-2 shadow-sm cursor-pointer transition select-none">' +
+              '<i data-lucide="plus-circle" class="w-4 h-4"></i>' +
+              '<span>+ TẠO NHÓM TOPPING</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < modifierGroups.length; i++) {
+        var group = modifierGroups[i];
+
+        // Rule badge
+        var ruleBadge = '';
+        if (group.selectionType === 'single') {
+          ruleBadge = '<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Chọn 1 duy nhất (Radio)</span>';
+        } else {
+          var minS = group.minSelect !== undefined ? group.minSelect : 0;
+          var maxS = group.maxSelect !== undefined ? group.maxSelect : 5;
+          ruleBadge = '<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-mono">Chọn nhiều: ' + minS + ' - ' + maxS + '</span>';
+        }
+
+        // Calculate how many items use this group
+        var appliedCount = 0;
+        for (var itIdx = 0; itIdx < items.length; itIdx++) {
+          var item = items[itIdx];
+          var hasAssigned = Array.isArray(item.assignedModifierGroupIds) && (item.assignedModifierGroupIds.indexOf(group.id) !== -1);
+          if (hasAssigned) {
+            appliedCount++;
+          } else {
+            // Check inheritance from category
+            var cat = categories.find(function (c) { return c.id === item.categoryId; });
+            var isInherited = cat && Array.isArray(cat.defaultGroupIds) && (cat.defaultGroupIds.indexOf(group.id) !== -1);
+            var isExcluded = Array.isArray(item.excludedModifierGroupIds) && (item.excludedModifierGroupIds.indexOf(group.id) !== -1);
+            if (isInherited && !isExcluded) {
+              appliedCount++;
+            }
+          }
+        }
+
+        // Child options tags
+        var optionsHtml = '';
+        var opts = Array.isArray(group.options) ? group.options : [];
+        if (opts.length > 0) {
+          for (var o = 0; o < opts.length; o++) {
+            var opt = opts[o];
+            var priceText = (opt.price && opt.price > 0) ? ('+' + formatVND(opt.price)) : (opt.isDefault ? '0 đ (MĐ)' : '0 đ');
+            optionsHtml += '<span class="px-2.5 py-1 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium flex items-center justify-between gap-1.5">' +
+              '<span class="truncate">' + escapeHtml(opt.name) + '</span>' +
+              '<span class="font-mono font-bold text-emerald-700 flex-shrink-0">' + priceText + '</span>' +
+            '</span>';
+          }
+        } else {
+          optionsHtml = '<span class="text-xs text-slate-400 italic">Chưa có tùy chọn con</span>';
+        }
+
+        html += '<div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between group">' +
+          '<div>' +
+            '<!-- Header: Group Name & Selection Badge -->' +
+            '<div class="flex items-start justify-between gap-2">' +
+              '<h4 class="text-base font-bold text-slate-900 leading-snug group-hover:text-emerald-600 transition">' + escapeHtml(group.name) + '</h4>' +
+              ruleBadge +
+            '</div>' +
+
+            '<!-- Applied Items Count Badge -->' +
+            '<div class="mt-2 flex items-center gap-1.5 text-xs text-slate-500 font-medium">' +
+              '<i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-600"></i>' +
+              '<span>Áp dụng cho <strong class="text-slate-900 font-mono">' + appliedCount + '</strong> món</span>' +
+            '</div>' +
+
+            '<!-- Child Options List -->' +
+            '<div class="mt-3 pt-3 border-t border-slate-100 space-y-1.5">' +
+              '<div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Các lựa chọn con (' + opts.length + '):</div>' +
+              '<div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">' + optionsHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<!-- Action Buttons -->' +
+          '<div class="pt-3 mt-4 border-t border-slate-100 flex items-center gap-2">' +
+            '<button type="button" onclick="openModifierGroupModal(\'' + escapeHtml(group.id) + '\')" class="min-h-[48px] h-12 flex-1 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition select-none">' +
+              '<i data-lucide="edit-3" class="w-4 h-4"></i>' +
+              '<span>Sửa nhóm</span>' +
+            '</button>' +
+            '<button type="button" onclick="jumpToBatchLinkerForGroup(\'' + escapeHtml(group.id) + '\')" class="min-h-[48px] h-12 flex-1 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-[0.98] text-emerald-700 border border-emerald-200 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition select-none">' +
+              '<i data-lucide="zap" class="w-4 h-4"></i>' +
+              '<span>Phân bổ vào món...</span>' +
+            '</button>' +
+            '<button type="button" onclick="deleteModifierGroupConfirmed(\'' + escapeHtml(group.id) + '\')" class="min-h-[48px] min-w-[48px] h-12 w-12 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-[0.98] text-rose-700 border border-rose-200 flex items-center justify-center cursor-pointer transition select-none" title="Xóa nhóm topping">' +
+              '<i data-lucide="trash-2" class="w-4 h-4 text-rose-600"></i>' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      }
+
+      grid.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    var renderCatalogModifiersGrid = renderCatalogModifierGroupsGrid;
+
+    /* Opens Modifier Group Modal in Create or Edit Mode */
+    function openModifierGroupModal(groupId) {
+      playTapChirp();
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var modifierGroups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+
+      var modalTitle = document.getElementById('modal-modifier-group-title') || document.getElementById('modal-modifier-group-form-title');
+      var btnDelete = document.getElementById('btn-modifier-group-delete');
+      var idInput = document.getElementById('modifier-group-form-id');
+      var nameInput = document.getElementById('modifier-group-form-name');
+      var minInput = document.getElementById('modifier-group-min-select');
+      var maxInput = document.getElementById('modifier-group-max-select');
+
+      if (groupId) {
+        // Edit Mode
+        var group = modifierGroups.find(function (g) { return g.id === groupId; });
+        if (!group) {
+          showToast('Không tìm thấy nhóm tùy chọn: ' + groupId, true);
+          return;
+        }
+
+        currentModifierGroupModalId = group.id;
+        if (modalTitle) modalTitle.textContent = 'Chỉnh sửa nhóm: ' + group.name;
+        if (btnDelete) btnDelete.classList.remove('hidden');
+
+        if (idInput) idInput.value = group.id;
+        if (nameInput) nameInput.value = group.name || '';
+
+        currentModifierSelectionType = group.selectionType || 'multiple';
+        if (minInput) minInput.value = (group.minSelect !== undefined) ? group.minSelect : 0;
+        if (maxInput) maxInput.value = (group.maxSelect !== undefined) ? group.maxSelect : 5;
+
+        currentModifierOptions = Array.isArray(group.options)
+          ? group.options.map(function (o) { return { id: o.id, name: o.name || '', price: o.price || 0, isAvailable: o.isAvailable !== false, isDefault: !!o.isDefault }; })
+          : [];
+      } else {
+        // Create Mode
+        currentModifierGroupModalId = null;
+        if (modalTitle) modalTitle.textContent = 'Tạo nhóm Topping / Tùy chọn mới';
+        if (btnDelete) btnDelete.classList.add('hidden');
+
+        if (idInput) idInput.value = '';
+        if (nameInput) nameInput.value = '';
+
+        currentModifierSelectionType = 'multiple';
+        if (minInput) minInput.value = 0;
+        if (maxInput) maxInput.value = 5;
+
+        currentModifierOptions = [
+          { name: '', price: 10000, isAvailable: true },
+          { name: '', price: 10000, isAvailable: true }
+        ];
+      }
+
+      setModifierSelectionType(currentModifierSelectionType);
+      renderModifierOptionsTable();
+
+      openModal('modal-modifier-group-form');
+      setTimeout(function () {
+        if (nameInput) nameInput.focus();
+      }, 100);
+    }
+
+    /* Closes Modifier Group Modal */
+    function closeModifierGroupModal() {
+      closeModal('modal-modifier-group-form');
+    }
+
+    /* Toggles selection type between 'single' and 'multiple' */
+    function setModifierSelectionType(type) {
+      currentModifierSelectionType = type === 'single' ? 'single' : 'multiple';
+      var hiddenInput = document.getElementById('modifier-group-selection-type');
+      if (hiddenInput) hiddenInput.value = currentModifierSelectionType;
+
+      var btnSingle = document.getElementById('btn-mod-type-single') || document.getElementById('btn-selection-type-single');
+      var btnMultiple = document.getElementById('btn-mod-type-multiple') || document.getElementById('btn-selection-type-multiple');
+      var minInput = document.getElementById('modifier-group-min-select');
+      var maxInput = document.getElementById('modifier-group-max-select');
+
+      if (currentModifierSelectionType === 'single') {
+        if (btnSingle) {
+          btnSingle.className = 'min-h-[48px] h-12 px-4 rounded-xl border-2 border-emerald-600 bg-emerald-50 text-emerald-900 shadow-2xs flex items-center justify-center gap-2 font-bold text-xs sm:text-sm cursor-pointer transition select-none';
+        }
+        if (btnMultiple) {
+          btnMultiple.className = 'min-h-[48px] h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-2 font-bold text-xs sm:text-sm cursor-pointer transition select-none';
+        }
+        if (minInput) minInput.value = 1;
+        if (maxInput) maxInput.value = 1;
+      } else {
+        if (btnSingle) {
+          btnSingle.className = 'min-h-[48px] h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-2 font-bold text-xs sm:text-sm cursor-pointer transition select-none';
+        }
+        if (btnMultiple) {
+          btnMultiple.className = 'min-h-[48px] h-12 px-4 rounded-xl border-2 border-emerald-600 bg-emerald-50 text-emerald-900 shadow-2xs flex items-center justify-center gap-2 font-bold text-xs sm:text-sm cursor-pointer transition select-none';
+        }
+        if (minInput && (!minInput.value || minInput.value === '1')) minInput.value = 0;
+        if (maxInput && (!maxInput.value || maxInput.value === '1')) maxInput.value = 5;
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Synchronize current in-memory options with actual DOM values */
+    function syncModifierOptionsFromDOM() {
+      var rows = document.querySelectorAll('#modifier-group-options-list .modifier-opt-row');
+      if (rows.length === 0) return;
+      var updated = [];
+      for (var i = 0; i < rows.length; i++) {
+        var nameInp = rows[i].querySelector('.modifier-opt-name');
+        var priceInp = rows[i].querySelector('.modifier-opt-price');
+        var name = nameInp ? nameInp.value.trim() : '';
+        var price = parseInt(priceInp ? priceInp.value : 0, 10) || 0;
+        var existing = currentModifierOptions[i] || {};
+        updated.push({
+          id: existing.id || ('opt_' + Date.now() + '_' + i),
+          name: name,
+          price: price,
+          isAvailable: existing.isAvailable !== false,
+          isDefault: !!existing.isDefault
+        });
+      }
+      if (updated.length > 0) {
+        currentModifierOptions = updated;
+      }
+    }
+
+    /* Renders Dynamic Child Options Table in Modal */
+    function renderModifierOptionsTable() {
+      var container = document.getElementById('modifier-group-options-list');
+      if (!container) return;
+
+      if (currentModifierOptions.length === 0) {
+        currentModifierOptions = [{ name: '', price: 10000, isAvailable: true }];
+      }
+
+      var html = '';
+      for (var i = 0; i < currentModifierOptions.length; i++) {
+        var opt = currentModifierOptions[i];
+
+        html += '<div class="modifier-opt-row flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 group">' +
+          '<!-- Option Name Input -->' +
+          '<div class="flex-1">' +
+            '<input type="text" value="' + escapeHtml(opt.name) + '" onchange="syncModifierOptionsFromDOM()" placeholder="Tên lựa chọn (vd: Trân châu trắng, Kem cheese...)" class="modifier-opt-name w-full min-h-[48px] h-12 px-3.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-900 outline-none bg-white focus:border-emerald-500 transition">' +
+          '</div>' +
+          '<!-- Surcharge Price Input -->' +
+          '<div class="w-32 sm:w-36 relative flex-shrink-0">' +
+            '<input type="number" min="0" step="1000" value="' + (opt.price !== undefined ? opt.price : 0) + '" onchange="syncModifierOptionsFromDOM()" onkeydown="if(event.key===\'Enter\'){event.preventDefault(); addModifierOptionRow();}" placeholder="0" class="modifier-opt-price w-full min-h-[48px] h-12 pl-3 pr-10 rounded-lg border border-slate-300 font-mono text-xs sm:text-sm font-bold text-emerald-700 outline-none bg-white focus:border-emerald-500 transition">' +
+            '<div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[10px] font-mono font-bold text-slate-400">VND</div>' +
+          '</div>' +
+          '<!-- Delete Row Button -->' +
+          '<button type="button" onclick="removeModifierOptionRow(' + i + ')" class="modifier-opt-delete min-h-[48px] min-w-[48px] h-12 w-12 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition cursor-pointer flex-shrink-0 ' + (currentModifierOptions.length <= 1 ? 'opacity-40 pointer-events-none' : '') + '" title="Xóa dòng này">' +
+            '<i data-lucide="trash-2" class="w-4 h-4"></i>' +
+          '</button>' +
+        '</div>';
+      }
+
+      container.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* Adds a new option row and focuses the new option name */
+    function addModifierOptionRow(name, price) {
+      playTapChirp();
+      syncModifierOptionsFromDOM();
+      currentModifierOptions.push({
+        id: 'opt_' + Date.now(),
+        name: name || '',
+        price: (typeof price === 'number') ? price : 10000,
+        isAvailable: true
+      });
+      renderModifierOptionsTable();
+
+      setTimeout(function () {
+        var names = document.querySelectorAll('#modifier-group-options-list .modifier-opt-name');
+        if (names.length > 0) {
+          names[names.length - 1].focus();
+        }
+      }, 50);
+    }
+
+    /* Removes an option row */
+    function removeModifierOptionRow(index) {
+      if (currentModifierOptions.length <= 1) return;
+      playTapChirp();
+      syncModifierOptionsFromDOM();
+      currentModifierOptions.splice(index, 1);
+      renderModifierOptionsTable();
+    }
+
+    /* Saves Modifier Group Form */
+    function saveModifierGroupForm(event) {
+      if (event && typeof event.preventDefault === 'function') event.preventDefault();
+      syncModifierOptionsFromDOM();
+
+      var nameInput = document.getElementById('modifier-group-form-name');
+      var name = nameInput ? nameInput.value.trim() : '';
+      if (!name) {
+        showToast('Vui lòng nhập tên nhóm tùy chọn / Topping', true);
+        if (nameInput) nameInput.focus();
+        return;
+      }
+
+      var minInput = document.getElementById('modifier-group-min-select');
+      var maxInput = document.getElementById('modifier-group-max-select');
+      var minSelect = parseInt(minInput ? minInput.value : 0, 10);
+      var maxSelect = parseInt(maxInput ? maxInput.value : 1, 10);
+      if (isNaN(minSelect) || minSelect < 0) minSelect = 0;
+      if (isNaN(maxSelect) || maxSelect < 1) maxSelect = 1;
+      if (currentModifierSelectionType === 'single') {
+        minSelect = Math.min(minSelect, 1);
+        maxSelect = 1;
+      }
+
+      // Filter valid non-empty options
+      var validOptions = currentModifierOptions.filter(function (o) { return o.name && o.name.trim().length > 0; });
+      if (validOptions.length === 0) {
+        showToast('Vui lòng nhập ít nhất một lựa chọn có tên hợp lệ', true);
+        return;
+      }
+
+      var groupObj = {
+        id: currentModifierGroupModalId || ('mod_' + Date.now()),
+        name: name,
+        selectionType: currentModifierSelectionType,
+        minSelect: minSelect,
+        maxSelect: maxSelect,
+        options: validOptions.map(function (o, idx) {
+          return {
+            id: o.id || ('opt_' + Date.now() + '_' + idx),
+            name: o.name.trim(),
+            price: Math.max(0, parseInt(o.price, 10) || 0),
+            isAvailable: o.isAvailable !== false,
+            isDefault: (currentModifierSelectionType === 'single' && idx === 0)
+          };
+        })
+      };
+
+      if (window.POS_BUS && typeof window.POS_BUS.saveModifierGroup === 'function') {
+        window.POS_BUS.saveModifierGroup(groupObj);
+      }
+
+      playSaveChime();
+      showToast('Đã lưu nhóm tùy chọn: ' + groupObj.name);
+      closeModifierGroupModal();
+      renderCatalogModifierGroupsGrid();
+      refreshCatalogCounters();
+    }
+
+    /* Deletes a modifier group with confirmation */
+    function deleteModifierGroupConfirmed(groupId) {
+      var targetId = groupId || currentModifierGroupModalId;
+      if (!targetId) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var groups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      var group = groups.find(function (g) { return g.id === targetId; });
+      var groupName = group ? group.name : targetId;
+
+      if (!confirm('Bạn có chắc chắn muốn xóa nhóm "' + groupName + '"? Nhóm sẽ bị hủy liên kết khỏi tất cả các món ăn.')) {
+        return;
+      }
+
+      if (window.POS_BUS && typeof window.POS_BUS.deleteModifierGroup === 'function') {
+        window.POS_BUS.deleteModifierGroup(targetId);
+      }
+
+      playTapChirp();
+      showToast('Đã xóa nhóm "' + groupName + '"');
+      closeModifierGroupModal();
+      renderCatalogModifierGroupsGrid();
+      if (typeof renderCatalogItemsGrid === 'function') {
+        renderCatalogItemsGrid();
+      }
+      refreshCatalogCounters();
+    }
+
+    /* Shortcut: Jump to Batch Linker with this group selected */
+    function jumpToBatchLinkerForGroup(groupId) {
+      playTapChirp();
+      switchCatalogSubView('linker');
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var groups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      var group = groups.find(function (g) { return g.id === groupId; });
+      var groupName = group ? group.name : groupId;
+      showToast('Đã chọn nhóm "' + groupName + '" cho ma trận phân bổ');
     }
 
     /* =========================================================================
@@ -3742,7 +4743,7 @@
       var backdrop = document.getElementById('modal-backdrop-overlay');
       if (modal) modal.classList.add('hidden');
 
-      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form'];
+      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form', 'modal-category-form', 'modal-modifier-group-form'];
       var anyOpen = false;
       for (var i = 0; i < checkModals.length; i++) {
         var m = document.getElementById(checkModals[i]);
@@ -3757,7 +4758,7 @@
     }
 
     function closeAllModals() {
-      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form'];
+      var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form', 'modal-category-form', 'modal-modifier-group-form'];
       for (var i = 0; i < checkModals.length; i++) {
         var m = document.getElementById(checkModals[i]);
         if (m) m.classList.add('hidden');
@@ -3894,12 +4895,18 @@
         return;
       }
 
-      // Ctrl + S: Save Store Settings Form or Save Menu Item Form
+      // Ctrl + S: Save Store Settings Form, Menu Item Form, Category Form, or Modifier Group Form
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         var itemModal = document.getElementById('modal-item-form');
+        var catModal = document.getElementById('modal-category-form');
+        var modModal = document.getElementById('modal-modifier-group-form');
         if (itemModal && !itemModal.classList.contains('hidden')) {
           saveMenuItemForm();
+        } else if (catModal && !catModal.classList.contains('hidden')) {
+          saveCategoryForm();
+        } else if (modModal && !modModal.classList.contains('hidden')) {
+          saveModifierGroupForm();
         } else {
           saveStoreSettingsForm();
         }
@@ -3922,7 +4929,7 @@
         }
 
         var anyModalOpen = false;
-        var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form'];
+        var checkModals = ['modal-manager-reset', 'modal-shortcuts-help', 'modal-item-form', 'modal-category-form', 'modal-modifier-group-form'];
         for (var i = 0; i < checkModals.length; i++) {
           var m = document.getElementById(checkModals[i]);
           if (m && !m.classList.contains('hidden')) {
