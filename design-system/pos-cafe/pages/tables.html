@@ -2336,6 +2336,10 @@
       var table = localTables.find(function (t) { return t.id === tableId; });
       if (!table) return;
 
+      if (!window.confirm('Xác nhận hoàn tất và trả ' + table.name + ' về trạng thái Trống?')) {
+        return;
+      }
+
       table.status = 'available';
       table.activeSession = null;
       saveTablesToStorage(true);
@@ -2462,11 +2466,31 @@
               roundNumber: 1,
               items: order.items || []
             };
+          } else {
+            // Append incoming order items and add to totalVND
+            var nextRound = (targetTable.activeSession.roundNumber || 1) + 1;
+            targetTable.activeSession.roundNumber = nextRound;
+            var incomingItems = (order.items || []).map(function (it, idx) {
+              return {
+                id: 'ci_bus_' + Date.now() + '_' + idx,
+                name: it.name,
+                sizeName: it.size || it.sizeName || '',
+                unitPrice: it.price || it.unitPrice || 0,
+                quantity: it.quantity || 1,
+                lineTotalVND: (it.price || it.unitPrice || 0) * (it.quantity || 1),
+                round: nextRound,
+                modifiers: it.modifiers || [],
+                preparationNote: it.note || it.preparationNote || ''
+              };
+            });
+            targetTable.activeSession.items = (targetTable.activeSession.items || []).concat(incomingItems);
+            targetTable.activeSession.itemsCount = targetTable.activeSession.items.length;
+            targetTable.activeSession.totalVND = (targetTable.activeSession.totalVND || 0) + (order.grandTotalVND || order.subtotalVND || 0);
           }
           saveTablesToStorage(false);
           renderFloorGrid();
           if (selectedTableId === targetTable.id) renderTableDrawer(targetTable.id);
-          showToast('Bàn ' + targetTable.name + ' vừa có đơn mới từ Thu ngân!');
+          showToast(targetTable.name + ' vừa có đơn mới từ Thu ngân!');
         }
       });
 
