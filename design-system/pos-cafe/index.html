@@ -81,7 +81,7 @@
       <div class="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200/80 items-center">
         <!-- Mang đi (F1) -->
         <button id="btn-mode-takeaway" type="button" onclick="window.POS_STATE.setMode('takeaway')"
-          class="min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white">
+          class="min-h-[48px] h-12 px-4 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white select-none">
           <i data-lucide="shopping-bag" class="w-4 h-4"></i>
           <span>Mang đi</span>
           <kbd class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/20 text-white border border-white/10">F1</kbd>
@@ -89,7 +89,7 @@
 
         <!-- Tại bàn (F2) -->
         <button id="btn-mode-dinein" type="button" onclick="window.POS_STATE.setMode('dinein')"
-          class="min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60">
+          class="min-h-[48px] h-12 px-4 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 select-none">
           <i data-lucide="utensils" class="w-4 h-4"></i>
           <span>Tại bàn</span>
           <kbd class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-200 text-slate-600 border border-slate-300">F2</kbd>
@@ -105,12 +105,13 @@
         </span>
         <input id="quick-search-input" type="text" autocomplete="off"
           placeholder="Tìm món nhanh (tên món, viết tắt: cfsd, tdcs)..."
-          class="w-full h-10 pl-9 pr-14 rounded-lg bg-slate-100 border border-transparent focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-sm text-slate-800 placeholder-slate-400 transition outline-none font-medium"
-          oninput="window.POS_STATE.setSearchQuery(this.value)">
-        <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+          class="w-full h-11 pl-9 pr-14 rounded-xl bg-slate-100 border border-transparent focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-sm text-slate-800 placeholder-slate-400 transition outline-none font-medium"
+          oninput="filterItems(this.value)">
+        <div class="absolute inset-y-0 right-0 pr-1.5 flex items-center gap-1">
           <button id="btn-clear-search" type="button" onclick="clearSearch()"
-            class="hidden text-slate-400 hover:text-slate-600 p-1 rounded transition">
-            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            class="hidden text-slate-400 hover:text-slate-600 p-2 min-h-[44px] min-w-[44px] rounded-lg transition flex items-center justify-center"
+            title="Xóa tìm kiếm">
+            <i data-lucide="x" class="w-4 h-4"></i>
           </button>
           <kbd class="px-1.5 py-0.5 text-[11px] font-mono text-slate-400 bg-white border border-slate-200 rounded shadow-2xs pointer-events-none">/</kbd>
         </div>
@@ -197,8 +198,8 @@
 
         <!-- Action / Reset Button -->
         <button id="btn-clear-cart" type="button" onclick="window.POS_STATE.clearCart()"
-          class="h-9 px-3 rounded-lg text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition flex items-center gap-1.5">
-          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          class="min-h-[48px] h-12 px-3.5 rounded-xl text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition flex items-center gap-1.5 select-none">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
           <span>Làm mới</span>
         </button>
       </div>
@@ -235,11 +236,11 @@
       <div id="bill-actions-container" class="border-t border-slate-200 bg-slate-50 p-4 space-y-3 flex-shrink-0">
         <!-- Payment Mode Buttons -->
         <div class="grid grid-cols-2 gap-2">
-          <button type="button" class="h-11 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs">
+          <button type="button" class="min-h-[48px] h-12 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs select-none">
             <i data-lucide="banknote" class="w-4 h-4"></i>
             <span>Tiền mặt</span>
           </button>
-          <button type="button" class="h-11 rounded-lg bg-white text-slate-700 border border-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 hover:bg-slate-100 transition">
+          <button type="button" class="min-h-[48px] h-12 rounded-xl bg-white text-slate-700 border border-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 hover:bg-slate-100 transition select-none">
             <i data-lucide="qr-code" class="w-4 h-4"></i>
             <span>VietQR Pro</span>
           </button>
@@ -567,6 +568,22 @@
         this.notify();
       },
 
+      filterItems(query) {
+        this.setSearchQuery(query);
+      },
+
+      handleItemClick(itemId) {
+        handleItemClick(itemId);
+      },
+
+      addToCart(item, options) {
+        addToCart(item, options);
+      },
+
+      renderCatalog() {
+        renderCatalog(this);
+      },
+
       setSelectedTable(table) {
         this.selectedTable = table;
         this.notify();
@@ -604,16 +621,16 @@
 
       if (btnTakeaway && btnDinein) {
         if (isTakeaway) {
-          btnTakeaway.className = 'min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white';
+          btnTakeaway.className = 'min-h-[48px] h-12 px-4 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white select-none';
           btnTakeaway.querySelector('kbd').className = 'px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/20 text-white border border-white/10';
 
-          btnDinein.className = 'min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60';
+          btnDinein.className = 'min-h-[48px] h-12 px-4 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 select-none';
           btnDinein.querySelector('kbd').className = 'px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-200 text-slate-600 border border-slate-300';
         } else {
-          btnDinein.className = 'min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white';
+          btnDinein.className = 'min-h-[48px] h-12 px-4 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white select-none';
           btnDinein.querySelector('kbd').className = 'px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/20 text-white border border-white/10';
 
-          btnTakeaway.className = 'min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60';
+          btnTakeaway.className = 'min-h-[48px] h-12 px-4 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 select-none';
           btnTakeaway.querySelector('kbd').className = 'px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-200 text-slate-600 border border-slate-300';
         }
       }
@@ -647,58 +664,116 @@
       }
     }
 
-    // 2. Render Category Pills Bar
+    // 2. Search & Acronym Matching Engine
+    function matchesSearch(item, rawQuery) {
+      if (!rawQuery) return true;
+      const q = removeAccents(rawQuery).toLowerCase().trim();
+      if (!q) return true;
+
+      const nameClean = removeAccents(item.name || '').toLowerCase();
+      const catClean = removeAccents(item.categoryName || '').toLowerCase();
+
+      // 1. Direct substring match on normalized item name or category
+      if (nameClean.includes(q) || catClean.includes(q)) return true;
+
+      // 2. Multi-word match: e.g. "ca sua" matches "ca phe sua da"
+      const queryTokens = q.split(/\s+/).filter(Boolean);
+      if (queryTokens.length > 1 && queryTokens.every(token => nameClean.includes(token))) {
+        return true;
+      }
+
+      // 3. Pre-defined acronym match (e.g. 'cfsd', 'cfdd', 'bx', 'tdcs', 'tms')
+      const itemAcronym = (item.acronym || '').toLowerCase();
+      if (itemAcronym && (itemAcronym === q || itemAcronym.startsWith(q) || itemAcronym.includes(q))) {
+        return true;
+      }
+
+      // 4. Dynamic acronym generation (initials of words in item name)
+      const nameWords = nameClean.split(/\s+/).filter(Boolean);
+      if (nameWords.length > 0) {
+        const initials = nameWords.map(w => w[0]).join(''); // e.g. 'cpsd' for 'ca phe sua da'
+        if (initials === q || initials.startsWith(q) || initials.includes(q)) {
+          return true;
+        }
+
+        // Vietnamese cafe acronym convention: 'ca phe' -> 'cf'
+        if (nameWords.length >= 2 && nameWords[0] === 'ca' && nameWords[1] === 'phe') {
+          const cfInitials = 'cf' + nameWords.slice(2).map(w => w[0]).join(''); // e.g. 'cfsd', 'cfdd'
+          if (cfInitials === q || cfInitials.startsWith(q) || cfInitials.includes(q)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    // 3. Render Category Pills Bar
     function renderCategoryPills(state) {
       const container = document.getElementById('category-pills-bar');
       if (!container) return;
 
+      const totalItemsCount = (state.menuItems || []).length;
+
       container.innerHTML = state.categories.map(cat => {
         const isActive = state.activeCategory === cat.id;
         const activeClass = isActive
-          ? 'bg-slate-900 text-white shadow-xs'
+          ? 'bg-slate-900 text-white shadow-sm'
           : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+
+        const count = cat.id === 'all'
+          ? totalItemsCount
+          : (state.menuItems || []).filter(it => it.categoryId === cat.id).length;
+
         return `
-          <button type="button" onclick="window.POS_STATE.setCategory('${cat.id}')"
-            class="min-h-[44px] px-4 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2 ${activeClass}">
+          <button type="button" onclick="setCategory('${cat.id}')"
+            class="h-12 min-h-[48px] px-4 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2 select-none ${activeClass}">
             <i data-lucide="${cat.icon}" class="w-4 h-4"></i>
             <span>${cat.name}</span>
-            <span class="text-[11px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 font-mono'}">${cat.count || 0}</span>
+            <span class="text-[11px] px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 font-mono font-medium'}">${count}</span>
           </button>
         `;
       }).join('');
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
     }
 
-    // 3. Render Catalog Grid Preview (Hook for Task 2)
+    // 4. Render Responsive Product Card Grid
     function renderCatalogItems(state) {
       const container = document.getElementById('catalog-grid');
       if (!container) return;
 
+      let items = state.menuItems || [];
+
       // Filter by category
-      let items = state.menuItems;
       if (state.activeCategory && state.activeCategory !== 'all') {
         items = items.filter(it => it.categoryId === state.activeCategory);
       }
 
       // Filter by search query if any
-      if (state.searchQuery) {
-        const queryClean = removeAccents(state.searchQuery);
-        items = items.filter(it => {
-          const nameClean = removeAccents(it.name);
-          const acronym = it.acronym ? it.acronym.toLowerCase() : '';
-          return nameClean.includes(queryClean) || acronym.includes(queryClean);
-        });
+      if (state.searchQuery && state.searchQuery.trim() !== '') {
+        items = items.filter(it => matchesSearch(it, state.searchQuery));
       }
 
-      // Update counter
+      // Update counter in bottom status strip
       const counterEl = document.getElementById('catalog-total-items');
       if (counterEl) counterEl.textContent = items.length;
 
       if (items.length === 0) {
         container.innerHTML = `
-          <div class="col-span-full py-12 text-center text-slate-400">
-            <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
-            <p class="text-sm font-medium text-slate-600">Không tìm thấy món nào phù hợp</p>
-            <p class="text-xs text-slate-400 mt-1">Thử tìm với từ khóa khác hoặc chuyển danh mục.</p>
+          <div class="col-span-full py-16 text-center text-slate-400 flex flex-col items-center justify-center">
+            <div class="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mb-3 shadow-2xs">
+              <i data-lucide="inbox" class="w-6 h-6 stroke-[1.5]"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-700">Không tìm thấy món nào phù hợp</p>
+            <p class="text-xs text-slate-400 mt-1 max-w-sm">Thử tìm với từ khóa khác (vd: cfsd, bac, tdcs) hoặc chọn danh mục khác.</p>
+            <button type="button" onclick="clearSearch()"
+              class="mt-4 min-h-[48px] h-12 px-5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition flex items-center gap-1.5 select-none">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              <span>Xóa bộ lọc tìm kiếm</span>
+            </button>
           </div>
         `;
         if (window.lucide) window.lucide.createIcons();
@@ -714,7 +789,7 @@
           : '';
 
         return `
-          <div data-item-id="${item.id}"
+          <div data-item-id="${item.id}" onclick="handleItemClick('${item.id}')"
             class="bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between hover:border-slate-400 active:scale-[0.98] transition cursor-pointer select-none min-h-[110px] shadow-xs hover:shadow-sm">
             <div>
               <div class="flex items-start justify-between gap-1">
@@ -736,7 +811,32 @@
       }
     }
 
-    // 4. Quick Search Helper
+    // 5. Catalog Navigation & Card Click Routing
+    function renderCatalog(state = window.POS_STATE) {
+      renderCategoryPills(state);
+      renderCatalogItems(state);
+    }
+
+    function setCategory(catId) {
+      window.POS_STATE.setCategory(catId);
+    }
+
+    function filterItems(query) {
+      const searchInput = document.getElementById('quick-search-input');
+      const clearBtn = document.getElementById('btn-clear-search');
+      if (searchInput && searchInput.value !== query) {
+        searchInput.value = query || '';
+      }
+      if (clearBtn) {
+        if (query && query.trim() !== '') {
+          clearBtn.classList.remove('hidden');
+        } else {
+          clearBtn.classList.add('hidden');
+        }
+      }
+      window.POS_STATE.setSearchQuery(query);
+    }
+
     function clearSearch() {
       const input = document.getElementById('quick-search-input');
       const clearBtn = document.getElementById('btn-clear-search');
@@ -744,8 +844,110 @@
         input.value = '';
         input.focus();
       }
-      if (clearBtn) clearBtn.classList.add('hidden');
+      if (clearBtn) {
+        clearBtn.classList.add('hidden');
+      }
       window.POS_STATE.setSearchQuery('');
+    }
+
+    function handleItemClick(itemId) {
+      const state = window.POS_STATE;
+      const item = (state.menuItems || []).find(it => it.id === itemId);
+      if (!item) return;
+
+      const hasModifiersOrSizes = Boolean(item.hasModifiers || (item.sizes && item.sizes.length > 1));
+      if (hasModifiersOrSizes) {
+        if (typeof window.openModifierModal === 'function') {
+          window.openModifierModal(item);
+        }
+      } else {
+        addToCart(item);
+      }
+    }
+
+    function addToCart(item, options = {}) {
+      const state = window.POS_STATE;
+      if (!item) return;
+
+      const sizeId = options.sizeId || item.defaultSize || (item.sizes && item.sizes[0] ? item.sizes[0].id : null);
+      const sizeObj = item.sizes ? item.sizes.find(s => s.id === sizeId) : null;
+      const sizeName = sizeObj ? sizeObj.name : '';
+      const unitPrice = sizeObj ? sizeObj.price : item.basePrice;
+
+      // Check if item already exists in cart with same size and modifiers
+      const existingItem = state.cart.find(ci => {
+        return ci.menuItemId === item.id &&
+               ci.sizeId === sizeId &&
+               JSON.stringify(ci.modifiers || []) === JSON.stringify(options.modifiers || []) &&
+               (ci.preparationNote || '') === (options.preparationNote || '');
+      });
+
+      if (existingItem) {
+        existingItem.quantity += (options.quantity || 1);
+        existingItem.lineTotalVND = existingItem.quantity * existingItem.unitPrice;
+      } else {
+        const newCartItem = {
+          id: 'cart_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          menuItemId: item.id,
+          name: item.name,
+          sizeId: sizeId,
+          sizeName: sizeName,
+          basePriceVND: item.basePrice,
+          unitPrice: unitPrice,
+          modifiers: options.modifiers || [],
+          preparationNote: options.preparationNote || '',
+          quantity: options.quantity || 1,
+          lineTotalVND: unitPrice * (options.quantity || 1)
+        };
+        state.cart.push(newCartItem);
+      }
+
+      state.notify();
+      showToast(`Đã thêm "${item.name}" vào đơn hàng`);
+    }
+
+    // Placeholder hook for Task 3: Modifier Popover with Smart Defaults
+    function openModifierModal(item) {
+      console.log('openModifierModal called for:', item);
+      showToast(`Tùy chọn cho "${item.name}" (Hook Task 3)`);
+    }
+
+    // Floating tactile toast helper
+    let toastTimer = null;
+    function showToast(message) {
+      const toastEl = document.getElementById('pos-toast');
+      const msgEl = document.getElementById('pos-toast-msg');
+      if (!toastEl || !msgEl) return;
+
+      msgEl.textContent = message;
+      toastEl.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+      toastEl.classList.add('opacity-100', 'translate-y-0');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastEl.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+        toastEl.classList.remove('opacity-100', 'translate-y-0');
+      }, 2200);
+    }
+
+    // 6. Sync Bill Area Summary with State
+    function updateBillUI(state) {
+      const subtotalEl = document.getElementById('bill-subtotal');
+      const grandTotalEl = document.getElementById('bill-grand-total');
+      const emptyCartState = document.getElementById('empty-cart-state');
+
+      const total = (state.cart || []).reduce((sum, item) => sum + (item.lineTotalVND || 0), 0);
+
+      if (subtotalEl) subtotalEl.textContent = formatVND(total);
+      if (grandTotalEl) grandTotalEl.textContent = formatVND(total);
+
+      if (emptyCartState) {
+        if ((state.cart || []).length === 0) {
+          emptyCartState.classList.remove('hidden');
+        } else {
+          emptyCartState.classList.add('hidden');
+        }
+      }
     }
 
     /* =========================================================================
@@ -799,6 +1001,8 @@
       }
 
       window.addEventListener('keydown', (e) => {
+        const isInputActive = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+
         // F1: Mang đi (Takeaway)
         if (e.key === 'F1') {
           e.preventDefault();
@@ -809,8 +1013,8 @@
           e.preventDefault();
           window.POS_STATE.setMode('dinein');
         }
-        // / or Ctrl+K: Quick search focus
-        else if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && document.activeElement !== searchInput) {
+        // / or Ctrl+K: Quick search focus (guard when typing in inputs/textareas)
+        else if ((e.key === '/' || (e.ctrlKey && e.key.toLowerCase() === 'k')) && !isInputActive) {
           e.preventDefault();
           if (searchInput) {
             searchInput.focus();
@@ -827,37 +1031,51 @@
     }
 
     /* =========================================================================
-       3.7 Application Bootstrap
+       3.7 Window Global API Bindings & Application Bootstrap
        ========================================================================= */
-    document.addEventListener('DOMContentLoaded', () => {
-      // 1. Initialize icons
-      if (window.lucide) {
-        window.lucide.createIcons();
-      }
+    // Expose required public interfaces on window
+    window.renderCatalog = renderCatalog;
+    window.setCategory = setCategory;
+    window.filterItems = filterItems;
+    window.handleItemClick = handleItemClick;
+    window.addToCart = addToCart;
+    window.openModifierModal = openModifierModal;
+    window.clearSearch = clearSearch;
+    window.matchesSearch = matchesSearch;
+    window.showToast = showToast;
 
-      // 2. Initialize real-time digital clock
+    document.addEventListener('DOMContentLoaded', () => {
+      // 1. Initialize real-time digital clock
       initDigitalClock();
 
-      // 3. Initialize keyboard shortcuts
+      // 2. Initialize keyboard shortcuts
       initKeyboardShortcuts();
 
-      // 4. Register UI renderers as state subscribers
+      // 3. Register UI renderers as state subscribers
       window.POS_STATE.subscribe(updateTopBarUI);
       window.POS_STATE.subscribe(renderCategoryPills);
       window.POS_STATE.subscribe(renderCatalogItems);
+      window.POS_STATE.subscribe(updateBillUI);
 
-      // 5. Initial render pass
+      // 4. Initial render pass
       updateTopBarUI(window.POS_STATE);
       renderCategoryPills(window.POS_STATE);
       renderCatalogItems(window.POS_STATE);
+      updateBillUI(window.POS_STATE);
 
-      // Refresh icons after dynamic injection
+      // 5. Initialize icons
       if (window.lucide) {
         window.lucide.createIcons();
       }
 
-      console.log('POS Cafe initial shell & state engine initialized successfully.');
+      console.log('POS Cafe: Catalog grid, category filtering & state engine ready.');
     });
   </script>
+
+  <!-- Floating notification toast for tactile touch feedback -->
+  <div id="pos-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-lg text-xs md:text-sm font-medium transition-all duration-200 opacity-0 pointer-events-none translate-y-2 flex items-center gap-2 select-none">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i>
+    <span id="pos-toast-msg">Thông báo</span>
+  </div>
 </body>
 </html>
