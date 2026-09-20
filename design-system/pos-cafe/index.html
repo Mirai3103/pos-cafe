@@ -160,7 +160,7 @@
           <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse flex-shrink-0"></span>
           <span id="dinein-catalog-banner-text" class="text-xs md:text-sm font-semibold text-indigo-900 truncate">Đang chọn món cho bàn</span>
         </div>
-        <button type="button" onclick="setDineInView('floor')" class="min-h-[44px] h-11 px-3.5 rounded-xl bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1.5 shadow-2xs select-none flex-shrink-0">
+        <button type="button" onclick="setDineInView('floor')" class="min-h-[48px] h-12 px-4 rounded-xl bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1.5 shadow-2xs select-none flex-shrink-0">
           <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
           <span>Quay lại Sơ đồ bàn</span>
         </button>
@@ -281,7 +281,7 @@
               <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
               <span>Thanh toán bàn</span>
             </span>
-            <button type="button" onclick="cancelTableSettlement()" class="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 min-h-[36px] px-2 rounded-lg hover:bg-slate-200 transition">
+            <button type="button" onclick="cancelTableSettlement()" class="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 min-h-[48px] h-12 px-3.5 rounded-xl hover:bg-slate-200 transition select-none">
               <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
               <span>Quay lại gọi món</span>
             </button>
@@ -985,6 +985,7 @@
 
       // Cart state
       cart: [],
+      takeawayCart: [],
 
       // Mock catalog & floor collections
       categories: INITIAL_CATEGORIES,
@@ -1015,20 +1016,55 @@
 
       setMode(newMode) {
         if (newMode !== 'takeaway' && newMode !== 'dinein') return;
-        if (this.mode === newMode) return;
+        if (this.mode === newMode) {
+          if (newMode === 'dinein') {
+            this.toggleDineInView();
+          }
+          return;
+        }
+
+        // Save takeaway cart when switching away from takeaway
+        if (this.mode === 'takeaway') {
+          this.takeawayCart = JSON.parse(JSON.stringify(this.cart || []));
+        }
+
         this.mode = newMode;
+
         if (newMode === 'takeaway') {
           this.selectedTable = null;
           this.isSettlingTable = false;
+          // Restore saved takeaway cart
+          this.cart = JSON.parse(JSON.stringify(this.takeawayCart || []));
         } else {
           this.dineInView = 'floor';
           this.isSettlingTable = false;
+          // If table selected with session items, load it; otherwise clear cart
+          if (this.selectedTable && this.selectedTable.activeSession && Array.isArray(this.selectedTable.activeSession.items)) {
+            this.cart = JSON.parse(JSON.stringify(this.selectedTable.activeSession.items)).map(it => ({
+              ...it,
+              sentToKitchen: true,
+              isNewRound: false
+            }));
+          } else {
+            this.cart = [];
+          }
         }
+
+        this.tenderedVND = 0;
+        this.isCustomTendered = false;
+        const inputCustom = document.getElementById('input-custom-tendered');
+        if (inputCustom) inputCustom.value = '';
+
         this.notify();
       },
 
       setTableZone(zone) {
-        this.activeTableZone = zone || 'all';
+        let normalized = zone || 'all';
+        if (normalized === 'Tầng 1') normalized = 'tang1';
+        else if (normalized === 'Tầng 2') normalized = 'tang2';
+        else if (normalized === 'Sân vườn') normalized = 'sanvuon';
+        else if (normalized === 'Tất cả') normalized = 'all';
+        this.activeTableZone = normalized;
         this.notify();
       },
 
@@ -2199,7 +2235,7 @@
       }
     }
 
-    function updateItemQty(cartItemId, delta) {
+    function updateItemQty(cartItemId, delta, force = false) {
       const state = window.POS_STATE;
       if (!state || !state.cart) return;
 
@@ -2208,22 +2244,63 @@
 
       const newQty = (item.quantity || 1) + delta;
       if (newQty <= 0) {
-        removeCartItem(cartItemId);
+        removeCartItem(cartItemId, force);
         return;
+      }
+
+      // If item was already sent to kitchen and quantity is decreasing, confirm first
+      if (item.sentToKitchen && delta < 0 && !force) {
+        const confirmed = typeof window.confirm === 'function'
+          ? window.confirm(`Món "${item.name}" (Lượt ${item.round || 1}) đã được gửi Barista pha chế. Bạn có chắc muốn giảm số lượng xuống ${newQty} không?`)
+          : true;
+        if (!confirmed) return;
       }
 
       item.quantity = newQty;
       item.lineTotalVND = item.quantity * item.unitPrice;
+
+      // Sync active session if dine-in table has committed items
+      if (state.mode === 'dinein' && state.selectedTable && state.selectedTable.activeSession && item.sentToKitchen) {
+        const sessItem = state.selectedTable.activeSession.items.find(si => si.id === cartItemId);
+        if (sessItem) {
+          sessItem.quantity = newQty;
+          sessItem.lineTotalVND = newQty * (sessItem.unitPrice || item.unitPrice);
+        }
+        state.selectedTable.activeSession.itemsCount = state.selectedTable.activeSession.items.reduce((s, it) => s + (it.quantity || 1), 0);
+        const totals = getFinancialTotals();
+        state.selectedTable.activeSession.totalVND = totals.grandTotalVND;
+      }
+
       state.notify();
     }
 
-    function removeCartItem(cartItemId) {
+    function removeCartItem(cartItemId, force = false) {
       const state = window.POS_STATE;
       if (!state || !state.cart) return;
 
       const item = state.cart.find(ci => ci.id === cartItemId);
-      const itemName = item ? item.name : 'món';
+      if (!item) return;
+
+      const itemName = item.name || 'món';
+
+      // Protection: If item was already sent to kitchen, confirm before deletion
+      if (item.sentToKitchen && !force) {
+        const confirmed = typeof window.confirm === 'function'
+          ? window.confirm(`Món "${itemName}" (Lượt ${item.round || 1}) đã được gửi Barista pha chế. Bạn có chắc chắn muốn xóa/hủy món này khỏi đơn không?`)
+          : true;
+        if (!confirmed) return;
+      }
+
       state.cart = state.cart.filter(ci => ci.id !== cartItemId);
+
+      // Sync active session if dine-in table has committed items
+      if (state.mode === 'dinein' && state.selectedTable && state.selectedTable.activeSession && item.sentToKitchen) {
+        state.selectedTable.activeSession.items = JSON.parse(JSON.stringify(state.cart.filter(ci => ci.sentToKitchen)));
+        state.selectedTable.activeSession.itemsCount = state.selectedTable.activeSession.items.reduce((s, it) => s + (it.quantity || 1), 0);
+        const totals = getFinancialTotals();
+        state.selectedTable.activeSession.totalVND = totals.grandTotalVND;
+      }
+
       state.notify();
       showToast(`Đã xóa "${itemName}" khỏi đơn hàng`);
     }
@@ -2329,7 +2406,12 @@
     function setTableZone(zoneId) {
       const state = window.POS_STATE;
       if (!state) return;
-      state.activeTableZone = zoneId || 'all';
+      let normalized = zoneId || 'all';
+      if (normalized === 'Tầng 1') normalized = 'tang1';
+      else if (normalized === 'Tầng 2') normalized = 'tang2';
+      else if (normalized === 'Sân vườn') normalized = 'sanvuon';
+      else if (normalized === 'Tất cả') normalized = 'all';
+      state.activeTableZone = normalized;
       state.notify();
     }
 
@@ -2452,14 +2534,17 @@
       const table = (state.tables || []).find(t => t.id === targetId);
       if (!table) return;
 
-      state.selectedTable = table;
+      // Always select target table first to sync cart and prevent cross-table cart leakage
+      selectTable(targetId);
+
       state.isSettlingTable = true;
 
       if (table.status === 'occupied') {
         table.status = 'billing';
       }
 
-      if (table.activeSession && Array.isArray(table.activeSession.items) && (!state.cart || state.cart.length === 0)) {
+      // Ensure cart has target table's active session items
+      if (table.activeSession && Array.isArray(table.activeSession.items) && table.activeSession.items.length > 0) {
         state.cart = JSON.parse(JSON.stringify(table.activeSession.items)).map(it => ({
           ...it,
           sentToKitchen: true,
@@ -2522,7 +2607,7 @@
           <div data-table-id="${table.id}" onclick="selectTable('${table.id}')"
             class="bg-amber-50/50 border-2 ${
               isSelected ? 'border-amber-500 ring-2 ring-amber-500 bg-amber-50/90 shadow-sm' : 'border-amber-300 hover:border-amber-400 hover:shadow-xs'
-            } animate-pulse min-h-[120px] rounded-xl p-3 flex flex-col justify-between cursor-pointer select-none active:scale-[0.98] transition">
+            } animate-pulse min-h-[128px] rounded-xl p-3 flex flex-col justify-between cursor-pointer select-none active:scale-[0.98] transition">
             <div>
               <div class="flex items-start justify-between gap-1">
                 <div class="flex items-center gap-1.5">
@@ -2543,11 +2628,11 @@
                 <span>${itemsCount} món</span>
               </div>
             </div>
-            <div class="pt-2 border-t border-amber-200/80 flex items-center justify-between">
+            <div class="pt-2 border-t border-amber-200/80 flex items-center justify-between gap-2">
               <span class="font-mono font-bold text-sm text-amber-950 tabular-nums">${formatVND(totalVND)}</span>
               <button type="button" onclick="event.stopPropagation(); settleTableBill('${table.id}')"
-                class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition">
-                <i data-lucide="receipt" class="w-3 h-3"></i>
+                class="min-h-[48px] h-12 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition select-none">
+                <i data-lucide="receipt" class="w-4 h-4"></i>
                 <span>Thanh toán</span>
               </button>
             </div>
@@ -2619,7 +2704,7 @@
       if (pillsContainer) {
         const activeZone = state.activeTableZone || 'all';
         pillsContainer.innerHTML = zoneDefs.map(z => {
-          const isActive = activeZone === z.id;
+          const isActive = activeZone === z.id || activeZone === z.match || (activeZone === 'all' && z.id === 'all');
           const activeClass = isActive
             ? 'bg-slate-900 text-white shadow-xs font-bold'
             : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold';
@@ -2635,11 +2720,11 @@
       // 2. Filter tables for layout container
       const activeZone = state.activeTableZone || 'all';
       let filteredTables = allTables;
-      if (activeZone === 'tang1') {
+      if (activeZone === 'tang1' || activeZone === 'Tầng 1') {
         filteredTables = allTables.filter(t => t.zone === 'Tầng 1');
-      } else if (activeZone === 'tang2') {
+      } else if (activeZone === 'tang2' || activeZone === 'Tầng 2') {
         filteredTables = allTables.filter(t => t.zone === 'Tầng 2');
-      } else if (activeZone === 'sanvuon') {
+      } else if (activeZone === 'sanvuon' || activeZone === 'Sân vườn') {
         filteredTables = allTables.filter(t => t.zone === 'Sân vườn');
       }
 
@@ -3179,6 +3264,8 @@
         state.selectedTable = null;
         state.isSettlingTable = false;
         state.dineInView = 'floor';
+      } else if (state.mode === 'takeaway') {
+        state.takeawayCart = [];
       }
 
       // 6. Reset cart and payment fields in < 200ms
