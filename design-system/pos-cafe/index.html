@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POS Cafe - Máy bán hàng thu ngân</title>
+
+  <!-- Google Fonts: Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            emerald: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              300: '#6ee7b7',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            }
+          },
+          boxShadow: {
+            '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    * { -webkit-tap-highlight-color: transparent; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+
+<body class="h-screen h-[100dvh] w-screen overflow-hidden bg-slate-50 text-slate-900 select-none flex flex-col font-sans antialiased">
+
+  <!-- ========================================================================= -->
+  <!-- 1. TOP BAR (Height: 56px)                                                  -->
+  <!-- ========================================================================= -->
+  <header id="top-bar" class="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between flex-shrink-0 z-20 shadow-xs select-none">
+    
+    <!-- Left Section: Brand Logo & Mode Switcher -->
+    <div class="flex items-center gap-3 md:gap-4">
+      <!-- Brand Logo & App Name -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs flex-shrink-0">
+          <i data-lucide="coffee" class="w-5 h-5"></i>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-base font-bold text-slate-900 tracking-tight leading-tight">POS Cafe</span>
+          <span class="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Hệ thống thu ngân</span>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="h-6 w-[1px] bg-slate-200 mx-1"></div>
+
+      <!-- Mode Switcher Pills -->
+      <div class="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200/80 items-center">
+        <!-- Mang đi (F1) -->
+        <button id="btn-mode-takeaway" type="button" onclick="window.POS_STATE.setMode('takeaway')"
+          class="min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white">
+          <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+          <span>Mang đi</span>
+          <kbd class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/20 text-white border border-white/10">F1</kbd>
+        </button>
+
+        <!-- Tại bàn (F2) -->
+        <button id="btn-mode-dinein" type="button" onclick="window.POS_STATE.setMode('dinein')"
+          class="min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60">
+          <i data-lucide="utensils" class="w-4 h-4"></i>
+          <span>Tại bàn</span>
+          <kbd class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-200 text-slate-600 border border-slate-300">F2</kbd>
+        </button>
+      </div>
+    </div>
+
+    <!-- Center Section: Quick Search Input -->
+    <div class="flex-1 max-w-md mx-4 hidden sm:block">
+      <div class="relative w-full">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          <i data-lucide="search" class="w-4 h-4"></i>
+        </span>
+        <input id="quick-search-input" type="text" autocomplete="off"
+          placeholder="Tìm món nhanh (tên món, viết tắt: cfsd, tdcs)..."
+          class="w-full h-10 pl-9 pr-14 rounded-lg bg-slate-100 border border-transparent focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-sm text-slate-800 placeholder-slate-400 transition outline-none font-medium"
+          oninput="window.POS_STATE.setSearchQuery(this.value)">
+        <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+          <button id="btn-clear-search" type="button" onclick="clearSearch()"
+            class="hidden text-slate-400 hover:text-slate-600 p-1 rounded transition">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+          <kbd class="px-1.5 py-0.5 text-[11px] font-mono text-slate-400 bg-white border border-slate-200 rounded shadow-2xs pointer-events-none">/</kbd>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Section: Shift Badge & Real-time Clock -->
+    <div class="flex items-center gap-3 md:gap-4">
+      <!-- Active Shift Badge -->
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100/90 border border-slate-200 text-xs text-slate-700">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span id="shift-badge-text" class="font-semibold text-slate-900">Ca #04 - Nguyễn Thu Ngân</span>
+        <span class="hidden lg:inline text-slate-300">|</span>
+        <span id="shift-fund-text" class="hidden lg:inline font-mono text-slate-600 font-medium">Quỹ: 2.000.000 đ</span>
+      </div>
+
+      <!-- Digital Clock -->
+      <div class="text-right flex flex-col justify-center min-w-[76px]">
+        <div id="live-clock-time" class="font-mono text-sm font-bold text-slate-900 tabular-nums leading-tight tracking-tight">10:00:00</div>
+        <div id="live-clock-date" class="text-[10px] text-slate-500 uppercase tracking-wider font-medium leading-none mt-0.5">CN, 20/09</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- 2. MAIN COCKPIT: CATALOG (62%) & ORDER BILL (38%)                          -->
+  <!-- ========================================================================= -->
+  <main class="flex-1 flex overflow-hidden">
+
+    <!-- --------------------------------------------------------------------- -->
+    <!-- LEFT / CATALOG & FLOOR AREA (62% width)                                -->
+    <!-- --------------------------------------------------------------------- -->
+    <section id="catalog-area" class="w-[62%] border-r border-slate-200 flex flex-col bg-slate-50 overflow-hidden relative">
+      
+      <!-- Category Filter Pills Bar (Hook for Task 2) -->
+      <div id="category-pills-bar" class="bg-white border-b border-slate-200 px-4 py-2.5 flex-shrink-0 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <!-- Will be rendered dynamically by state subscribers -->
+      </div>
+
+      <!-- Menu Items Grid / Floor Plan Container (Hook for Task 2 & Task 6) -->
+      <div id="catalog-content-container" class="flex-1 overflow-y-auto p-4">
+        <!-- Catalog Grid -->
+        <div id="catalog-grid" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+          <!-- Item Cards will be populated here -->
+        </div>
+
+        <!-- Dine-in Floor Layout Placeholder (Hidden by default in takeaway mode) -->
+        <div id="floor-layout-container" class="hidden h-full flex flex-col">
+          <!-- Floor layout will be populated here in Task 6 -->
+        </div>
+      </div>
+
+      <!-- Bottom Status Strip for Catalog Area -->
+      <div class="h-8 bg-white border-t border-slate-200 px-4 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
+        <div class="flex items-center gap-2">
+          <span>Tổng số món:</span>
+          <span id="catalog-total-items" class="font-mono font-bold text-slate-800">11</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="hidden sm:inline">Phím tắt: <kbd class="px-1 py-0.5 font-mono text-[10px] bg-slate-100 border border-slate-200 rounded">F1</kbd> Mang đi | <kbd class="px-1 py-0.5 font-mono text-[10px] bg-slate-100 border border-slate-200 rounded">F2</kbd> Tại bàn | <kbd class="px-1 py-0.5 font-mono text-[10px] bg-slate-100 border border-slate-200 rounded">/</kbd> Tìm kiếm</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------------------- -->
+    <!-- RIGHT / ORDER BILL & CHECKOUT (38% width)                              -->
+    <!-- --------------------------------------------------------------------- -->
+    <aside id="bill-area" class="w-[38%] flex flex-col bg-white overflow-hidden relative">
+
+      <!-- Bill Header -->
+      <div class="h-14 border-b border-slate-200 px-4 flex items-center justify-between flex-shrink-0 bg-white">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-sm">
+            <i data-lucide="receipt" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <div id="bill-order-title" class="text-sm font-bold text-slate-900 leading-tight">Đơn mang đi #14</div>
+            <div id="bill-order-subtitle" class="text-[11px] text-slate-500 font-medium">Khách mua mang về</div>
+          </div>
+        </div>
+
+        <!-- Action / Reset Button -->
+        <button id="btn-clear-cart" type="button" onclick="window.POS_STATE.clearCart()"
+          class="h-9 px-3 rounded-lg text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition flex items-center gap-1.5">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span>Làm mới</span>
+        </button>
+      </div>
+
+      <!-- Bill Cart Items List Container (Hook for Task 4) -->
+      <div id="bill-items-container" class="flex-1 overflow-y-auto p-4 space-y-2.5 bg-slate-50/50">
+        <!-- Empty Cart State -->
+        <div id="empty-cart-state" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+          <div class="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-300 mb-3 shadow-2xs">
+            <i data-lucide="shopping-cart" class="w-8 h-8 stroke-[1.5]"></i>
+          </div>
+          <p class="text-sm font-semibold text-slate-700">Chưa có món trong đơn</p>
+          <p class="text-xs text-slate-400 mt-1 max-w-xs">Chạm vào món ở thực đơn bên trái hoặc gõ phím tắt để thêm món vào đơn hàng.</p>
+        </div>
+      </div>
+
+      <!-- Financial Totals & Summary (Hook for Task 4 & 5) -->
+      <div id="bill-financial-summary" class="border-t border-slate-200 bg-white p-4 space-y-2 flex-shrink-0 shadow-xs">
+        <div class="flex items-center justify-between text-xs text-slate-600">
+          <span>Tạm tính:</span>
+          <span id="bill-subtotal" class="font-mono font-semibold text-slate-800">0 đ</span>
+        </div>
+        <div class="flex items-center justify-between text-xs text-slate-600">
+          <span>Khuyến mãi:</span>
+          <span id="bill-discount" class="font-mono text-slate-500">0 đ</span>
+        </div>
+        <div class="pt-2 border-t border-slate-100 flex items-baseline justify-between">
+          <span class="text-sm font-bold text-slate-900">TỔNG CỘNG:</span>
+          <span id="bill-grand-total" class="font-mono text-2xl font-extrabold text-emerald-600 tracking-tight tabular-nums">0 đ</span>
+        </div>
+      </div>
+
+      <!-- Payment & Fast Checkout Action Bar (Hook for Task 5) -->
+      <div id="bill-actions-container" class="border-t border-slate-200 bg-slate-50 p-4 space-y-3 flex-shrink-0">
+        <!-- Payment Mode Buttons -->
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" class="h-11 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs">
+            <i data-lucide="banknote" class="w-4 h-4"></i>
+            <span>Tiền mặt</span>
+          </button>
+          <button type="button" class="h-11 rounded-lg bg-white text-slate-700 border border-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 hover:bg-slate-100 transition">
+            <i data-lucide="qr-code" class="w-4 h-4"></i>
+            <span>VietQR Pro</span>
+          </button>
+        </div>
+
+        <!-- Checkout Action Button (Primary CTA >= 48px touch target) -->
+        <button id="btn-checkout-cta" type="button"
+          class="w-full min-h-[50px] rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-sm md:text-base flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition select-none">
+          <i data-lucide="check-circle" class="w-5 h-5"></i>
+          <span>THU TIỀN &amp; GỬI PHA CHẾ</span>
+          <kbd class="ml-1 px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-800/60 text-emerald-100 border border-emerald-400/20">Enter</kbd>
+        </button>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- 3. STATE ENGINE, MOCK DATA & CLIENT LOGIC                                  -->
+  <!-- ========================================================================= -->
+  <script>
+    /* =========================================================================
+       3.1 Currency Formatter Helper
+       ========================================================================= */
+    function formatVND(amount) {
+      if (amount == null || isNaN(amount)) return '0 đ';
+      const rounded = Math.round(Number(amount));
+      return rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' đ';
+    }
+
+    /* Helper to strip Vietnamese diacritics for search & acronym matching */
+    function removeAccents(str) {
+      if (!str) return '';
+      return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLowerCase()
+        .trim();
+    }
+
+    /* =========================================================================
+       3.2 Realistic Cafe Catalog & Operational Mock Data
+       ========================================================================= */
+    const INITIAL_CATEGORIES = [
+      { id: 'all', name: 'Tất cả', icon: 'layout-grid', count: 11 },
+      { id: 'coffee_vn', name: 'Cà phê Việt', icon: 'coffee', count: 4 },
+      { id: 'coffee_machine', name: 'Cà phê máy', icon: 'cup-soda', count: 2 },
+      { id: 'tea', name: 'Trà & Macchiato', icon: 'leaf', count: 2 },
+      { id: 'freeze', name: 'Đá xay & Sinh tố', icon: 'sparkles', count: 1 },
+      { id: 'bakery', name: 'Bánh & Điểm tâm', icon: 'croissant', count: 2 }
+    ];
+
+    const INITIAL_MENU_ITEMS = [
+      {
+        id: 'cfsd',
+        name: 'Cà phê sữa đá',
+        categoryId: 'coffee_vn',
+        categoryName: 'Cà phê Việt',
+        basePrice: 35000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'S', name: 'Size S', price: 29000 },
+          { id: 'M', name: 'Size M', price: 35000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 42000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'cfsd',
+        badge: 'Bán chạy',
+        description: 'Cà phê pha phin truyền thống hòa quyện cùng sữa đặc béo ngậy'
+      },
+      {
+        id: 'cfdd',
+        name: 'Cà phê đen đá',
+        categoryId: 'coffee_vn',
+        categoryName: 'Cà phê Việt',
+        basePrice: 30000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'S', name: 'Size S', price: 25000 },
+          { id: 'M', name: 'Size M', price: 30000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 37000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'cfdd',
+        description: 'Cà phê phin mộc nguyên chất đậm đà chuẩn vị'
+      },
+      {
+        id: 'bacxiu',
+        name: 'Bạc xỉu',
+        categoryId: 'coffee_vn',
+        categoryName: 'Cà phê Việt',
+        basePrice: 39000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'S', name: 'Size S', price: 32000 },
+          { id: 'M', name: 'Size M', price: 39000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 46000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'bx',
+        badge: 'Đặc trưng',
+        description: 'Nhiều sữa ít cà phê, béo thơm ngọt dịu dễ uống'
+      },
+      {
+        id: 'coldbrew_cs',
+        name: 'Cold Brew cam sả',
+        categoryId: 'coffee_vn',
+        categoryName: 'Cà phê Việt',
+        basePrice: 45000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'M', name: 'Size M', price: 45000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 52000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'cbcs',
+        badge: 'Mới',
+        description: 'Cà phê ủ lạnh 16 giờ thơm hương vỏ cam tươi và sả thanh mát'
+      },
+      {
+        id: 'espresso',
+        name: 'Espresso',
+        categoryId: 'coffee_machine',
+        categoryName: 'Cà phê máy',
+        basePrice: 30000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'Single', name: 'Single Shot', price: 30000, isDefault: true },
+          { id: 'Double', name: 'Double Shot', price: 40000 }
+        ],
+        defaultSize: 'Single',
+        acronym: 'esp',
+        description: 'Chiết xuất từ hạt Arabica Cầu Đất nguyên chất đậm đặc'
+      },
+      {
+        id: 'latte',
+        name: 'Latte',
+        categoryId: 'coffee_machine',
+        categoryName: 'Cà phê máy',
+        basePrice: 48000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'S', name: 'Size S', price: 42000 },
+          { id: 'M', name: 'Size M', price: 48000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 55000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'lt',
+        description: 'Espresso thơm dịu cùng sữa tươi thanh trùng đánh bông bọt mịn'
+      },
+      {
+        id: 'tdcs',
+        name: 'Trà đào cam sả',
+        categoryId: 'tea',
+        categoryName: 'Trà & Macchiato',
+        basePrice: 45000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'M', name: 'Size M', price: 45000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 52000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'tdcs',
+        badge: 'Món hot',
+        description: 'Trà đen hảo hạng kết hợp miếng đào giòn ngọt và cam vàng thơm mát'
+      },
+      {
+        id: 'tvhh',
+        name: 'Trà vải hoa hồng',
+        categoryId: 'tea',
+        categoryName: 'Trà & Macchiato',
+        basePrice: 45000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'M', name: 'Size M', price: 45000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 52000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'tvhh',
+        description: 'Vị ngọt thanh từ quả vải và hương hoa hồng quyến rũ'
+      },
+      {
+        id: 'freeze_tx',
+        name: 'Freeze trà xanh',
+        categoryId: 'freeze',
+        categoryName: 'Đá xay & Sinh tố',
+        basePrice: 52000,
+        hasModifiers: true,
+        sizes: [
+          { id: 'M', name: 'Size M', price: 52000, isDefault: true },
+          { id: 'L', name: 'Size L', price: 59000 }
+        ],
+        defaultSize: 'M',
+        acronym: 'ftx',
+        badge: 'Yêu thích',
+        description: 'Matcha Uji Nhật Bản xay cùng đá tuyết và thạch trà xanh giòn dai'
+      },
+      {
+        id: 'croissant_bt',
+        name: 'Croissant bơ tỏi',
+        categoryId: 'bakery',
+        categoryName: 'Bánh & Điểm tâm',
+        basePrice: 32000,
+        hasModifiers: false,
+        sizes: null,
+        defaultSize: null,
+        acronym: 'cb',
+        description: 'Bánh sừng bò nướng giòn rụm thơm lừng sốt bơ tỏi'
+      },
+      {
+        id: 'tiramisu',
+        name: 'Tiramisu',
+        categoryId: 'bakery',
+        categoryName: 'Bánh & Điểm tâm',
+        basePrice: 40000,
+        hasModifiers: false,
+        sizes: null,
+        defaultSize: null,
+        acronym: 'tms',
+        badge: 'Chef Pick',
+        description: 'Bánh tráng miệng phong cách Ý phủ bột cacao nguyên chất và kem phô mai'
+      }
+    ];
+
+    const INITIAL_TABLES = [
+      // Tầng 1 (T01 - T08)
+      { id: 'T01', name: 'Bàn 01', zone: 'Tầng 1', seats: 2, status: 'available', activeSession: null },
+      { id: 'T02', name: 'Bàn 02', zone: 'Tầng 1', seats: 4, status: 'occupied', activeSession: { startTime: '10:15', duration: '42p', itemsCount: 3, totalVND: 119000, roundNumber: 2 } },
+      { id: 'T03', name: 'Bàn 03', zone: 'Tầng 1', seats: 4, status: 'available', activeSession: null },
+      { id: 'T04', name: 'Bàn 04', zone: 'Tầng 1', seats: 6, status: 'billing', activeSession: { startTime: '09:50', duration: '67p', itemsCount: 5, totalVND: 215000, roundNumber: 1 } },
+      { id: 'T05', name: 'Bàn 05', zone: 'Tầng 1', seats: 2, status: 'available', activeSession: null },
+      { id: 'T06', name: 'Bàn 06', zone: 'Tầng 1', seats: 4, status: 'available', activeSession: null },
+      { id: 'T07', name: 'Bàn 07', zone: 'Tầng 1', seats: 4, status: 'occupied', activeSession: { startTime: '10:30', duration: '27p', itemsCount: 2, totalVND: 70000, roundNumber: 1 } },
+      { id: 'T08', name: 'Bàn 08', zone: 'Tầng 1', seats: 8, status: 'available', activeSession: null },
+
+      // Tầng 2 (T09 - T14)
+      { id: 'T09', name: 'Bàn 09', zone: 'Tầng 2', seats: 4, status: 'available', activeSession: null },
+      { id: 'T10', name: 'Bàn 10', zone: 'Tầng 2', seats: 4, status: 'occupied', activeSession: { startTime: '10:20', duration: '37p', itemsCount: 4, totalVND: 180000, roundNumber: 1 } },
+      { id: 'T11', name: 'Bàn 11', zone: 'Tầng 2', seats: 2, status: 'available', activeSession: null },
+      { id: 'T12', name: 'Bàn 12', zone: 'Tầng 2', seats: 2, status: 'available', activeSession: null },
+      { id: 'T13', name: 'Bàn 13', zone: 'Tầng 2', seats: 6, status: 'available', activeSession: null },
+      { id: 'T14', name: 'Bàn 14', zone: 'Tầng 2', seats: 4, status: 'available', activeSession: null },
+
+      // Sân vườn (S01 - S05)
+      { id: 'S01', name: 'Sân 01', zone: 'Sân vườn', seats: 4, status: 'available', activeSession: null },
+      { id: 'S02', name: 'Sân 02', zone: 'Sân vườn', seats: 4, status: 'occupied', activeSession: { startTime: '10:35', duration: '22p', itemsCount: 2, totalVND: 84000, roundNumber: 1 } },
+      { id: 'S03', name: 'Sân 03', zone: 'Sân vườn', seats: 4, status: 'available', activeSession: null },
+      { id: 'S04', name: 'Sân 04', zone: 'Sân vườn', seats: 6, status: 'available', activeSession: null },
+      { id: 'S05', name: 'Sân 05', zone: 'Sân vườn', seats: 8, status: 'available', activeSession: null }
+    ];
+
+    /* =========================================================================
+       3.3 Reactive State Engine (window.POS_STATE)
+       ========================================================================= */
+    const rawState = {
+      // Active Sales Shift info
+      activeShift: {
+        id: 'SHIFT-20260920-01',
+        shiftCode: 'Ca #04',
+        cashierName: 'Nguyễn Thu Ngân',
+        cashFundVND: 2000000,
+        startTime: '06:30',
+        date: '2026-09-20'
+      },
+
+      // Operational mode: 'takeaway' | 'dinein'
+      mode: 'takeaway',
+
+      // Order counters and session identifiers
+      serviceNumber: 14,
+      selectedTable: null,
+
+      // Catalog navigation & filters
+      activeCategory: 'all',
+      searchQuery: '',
+
+      // Cart state
+      cart: [],
+
+      // Mock catalog & floor collections
+      categories: INITIAL_CATEGORIES,
+      menuItems: INITIAL_MENU_ITEMS,
+      tables: INITIAL_TABLES,
+
+      // Subscriber registry
+      _listeners: [],
+
+      subscribe(fn) {
+        if (typeof fn === 'function') {
+          this._listeners.push(fn);
+        }
+        return () => {
+          this._listeners = this._listeners.filter(l => l !== fn);
+        };
+      },
+
+      notify() {
+        this._listeners.forEach(fn => {
+          try {
+            fn(window.POS_STATE);
+          } catch (err) {
+            console.error('POS_STATE subscriber error:', err);
+          }
+        });
+      },
+
+      setMode(newMode) {
+        if (newMode !== 'takeaway' && newMode !== 'dinein') return;
+        if (this.mode === newMode) return;
+        this.mode = newMode;
+        this.notify();
+      },
+
+      setCategory(catId) {
+        if (this.activeCategory === catId) return;
+        this.activeCategory = catId;
+        this.notify();
+      },
+
+      setSearchQuery(query) {
+        this.searchQuery = (query || '').trim();
+        this.notify();
+      },
+
+      setSelectedTable(table) {
+        this.selectedTable = table;
+        this.notify();
+      },
+
+      clearCart() {
+        this.cart = [];
+        this.notify();
+      },
+
+      formatVND: formatVND,
+      removeAccents: removeAccents
+    };
+
+    // Proxy wrapper to provide automatic reactivity when properties are modified directly
+    window.POS_STATE = new Proxy(rawState, {
+      set(target, prop, value) {
+        target[prop] = value;
+        if (prop !== '_listeners') {
+          target.notify();
+        }
+        return true;
+      }
+    });
+
+    /* =========================================================================
+       3.4 UI Component Synchronizers & Subscribers
+       ========================================================================= */
+
+    // 1. Sync Top Bar & Mode Switcher
+    function updateTopBarUI(state) {
+      const isTakeaway = state.mode === 'takeaway';
+      const btnTakeaway = document.getElementById('btn-mode-takeaway');
+      const btnDinein = document.getElementById('btn-mode-dinein');
+
+      if (btnTakeaway && btnDinein) {
+        if (isTakeaway) {
+          btnTakeaway.className = 'min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white';
+          btnTakeaway.querySelector('kbd').className = 'px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/20 text-white border border-white/10';
+
+          btnDinein.className = 'min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60';
+          btnDinein.querySelector('kbd').className = 'px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-200 text-slate-600 border border-slate-300';
+        } else {
+          btnDinein.className = 'min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-xs bg-slate-900 text-white';
+          btnDinein.querySelector('kbd').className = 'px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/20 text-white border border-white/10';
+
+          btnTakeaway.className = 'min-h-[44px] px-3.5 inline-flex items-center gap-2 rounded-lg font-medium text-xs md:text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-200/60';
+          btnTakeaway.querySelector('kbd').className = 'px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-200 text-slate-600 border border-slate-300';
+        }
+      }
+
+      // Update Order Title in Bill Area
+      const billTitle = document.getElementById('bill-order-title');
+      const billSubtitle = document.getElementById('bill-order-subtitle');
+      if (billTitle && billSubtitle) {
+        if (isTakeaway) {
+          billTitle.textContent = `Đơn mang đi #${state.serviceNumber}`;
+          billSubtitle.textContent = 'Khách mua mang về';
+        } else {
+          const tableName = state.selectedTable ? state.selectedTable.name : 'Chưa chọn bàn';
+          billTitle.textContent = `Đơn tại bàn - ${tableName}`;
+          billSubtitle.textContent = state.selectedTable ? `Khu vực: ${state.selectedTable.zone} (${state.selectedTable.seats} chỗ)` : 'Vui lòng chọn bàn trên sơ đồ';
+        }
+      }
+
+      // Sync Floor Layout vs Catalog Grid view
+      const catalogGrid = document.getElementById('catalog-grid');
+      const floorContainer = document.getElementById('floor-layout-container');
+      if (catalogGrid && floorContainer) {
+        if (isTakeaway) {
+          catalogGrid.classList.remove('hidden');
+          floorContainer.classList.add('hidden');
+        } else {
+          // Keep catalog grid visible or toggle floor plan depending on selection
+          catalogGrid.classList.remove('hidden');
+          floorContainer.classList.add('hidden');
+        }
+      }
+    }
+
+    // 2. Render Category Pills Bar
+    function renderCategoryPills(state) {
+      const container = document.getElementById('category-pills-bar');
+      if (!container) return;
+
+      container.innerHTML = state.categories.map(cat => {
+        const isActive = state.activeCategory === cat.id;
+        const activeClass = isActive
+          ? 'bg-slate-900 text-white shadow-xs'
+          : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+        return `
+          <button type="button" onclick="window.POS_STATE.setCategory('${cat.id}')"
+            class="min-h-[44px] px-4 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2 ${activeClass}">
+            <i data-lucide="${cat.icon}" class="w-4 h-4"></i>
+            <span>${cat.name}</span>
+            <span class="text-[11px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 font-mono'}">${cat.count || 0}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    // 3. Render Catalog Grid Preview (Hook for Task 2)
+    function renderCatalogItems(state) {
+      const container = document.getElementById('catalog-grid');
+      if (!container) return;
+
+      // Filter by category
+      let items = state.menuItems;
+      if (state.activeCategory && state.activeCategory !== 'all') {
+        items = items.filter(it => it.categoryId === state.activeCategory);
+      }
+
+      // Filter by search query if any
+      if (state.searchQuery) {
+        const queryClean = removeAccents(state.searchQuery);
+        items = items.filter(it => {
+          const nameClean = removeAccents(it.name);
+          const acronym = it.acronym ? it.acronym.toLowerCase() : '';
+          return nameClean.includes(queryClean) || acronym.includes(queryClean);
+        });
+      }
+
+      // Update counter
+      const counterEl = document.getElementById('catalog-total-items');
+      if (counterEl) counterEl.textContent = items.length;
+
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-400">
+            <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
+            <p class="text-sm font-medium text-slate-600">Không tìm thấy món nào phù hợp</p>
+            <p class="text-xs text-slate-400 mt-1">Thử tìm với từ khóa khác hoặc chuyển danh mục.</p>
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = items.map(item => {
+        const sizeBadge = item.sizes && item.sizes.length > 0
+          ? `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[11px] font-medium">${item.sizes.length} cỡ</span>`
+          : '';
+        const itemBadge = item.badge
+          ? `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-1.5 py-0.5 rounded text-[10px] font-semibold">${item.badge}</span>`
+          : '';
+
+        return `
+          <div data-item-id="${item.id}"
+            class="bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between hover:border-slate-400 active:scale-[0.98] transition cursor-pointer select-none min-h-[110px] shadow-xs hover:shadow-sm">
+            <div>
+              <div class="flex items-start justify-between gap-1">
+                <span class="font-semibold text-slate-900 text-sm leading-snug line-clamp-2">${item.name}</span>
+                ${itemBadge}
+              </div>
+              <span class="text-xs text-slate-500 mt-1 block">${item.categoryName}</span>
+            </div>
+            <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-100">
+              <span class="font-mono font-bold text-slate-900 text-sm">${formatVND(item.basePrice)}</span>
+              ${sizeBadge}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    // 4. Quick Search Helper
+    function clearSearch() {
+      const input = document.getElementById('quick-search-input');
+      const clearBtn = document.getElementById('btn-clear-search');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      if (clearBtn) clearBtn.classList.add('hidden');
+      window.POS_STATE.setSearchQuery('');
+    }
+
+    /* =========================================================================
+       3.5 Real-time Digital Clock
+       ========================================================================= */
+    function initDigitalClock() {
+      const timeEl = document.getElementById('live-clock-time');
+      const dateEl = document.getElementById('live-clock-date');
+
+      const DAYS_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+      function tick() {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+
+        if (timeEl) {
+          timeEl.textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        if (dateEl) {
+          const dayName = DAYS_VN[now.getDay()];
+          const day = String(now.getDate()).padStart(2, '0');
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          dateEl.textContent = `${dayName}, ${day}/${month}`;
+        }
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    }
+
+    /* =========================================================================
+       3.6 Global Keyboard Shortcuts Listener
+       ========================================================================= */
+    function initKeyboardShortcuts() {
+      const searchInput = document.getElementById('quick-search-input');
+      const clearBtn = document.getElementById('btn-clear-search');
+
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          if (clearBtn) {
+            if (e.target.value.length > 0) {
+              clearBtn.classList.remove('hidden');
+            } else {
+              clearBtn.classList.add('hidden');
+            }
+          }
+        });
+      }
+
+      window.addEventListener('keydown', (e) => {
+        // F1: Mang đi (Takeaway)
+        if (e.key === 'F1') {
+          e.preventDefault();
+          window.POS_STATE.setMode('takeaway');
+        }
+        // F2: Tại bàn (Dine-in)
+        else if (e.key === 'F2') {
+          e.preventDefault();
+          window.POS_STATE.setMode('dinein');
+        }
+        // / or Ctrl+K: Quick search focus
+        else if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && document.activeElement !== searchInput) {
+          e.preventDefault();
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+          }
+        }
+        // Escape: Blur search input
+        else if (e.key === 'Escape') {
+          if (document.activeElement === searchInput) {
+            searchInput.blur();
+          }
+        }
+      });
+    }
+
+    /* =========================================================================
+       3.7 Application Bootstrap
+       ========================================================================= */
+    document.addEventListener('DOMContentLoaded', () => {
+      // 1. Initialize icons
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+
+      // 2. Initialize real-time digital clock
+      initDigitalClock();
+
+      // 3. Initialize keyboard shortcuts
+      initKeyboardShortcuts();
+
+      // 4. Register UI renderers as state subscribers
+      window.POS_STATE.subscribe(updateTopBarUI);
+      window.POS_STATE.subscribe(renderCategoryPills);
+      window.POS_STATE.subscribe(renderCatalogItems);
+
+      // 5. Initial render pass
+      updateTopBarUI(window.POS_STATE);
+      renderCategoryPills(window.POS_STATE);
+      renderCatalogItems(window.POS_STATE);
+
+      // Refresh icons after dynamic injection
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+
+      console.log('POS Cafe initial shell & state engine initialized successfully.');
+    });
+  </script>
+</body>
+</html>
