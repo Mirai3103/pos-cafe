@@ -698,15 +698,134 @@
 
       <!-- Subview Container 4: Batch Linker Matrix (#catalog-subview-linker) -->
       <div id="catalog-subview-linker" class="space-y-5 hidden animate-card-in">
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-card text-center space-y-3">
-          <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-100">
-            <i data-lucide="zap" class="w-7 h-7"></i>
+        
+        <!-- Header Instruction Banner -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center flex-shrink-0 shadow-2xs">
+              <i data-lucide="zap" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm sm:text-base font-bold text-slate-900 leading-tight">Ma trận Gán Topping Hàng Loạt (Batch Linker)</h3>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">Live POS Sync</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">
+                Chọn 1 nhóm topping, tick nhanh theo danh mục hoặc nhiều món cùng lúc, và xem trước mô phỏng màn hình thu ngân tức thì.
+              </p>
+            </div>
           </div>
-          <h3 class="text-base font-bold text-slate-900">Ma trận Gán Topping Hàng loạt (Batch Linker)</h3>
-          <p class="text-xs text-slate-500 max-w-md mx-auto">
-            Công cụ gán hoặc hủy gán nhanh chóng các nhóm topping cho hàng loạt món ăn theo danh mục chỉ với một lần nhấp chuột.
-          </p>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button id="btn-linker-add-group" type="button" onclick="openModifierGroupModal()"
+              class="min-h-[48px] h-12 px-4 rounded-xl bg-white hover:bg-slate-50 active:scale-[0.98] border border-slate-200 text-slate-700 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-2xs transition select-none cursor-pointer">
+              <i data-lucide="plus-circle" class="w-4 h-4 text-emerald-600"></i>
+              <span>+ Tạo nhóm mới</span>
+            </button>
+          </div>
         </div>
+
+        <!-- 3-Column Responsive Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          
+          <!-- Column 1 (lg:col-span-3): Modifier Groups Selection Rail -->
+          <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-card flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <i data-lucide="list-filter" class="w-4 h-4 text-slate-500"></i>
+                <h4 class="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider">1. Nhóm Topping</h4>
+              </div>
+              <span id="linker-group-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-slate-200 text-slate-700">0 nhóm</span>
+            </div>
+            <!-- Modifier groups list container -->
+            <div id="linker-group-rail" class="p-3 space-y-2.5 max-h-[calc(100dvh-280px)] overflow-y-auto">
+              <!-- Dynamically populated by renderLinkerGroupRail() -->
+            </div>
+          </div>
+
+          <!-- Column 2 (lg:col-span-5): Target Items Tree grouped by Category -->
+          <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-card flex flex-col overflow-hidden relative">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <i data-lucide="check-square" class="w-4 h-4 text-emerald-600"></i>
+                <h4 class="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider">2. Danh mục & Món áp dụng</h4>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs text-slate-500">
+                <span>Nhóm:</span>
+                <span id="linker-active-group-name" class="font-bold text-emerald-700 truncate max-w-[140px]">[Chưa chọn]</span>
+              </div>
+            </div>
+
+            <!-- Search box within Column 2 -->
+            <div class="p-3 border-b border-slate-100 bg-white">
+              <div class="relative">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                <input id="linker-items-search" type="text" oninput="handleLinkerSearch(this.value)"
+                  placeholder="Tìm món theo tên hoặc viết tắt (vd: cfsd, tdcs)..."
+                  class="w-full min-h-[48px] h-12 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none text-xs sm:text-sm text-slate-800 transition">
+              </div>
+            </div>
+
+            <!-- Category Tree & Checklist Rows -->
+            <div id="linker-category-tree" class="p-3 sm:p-4 space-y-4 max-h-[calc(100dvh-390px)] overflow-y-auto">
+              <!-- Dynamically populated by renderLinkerCategoryTree() -->
+            </div>
+
+            <!-- Sticky Bottom Commit Action Bar -->
+            <div class="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 shadow-lg space-y-2.5 z-10">
+              <div class="flex items-center justify-between text-xs">
+                <div class="text-slate-600">
+                  <span>Đã chọn: </span>
+                  <span id="linker-selected-count" class="font-mono font-bold text-emerald-700 text-sm">0</span>
+                  <span> món cho nhóm </span>
+                  <span id="linker-commit-group-name" class="font-bold text-slate-900">...</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" onclick="selectAllLinkerItems()" class="min-h-[48px] h-12 px-2.5 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-50 active:scale-[0.98] transition cursor-pointer select-none">
+                    Chọn hết
+                  </button>
+                  <span class="text-slate-200">|</span>
+                  <button type="button" onclick="deselectAllLinkerItems()" class="min-h-[48px] h-12 px-2.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 active:scale-[0.98] transition cursor-pointer select-none">
+                    Bỏ chọn hết
+                  </button>
+                </div>
+              </div>
+
+              <!-- Primary CTA -->
+              <button id="btn-save-batch-linker" type="button" onclick="saveBatchLinkerAssignments()"
+                class="min-h-[56px] h-14 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-md shadow-emerald-600/20 cursor-pointer transition select-none">
+                <i data-lucide="check" class="w-5 h-5"></i>
+                <span>LƯU ÁP DỤNG NGAY (Enter)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Column 3 (lg:col-span-4): Live Cashier POS Simulator -->
+          <div class="lg:col-span-4 bg-slate-900 p-3 sm:p-4 rounded-[28px] shadow-2xl border-4 border-slate-800 flex flex-col text-slate-900 select-none">
+            <!-- Tablet Top Bezel: Camera & Digital Bar -->
+            <div class="flex items-center justify-between text-[11px] text-slate-400 px-2 pb-2.5">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="font-bold text-slate-300">Quầy thu ngân (Simulator)</span>
+              </div>
+              <!-- Camera hole -->
+              <div class="w-2.5 h-2.5 rounded-full bg-slate-800 border border-slate-700"></div>
+              <div class="flex items-center gap-2 font-mono text-[10px]">
+                <span id="simulator-clock">19:30</span>
+                <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+              </div>
+            </div>
+
+            <!-- Tablet Screen Interior -->
+            <div id="linker-simulator-screen" class="bg-white rounded-2xl overflow-hidden shadow-inner flex flex-col min-h-[480px]">
+              <!-- Dynamically populated by updateLiveSimulator() -->
+            </div>
+
+            <!-- Tablet Bottom Bezel: Home bar -->
+            <div class="w-20 h-1 bg-slate-700 rounded-full mx-auto mt-3"></div>
+          </div>
+
+        </div>
+
       </div>
 
     </section>
@@ -2376,8 +2495,12 @@
         renderCatalogCategoriesGrid();
       } else if (subViewName === 'modifiers' && typeof renderCatalogModifiersGrid === 'function') {
         renderCatalogModifiersGrid();
-      } else if (subViewName === 'linker' && typeof renderCatalogLinkerMatrix === 'function') {
-        renderCatalogLinkerMatrix();
+      } else if (subViewName === 'linker') {
+        if (typeof renderBatchLinkerMatrix === 'function') {
+          renderBatchLinkerMatrix();
+        } else if (typeof renderCatalogLinkerMatrix === 'function') {
+          renderCatalogLinkerMatrix();
+        }
       }
 
       if (window.lucide) window.lucide.createIcons();
@@ -4082,10 +4205,761 @@
       refreshCatalogCounters();
     }
 
+    /* =========================================================================
+       5.3 Batch Linker Matrix & Live Cashier POS Simulator Subsystem (Task 5)
+       ========================================================================= */
+
+    var linkerState = {
+      activeGroupId: 'top_tea',
+      selectedItemIds: new Set(),
+      simulatedItemId: 'tdcs',
+      simulatedSizeId: 'M',
+      simulatedSugar: '100%',
+      simulatedIce: '100% đá',
+      simulatedToppings: new Set(),
+      searchQuery: ''
+    };
+
+    function playSaveCashChime() {
+      if (isSoundMuted) return;
+      try {
+        var ctx = getAudioContext();
+        if (!ctx) return;
+        var now = ctx.currentTime;
+        var notes = [523.25, 659.25, 783.99, 1046.50];
+        for (var i = 0; i < notes.length; i++) {
+          (function (freq, offset) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + offset);
+            gain.gain.setValueAtTime(0, now + offset);
+            gain.gain.linearRampToValueAtTime(0.18, now + offset + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.28);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.3);
+          })(notes[i], i * 0.06);
+        }
+      } catch (err) {}
+    }
+
+    function getCategoryIconForLinker(categoryId, catalog) {
+      if (!catalog || !Array.isArray(catalog.categories)) return 'coffee';
+      var cat = catalog.categories.find(function (c) { return c.id === categoryId; });
+      return (cat && cat.icon) ? cat.icon : 'coffee';
+    }
+
+    function renderBatchLinkerMatrix() {
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var groups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+
+      // Validate activeGroupId
+      var hasActiveGroup = groups.some(function (g) { return g.id === linkerState.activeGroupId; });
+      if (!hasActiveGroup && groups.length > 0) {
+        var defaultGrp = groups.find(function (g) { return g.id === 'top_tea'; }) || groups[0];
+        linkerState.activeGroupId = defaultGrp.id;
+        linkerState.selectedItemIds.clear();
+        items.forEach(function (item) {
+          if (item.assignedModifierGroupIds && item.assignedModifierGroupIds.indexOf(linkerState.activeGroupId) !== -1) {
+            linkerState.selectedItemIds.add(item.id);
+          }
+        });
+      } else if (linkerState.selectedItemIds.size === 0 && linkerState.activeGroupId) {
+        items.forEach(function (item) {
+          if (item.assignedModifierGroupIds && item.assignedModifierGroupIds.indexOf(linkerState.activeGroupId) !== -1) {
+            linkerState.selectedItemIds.add(item.id);
+          }
+        });
+      }
+
+      // Validate simulatedItemId
+      var hasSimItem = items.some(function (i) { return i.id === linkerState.simulatedItemId; });
+      if (!hasSimItem && items.length > 0) {
+        var defaultItem = items.find(function (i) { return i.id === 'tdcs'; }) || items[0];
+        linkerState.simulatedItemId = defaultItem.id;
+      }
+
+      renderLinkerGroupRail(catalog);
+      renderLinkerCategoryTree(catalog);
+      updateLiveSimulator(linkerState.simulatedItemId);
+      updateLinkerStickyBar(catalog);
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function renderCatalogLinkerMatrix() {
+      renderBatchLinkerMatrix();
+    }
+
+    function selectLinkerModifierGroup(groupId) {
+      linkerState.activeGroupId = groupId;
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+
+      linkerState.selectedItemIds.clear();
+      items.forEach(function (item) {
+        if (item.assignedModifierGroupIds && item.assignedModifierGroupIds.indexOf(groupId) !== -1) {
+          linkerState.selectedItemIds.add(item.id);
+        }
+      });
+
+      playTapChirp();
+
+      renderLinkerGroupRail(catalog);
+      renderLinkerCategoryTree(catalog);
+      updateLiveSimulator(linkerState.simulatedItemId);
+      updateLinkerStickyBar(catalog);
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function renderLinkerGroupRail(catalog) {
+      var rail = document.getElementById('linker-group-rail');
+      if (!rail) return;
+
+      var groups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+
+      var countBadge = document.getElementById('linker-group-count-badge');
+      if (countBadge) {
+        countBadge.textContent = groups.length + ' nhóm';
+      }
+
+      if (groups.length === 0) {
+        rail.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Chưa có nhóm topping nào. Nhấn nút tạo nhóm mới để bắt đầu.</div>';
+        return;
+      }
+
+      var html = '';
+      groups.forEach(function (group) {
+        var isActive = group.id === linkerState.activeGroupId;
+        
+        var assignedCount = 0;
+        if (isActive) {
+          assignedCount = linkerState.selectedItemIds.size;
+        } else {
+          items.forEach(function (item) {
+            if (item.assignedModifierGroupIds && item.assignedModifierGroupIds.indexOf(group.id) !== -1) {
+              assignedCount++;
+            }
+          });
+        }
+
+        var cardClass = isActive
+          ? 'w-full text-left p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-500 shadow-xs ring-2 ring-emerald-500/20 transition cursor-pointer select-none space-y-2'
+          : 'w-full text-left p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 transition cursor-pointer select-none space-y-2';
+
+        var badgeClass = isActive
+          ? 'px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-600 text-white'
+          : 'px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-slate-100 text-slate-700';
+
+        var typeLabel = group.selectionType === 'multiple'
+          ? 'Chọn nhiều (Tối đa ' + (group.maxSelect || 'không giới hạn') + ')'
+          : 'Chọn 1 (Bắt buộc ' + (group.minSelect > 0 ? 'Có' : 'Không') + ')';
+
+        var optsSnippet = (group.options || []).map(function (opt) {
+          return opt.name + (opt.price ? ' (+' + formatVND(opt.price) + ')' : '');
+        }).slice(0, 3).join(', ');
+        if (group.options && group.options.length > 3) {
+          optsSnippet += '...';
+        }
+
+        html += '<button type="button" class="min-h-[48px] ' + cardClass + '" onclick="selectLinkerModifierGroup(\'' + escapeHtml(group.id) + '\')">';
+        html += '  <div class="flex items-center justify-between gap-2">';
+        html += '    <h5 class="text-xs sm:text-sm font-bold text-slate-900 truncate">' + escapeHtml(group.name) + '</h5>';
+        html += '    <span class="' + badgeClass + ' flex-shrink-0">' + assignedCount + ' món</span>';
+        html += '  </div>';
+        html += '  <div class="flex items-center gap-2 text-[11px] text-slate-500">';
+        html += '    <span class="px-1.5 py-0.5 rounded bg-slate-100 font-medium text-slate-600">' + typeLabel + '</span>';
+        html += '    <span class="font-mono text-slate-400">' + (group.options ? group.options.length : 0) + ' tùy chọn</span>';
+        html += '  </div>';
+        if (optsSnippet) {
+          html += '  <p class="text-[11px] text-slate-400 line-clamp-1 italic">' + escapeHtml(optsSnippet) + '</p>';
+        }
+        html += '</button>';
+      });
+
+      rail.innerHTML = html;
+    }
+
+    function renderLinkerCategoryTree(catalog) {
+      var container = document.getElementById('linker-category-tree');
+      if (!container) return;
+
+      var categories = (catalog && Array.isArray(catalog.categories)) ? catalog.categories : [];
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+      var activeGroup = (catalog && Array.isArray(catalog.modifierGroups))
+        ? catalog.modifierGroups.find(function (g) { return g.id === linkerState.activeGroupId; })
+        : null;
+
+      var activeGroupNameEl = document.getElementById('linker-active-group-name');
+      if (activeGroupNameEl) {
+        activeGroupNameEl.textContent = activeGroup ? activeGroup.name : '[Chưa chọn]';
+      }
+
+      var cleanQuery = removeAccents(linkerState.searchQuery || '');
+
+      var html = '';
+
+      if (categories.length === 0) {
+        container.innerHTML = '<div class="p-8 text-center text-xs text-slate-400">Chưa có danh mục nào trong thực đơn.</div>';
+        return;
+      }
+
+      categories.forEach(function (cat) {
+        var catItems = items.filter(function (item) {
+          if (item.categoryId !== cat.id) return false;
+          if (!cleanQuery) return true;
+          var cleanName = removeAccents(item.name || '');
+          var acronym = (item.acronym || '').toLowerCase();
+          return cleanName.indexOf(cleanQuery) !== -1 || acronym.indexOf(cleanQuery) !== -1;
+        });
+
+        if (catItems.length === 0 && cleanQuery) {
+          return;
+        }
+
+        var selectedCountInCat = 0;
+        catItems.forEach(function (i) {
+          if (linkerState.selectedItemIds.has(i.id)) {
+            selectedCountInCat++;
+          }
+        });
+        var isAllCatSelected = catItems.length > 0 && selectedCountInCat === catItems.length;
+
+        var catIcon = cat.icon || 'coffee';
+
+        html += '<div class="border border-slate-200 rounded-2xl p-3.5 bg-white shadow-2xs space-y-3">';
+        
+        // Category Header
+        html += '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">';
+        html += '  <div class="flex items-center gap-2.5">';
+        html += '    <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200 flex-shrink-0">';
+        html += '      <i data-lucide="' + escapeHtml(catIcon) + '" class="w-4 h-4"></i>';
+        html += '    </div>';
+        html += '    <div>';
+        html += '      <h5 class="text-xs sm:text-sm font-bold text-slate-900 leading-tight">' + escapeHtml(cat.name) + '</h5>';
+        html += '      <span class="text-[11px] font-mono text-slate-500">' + selectedCountInCat + '/' + catItems.length + ' món được chọn</span>';
+        html += '    </div>';
+        html += '  </div>';
+        
+        var toggleBtnLabel = isAllCatSelected
+          ? 'Bỏ chọn tất cả (' + catItems.length + ')'
+          : 'Chọn tất cả món ' + escapeHtml(cat.name);
+        var toggleBtnIcon = isAllCatSelected ? 'check-check' : 'check-square';
+        var toggleBtnClass = isAllCatSelected
+          ? 'px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center gap-1.5 transition select-none cursor-pointer flex-shrink-0'
+          : 'px-3 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 text-xs font-bold flex items-center gap-1.5 transition select-none cursor-pointer flex-shrink-0';
+        
+        html += '  <button type="button" class="min-h-[48px] h-12 ' + toggleBtnClass + '" onclick="toggleLinkerCategoryAll(\'' + escapeHtml(cat.id) + '\')">';
+        html += '    <i data-lucide="' + toggleBtnIcon + '" class="w-4 h-4"></i>';
+        html += '    <span>' + toggleBtnLabel + '</span>';
+        html += '  </button>';
+        html += '</div>';
+
+        // Item checklist rows
+        if (catItems.length === 0) {
+          html += '<p class="text-xs text-slate-400 italic py-2">Danh mục này chưa có món nào.</p>';
+        } else {
+          html += '<div class="space-y-2">';
+          catItems.forEach(function (item) {
+            var isSelected = linkerState.selectedItemIds.has(item.id);
+            var isSimulated = linkerState.simulatedItemId === item.id;
+            
+            var rowBorder = isSelected
+              ? 'border-emerald-300 bg-emerald-50/40'
+              : 'border-slate-200 bg-white hover:bg-slate-50';
+            if (isSimulated) {
+              rowBorder += ' ring-2 ring-emerald-500/30';
+            }
+
+            html += '<div class="min-h-[48px] p-2.5 rounded-xl border ' + rowBorder + ' flex items-center justify-between gap-2.5 transition">';
+            
+            // Left: Clickable checklist row
+            html += '  <button type="button" class="min-h-[48px] flex-1 flex items-center gap-3 text-left cursor-pointer select-none bg-transparent border-0" onclick="toggleLinkerItem(\'' + escapeHtml(item.id) + '\')">';
+            html += '    <i data-lucide="' + (isSelected ? 'check-square' : 'square') + '" class="w-5 h-5 flex-shrink-0 ' + (isSelected ? 'text-emerald-600' : 'text-slate-400') + '"></i>';
+            
+            if (item.imageUrl) {
+              html += '    <img src="' + escapeHtml(item.imageUrl) + '" alt="' + escapeHtml(item.name) + '" class="w-10 h-10 rounded-lg object-cover border border-slate-200 flex-shrink-0" onerror="this.classList.add(\'hidden\'); if(this.nextElementSibling) this.nextElementSibling.classList.remove(\'hidden\');" />';
+              html += '    <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center justify-center flex-shrink-0 hidden">';
+              html += '      <i data-lucide="' + escapeHtml(catIcon) + '" class="w-5 h-5"></i>';
+              html += '    </div>';
+            } else {
+              html += '    <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center justify-center flex-shrink-0">';
+              html += '      <i data-lucide="' + escapeHtml(catIcon) + '" class="w-5 h-5"></i>';
+              html += '    </div>';
+            }
+
+            html += '    <div class="min-w-0 flex-1">';
+            html += '      <div class="flex items-center gap-2">';
+            html += '        <span class="text-xs sm:text-sm font-bold text-slate-900 truncate">' + escapeHtml(item.name) + '</span>';
+            if (item.badge) {
+              html += '        <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800">' + escapeHtml(item.badge) + '</span>';
+            }
+            html += '      </div>';
+            html += '      <div class="flex items-center gap-2 text-[11px] text-slate-500">';
+            html += '        <span class="font-mono font-semibold text-emerald-700">' + formatVND(item.basePrice) + '</span>';
+            if (item.acronym) {
+              html += '        <span class="font-mono text-[10px] text-slate-400 bg-slate-100 px-1 rounded">' + escapeHtml(item.acronym) + '</span>';
+            }
+            html += '      </div>';
+            html += '    </div>';
+            html += '  </button>';
+
+            // Right: Simulator Focus Button (min-h-[48px] min-w-[48px])
+            var eyeBtnClass = isSimulated
+              ? 'rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs transition select-none cursor-pointer flex-shrink-0'
+              : 'rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition select-none cursor-pointer flex-shrink-0';
+            
+            html += '  <button type="button" class="min-h-[48px] min-w-[48px] h-12 w-12 ' + eyeBtnClass + '" onclick="updateLiveSimulator(\'' + escapeHtml(item.id) + '\')" title="Xem trước mô phỏng thu ngân">';
+            html += '    <i data-lucide="eye" class="w-4 h-4"></i>';
+            html += '  </button>';
+
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+
+        html += '</div>';
+      });
+
+      if (cleanQuery && html === '') {
+        html = '<div class="p-8 text-center text-xs text-slate-400">Không tìm thấy món nào khớp với từ khóa "' + escapeHtml(linkerState.searchQuery) + '".</div>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    function toggleLinkerCategoryAll(categoryId) {
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+      var cleanQuery = removeAccents(linkerState.searchQuery || '');
+      
+      var catItems = items.filter(function (item) {
+        if (item.categoryId !== categoryId) return false;
+        if (!cleanQuery) return true;
+        var cleanName = removeAccents(item.name || '');
+        var acronym = (item.acronym || '').toLowerCase();
+        return cleanName.indexOf(cleanQuery) !== -1 || acronym.indexOf(cleanQuery) !== -1;
+      });
+
+      if (catItems.length === 0) return;
+
+      var allSelected = catItems.every(function (i) {
+        return linkerState.selectedItemIds.has(i.id);
+      });
+
+      if (allSelected) {
+        catItems.forEach(function (i) {
+          linkerState.selectedItemIds.delete(i.id);
+        });
+      } else {
+        catItems.forEach(function (i) {
+          linkerState.selectedItemIds.add(i.id);
+        });
+      }
+
+      playTapChirp();
+
+      if (linkerState.simulatedItemId) {
+        var isSimInCat = catItems.some(function (i) { return i.id === linkerState.simulatedItemId; });
+        if (isSimInCat) {
+          updateLiveSimulator(linkerState.simulatedItemId);
+        }
+      }
+
+      renderLinkerCategoryTree(catalog);
+      renderLinkerGroupRail(catalog);
+      updateLinkerStickyBar(catalog);
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function toggleLinkerItem(itemId) {
+      if (linkerState.selectedItemIds.has(itemId)) {
+        linkerState.selectedItemIds.delete(itemId);
+      } else {
+        linkerState.selectedItemIds.add(itemId);
+      }
+      playTapChirp();
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+
+      if (itemId === linkerState.simulatedItemId) {
+        updateLiveSimulator(linkerState.simulatedItemId);
+      }
+
+      renderLinkerCategoryTree(catalog);
+      renderLinkerGroupRail(catalog);
+      updateLinkerStickyBar(catalog);
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function updateLiveSimulator(itemId) {
+      if (itemId) {
+        linkerState.simulatedItemId = itemId;
+      }
+      var screen = document.getElementById('linker-simulator-screen');
+      if (!screen) return;
+
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+      var item = items.find(function (i) { return i.id === linkerState.simulatedItemId; }) || items[0];
+
+      if (!item) {
+        screen.innerHTML = '<div class="p-8 text-center text-xs text-slate-400">Không có món nào để mô phỏng.</div>';
+        return;
+      }
+
+      linkerState.simulatedItemId = item.id;
+
+      var clockEl = document.getElementById('simulator-clock');
+      if (clockEl) {
+        var now = new Date();
+        clockEl.textContent = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+      }
+
+      var catIcon = getCategoryIconForLinker(item.categoryId, catalog);
+
+      var effectiveGroups = [];
+      var groups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      groups.forEach(function (g) {
+        if (g.id === 'sugar' || g.id === 'ice') return;
+        var isAssigned = false;
+        if (g.id === linkerState.activeGroupId) {
+          isAssigned = linkerState.selectedItemIds.has(item.id);
+        } else {
+          isAssigned = item.assignedModifierGroupIds && item.assignedModifierGroupIds.indexOf(g.id) !== -1;
+        }
+        if (isAssigned) {
+          effectiveGroups.push(g);
+        }
+      });
+
+      var sizes = (item.sizes && item.sizes.length > 0) ? item.sizes : [];
+      var currentSize = sizes.find(function (s) { return s.id === linkerState.simulatedSizeId; }) || sizes[0];
+      var basePrice = currentSize ? currentSize.price : (item.basePrice || 0);
+
+      var toppingSurcharge = 0;
+      effectiveGroups.forEach(function (g) {
+        (g.options || []).forEach(function (opt) {
+          if (linkerState.simulatedToppings.has(opt.id)) {
+            toppingSurcharge += (Number(opt.price) || 0);
+          }
+        });
+      });
+
+      var grandTotal = basePrice + toppingSurcharge;
+
+      var html = '';
+
+      // Simulator Popover Header
+      html += '<div class="p-3.5 border-b border-slate-100 bg-white flex items-center justify-between gap-2.5 flex-shrink-0">';
+      html += '  <div class="flex items-center gap-2.5 min-w-0">';
+      if (item.imageUrl) {
+        html += '    <img src="' + escapeHtml(item.imageUrl) + '" alt="' + escapeHtml(item.name) + '" class="w-11 h-11 rounded-xl object-cover border border-slate-200 flex-shrink-0" onerror="this.classList.add(\'hidden\'); if(this.nextElementSibling) this.nextElementSibling.classList.remove(\'hidden\');" />';
+        html += '    <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center justify-center flex-shrink-0 hidden">';
+        html += '      <i data-lucide="' + escapeHtml(catIcon) + '" class="w-5 h-5"></i>';
+        html += '    </div>';
+      } else {
+        html += '    <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center justify-center flex-shrink-0">';
+        html += '      <i data-lucide="' + escapeHtml(catIcon) + '" class="w-5 h-5"></i>';
+        html += '    </div>';
+      }
+      html += '    <div class="min-w-0">';
+      html += '      <div class="flex items-center gap-1.5">';
+      html += '        <h5 class="text-xs sm:text-sm font-bold text-slate-900 truncate leading-tight">' + escapeHtml(item.name) + '</h5>';
+      html += '        <span class="bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded text-[10px] font-semibold flex-shrink-0">' + escapeHtml(item.categoryName || '') + '</span>';
+      html += '      </div>';
+      html += '      <p class="text-[11px] text-slate-400 truncate mt-0.5">Tùy chọn kích cỡ, đường đá và topping</p>';
+      html += '    </div>';
+      html += '  </div>';
+      html += '  <span class="font-mono text-xs sm:text-sm font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex-shrink-0">' + formatVND(basePrice) + '</span>';
+      html += '</div>';
+
+      // Simulator Popover Body
+      html += '<div class="p-3.5 overflow-y-auto space-y-3.5 bg-slate-50/50 max-h-[360px] flex-1">';
+
+      // 1. Size Selection
+      if (sizes.length > 0) {
+        html += '<div class="space-y-1.5">';
+        html += '  <div class="flex items-center justify-between text-[11px]">';
+        html += '    <span class="font-bold text-slate-700 uppercase tracking-wider">Chọn kích cỡ</span>';
+        html += '    <span class="text-slate-400 font-medium">Bắt buộc</span>';
+        html += '  </div>';
+        html += '  <div class="grid grid-cols-3 gap-1.5">';
+        sizes.forEach(function (sz) {
+          var isSzSelected = currentSize && currentSize.id === sz.id;
+          var szClass = isSzSelected
+            ? 'px-2 py-1 rounded-xl bg-slate-900 text-white font-bold text-xs flex flex-col items-center justify-center leading-tight shadow-xs select-none'
+            : 'px-2 py-1 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold text-xs flex flex-col items-center justify-center leading-tight select-none cursor-pointer';
+          html += '    <button type="button" class="min-h-[48px] h-12 ' + szClass + '" onclick="selectSimulatorSize(\'' + escapeHtml(sz.id) + '\')">';
+          html += '      <span>' + escapeHtml(sz.name || sz.id) + '</span>';
+          html += '      <span class="font-mono text-[10px] ' + (isSzSelected ? 'text-slate-300' : 'text-slate-400') + '">' + formatVND(sz.price) + '</span>';
+          html += '    </button>';
+        });
+        html += '  </div>';
+        html += '</div>';
+      }
+
+      // 2. Sugar Level
+      var sugarOpts = [
+        { label: '0%', value: '0%' },
+        { label: '30%', value: '30%' },
+        { label: '50%', value: '50%' },
+        { label: '70%', value: '70%' },
+        { label: '100%', value: '100%', isDef: true }
+      ];
+      html += '<div class="space-y-1.5 pt-2 border-t border-slate-200/60">';
+      html += '  <div class="flex items-center justify-between text-[11px]">';
+      html += '    <span class="font-bold text-slate-700 uppercase tracking-wider">Mức ngọt (Đường)</span>';
+      html += '    <span class="text-slate-400 font-medium">Mặc định: 100%</span>';
+      html += '  </div>';
+      html += '  <div class="grid grid-cols-5 gap-1">';
+      sugarOpts.forEach(function (opt) {
+        var isSugSelected = linkerState.simulatedSugar === opt.value;
+        var sugClass = isSugSelected
+          ? 'px-1 rounded-xl bg-slate-900 text-white font-bold text-xs flex flex-col items-center justify-center select-none shadow-xs'
+          : 'px-1 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-medium text-xs flex flex-col items-center justify-center select-none cursor-pointer';
+        html += '    <button type="button" class="min-h-[48px] h-12 ' + sugClass + '" onclick="selectSimulatorSugar(\'' + opt.value + '\')">';
+        html += '      <span class="font-bold">' + opt.label + '</span>';
+        if (opt.isDef) {
+          html += '      <span class="text-[9px] ' + (isSugSelected ? 'text-slate-300' : 'text-slate-400') + ' leading-none mt-0.5">(Mặc định)</span>';
+        }
+        html += '    </button>';
+      });
+      html += '  </div>';
+      html += '</div>';
+
+      // 3. Ice Level
+      var iceOpts = [
+        { label: 'Nóng', value: 'Nóng' },
+        { label: 'Không đá', value: 'Không đá' },
+        { label: '50% đá', value: '50% đá' },
+        { label: '100% đá', value: '100% đá', isDef: true },
+        { label: 'Đá riêng', value: 'Đá riêng' }
+      ];
+      html += '<div class="space-y-1.5 pt-2 border-t border-slate-200/60">';
+      html += '  <div class="flex items-center justify-between text-[11px]">';
+      html += '    <span class="font-bold text-slate-700 uppercase tracking-wider">Mức đá</span>';
+      html += '    <span class="text-slate-400 font-medium">Mặc định: 100% đá</span>';
+      html += '  </div>';
+      html += '  <div class="grid grid-cols-3 sm:grid-cols-5 gap-1">';
+      iceOpts.forEach(function (opt) {
+        var isIceSelected = linkerState.simulatedIce === opt.value;
+        var iceClass = isIceSelected
+          ? 'px-1 rounded-xl bg-slate-900 text-white font-bold text-xs flex flex-col items-center justify-center select-none shadow-xs'
+          : 'px-1 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-medium text-xs flex flex-col items-center justify-center select-none cursor-pointer';
+        html += '    <button type="button" class="min-h-[48px] h-12 ' + iceClass + '" onclick="selectSimulatorIce(\'' + opt.value + '\')">';
+        html += '      <span class="font-bold">' + opt.label + '</span>';
+        if (opt.isDef) {
+          html += '      <span class="text-[9px] ' + (isIceSelected ? 'text-slate-300' : 'text-slate-400') + ' leading-none mt-0.5">(Mặc định)</span>';
+        }
+        html += '    </button>';
+      });
+      html += '  </div>';
+      html += '</div>';
+
+      // 4. Dynamic Toppings Checklist (Real-time live sync from Column 2)
+      html += '<div class="space-y-2 pt-2 border-t border-slate-200/60">';
+      html += '  <div class="flex items-center justify-between">';
+      html += '    <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Topping thêm</span>';
+      html += '    <span class="text-[10px] text-emerald-600 font-mono font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Live Sync</span>';
+      html += '  </div>';
+
+      if (effectiveGroups.length === 0) {
+        html += '  <div class="p-3 bg-white rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500 space-y-1">';
+        html += '    <p class="font-semibold text-slate-700">Chưa có nhóm topping nào gán cho món này</p>';
+        html += '    <p class="text-[11px] text-slate-400">Tick chọn món này ở Cột 2 để thêm ngay vào màn hình thu ngân!</p>';
+        html += '  </div>';
+      } else {
+        effectiveGroups.forEach(function (grp) {
+          html += '  <div class="space-y-1.5">';
+          html += '    <div class="flex items-center justify-between text-[11px]">';
+          html += '      <span class="font-semibold text-slate-600">' + escapeHtml(grp.name) + '</span>';
+          html += '      <span class="text-slate-400 font-mono text-[10px]">' + (grp.selectionType === 'multiple' ? 'Chọn nhiều' : 'Chọn 1') + '</span>';
+          html += '    </div>';
+          html += '    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">';
+          (grp.options || []).forEach(function (opt) {
+            var isTopChecked = linkerState.simulatedToppings.has(opt.id);
+            var topBtnClass = isTopChecked
+              ? 'px-3 py-2 rounded-xl text-xs transition flex items-center justify-between select-none bg-emerald-50 text-emerald-900 border-2 border-emerald-500 shadow-xs cursor-pointer'
+              : 'px-3 py-2 rounded-xl text-xs transition flex items-center justify-between select-none bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer';
+            
+            html += '      <button type="button" class="min-h-[48px] h-12 ' + topBtnClass + '" onclick="toggleSimulatorTopping(\'' + escapeHtml(opt.id) + '\')">';
+            html += '        <div class="flex items-center gap-1.5 truncate">';
+            html += '          <i data-lucide="' + (isTopChecked ? 'check-square' : 'square') + '" class="w-4 h-4 flex-shrink-0 ' + (isTopChecked ? 'text-emerald-600' : 'text-slate-400') + '"></i>';
+            html += '          <span class="font-semibold truncate">+ ' + escapeHtml(opt.name) + '</span>';
+            html += '        </div>';
+            html += '        <span class="font-mono text-[11px] font-bold ' + (isTopChecked ? 'text-emerald-700' : 'text-slate-500') + ' flex-shrink-0">+ ' + formatVND(opt.price) + '</span>';
+            html += '      </button>';
+          });
+          html += '    </div>';
+          html += '  </div>';
+        });
+      }
+      html += '</div>';
+
+      html += '</div>';
+
+      // Simulator Popover Footer
+      html += '<div class="p-3.5 bg-white border-t border-slate-200 flex items-center justify-between gap-3 flex-shrink-0">';
+      html += '  <div class="flex flex-col">';
+      html += '    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tổng tiền tạm tính</span>';
+      html += '    <span id="simulator-total-price" class="font-mono font-bold text-lg sm:text-xl text-emerald-700 tabular-nums">' + formatVND(grandTotal) + '</span>';
+      html += '  </div>';
+      html += '  <button type="button" class="min-h-[48px] h-12 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition select-none cursor-default">';
+      html += '    <i data-lucide="plus" class="w-4 h-4"></i>';
+      html += '    <span>+ THÊM VÀO ĐƠN</span>';
+      html += '  </button>';
+      html += '</div>';
+
+      screen.innerHTML = html;
+
+      var priceEl = document.getElementById('simulator-total-price');
+      if (priceEl) {
+        priceEl.textContent = formatVND(grandTotal);
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function selectSimulatorSize(sizeId) {
+      linkerState.simulatedSizeId = sizeId;
+      playTapChirp();
+      updateLiveSimulator(linkerState.simulatedItemId);
+    }
+
+    function selectSimulatorSugar(val) {
+      linkerState.simulatedSugar = val;
+      playTapChirp();
+      updateLiveSimulator(linkerState.simulatedItemId);
+    }
+
+    function selectSimulatorIce(val) {
+      linkerState.simulatedIce = val;
+      playTapChirp();
+      updateLiveSimulator(linkerState.simulatedItemId);
+    }
+
+    function toggleSimulatorTopping(toppingId) {
+      if (linkerState.simulatedToppings.has(toppingId)) {
+        linkerState.simulatedToppings.delete(toppingId);
+      } else {
+        linkerState.simulatedToppings.add(toppingId);
+      }
+      playTapChirp();
+      updateLiveSimulator(linkerState.simulatedItemId);
+    }
+
+    function updateLinkerStickyBar(catalog) {
+      var selectedCountEl = document.getElementById('linker-selected-count');
+      var commitGroupNameEl = document.getElementById('linker-commit-group-name');
+      var activeGroupNameEl = document.getElementById('linker-active-group-name');
+
+      var count = linkerState.selectedItemIds.size;
+      if (selectedCountEl) selectedCountEl.textContent = count;
+
+      var groupName = '...';
+      if (catalog && Array.isArray(catalog.modifierGroups)) {
+        var group = catalog.modifierGroups.find(function (g) { return g.id === linkerState.activeGroupId; });
+        if (group) groupName = group.name;
+      }
+
+      if (commitGroupNameEl) commitGroupNameEl.textContent = groupName;
+      if (activeGroupNameEl) activeGroupNameEl.textContent = groupName;
+    }
+
+    function selectAllLinkerItems() {
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      var items = (catalog && Array.isArray(catalog.items)) ? catalog.items : [];
+      items.forEach(function (item) {
+        linkerState.selectedItemIds.add(item.id);
+      });
+      playTapChirp();
+      if (linkerState.simulatedItemId) {
+        updateLiveSimulator(linkerState.simulatedItemId);
+      }
+      renderLinkerCategoryTree(catalog);
+      renderLinkerGroupRail(catalog);
+      updateLinkerStickyBar(catalog);
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function deselectAllLinkerItems() {
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      linkerState.selectedItemIds.clear();
+      playTapChirp();
+      if (linkerState.simulatedItemId) {
+        updateLiveSimulator(linkerState.simulatedItemId);
+      }
+      renderLinkerCategoryTree(catalog);
+      renderLinkerGroupRail(catalog);
+      updateLinkerStickyBar(catalog);
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function handleLinkerSearch(query) {
+      linkerState.searchQuery = (query || '').trim();
+      var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      renderLinkerCategoryTree(catalog);
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function saveBatchLinkerAssignments() {
+      if (!linkerState.activeGroupId) {
+        showToast('Vui lòng chọn một nhóm topping ở Cột 1 trước', true);
+        return;
+      }
+      if (!window.POS_BUS || typeof window.POS_BUS.batchAssignModifierGroup !== 'function') {
+        showToast('Hệ thống lưu trữ chưa sẵn sàng', true);
+        return;
+      }
+
+      var catalog = window.POS_BUS.getCatalogData();
+      var groups = (catalog && Array.isArray(catalog.modifierGroups)) ? catalog.modifierGroups : [];
+      var activeGroup = groups.find(function (g) { return g.id === linkerState.activeGroupId; });
+      var groupName = activeGroup ? activeGroup.name : linkerState.activeGroupId;
+      var itemIds = Array.from(linkerState.selectedItemIds);
+
+      window.POS_BUS.batchAssignModifierGroup(linkerState.activeGroupId, itemIds, true);
+
+      playSaveCashChime();
+      playSaveChime();
+      showToast('Đã lưu áp dụng nhóm "' + groupName + '" cho ' + itemIds.length + ' món thành công!');
+
+      refreshCatalogCounters();
+      var updatedCatalog = window.POS_BUS.getCatalogData();
+      renderLinkerGroupRail(updatedCatalog);
+      renderLinkerCategoryTree(updatedCatalog);
+      updateLinkerStickyBar(updatedCatalog);
+    }
+
     /* Shortcut: Jump to Batch Linker with this group selected */
     function jumpToBatchLinkerForGroup(groupId) {
       playTapChirp();
       switchCatalogSubView('linker');
+      if (typeof selectLinkerModifierGroup === 'function') {
+        selectLinkerModifierGroup(groupId);
+      }
       var catalog = (window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
         ? window.POS_BUS.getCatalogData()
         : null;
@@ -4907,6 +5781,8 @@
           saveCategoryForm();
         } else if (modModal && !modModal.classList.contains('hidden')) {
           saveModifierGroupForm();
+        } else if (currentTab === 'catalog' && currentCatalogSubView === 'linker') {
+          saveBatchLinkerAssignments();
         } else {
           saveStoreSettingsForm();
         }
@@ -4961,6 +5837,17 @@
           submitManagerReset();
         }
       }
+
+      // Enter shortcut for Batch Linker Matrix commit
+      if (e.key === 'Enter') {
+        var activeEl = document.activeElement;
+        var isFormInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+        if (!isFormInput && currentTab === 'catalog' && currentCatalogSubView === 'linker') {
+          e.preventDefault();
+          saveBatchLinkerAssignments();
+          return;
+        }
+      }
     });
 
     /* =========================================================================
@@ -4973,6 +5860,9 @@
       initBusSubscriptions();
       refreshCatalogCounters();
       renderCatalogItemsGrid();
+      if (typeof renderBatchLinkerMatrix === 'function') {
+        renderBatchLinkerMatrix();
+      }
 
       if (window.lucide) {
         window.lucide.createIcons();
