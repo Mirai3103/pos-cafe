@@ -391,7 +391,7 @@
 
         <!-- Button: Đóng ca & Đối soát (Primary) -->
         <button id="btn-close-shift-trigger" type="button" onclick="openShiftClosureModal()"
-          class="min-h-[48px] min-h-[56px] h-14 px-5 rounded-xl bg-slate-900 hover:bg-black active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition shadow-xs">
+          class="min-h-[48px] min-h-[56px] h-14 px-5 rounded-xl bg-slate-900 hover:bg-slate-950 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition shadow-xs">
           <i data-lucide="file-check" class="w-4 h-4 text-emerald-400"></i>
           <span>ĐÓNG CA & ĐỐI SOÁT (Z-REPORT)</span>
         </button>
@@ -413,7 +413,7 @@
           <div id="metric-opening-float" class="font-mono text-2xl font-bold text-slate-900 tracking-tight">2.000.000 đ</div>
           <div class="flex items-center justify-between text-[11px] text-slate-500">
             <span>Kiểm đếm 9 mệnh giá</span>
-            <button type="button" onclick="openOpeningFloatModal()" class="text-blue-600 hover:underline font-semibold cursor-pointer">Xem / Sửa</button>
+            <button type="button" onclick="openOpeningFloatModal()" class="min-h-[48px] px-3.5 flex items-center text-blue-600 hover:underline font-semibold cursor-pointer rounded-lg hover:bg-blue-50/60 transition">Xem / Sửa</button>
           </div>
         </div>
       </div>
@@ -516,9 +516,9 @@
 
             <!-- Filter Tabs -->
             <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-              <button type="button" onclick="filterMovements('all')" id="tab-mov-all" class="min-h-[36px] px-3 py-1 text-xs font-semibold rounded-lg bg-white text-slate-900 shadow-2xs cursor-pointer">Tất cả</button>
-              <button type="button" onclick="filterMovements('in')" id="tab-mov-in" class="min-h-[36px] px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg cursor-pointer">Thu (+)</button>
-              <button type="button" onclick="filterMovements('out')" id="tab-mov-out" class="min-h-[36px] px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg cursor-pointer">Chi (-)</button>
+              <button type="button" onclick="filterMovements('all')" id="tab-mov-all" class="min-h-[48px] px-4 py-2 text-xs font-semibold rounded-lg bg-white text-slate-900 shadow-2xs flex items-center cursor-pointer">Tất cả</button>
+              <button type="button" onclick="filterMovements('in')" id="tab-mov-in" class="min-h-[48px] px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center rounded-lg cursor-pointer">Thu (+)</button>
+              <button type="button" onclick="filterMovements('out')" id="tab-mov-out" class="min-h-[48px] px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center rounded-lg cursor-pointer">Chi (-)</button>
             </div>
           </div>
 
@@ -600,7 +600,7 @@
               </div>
             </div>
             <button type="button" onclick="openOpeningFloatModal()"
-              class="min-h-[36px] px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-xs font-semibold text-slate-700 cursor-pointer transition">
+              class="min-h-[48px] px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-xs font-semibold text-slate-700 flex items-center cursor-pointer transition">
               Cập nhật
             </button>
           </div>
@@ -956,7 +956,7 @@
           <div class="flex items-center justify-between pb-2 border-b border-slate-100">
             <span class="text-xs font-bold uppercase tracking-wider text-slate-600">1. Kiểm đếm tiền mặt thực tế</span>
             <button type="button" onclick="quickFillClosingExpected()"
-              class="min-h-[36px] px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200 cursor-pointer active:scale-[0.98] transition">
+              class="min-h-[48px] px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 cursor-pointer active:scale-[0.98] transition flex items-center">
               Điền theo số lý thuyết
             </button>
           </div>
@@ -1037,7 +1037,7 @@
         </button>
         <!-- Primary button >= 56px height -->
         <button type="button" onclick="confirmShiftClosure()"
-          class="min-h-[56px] px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-black active:scale-[0.98] text-white text-sm font-bold shadow-xs flex items-center justify-center gap-2 cursor-pointer transition">
+          class="min-h-[56px] px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-950 active:scale-[0.98] text-white text-sm font-bold shadow-xs flex items-center justify-center gap-2 cursor-pointer transition">
           <i data-lucide="check-check" class="w-4 h-4 text-emerald-400"></i>
           <span>XÁC NHẬN ĐÓNG CA & XUẤT BÁO CÁO Z (Enter)</span>
         </button>
@@ -1647,6 +1647,41 @@
       if (txtCash) txtCash.textContent = formatVND(currentShift.cashSales) + ' (' + cashPct + '%)';
       if (txtQr) txtQr.textContent = formatVND(currentShift.transferSales) + ' (' + qrPct + '%)';
 
+      // Action Buttons State when shift is closed vs open
+      var btnIn = document.getElementById('btn-open-cash-in');
+      var btnOut = document.getElementById('btn-open-cash-out');
+      var btnCloseTrigger = document.getElementById('btn-close-shift-trigger');
+
+      if (currentShift.status === 'closed') {
+        if (btnIn) {
+          btnIn.classList.add('opacity-40', 'pointer-events-none', 'cursor-not-allowed');
+          btnIn.setAttribute('title', 'Ca đã đóng, không thể thu quỹ');
+        }
+        if (btnOut) {
+          btnOut.classList.add('opacity-40', 'pointer-events-none', 'cursor-not-allowed');
+          btnOut.setAttribute('title', 'Ca đã đóng, không thể chi quỹ');
+        }
+        if (btnCloseTrigger) {
+          btnCloseTrigger.className = 'min-h-[48px] min-h-[56px] h-14 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition shadow-xs';
+          btnCloseTrigger.innerHTML = '<i data-lucide="plus-circle" class="w-4 h-4 text-white"></i><span>MỞ CA BÁN HÀNG MỚI</span>';
+          btnCloseTrigger.onclick = openOpeningFloatModal;
+        }
+      } else {
+        if (btnIn) {
+          btnIn.classList.remove('opacity-40', 'pointer-events-none', 'cursor-not-allowed');
+          btnIn.removeAttribute('title');
+        }
+        if (btnOut) {
+          btnOut.classList.remove('opacity-40', 'pointer-events-none', 'cursor-not-allowed');
+          btnOut.removeAttribute('title');
+        }
+        if (btnCloseTrigger) {
+          btnCloseTrigger.className = 'min-h-[48px] min-h-[56px] h-14 px-5 rounded-xl bg-slate-900 hover:bg-slate-950 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition shadow-xs';
+          btnCloseTrigger.innerHTML = '<i data-lucide="file-check" class="w-4 h-4 text-emerald-400"></i><span>ĐÓNG CA & ĐỐI SOÁT (Z-REPORT)</span>';
+          btnCloseTrigger.onclick = openShiftClosureModal;
+        }
+      }
+
       // Render Tables
       renderMovementsTable();
       renderOrdersTable();
@@ -1668,8 +1703,8 @@
       var tabIn = document.getElementById('tab-mov-in');
       var tabOut = document.getElementById('tab-mov-out');
 
-      var activeClass = 'min-h-[36px] px-3 py-1 text-xs font-semibold rounded-lg bg-white text-slate-900 shadow-2xs cursor-pointer';
-      var inactiveClass = 'min-h-[36px] px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg cursor-pointer';
+      var activeClass = 'min-h-[48px] px-4 py-2 text-xs font-semibold rounded-lg bg-white text-slate-900 shadow-2xs flex items-center cursor-pointer';
+      var inactiveClass = 'min-h-[48px] px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center rounded-lg cursor-pointer';
 
       if (tabAll) tabAll.className = type === 'all' ? activeClass : inactiveClass;
       if (tabIn) tabIn.className = type === 'in' ? activeClass : inactiveClass;
@@ -1878,12 +1913,12 @@
 
             // +5 Shortcut Button
             '<button type="button" onclick="stepDenom(\'' + mode + '\', ' + d.value + ', 5)" ' +
-              'class="min-h-[48px] px-2.5 h-12 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-slate-600 font-mono text-xs font-bold cursor-pointer transition select-none" ' +
+              'class="min-h-[48px] min-w-[48px] h-12 px-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-slate-600 font-mono text-xs font-bold flex items-center justify-center cursor-pointer transition select-none" ' +
               'title="Thêm 5 tờ">+5</button>' +
 
             // +10 Shortcut Button
             '<button type="button" onclick="stepDenom(\'' + mode + '\', ' + d.value + ', 10)" ' +
-              'class="min-h-[48px] px-2.5 h-12 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-slate-600 font-mono text-xs font-bold cursor-pointer transition select-none" ' +
+              'class="min-h-[48px] min-w-[48px] h-12 px-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] text-slate-600 font-mono text-xs font-bold flex items-center justify-center cursor-pointer transition select-none" ' +
               'title="Thêm 10 tờ">+10</button>' +
           '</div>' +
         '</div>';
@@ -2002,6 +2037,15 @@
       currentShift.openingDenominations = Object.assign({}, openingCounts);
       currentShift.status = 'open';
       currentShift.startTime = new Date().toISOString();
+      currentShift.movements = [];
+      currentShift.cashIn = 0;
+      currentShift.cashOut = 0;
+      currentShift.countedCash = null;
+      currentShift.cashDiscrepancy = null;
+      currentShift.closingDenominations = null;
+      currentShift.explanationNote = '';
+      currentShift.endTime = null;
+      shiftMovements = [];
 
       // Recalculate and persist
       recalculateShiftFinancials();
@@ -2019,6 +2063,11 @@
        13. Workflow 2: Thu Quỹ / Chi Quỹ Mid-Shift Movements
        ========================================================================= */
     function openCashInModal() {
+      if (!currentShift || currentShift.status === 'closed') {
+        playErrorBuzz();
+        showToast('Ca hiện tại đã kết thúc, vui lòng mở ca mới để thu quỹ!', true);
+        return;
+      }
       playTapChirp();
       var amtInput = document.getElementById('input-cash-in-amount');
       if (amtInput) amtInput.value = '';
@@ -2070,6 +2119,11 @@
     }
 
     function openCashOutModal() {
+      if (!currentShift || currentShift.status === 'closed') {
+        playErrorBuzz();
+        showToast('Ca hiện tại đã kết thúc, vui lòng mở ca mới để chi quỹ!', true);
+        return;
+      }
       playTapChirp();
       var amtInput = document.getElementById('input-cash-out-amount');
       if (amtInput) amtInput.value = '';
@@ -2492,6 +2546,7 @@
 
       // Enter key for active modal submission
       if (e.key === 'Enter') {
+        if (e.target && e.target.tagName === 'TEXTAREA') return;
         var openFloatModal = document.getElementById('modal-opening-float');
         if (openFloatModal && !openFloatModal.classList.contains('hidden')) {
           e.preventDefault();
