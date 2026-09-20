@@ -17,6 +17,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppShiftRouteImport } from './routes/_app/shift'
 import { Route as AppTablesRouteImport } from './routes/_app/tables'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AuthWorkspaceRouteImport } from './routes/auth/workspace'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -57,6 +58,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthWorkspaceRoute = AuthWorkspaceRouteImport.update({
+  id: '/auth/workspace',
+  path: '/auth/workspace',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/shift': typeof AppShiftRoute
   '/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/workspace': typeof AuthWorkspaceRoute
 }
 export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/shift': typeof AppShiftRoute
   '/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/workspace': typeof AuthWorkspaceRoute
   '/': typeof AppIndexRoute
 }
 export interface FileRoutesById {
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/_app/shift': typeof AppShiftRoute
   '/_app/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/workspace': typeof AuthWorkspaceRoute
   '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/shift'
     | '/tables'
     | '/auth/login'
+    | '/auth/workspace'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/history'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
     | '/shift'
     | '/tables'
     | '/auth/login'
+    | '/auth/workspace'
     | '/'
   id:
     | '__root__'
@@ -115,12 +126,14 @@ export interface FileRouteTypes {
     | '/_app/shift'
     | '/_app/tables'
     | '/auth/login'
+    | '/auth/workspace'
     | '/_app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AuthLoginRoute: typeof AuthLoginRoute
+  AuthWorkspaceRoute: typeof AuthWorkspaceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -181,6 +194,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/workspace': {
+      id: '/auth/workspace'
+      path: '/auth/workspace'
+      fullPath: '/auth/workspace'
+      preLoaderRoute: typeof AuthWorkspaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -207,6 +227,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AuthLoginRoute: AuthLoginRoute,
+  AuthWorkspaceRoute: AuthWorkspaceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
