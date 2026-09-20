@@ -697,7 +697,8 @@
     ];
 
     function getCategoryIcon(categoryId) {
-      const cat = INITIAL_CATEGORIES.find(c => c.id === categoryId);
+      const catList = (window.POS_STATE && window.POS_STATE.categories) || INITIAL_CATEGORIES;
+      const cat = catList.find(c => c.id === categoryId);
       return (cat && cat.icon) || 'coffee';
     }
 
@@ -1215,6 +1216,16 @@
       }
     }
 
+    let initialCategories = INITIAL_CATEGORIES;
+    let initialMenuItems = INITIAL_MENU_ITEMS;
+    if (typeof window !== 'undefined' && window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function') {
+      const busCatalog = window.POS_BUS.getCatalogData();
+      if (busCatalog && Array.isArray(busCatalog.categories) && Array.isArray(busCatalog.items)) {
+        initialCategories = busCatalog.categories;
+        initialMenuItems = busCatalog.items;
+      }
+    }
+
     const rawState = {
       // Active Sales Shift info
       activeShift: initialShift,
@@ -1239,9 +1250,9 @@
       cart: [],
       takeawayCart: [],
 
-      // Mock catalog & floor collections
-      categories: INITIAL_CATEGORIES,
-      menuItems: INITIAL_MENU_ITEMS,
+      // Dynamic catalog & floor collections
+      categories: initialCategories,
+      menuItems: initialMenuItems,
       tables: INITIAL_TABLES,
 
       // Subscriber registry
@@ -1459,7 +1470,25 @@
       }
     });
 
-    // Subscribe to POS_BUS cross-tab events (Task 1)
+    var state = window.POS_STATE;
+
+    function hydrateCatalogFromBus() {
+      if (!window.POS_BUS || !window.POS_BUS.getCatalogData) return;
+      const catalog = window.POS_BUS.getCatalogData();
+      if (catalog && catalog.categories && catalog.items) {
+        state.categories = catalog.categories;
+        state.menuItems = catalog.items;
+      }
+    }
+
+    function renderProductGrid(s) {
+      s = s || (typeof window !== 'undefined' ? window.POS_STATE : null);
+      if (typeof renderCatalogItems === 'function') {
+        renderCatalogItems(s);
+      }
+    }
+
+    // Subscribe to POS_BUS cross-tab events (Task 1 & Task 6)
     if (typeof window !== 'undefined' && window.POS_BUS) {
       window.POS_BUS.subscribe('SHIFT_UPDATED', function (shift) {
         if (!shift || !window.POS_STATE) return;
@@ -1484,6 +1513,13 @@
         if (typeof renderCatalogItems === 'function' && window.POS_STATE) {
           renderCatalogItems(window.POS_STATE);
         }
+      });
+
+      // Synchronize dynamic catalog items, categories, and modifier groups (Task 6)
+      window.POS_BUS.subscribe('CATALOG_ITEMS_UPDATED', function (payload) {
+        hydrateCatalogFromBus();
+        renderCategoryPills();
+        renderProductGrid();
       });
 
       // Synchronize serviceNumber when orders are placed in other tabs (Task 1)
@@ -1688,12 +1724,17 @@
 
     // 3. Render Category Pills Bar
     function renderCategoryPills(state) {
+      state = state || (typeof window !== 'undefined' ? window.POS_STATE : null);
       const container = document.getElementById('category-pills-bar');
-      if (!container) return;
+      if (!container || !state) return;
 
       const totalItemsCount = (state.menuItems || []).length;
+      let categories = (state.categories || []).slice();
+      if (!categories.some(c => c.id === 'all')) {
+        categories.unshift({ id: 'all', name: 'Tất cả', icon: 'layout-grid' });
+      }
 
-      container.innerHTML = state.categories.map(cat => {
+      container.innerHTML = categories.map(cat => {
         const isActive = state.activeCategory === cat.id;
         const activeClass = isActive
           ? 'bg-slate-900 text-white shadow-sm'
@@ -1706,7 +1747,7 @@
         return `
           <button type="button" onclick="setCategory('${cat.id}')"
             class="h-12 min-h-[48px] px-4 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2 select-none ${activeClass}">
-            <i data-lucide="${cat.icon}" class="w-4 h-4"></i>
+            <i data-lucide="${cat.icon || 'coffee'}" class="w-4 h-4"></i>
             <span>${cat.name}</span>
             <span class="text-[11px] px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 font-mono font-medium'}">${count}</span>
           </button>
@@ -1720,8 +1761,9 @@
 
     // 4. Render Responsive Product Card Grid
     function renderCatalogItems(state) {
+      state = state || (typeof window !== 'undefined' ? window.POS_STATE : null);
       const container = document.getElementById('catalog-grid');
-      if (!container) return;
+      if (!container || !state) return;
 
       let items = state.menuItems || [];
 
@@ -2024,10 +2066,76 @@
 
     const QUICK_TAGS = ['Ít sữa', 'Pha đậm', 'Để đá riêng'];
 
+    function getItemEffectiveModifierGroups(item) {
+      if (!item) return [];
+      const catalog = (typeof window !== 'undefined' && window.POS_BUS && typeof window.POS_BUS.getCatalogData === 'function')
+        ? window.POS_BUS.getCatalogData()
+        : null;
+      if (!catalog) {
+        return [];
+      }
+
+      const effectiveGroupIds = [];
+      // 1. Category default groups minus item exclusions
+      const cat = (catalog.categories || []).find(c => c.id === item.categoryId);
+      if (cat && Array.isArray(cat.defaultGroupIds)) {
+        const excluded = Array.isArray(item.excludedModifierGroupIds) ? item.excludedModifierGroupIds : [];
+        cat.defaultGroupIds.forEach(gid => {
+          if (!excluded.includes(gid) && !effectiveGroupIds.includes(gid)) {
+            effectiveGroupIds.push(gid);
+          }
+        });
+      }
+
+      // 2. Explicitly assigned groups
+      if (Array.isArray(item.assignedModifierGroupIds)) {
+        item.assignedModifierGroupIds.forEach(gid => {
+          if (!effectiveGroupIds.includes(gid)) {
+            effectiveGroupIds.push(gid);
+          }
+        });
+      }
+
+      const allGroups = catalog.modifierGroups || [];
+      return effectiveGroupIds.map(gid => allGroups.find(g => g.id === gid)).filter(Boolean);
+    }
+
+    let currentModalToppingGroups = [];
+    let currentModalToppings = [];
+
     function openModifierModal(item) {
       if (!item) return;
       selectedItemForModifier = item;
       window.selectedItemForModifier = item;
+
+      // 1. Read assigned modifier groups for item (including category defaults minus exclusions plus assigned groups)
+      const effectiveGroups = getItemEffectiveModifierGroups(item);
+      const toppingGroups = effectiveGroups.filter(g => g.id !== 'sugar' && g.id !== 'ice');
+      currentModalToppingGroups = toppingGroups;
+
+      // 2. Dynamically lookup modifier groups and their options from POS_BUS.getCatalogData().modifierGroups
+      currentModalToppings = [];
+      if (toppingGroups.length > 0) {
+        toppingGroups.forEach(grp => {
+          if (Array.isArray(grp.options)) {
+            grp.options.forEach(opt => {
+              currentModalToppings.push({
+                id: opt.id,
+                name: opt.name,
+                price: typeof opt.price === 'number' ? opt.price : 0,
+                groupId: grp.id,
+                groupName: grp.name,
+                selectionType: grp.selectionType || 'multiple'
+              });
+            });
+          }
+        });
+      } else if (!item.assignedModifierGroupIds && (!item.sizes || item.hasModifiers)) {
+        currentModalToppings = MODIFIER_TOPPINGS.slice();
+      }
+
+      window.currentModalToppingGroups = currentModalToppingGroups;
+      window.currentModalToppings = currentModalToppings;
 
       // Smart Defaults: pre-select Size M (or item default), 100% Đường, 100% Đá
       const defaultSize = (item.sizes && item.sizes.length > 0)
@@ -2106,12 +2214,22 @@
       renderModifierModalBody();
     }
 
-    function toggleModifierTopping(toppingId) {
-      const idx = modifierState.toppings.indexOf(toppingId);
-      if (idx >= 0) {
-        modifierState.toppings.splice(idx, 1);
+    function toggleModifierTopping(toppingId, groupId, selectionType) {
+      if (selectionType === 'single' && groupId) {
+        const grp = (currentModalToppingGroups || []).find(g => g.id === groupId);
+        const optIds = grp ? (grp.options || []).map(o => o.id) : [];
+        const isAlreadyChecked = modifierState.toppings.includes(toppingId);
+        modifierState.toppings = modifierState.toppings.filter(id => !optIds.includes(id));
+        if (!isAlreadyChecked) {
+          modifierState.toppings.push(toppingId);
+        }
       } else {
-        modifierState.toppings.push(toppingId);
+        const idx = modifierState.toppings.indexOf(toppingId);
+        if (idx >= 0) {
+          modifierState.toppings.splice(idx, 1);
+        } else {
+          modifierState.toppings.push(toppingId);
+        }
       }
       renderModifierModalBody();
       updateModifierFooter();
@@ -2175,9 +2293,10 @@
         }
       }
 
+      const toppingsList = (currentModalToppings && currentModalToppings.length > 0) ? currentModalToppings : MODIFIER_TOPPINGS;
       const toppingsTotal = modifierState.toppings.reduce((sum, tid) => {
-        const top = MODIFIER_TOPPINGS.find(t => t.id === tid);
-        return sum + (top ? top.price : 0);
+        const top = toppingsList.find(t => t.id === tid);
+        return sum + (top ? (top.price || 0) : 0);
       }, 0);
 
       const unitTotal = basePrice + toppingsTotal;
@@ -2218,10 +2337,11 @@
       if (modifierState.ice) {
         modifiersList.push({ group: 'ice', name: 'Đá', value: modifierState.ice });
       }
+      const toppingsList = (currentModalToppings && currentModalToppings.length > 0) ? currentModalToppings : MODIFIER_TOPPINGS;
       modifierState.toppings.forEach(tid => {
-        const top = MODIFIER_TOPPINGS.find(t => t.id === tid);
+        const top = toppingsList.find(t => t.id === tid);
         if (top) {
-          modifiersList.push({ group: 'topping', name: top.name, price: top.price });
+          modifiersList.push({ group: top.groupId || 'topping', name: top.name, price: top.price || 0 });
         }
       });
 
@@ -2278,85 +2398,131 @@
       }
 
       // 2. Sugar Level Group (Mức ngọt)
-      html += `
-        <div class="space-y-2 pt-3 border-t border-slate-100">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Mức ngọt (Đường)</span>
-            <span class="text-[11px] text-slate-400 font-medium">Mặc định: 100%</span>
-          </div>
-          <div class="grid grid-cols-5 gap-1.5">
-            ${SUGAR_OPTIONS.map(opt => {
-              const isSelected = modifierState.sugar === opt.value;
-              const activeClass = isSelected
-                ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-semibold'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 font-medium';
+      const hasSugarGroup = !item.excludedModifierGroupIds || !item.excludedModifierGroupIds.includes('sugar');
+      if (hasSugarGroup) {
+        html += `
+          <div class="space-y-2 pt-3 border-t border-slate-100">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Mức ngọt (Đường)</span>
+              <span class="text-[11px] text-slate-400 font-medium">Mặc định: 100%</span>
+            </div>
+            <div class="grid grid-cols-5 gap-1.5">
+              ${SUGAR_OPTIONS.map(opt => {
+                const isSelected = modifierState.sugar === opt.value;
+                const activeClass = isSelected
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-semibold'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 font-medium';
 
-              return `
-                <button type="button" onclick="selectModifierSugar('${opt.value}')"
-                  class="min-h-[48px] h-12 px-1.5 py-1 rounded-xl border text-xs md:text-sm transition-all flex flex-col items-center justify-center leading-tight select-none ${activeClass}">
-                  <span class="font-bold">${opt.value}</span>
-                  ${opt.isDefault ? `<span class="text-[9px] ${isSelected ? 'text-slate-300' : 'text-slate-400'} leading-none mt-0.5">(Mặc định)</span>` : ''}
-                </button>
-              `;
-            }).join('')}
+                return `
+                  <button type="button" onclick="selectModifierSugar('${opt.value}')"
+                    class="min-h-[48px] h-12 px-1.5 py-1 rounded-xl border text-xs md:text-sm transition-all flex flex-col items-center justify-center leading-tight select-none ${activeClass}">
+                    <span class="font-bold">${opt.value}</span>
+                    ${opt.isDefault ? `<span class="text-[9px] ${isSelected ? 'text-slate-300' : 'text-slate-400'} leading-none mt-0.5">(Mặc định)</span>` : ''}
+                  </button>
+                `;
+              }).join('')}
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      }
 
       // 3. Ice Level Group (Mức đá)
-      html += `
-        <div class="space-y-2 pt-3 border-t border-slate-100">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Mức đá</span>
-            <span class="text-[11px] text-slate-400 font-medium">Mặc định: 100% đá</span>
-          </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            ${ICE_OPTIONS.map(opt => {
-              const isSelected = modifierState.ice === opt.value;
-              const activeClass = isSelected
-                ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-semibold'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 font-medium';
+      const hasIceGroup = !item.excludedModifierGroupIds || !item.excludedModifierGroupIds.includes('ice');
+      if (hasIceGroup) {
+        html += `
+          <div class="space-y-2 pt-3 border-t border-slate-100">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Mức đá</span>
+              <span class="text-[11px] text-slate-400 font-medium">Mặc định: 100% đá</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              ${ICE_OPTIONS.map(opt => {
+                const isSelected = modifierState.ice === opt.value;
+                const activeClass = isSelected
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-semibold'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 font-medium';
 
-              return `
-                <button type="button" onclick="selectModifierIce('${opt.value}')"
-                  class="min-h-[48px] h-12 px-2 py-1 rounded-xl border text-xs md:text-sm transition-all flex flex-col items-center justify-center leading-tight select-none ${activeClass}">
-                  <span class="font-bold">${opt.value}</span>
-                  ${opt.isDefault ? `<span class="text-[9px] ${isSelected ? 'text-slate-300' : 'text-slate-400'} leading-none mt-0.5">(Mặc định)</span>` : ''}
-                </button>
-              `;
-            }).join('')}
+                return `
+                  <button type="button" onclick="selectModifierIce('${opt.value}')"
+                    class="min-h-[48px] h-12 px-2 py-1 rounded-xl border text-xs md:text-sm transition-all flex flex-col items-center justify-center leading-tight select-none ${activeClass}">
+                    <span class="font-bold">${opt.value}</span>
+                    ${opt.isDefault ? `<span class="text-[9px] ${isSelected ? 'text-slate-300' : 'text-slate-400'} leading-none mt-0.5">(Mặc định)</span>` : ''}
+                  </button>
+                `;
+              }).join('')}
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      }
 
-      // 4. Topping Group (Topping thêm)
-      html += `
-        <div class="space-y-2 pt-3 border-t border-slate-100">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Topping thêm</span>
-            <span class="text-[11px] text-slate-400 font-medium">Chọn nhiều</span>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            ${MODIFIER_TOPPINGS.map(top => {
-              const isChecked = modifierState.toppings.includes(top.id);
-              const activeClass = isChecked
-                ? 'bg-emerald-50 text-emerald-900 border-2 border-emerald-500 shadow-xs'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+      // 4. Topping Group (Dynamic Toppings from POS_BUS)
+      if (currentModalToppingGroups && currentModalToppingGroups.length > 0) {
+        currentModalToppingGroups.forEach(grp => {
+          const isSingle = grp.selectionType === 'single';
+          const subText = isSingle ? 'Chọn 1' : 'Chọn nhiều';
+          const options = grp.options || [];
+          if (options.length === 0) return;
 
-              return `
-                <button type="button" onclick="toggleModifierTopping('${top.id}')"
-                  class="min-h-[48px] h-12 px-3 py-2 rounded-xl text-xs md:text-sm transition-all flex items-center justify-between select-none ${activeClass}">
-                  <div class="flex items-center gap-1.5 truncate">
-                    <i data-lucide="${isChecked ? 'check-square' : 'square'}" class="w-4 h-4 flex-shrink-0 ${isChecked ? 'text-emerald-600' : 'text-slate-400'}"></i>
-                    <span class="font-semibold truncate">+ ${top.name}</span>
-                  </div>
-                  <span class="font-mono text-xs font-bold flex-shrink-0 ${isChecked ? 'text-emerald-700' : 'text-slate-500'}">+${formatVND(top.price)}</span>
-                </button>
-              `;
-            }).join('')}
+          html += `
+            <div class="space-y-2 pt-3 border-t border-slate-100">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">${grp.name}</span>
+                <span class="text-[11px] text-slate-400 font-medium">${subText}</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                ${options.map(top => {
+                  const isChecked = modifierState.toppings.includes(top.id);
+                  const activeClass = isChecked
+                    ? 'bg-emerald-50 text-emerald-900 border-2 border-emerald-500 shadow-xs'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+                  const checkIcon = isSingle
+                    ? (isChecked ? 'check-circle-2' : 'circle')
+                    : (isChecked ? 'check-square' : 'square');
+
+                  return `
+                    <button type="button" onclick="toggleModifierTopping('${top.id}', '${grp.id}', '${isSingle ? 'single' : 'multiple'}')"
+                      class="min-h-[48px] h-12 px-3 py-2 rounded-xl text-xs md:text-sm transition-all flex items-center justify-between select-none ${activeClass}">
+                      <div class="flex items-center gap-1.5 truncate">
+                        <i data-lucide="${checkIcon}" class="w-4 h-4 flex-shrink-0 ${isChecked ? 'text-emerald-600' : 'text-slate-400'}"></i>
+                        <span class="font-semibold truncate">+ ${top.name}</span>
+                      </div>
+                      <span class="font-mono text-xs font-bold flex-shrink-0 ${isChecked ? 'text-emerald-700' : 'text-slate-500'}">${top.price > 0 ? '+' + formatVND(top.price) : '0 đ'}</span>
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        });
+      } else if (currentModalToppings && currentModalToppings.length > 0) {
+        html += `
+          <div class="space-y-2 pt-3 border-t border-slate-100">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Topping thêm</span>
+              <span class="text-[11px] text-slate-400 font-medium">Chọn nhiều</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              ${currentModalToppings.map(top => {
+                const isChecked = modifierState.toppings.includes(top.id);
+                const activeClass = isChecked
+                  ? 'bg-emerald-50 text-emerald-900 border-2 border-emerald-500 shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+
+                return `
+                  <button type="button" onclick="toggleModifierTopping('${top.id}')"
+                    class="min-h-[48px] h-12 px-3 py-2 rounded-xl text-xs md:text-sm transition-all flex items-center justify-between select-none ${activeClass}">
+                    <div class="flex items-center gap-1.5 truncate">
+                      <i data-lucide="${isChecked ? 'check-square' : 'square'}" class="w-4 h-4 flex-shrink-0 ${isChecked ? 'text-emerald-600' : 'text-slate-400'}"></i>
+                      <span class="font-semibold truncate">+ ${top.name}</span>
+                    </div>
+                    <span class="font-mono text-xs font-bold flex-shrink-0 ${isChecked ? 'text-emerald-700' : 'text-slate-500'}">+${formatVND(top.price)}</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      }
 
       // 5. Preparation Notes Group (Ghi chú pha chế)
       html += `
@@ -4356,7 +4522,22 @@
     window.setDineInView = setDineInView;
     window.toggleDineInView = toggleDineInView;
 
+    // Task 6: Dynamic Catalog Sync & Modifier Groups bindings
+    window.hydrateCatalogFromBus = hydrateCatalogFromBus;
+    window.renderProductGrid = renderProductGrid;
+    window.renderCategoryPills = renderCategoryPills;
+    window.getItemEffectiveModifierGroups = getItemEffectiveModifierGroups;
+    window.calculateCurrentModifierTotal = calculateCurrentModifierTotal;
+    Object.defineProperty(window, 'modifierState', {
+      get: () => modifierState,
+      set: (val) => { modifierState = val; },
+      configurable: true
+    });
+
     document.addEventListener('DOMContentLoaded', () => {
+      // 0. Hydrate dynamic catalog from POS_BUS
+      hydrateCatalogFromBus();
+
       // 1. Initialize real-time digital clock
       initDigitalClock();
 

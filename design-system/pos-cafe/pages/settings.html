@@ -5850,6 +5850,17 @@
       }
     });
 
+    // Expose public interfaces on window for cross-module integration and testing
+    window.closeAllModals = closeAllModals;
+    window.refreshCatalogCounters = refreshCatalogCounters;
+    window.saveMenuItemForm = saveMenuItemForm;
+    window.saveCategoryForm = saveCategoryForm;
+    window.saveModifierGroupForm = saveModifierGroupForm;
+    window.saveBatchLinkerAssignments = saveBatchLinkerAssignments;
+    window.openMenuItemModal = openMenuItemModal;
+    window.switchSettingsTab = switchSettingsTab;
+    window.initBusSubscriptions = initBusSubscriptions;
+
     /* =========================================================================
        13. Initialization & DOM Ready
        ========================================================================= */
