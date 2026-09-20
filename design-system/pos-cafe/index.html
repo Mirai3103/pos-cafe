@@ -557,6 +557,11 @@
       { id: 'bakery', name: 'Bánh & Điểm tâm', icon: 'croissant', count: 2 }
     ];
 
+    function getCategoryIcon(categoryId) {
+      const cat = INITIAL_CATEGORIES.find(c => c.id === categoryId);
+      return (cat && cat.icon) || 'coffee';
+    }
+
     const INITIAL_MENU_ITEMS = [
       {
         id: 'cfsd',
@@ -564,6 +569,7 @@
         categoryId: 'coffee_vn',
         categoryName: 'Cà phê Việt',
         basePrice: 35000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=1',
         hasModifiers: true,
         sizes: [
           { id: 'S', name: 'Size S', price: 29000 },
@@ -581,6 +587,7 @@
         categoryId: 'coffee_vn',
         categoryName: 'Cà phê Việt',
         basePrice: 30000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=2',
         hasModifiers: true,
         sizes: [
           { id: 'S', name: 'Size S', price: 25000 },
@@ -597,6 +604,7 @@
         categoryId: 'coffee_vn',
         categoryName: 'Cà phê Việt',
         basePrice: 39000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=3',
         hasModifiers: true,
         sizes: [
           { id: 'S', name: 'Size S', price: 32000 },
@@ -614,6 +622,7 @@
         categoryId: 'coffee_vn',
         categoryName: 'Cà phê Việt',
         basePrice: 45000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=4',
         hasModifiers: true,
         sizes: [
           { id: 'M', name: 'Size M', price: 45000, isDefault: true },
@@ -630,6 +639,7 @@
         categoryId: 'coffee_machine',
         categoryName: 'Cà phê máy',
         basePrice: 30000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=5',
         hasModifiers: true,
         sizes: [
           { id: 'Single', name: 'Single Shot', price: 30000, isDefault: true },
@@ -645,6 +655,7 @@
         categoryId: 'coffee_machine',
         categoryName: 'Cà phê máy',
         basePrice: 48000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=6',
         hasModifiers: true,
         sizes: [
           { id: 'S', name: 'Size S', price: 42000 },
@@ -661,6 +672,7 @@
         categoryId: 'tea',
         categoryName: 'Trà & Macchiato',
         basePrice: 45000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=7',
         hasModifiers: true,
         sizes: [
           { id: 'M', name: 'Size M', price: 45000, isDefault: true },
@@ -677,6 +689,7 @@
         categoryId: 'tea',
         categoryName: 'Trà & Macchiato',
         basePrice: 45000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=8',
         hasModifiers: true,
         sizes: [
           { id: 'M', name: 'Size M', price: 45000, isDefault: true },
@@ -692,6 +705,7 @@
         categoryId: 'freeze',
         categoryName: 'Đá xay & Sinh tố',
         basePrice: 52000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=9',
         hasModifiers: true,
         sizes: [
           { id: 'M', name: 'Size M', price: 52000, isDefault: true },
@@ -708,6 +722,7 @@
         categoryId: 'bakery',
         categoryName: 'Bánh & Điểm tâm',
         basePrice: 32000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=10',
         hasModifiers: false,
         sizes: null,
         defaultSize: null,
@@ -720,6 +735,7 @@
         categoryId: 'bakery',
         categoryName: 'Bánh & Điểm tâm',
         basePrice: 40000,
+        imageUrl: 'https://placewaifu.com/image/300/200?id=11',
         hasModifiers: false,
         sizes: null,
         defaultSize: null,
@@ -1531,25 +1547,40 @@
 
       container.innerHTML = items.map(item => {
         const sizeBadge = item.sizes && item.sizes.length > 0
-          ? `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[11px] font-medium">${item.sizes.length} cỡ</span>`
+          ? `<span class="bg-slate-900/70 backdrop-blur-xs text-white px-2 py-0.5 rounded-md text-[10px] font-medium tracking-wide shadow-2xs">${item.sizes.length} cỡ</span>`
           : '';
         const itemBadge = item.badge
-          ? `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-1.5 py-0.5 rounded text-[10px] font-semibold">${item.badge}</span>`
+          ? `<span class="bg-white/95 backdrop-blur-xs text-emerald-800 border border-emerald-200/80 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-xs">${item.badge}</span>`
           : '';
+        const iconName = getCategoryIcon(item.categoryId);
 
         return `
           <div data-item-id="${item.id}" onclick="handleItemClick('${item.id}')"
-            class="bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between hover:border-slate-400 active:scale-[0.98] transition cursor-pointer select-none min-h-[110px] shadow-xs hover:shadow-sm">
-            <div>
-              <div class="flex items-start justify-between gap-1">
-                <span class="font-semibold text-slate-900 text-sm leading-snug line-clamp-2">${item.name}</span>
-                ${itemBadge}
+            class="group bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:border-emerald-500 hover:shadow-md active:scale-[0.98] transition-all duration-200 cursor-pointer select-none min-h-[210px] shadow-xs">
+            <!-- Product Image Container -->
+            <div class="relative w-full h-28 sm:h-32 bg-slate-100 overflow-hidden flex-shrink-0">
+              <img src="${item.imageUrl || ''}" alt="${item.name}" loading="lazy"
+                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');" />
+              <div class="${item.imageUrl ? 'hidden' : ''} w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+                <i data-lucide="${iconName}" class="w-8 h-8 stroke-[1.5]"></i>
               </div>
-              <span class="text-xs text-slate-500 mt-1 block">${item.categoryName}</span>
+              ${itemBadge ? `<div class="absolute top-2 left-2 z-10">${itemBadge}</div>` : ''}
+              ${sizeBadge ? `<div class="absolute bottom-2 right-2 z-10">${sizeBadge}</div>` : ''}
             </div>
-            <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-100">
-              <span class="font-mono font-bold text-slate-900 text-sm">${formatVND(item.basePrice)}</span>
-              ${sizeBadge}
+
+            <!-- Product Card Content -->
+            <div class="p-3 flex flex-col justify-between flex-1">
+              <div>
+                <span class="font-semibold text-slate-900 text-sm leading-snug line-clamp-1 group-hover:text-emerald-700 transition-colors">${item.name}</span>
+                <span class="text-xs text-slate-500 mt-0.5 block truncate">${item.categoryName}</span>
+              </div>
+              <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100">
+                <span class="font-mono font-bold text-slate-900 text-sm">${formatVND(item.basePrice)}</span>
+                <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center text-xs font-bold group-hover:bg-emerald-600 group-hover:text-white transition-colors flex-shrink-0">
+                  <i data-lucide="plus" class="w-4 h-4"></i>
+                </span>
+              </div>
             </div>
           </div>
         `;
@@ -1762,8 +1793,25 @@
       // Populate header
       const titleEl = document.getElementById('modifier-modal-title');
       const catEl = document.getElementById('modifier-modal-category');
+      const imgEl = document.getElementById('modifier-modal-img');
+      const iconWrap = document.getElementById('modifier-modal-icon-wrap');
+      const iconEl = document.getElementById('modifier-modal-icon');
+
       if (titleEl) titleEl.textContent = item.name;
       if (catEl) catEl.textContent = item.categoryName || '';
+
+      if (imgEl && item.imageUrl) {
+        imgEl.src = item.imageUrl;
+        imgEl.alt = item.name;
+        imgEl.classList.remove('hidden');
+        if (iconWrap) iconWrap.classList.add('hidden');
+      } else {
+        if (imgEl) imgEl.classList.add('hidden');
+        if (iconWrap) iconWrap.classList.remove('hidden');
+        if (iconEl) {
+          iconEl.setAttribute('data-lucide', getCategoryIcon(item.categoryId));
+        }
+      }
 
       // Render modal body & footer
       renderModifierModalBody();
@@ -3985,9 +4033,12 @@
 
       <!-- Modal Header -->
       <div class="h-16 px-5 border-b border-slate-200 flex items-center justify-between flex-shrink-0 bg-white">
-        <div class="flex items-center gap-2.5 overflow-hidden">
-          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0 font-bold">
-            <i data-lucide="coffee" class="w-5 h-5"></i>
+        <div class="flex items-center gap-3 overflow-hidden">
+          <div class="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+            <img id="modifier-modal-img" src="" alt="" class="w-full h-full object-cover hidden" onerror="this.classList.add('hidden'); if (this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');" />
+            <div id="modifier-modal-icon-wrap" class="w-full h-full flex items-center justify-center text-emerald-700 bg-emerald-50">
+              <i id="modifier-modal-icon" data-lucide="coffee" class="w-5 h-5"></i>
+            </div>
           </div>
           <div class="truncate">
             <div class="flex items-center gap-2">
