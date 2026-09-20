@@ -149,9 +149,33 @@
     <!-- --------------------------------------------------------------------- -->
     <section id="catalog-area" class="w-[62%] border-r border-slate-200 flex flex-col bg-slate-50 overflow-hidden relative">
       
-      <!-- Category Filter Pills Bar (Hook for Task 2) -->
+      <!-- Category Filter Pills Bar (Takeaway / Dine-in Catalog View) -->
       <div id="category-pills-bar" class="bg-white border-b border-slate-200 px-4 py-2.5 flex-shrink-0 flex items-center gap-2 overflow-x-auto no-scrollbar">
         <!-- Will be rendered dynamically by state subscribers -->
+      </div>
+
+      <!-- Dine-in Active Catalog Context Banner (Visible when in dinein mode and viewing catalog) -->
+      <div id="dinein-catalog-banner" class="hidden bg-indigo-50 border-b border-indigo-200 px-4 py-2 flex-shrink-0 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse flex-shrink-0"></span>
+          <span id="dinein-catalog-banner-text" class="text-xs md:text-sm font-semibold text-indigo-900 truncate">Đang chọn món cho bàn</span>
+        </div>
+        <button type="button" onclick="setDineInView('floor')" class="min-h-[44px] h-11 px-3.5 rounded-xl bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1.5 shadow-2xs select-none flex-shrink-0">
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+          <span>Quay lại Sơ đồ bàn</span>
+        </button>
+      </div>
+
+      <!-- Floor Plan Zone Filter Pills Bar (Dine-in Floor Plan View) -->
+      <div id="floor-pills-bar" class="hidden bg-white border-b border-slate-200 px-4 py-2.5 flex-shrink-0 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+        <div id="floor-zone-pills-container" class="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <!-- Zone filter pills rendered dynamically by renderFloorPlan() -->
+        </div>
+        <button id="btn-toggle-dinein-catalog" type="button" onclick="setDineInView('catalog')"
+          class="min-h-[48px] h-12 px-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 font-semibold text-xs md:text-sm flex items-center gap-2 select-none shadow-2xs flex-shrink-0">
+          <i data-lucide="book-open" class="w-4 h-4"></i>
+          <span>Xem thực đơn</span>
+        </button>
       </div>
 
       <!-- Menu Items Grid / Floor Plan Container (Hook for Task 2 & Task 6) -->
@@ -161,16 +185,16 @@
           <!-- Item Cards will be populated here -->
         </div>
 
-        <!-- Dine-in Floor Layout Placeholder (Hidden by default in takeaway mode) -->
+        <!-- Dine-in Floor Layout Container -->
         <div id="floor-layout-container" class="hidden h-full flex flex-col">
-          <!-- Floor layout will be populated here in Task 6 -->
+          <!-- Table grid rendered dynamically by renderFloorPlan() -->
         </div>
       </div>
 
       <!-- Bottom Status Strip for Catalog Area -->
       <div class="h-8 bg-white border-t border-slate-200 px-4 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
         <div class="flex items-center gap-2">
-          <span>Tổng số món:</span>
+          <span id="catalog-total-items-label">Tổng số món:</span>
           <span id="catalog-total-items" class="font-mono font-bold text-slate-800">11</span>
         </div>
         <div class="flex items-center gap-4">
@@ -241,181 +265,195 @@
         </div>
       </div>
 
-      <!-- Payment & Fast Checkout Action Bar (Task 5) -->
+      <!-- Payment & Fast Checkout Action Bar (Task 5 & 6) -->
       <div id="bill-actions-container" class="border-t border-slate-200 bg-slate-50 p-4 space-y-3 flex-shrink-0">
-        <!-- Payment Method Tabs (>= 48px height) -->
-        <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80">
-          <!-- Tiền mặt Tab -->
-          <button id="tab-payment-cash" type="button" onclick="selectPaymentMethod('cash')"
-            class="min-h-[48px] h-12 px-3 rounded-xl font-semibold text-xs md:text-sm transition-all shadow-sm bg-slate-900 text-white flex items-center justify-center gap-2 select-none">
-            <i data-lucide="banknote" class="w-4 h-4"></i>
-            <span>Tiền mặt (Cash)</span>
-          </button>
-
-          <!-- Chuyển khoản VietQR Tab -->
-          <button id="tab-payment-qr" type="button" onclick="selectPaymentMethod('qr')"
-            class="min-h-[48px] h-12 px-3 rounded-xl font-medium text-xs md:text-sm transition-all text-slate-700 hover:text-slate-900 hover:bg-white/80 border border-transparent flex items-center justify-center gap-2 select-none">
-            <i data-lucide="qr-code" class="w-4 h-4"></i>
-            <span>Chuyển khoản VietQR</span>
-          </button>
+        
+        <!-- Dine-in Specific Ordering Actions (Submit Round, Settle, etc.) -->
+        <div id="dinein-table-actions" class="hidden space-y-2">
+          <!-- Dynamically populated by renderDineInActions() -->
         </div>
 
-        <!-- 1. Cash Payment Panel -->
-        <div id="payment-cash-panel" class="space-y-2.5">
-          <!-- Dynamic Cash Denomination Buttons Grid -->
-          <div id="denomination-buttons-container" class="space-y-1.5">
-            <div class="flex items-center justify-between text-xs font-semibold text-slate-600 px-0.5">
-              <span>Gợi ý tiền khách đưa</span>
-              <span class="text-[11px] text-slate-400 font-normal">Chạm để chọn nhanh</span>
-            </div>
-            <div id="denomination-buttons-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-              <!-- Rendered dynamically by renderQuickPayment() -->
-            </div>
-          </div>
-
-          <!-- Custom Amount Input (>= 48px height) -->
-          <div class="relative">
-            <input id="input-custom-tendered" type="text" inputmode="numeric" autocomplete="off"
-              placeholder="Nhập số tiền khác (vd: 80.000)..."
-              class="w-full min-h-[48px] h-12 pl-3.5 pr-14 rounded-xl bg-white border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-xs md:text-sm font-mono font-medium outline-none transition text-slate-800 placeholder-slate-400"
-              oninput="handleCustomTenderedInput(this.value)">
-            <div class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none">
-              <span class="text-xs font-mono font-bold text-slate-400">VND</span>
-            </div>
-          </div>
-
-          <!-- Live Change Due Box -->
-          <div id="change-due-box" class="bg-emerald-50 border border-emerald-200/90 rounded-xl px-4 py-3 flex items-center justify-between shadow-2xs">
-            <div class="flex flex-col">
-              <span class="text-xs font-bold text-emerald-900 leading-tight">Tiền thừa trả khách:</span>
-              <span id="change-due-subtext" class="text-[11px] font-medium text-emerald-700 leading-tight mt-0.5">Khách đưa: 0 đ</span>
-            </div>
-            <span id="change-due-amount" class="font-mono font-extrabold text-xl md:text-2xl text-emerald-800 tabular-nums">0 đ</span>
-          </div>
-        </div>
-
-        <!-- 2. VietQR Payment Panel (Hidden by default) -->
-        <div id="payment-qr-panel" class="hidden space-y-2.5">
-          <div class="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs flex flex-col items-center gap-2.5 text-center">
-            
-            <!-- Bank & Account Header -->
-            <div class="w-full flex items-center justify-between px-1 border-b border-slate-100 pb-2">
-              <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-lg bg-blue-700 text-white font-bold text-xs flex items-center justify-center tracking-tighter">
-                  MB
-                </div>
-                <div class="text-left">
-                  <span class="text-xs font-bold text-slate-900 block leading-tight">MB Bank</span>
-                  <span class="text-[10px] text-slate-500 font-medium">Ngân hàng Quân Đội</span>
-                </div>
-              </div>
-              <div class="text-right">
-                <span class="text-[11px] font-mono font-bold text-slate-900 block leading-tight">STK: 999988888</span>
-                <span class="text-[10px] text-slate-600 font-medium">Chủ TK: POS CAFE</span>
-              </div>
-            </div>
-
-            <!-- Dynamic QR Code Container with Crisp Vector Graphic & Image Fallback -->
-            <div class="relative w-40 h-40 bg-white p-2 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center group">
-              <!-- Live VietQR API image with instant SVG fallback -->
-              <img id="vietqr-image" alt="VietQR Code"
-                class="w-full h-full object-contain rounded-lg"
-                src="https://api.vietqr.io/image/970422-999988888-print.png?amount=0&addInfo=POS14&accountName=POS%20CAFE"
-                onerror="this.classList.add('hidden'); document.getElementById('vietqr-svg-fallback').classList.remove('hidden');"
-                onload="document.getElementById('vietqr-svg-fallback').classList.add('hidden'); this.classList.remove('hidden');">
-              
-              <!-- Zero-dependency Offline SVG Fallback QR -->
-              <svg id="vietqr-svg-fallback" class="w-full h-full text-slate-900 hidden" viewBox="0 0 100 100" fill="currentColor">
-                <rect width="100" height="100" fill="#ffffff" />
-                <rect x="10" y="10" width="24" height="24" rx="3" fill="#0f172a" />
-                <rect x="14" y="14" width="16" height="16" rx="2" fill="#ffffff" />
-                <rect x="18" y="18" width="8" height="8" rx="1.5" fill="#0f172a" />
-                <rect x="66" y="10" width="24" height="24" rx="3" fill="#0f172a" />
-                <rect x="70" y="14" width="16" height="16" rx="2" fill="#ffffff" />
-                <rect x="74" y="18" width="8" height="8" rx="1.5" fill="#0f172a" />
-                <rect x="10" y="66" width="24" height="24" rx="3" fill="#0f172a" />
-                <rect x="14" y="70" width="16" height="16" rx="2" fill="#ffffff" />
-                <rect x="18" y="74" width="8" height="8" rx="1.5" fill="#0f172a" />
-                <rect x="38" y="14" width="4" height="4" fill="#0f172a" />
-                <rect x="46" y="14" width="4" height="4" fill="#0f172a" />
-                <rect x="54" y="14" width="4" height="4" fill="#0f172a" />
-                <rect x="14" y="38" width="4" height="4" fill="#0f172a" />
-                <rect x="14" y="46" width="4" height="4" fill="#0f172a" />
-                <rect x="14" y="54" width="4" height="4" fill="#0f172a" />
-                <rect x="40" y="24" width="4" height="4" fill="#0f172a" />
-                <rect x="48" y="24" width="4" height="4" fill="#0f172a" />
-                <rect x="56" y="24" width="4" height="4" fill="#0f172a" />
-                <rect x="38" y="36" width="4" height="4" fill="#0f172a" />
-                <rect x="46" y="36" width="4" height="4" fill="#0f172a" />
-                <rect x="58" y="36" width="4" height="4" fill="#0f172a" />
-                <rect x="38" y="44" width="4" height="4" fill="#0f172a" />
-                <rect x="54" y="44" width="4" height="4" fill="#0f172a" />
-                <rect x="42" y="52" width="4" height="4" fill="#0f172a" />
-                <rect x="50" y="52" width="4" height="4" fill="#0f172a" />
-                <rect x="58" y="52" width="4" height="4" fill="#0f172a" />
-                <rect x="68" y="40" width="4" height="4" fill="#0f172a" />
-                <rect x="76" y="40" width="4" height="4" fill="#0f172a" />
-                <rect x="84" y="40" width="4" height="4" fill="#0f172a" />
-                <rect x="72" y="48" width="4" height="4" fill="#0f172a" />
-                <rect x="80" y="48" width="4" height="4" fill="#0f172a" />
-                <rect x="68" y="56" width="4" height="4" fill="#0f172a" />
-                <rect x="76" y="56" width="4" height="4" fill="#0f172a" />
-                <rect x="84" y="56" width="4" height="4" fill="#0f172a" />
-                <rect x="40" y="68" width="4" height="4" fill="#0f172a" />
-                <rect x="48" y="68" width="4" height="4" fill="#0f172a" />
-                <rect x="56" y="68" width="4" height="4" fill="#0f172a" />
-                <rect x="38" y="76" width="4" height="4" fill="#0f172a" />
-                <rect x="46" y="76" width="4" height="4" fill="#0f172a" />
-                <rect x="54" y="76" width="4" height="4" fill="#0f172a" />
-                <rect x="42" y="84" width="4" height="4" fill="#0f172a" />
-                <rect x="50" y="84" width="4" height="4" fill="#0f172a" />
-                <rect x="58" y="84" width="4" height="4" fill="#0f172a" />
-                <rect x="68" y="68" width="4" height="4" fill="#0f172a" />
-                <rect x="80" y="68" width="4" height="4" fill="#0f172a" />
-                <rect x="72" y="76" width="4" height="4" fill="#0f172a" />
-                <rect x="84" y="76" width="4" height="4" fill="#0f172a" />
-                <rect x="68" y="84" width="4" height="4" fill="#0f172a" />
-                <rect x="76" y="84" width="4" height="4" fill="#0f172a" />
-                <rect x="40" y="40" width="20" height="20" rx="4" fill="#059669" />
-                <text x="50" y="53" font-family="'Outfit', sans-serif" font-size="8" font-weight="bold" fill="#ffffff" text-anchor="middle">QR</text>
-              </svg>
-            </div>
-
-            <!-- Payment Amount & Transfer Note -->
-            <div class="w-full bg-slate-50 rounded-xl p-2 border border-slate-100 flex items-center justify-between text-xs">
-              <div class="text-left">
-                <span class="text-[10px] text-slate-500 font-medium block">Số tiền:</span>
-                <span id="vietqr-amount-text" class="font-mono font-bold text-emerald-700 text-sm">0 đ</span>
-              </div>
-              <div class="text-right">
-                <span class="text-[10px] text-slate-500 font-medium block">Nội dung CK:</span>
-                <span id="vietqr-memo-text" class="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">POS14</span>
-              </div>
-            </div>
-
-            <!-- Caution Notice -->
-            <div class="w-full py-2 px-2.5 bg-amber-50 border border-amber-200/80 rounded-xl flex items-center justify-center gap-1.5 text-[11px] font-semibold text-amber-800">
-              <i data-lucide="alert-circle" class="w-3.5 h-3.5 flex-shrink-0 text-amber-600"></i>
-              <span>Vui lòng kiểm tra thông báo tiền vào trước khi xác nhận</span>
-            </div>
-
-            <!-- VietQR Confirmation Button (>= 48px height) -->
-            <button id="btn-qr-confirm" type="button" onclick="completeCheckout()"
-              class="w-full min-h-[48px] h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs md:text-sm flex items-center justify-center gap-2 shadow-xs transition select-none">
-              <i data-lucide="check-circle" class="w-4 h-4"></i>
-              <span>Xác nhận đã nhận &amp; Gửi pha chế</span>
+        <!-- Payment Settlement Drawer / Panel (Takeaway or Dine-in Settlement) -->
+        <div id="payment-settlement-drawer" class="space-y-3">
+          <!-- Settle Return Bar (Visible during dine-in table settlement) -->
+          <div id="dinein-settle-header" class="hidden flex items-center justify-between pb-1">
+            <span id="dinein-settle-title" class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+              <span>Thanh toán bàn</span>
+            </span>
+            <button type="button" onclick="cancelTableSettlement()" class="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 min-h-[36px] px-2 rounded-lg hover:bg-slate-200 transition">
+              <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+              <span>Quay lại gọi món</span>
             </button>
           </div>
-        </div>
 
-        <!-- 3. Primary 1-Tap Checkout CTA Button (>= 48px touch target) -->
-        <button id="btn-checkout-cta" type="button" onclick="completeCheckout()"
-          class="w-full min-h-[50px] rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:hover:bg-slate-300 disabled:active:scale-100 text-white font-bold text-sm md:text-base flex items-center justify-center gap-2 shadow-sm transition select-none"
-          disabled>
-          <i data-lucide="check-circle" class="w-5 h-5"></i>
-          <span id="btn-checkout-cta-text">THU TIỀN &amp; GỬI PHA CHẾ</span>
-          <kbd class="ml-1 px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-800/60 text-emerald-100 border border-emerald-400/20">Enter</kbd>
-        </button>
+          <!-- Payment Method Tabs (>= 48px height) -->
+          <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80">
+            <!-- Tiền mặt Tab -->
+            <button id="tab-payment-cash" type="button" onclick="selectPaymentMethod('cash')"
+              class="min-h-[48px] h-12 px-3 rounded-xl font-semibold text-xs md:text-sm transition-all shadow-sm bg-slate-900 text-white flex items-center justify-center gap-2 select-none">
+              <i data-lucide="banknote" class="w-4 h-4"></i>
+              <span>Tiền mặt (Cash)</span>
+            </button>
+
+            <!-- Chuyển khoản VietQR Tab -->
+            <button id="tab-payment-qr" type="button" onclick="selectPaymentMethod('qr')"
+              class="min-h-[48px] h-12 px-3 rounded-xl font-medium text-xs md:text-sm transition-all text-slate-700 hover:text-slate-900 hover:bg-white/80 border border-transparent flex items-center justify-center gap-2 select-none">
+              <i data-lucide="qr-code" class="w-4 h-4"></i>
+              <span>Chuyển khoản VietQR</span>
+            </button>
+          </div>
+
+          <!-- 1. Cash Payment Panel -->
+          <div id="payment-cash-panel" class="space-y-2.5">
+            <!-- Dynamic Cash Denomination Buttons Grid -->
+            <div id="denomination-buttons-container" class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs font-semibold text-slate-600 px-0.5">
+                <span>Gợi ý tiền khách đưa</span>
+                <span class="text-[11px] text-slate-400 font-normal">Chạm để chọn nhanh</span>
+              </div>
+              <div id="denomination-buttons-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                <!-- Rendered dynamically by renderQuickPayment() -->
+              </div>
+            </div>
+
+            <!-- Custom Amount Input (>= 48px height) -->
+            <div class="relative">
+              <input id="input-custom-tendered" type="text" inputmode="numeric" autocomplete="off"
+                placeholder="Nhập số tiền khác (vd: 80.000)..."
+                class="w-full min-h-[48px] h-12 pl-3.5 pr-14 rounded-xl bg-white border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-xs md:text-sm font-mono font-medium outline-none transition text-slate-800 placeholder-slate-400"
+                oninput="handleCustomTenderedInput(this.value)">
+              <div class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none">
+                <span class="text-xs font-mono font-bold text-slate-400">VND</span>
+              </div>
+            </div>
+
+            <!-- Live Change Due Box -->
+            <div id="change-due-box" class="bg-emerald-50 border border-emerald-200/90 rounded-xl px-4 py-3 flex items-center justify-between shadow-2xs">
+              <div class="flex flex-col">
+                <span class="text-xs font-bold text-emerald-900 leading-tight">Tiền thừa trả khách:</span>
+                <span id="change-due-subtext" class="text-[11px] font-medium text-emerald-700 leading-tight mt-0.5">Khách đưa: 0 đ</span>
+              </div>
+              <span id="change-due-amount" class="font-mono font-extrabold text-xl md:text-2xl text-emerald-800 tabular-nums">0 đ</span>
+            </div>
+          </div>
+
+          <!-- 2. VietQR Payment Panel (Hidden by default) -->
+          <div id="payment-qr-panel" class="hidden space-y-2.5">
+            <div class="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs flex flex-col items-center gap-2.5 text-center">
+              
+              <!-- Bank & Account Header -->
+              <div class="w-full flex items-center justify-between px-1 border-b border-slate-100 pb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-lg bg-blue-700 text-white font-bold text-xs flex items-center justify-center tracking-tighter">
+                    MB
+                  </div>
+                  <div class="text-left">
+                    <span class="text-xs font-bold text-slate-900 block leading-tight">MB Bank</span>
+                    <span class="text-[10px] text-slate-500 font-medium">Ngân hàng Quân Đội</span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="text-[11px] font-mono font-bold text-slate-900 block leading-tight">STK: 999988888</span>
+                  <span class="text-[10px] text-slate-600 font-medium">Chủ TK: POS CAFE</span>
+                </div>
+              </div>
+
+              <!-- Dynamic QR Code Container with Crisp Vector Graphic & Image Fallback -->
+              <div class="relative w-40 h-40 bg-white p-2 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center group">
+                <!-- Live VietQR API image with instant SVG fallback -->
+                <img id="vietqr-image" alt="VietQR Code"
+                  class="w-full h-full object-contain rounded-lg"
+                  src="https://api.vietqr.io/image/970422-999988888-print.png?amount=0&addInfo=POS14&accountName=POS%20CAFE"
+                  onerror="this.classList.add('hidden'); document.getElementById('vietqr-svg-fallback').classList.remove('hidden');"
+                  onload="document.getElementById('vietqr-svg-fallback').classList.add('hidden'); this.classList.remove('hidden');">
+                
+                <!-- Zero-dependency Offline SVG Fallback QR -->
+                <svg id="vietqr-svg-fallback" class="w-full h-full text-slate-900 hidden" viewBox="0 0 100 100" fill="currentColor">
+                  <rect width="100" height="100" fill="#ffffff" />
+                  <rect x="10" y="10" width="24" height="24" rx="3" fill="#0f172a" />
+                  <rect x="14" y="14" width="16" height="16" rx="2" fill="#ffffff" />
+                  <rect x="18" y="18" width="8" height="8" rx="1.5" fill="#0f172a" />
+                  <rect x="66" y="10" width="24" height="24" rx="3" fill="#0f172a" />
+                  <rect x="70" y="14" width="16" height="16" rx="2" fill="#ffffff" />
+                  <rect x="74" y="18" width="8" height="8" rx="1.5" fill="#0f172a" />
+                  <rect x="10" y="66" width="24" height="24" rx="3" fill="#0f172a" />
+                  <rect x="14" y="70" width="16" height="16" rx="2" fill="#ffffff" />
+                  <rect x="18" y="74" width="8" height="8" rx="1.5" fill="#0f172a" />
+                  <rect x="38" y="14" width="4" height="4" fill="#0f172a" />
+                  <rect x="46" y="14" width="4" height="4" fill="#0f172a" />
+                  <rect x="54" y="14" width="4" height="4" fill="#0f172a" />
+                  <rect x="14" y="38" width="4" height="4" fill="#0f172a" />
+                  <rect x="14" y="46" width="4" height="4" fill="#0f172a" />
+                  <rect x="14" y="54" width="4" height="4" fill="#0f172a" />
+                  <rect x="40" y="24" width="4" height="4" fill="#0f172a" />
+                  <rect x="48" y="24" width="4" height="4" fill="#0f172a" />
+                  <rect x="56" y="24" width="4" height="4" fill="#0f172a" />
+                  <rect x="38" y="36" width="4" height="4" fill="#0f172a" />
+                  <rect x="46" y="36" width="4" height="4" fill="#0f172a" />
+                  <rect x="58" y="36" width="4" height="4" fill="#0f172a" />
+                  <rect x="38" y="44" width="4" height="4" fill="#0f172a" />
+                  <rect x="54" y="44" width="4" height="4" fill="#0f172a" />
+                  <rect x="42" y="52" width="4" height="4" fill="#0f172a" />
+                  <rect x="50" y="52" width="4" height="4" fill="#0f172a" />
+                  <rect x="58" y="52" width="4" height="4" fill="#0f172a" />
+                  <rect x="68" y="40" width="4" height="4" fill="#0f172a" />
+                  <rect x="76" y="40" width="4" height="4" fill="#0f172a" />
+                  <rect x="84" y="40" width="4" height="4" fill="#0f172a" />
+                  <rect x="72" y="48" width="4" height="4" fill="#0f172a" />
+                  <rect x="80" y="48" width="4" height="4" fill="#0f172a" />
+                  <rect x="68" y="56" width="4" height="4" fill="#0f172a" />
+                  <rect x="76" y="56" width="4" height="4" fill="#0f172a" />
+                  <rect x="84" y="56" width="4" height="4" fill="#0f172a" />
+                  <rect x="40" y="68" width="4" height="4" fill="#0f172a" />
+                  <rect x="48" y="68" width="4" height="4" fill="#0f172a" />
+                  <rect x="56" y="68" width="4" height="4" fill="#0f172a" />
+                  <rect x="38" y="76" width="4" height="4" fill="#0f172a" />
+                  <rect x="46" y="76" width="4" height="4" fill="#0f172a" />
+                  <rect x="54" y="76" width="4" height="4" fill="#0f172a" />
+                  <rect x="42" y="84" width="4" height="4" fill="#0f172a" />
+                  <rect x="50" y="84" width="4" height="4" fill="#0f172a" />
+                  <rect x="58" y="84" width="4" height="4" fill="#0f172a" />
+                  <rect x="68" y="68" width="4" height="4" fill="#0f172a" />
+                  <rect x="80" y="68" width="4" height="4" fill="#0f172a" />
+                  <rect x="72" y="76" width="4" height="4" fill="#0f172a" />
+                  <rect x="84" y="76" width="4" height="4" fill="#0f172a" />
+                  <rect x="68" y="84" width="4" height="4" fill="#0f172a" />
+                  <rect x="76" y="84" width="4" height="4" fill="#0f172a" />
+                  <rect x="40" y="40" width="20" height="20" rx="4" fill="#059669" />
+                  <text x="50" y="53" font-family="'Outfit', sans-serif" font-size="8" font-weight="bold" fill="#ffffff" text-anchor="middle">QR</text>
+                </svg>
+              </div>
+
+              <!-- Payment Amount & Transfer Note -->
+              <div class="w-full bg-slate-50 rounded-xl p-2 border border-slate-100 flex items-center justify-between text-xs">
+                <div class="text-left">
+                  <span class="text-[10px] text-slate-500 font-medium block">Số tiền:</span>
+                  <span id="vietqr-amount-text" class="font-mono font-bold text-emerald-700 text-sm">0 đ</span>
+                </div>
+                <div class="text-right">
+                  <span class="text-[10px] text-slate-500 font-medium block">Nội dung CK:</span>
+                  <span id="vietqr-memo-text" class="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">POS14</span>
+                </div>
+              </div>
+
+              <!-- Caution Notice -->
+              <div class="w-full py-2 px-2.5 bg-amber-50 border border-amber-200/80 rounded-xl flex items-center justify-center gap-1.5 text-[11px] font-semibold text-amber-800">
+                <i data-lucide="alert-circle" class="w-3.5 h-3.5 flex-shrink-0 text-amber-600"></i>
+                <span>Vui lòng kiểm tra thông báo tiền vào trước khi xác nhận</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Primary 1-Tap Checkout CTA Button (>= 48px touch target) -->
+          <button id="btn-checkout-cta" type="button" onclick="completeCheckout()"
+            class="w-full min-h-[50px] rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:hover:bg-slate-300 disabled:active:scale-100 text-white font-bold text-sm md:text-base flex items-center justify-center gap-2 shadow-sm transition select-none"
+            disabled>
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+            <span id="btn-checkout-cta-text">THU TIỀN &amp; GỬI PHA CHẾ</span>
+            <kbd class="ml-1 px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-800/60 text-emerald-100 border border-emerald-400/20">Enter</kbd>
+          </button>
+        </div>
       </div>
 
     </aside>
@@ -634,17 +672,227 @@
     const INITIAL_TABLES = [
       // Tầng 1 (T01 - T08)
       { id: 'T01', name: 'Bàn 01', zone: 'Tầng 1', seats: 2, status: 'available', activeSession: null },
-      { id: 'T02', name: 'Bàn 02', zone: 'Tầng 1', seats: 4, status: 'occupied', activeSession: { startTime: '10:15', duration: '42p', itemsCount: 3, totalVND: 119000, roundNumber: 2 } },
+      {
+        id: 'T02',
+        name: 'Bàn 02',
+        zone: 'Tầng 1',
+        seats: 4,
+        status: 'occupied',
+        activeSession: {
+          startTime: '10:15',
+          duration: '42 phút',
+          itemsCount: 3,
+          totalVND: 119000,
+          roundNumber: 2,
+          items: [
+            {
+              id: 'ci_t02_1',
+              menuItemId: 'bacxiu',
+              name: 'Bạc xỉu',
+              sizeId: 'M',
+              sizeName: 'Size M',
+              basePriceVND: 39000,
+              unitPrice: 39000,
+              quantity: 1,
+              lineTotalVND: 39000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [
+                { group: 'sugar', name: 'Đường', value: '100% (Mặc định)' },
+                { group: 'ice', name: 'Đá', value: '100% đá' }
+              ],
+              preparationNote: ''
+            },
+            {
+              id: 'ci_t02_2',
+              menuItemId: 'tiramisu',
+              name: 'Tiramisu',
+              sizeId: null,
+              sizeName: '',
+              basePriceVND: 40000,
+              unitPrice: 40000,
+              quantity: 2,
+              lineTotalVND: 80000,
+              round: 2,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: 'Thêm bột cacao'
+            }
+          ]
+        }
+      },
       { id: 'T03', name: 'Bàn 03', zone: 'Tầng 1', seats: 4, status: 'available', activeSession: null },
-      { id: 'T04', name: 'Bàn 04', zone: 'Tầng 1', seats: 6, status: 'billing', activeSession: { startTime: '09:50', duration: '67p', itemsCount: 5, totalVND: 215000, roundNumber: 1 } },
+      {
+        id: 'T04',
+        name: 'Bàn 04',
+        zone: 'Tầng 1',
+        seats: 6,
+        status: 'billing',
+        activeSession: {
+          startTime: '09:50',
+          duration: '67 phút',
+          itemsCount: 5,
+          totalVND: 215000,
+          roundNumber: 1,
+          items: [
+            {
+              id: 'ci_t04_1',
+              menuItemId: 'freeze_tx',
+              name: 'Freeze trà xanh',
+              sizeId: 'M',
+              sizeName: 'Size M',
+              basePriceVND: 52000,
+              unitPrice: 52000,
+              quantity: 2,
+              lineTotalVND: 104000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [
+                { group: 'sugar', name: 'Đường', value: '70%' },
+                { group: 'ice', name: 'Đá', value: '50% đá' }
+              ],
+              preparationNote: ''
+            },
+            {
+              id: 'ci_t04_2',
+              menuItemId: 'bacxiu',
+              name: 'Bạc xỉu',
+              sizeId: 'M',
+              sizeName: 'Size M',
+              basePriceVND: 39000,
+              unitPrice: 39000,
+              quantity: 1,
+              lineTotalVND: 39000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: ''
+            },
+            {
+              id: 'ci_t04_3',
+              menuItemId: 'croissant_bt',
+              name: 'Croissant bơ tỏi',
+              sizeId: null,
+              sizeName: '',
+              basePriceVND: 32000,
+              unitPrice: 32000,
+              quantity: 1,
+              lineTotalVND: 32000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: 'Làm nóng giòn'
+            },
+            {
+              id: 'ci_t04_4',
+              menuItemId: 'tiramisu',
+              name: 'Tiramisu',
+              sizeId: null,
+              sizeName: '',
+              basePriceVND: 40000,
+              unitPrice: 40000,
+              quantity: 1,
+              lineTotalVND: 40000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: ''
+            }
+          ]
+        }
+      },
       { id: 'T05', name: 'Bàn 05', zone: 'Tầng 1', seats: 2, status: 'available', activeSession: null },
       { id: 'T06', name: 'Bàn 06', zone: 'Tầng 1', seats: 4, status: 'available', activeSession: null },
-      { id: 'T07', name: 'Bàn 07', zone: 'Tầng 1', seats: 4, status: 'occupied', activeSession: { startTime: '10:30', duration: '27p', itemsCount: 2, totalVND: 70000, roundNumber: 1 } },
+      {
+        id: 'T07',
+        name: 'Bàn 07',
+        zone: 'Tầng 1',
+        seats: 4,
+        status: 'occupied',
+        activeSession: {
+          startTime: '10:30',
+          duration: '27 phút',
+          itemsCount: 2,
+          totalVND: 70000,
+          roundNumber: 1,
+          items: [
+            {
+              id: 'ci_t07_1',
+              menuItemId: 'cfsd',
+              name: 'Cà phê sữa đá',
+              sizeId: 'M',
+              sizeName: 'Size M',
+              basePriceVND: 35000,
+              unitPrice: 35000,
+              quantity: 2,
+              lineTotalVND: 70000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: ''
+            }
+          ]
+        }
+      },
       { id: 'T08', name: 'Bàn 08', zone: 'Tầng 1', seats: 8, status: 'available', activeSession: null },
 
       // Tầng 2 (T09 - T14)
       { id: 'T09', name: 'Bàn 09', zone: 'Tầng 2', seats: 4, status: 'available', activeSession: null },
-      { id: 'T10', name: 'Bàn 10', zone: 'Tầng 2', seats: 4, status: 'occupied', activeSession: { startTime: '10:20', duration: '37p', itemsCount: 4, totalVND: 180000, roundNumber: 1 } },
+      {
+        id: 'T10',
+        name: 'Bàn 10',
+        zone: 'Tầng 2',
+        seats: 4,
+        status: 'occupied',
+        activeSession: {
+          startTime: '10:20',
+          duration: '37 phút',
+          itemsCount: 4,
+          totalVND: 180000,
+          roundNumber: 1,
+          items: [
+            {
+              id: 'ci_t10_1',
+              menuItemId: 'tdcs',
+              name: 'Trà đào cam sả',
+              sizeId: 'M',
+              sizeName: 'Size M',
+              basePriceVND: 45000,
+              unitPrice: 45000,
+              quantity: 2,
+              lineTotalVND: 90000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: ''
+            },
+            {
+              id: 'ci_t10_2',
+              menuItemId: 'coldbrew_cs',
+              name: 'Cold Brew cam sả',
+              sizeId: 'M',
+              sizeName: 'Size M',
+              basePriceVND: 45000,
+              unitPrice: 45000,
+              quantity: 2,
+              lineTotalVND: 90000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: ''
+            }
+          ]
+        }
+      },
       { id: 'T11', name: 'Bàn 11', zone: 'Tầng 2', seats: 2, status: 'available', activeSession: null },
       { id: 'T12', name: 'Bàn 12', zone: 'Tầng 2', seats: 2, status: 'available', activeSession: null },
       { id: 'T13', name: 'Bàn 13', zone: 'Tầng 2', seats: 6, status: 'available', activeSession: null },
@@ -652,7 +900,54 @@
 
       // Sân vườn (S01 - S05)
       { id: 'S01', name: 'Sân 01', zone: 'Sân vườn', seats: 4, status: 'available', activeSession: null },
-      { id: 'S02', name: 'Sân 02', zone: 'Sân vườn', seats: 4, status: 'occupied', activeSession: { startTime: '10:35', duration: '22p', itemsCount: 2, totalVND: 84000, roundNumber: 1 } },
+      {
+        id: 'S02',
+        name: 'Sân 02',
+        zone: 'Sân vườn',
+        seats: 4,
+        status: 'occupied',
+        activeSession: {
+          startTime: '10:35',
+          duration: '22 phút',
+          itemsCount: 2,
+          totalVND: 84000,
+          roundNumber: 1,
+          items: [
+            {
+              id: 'ci_s02_1',
+              menuItemId: 'tdcs',
+              name: 'Trà đào cam sả',
+              sizeId: 'M',
+              sizeName: 'Size M',
+              basePriceVND: 45000,
+              unitPrice: 45000,
+              quantity: 1,
+              lineTotalVND: 45000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: ''
+            },
+            {
+              id: 'ci_s02_2',
+              menuItemId: 'bacxiu',
+              name: 'Bạc xỉu',
+              sizeId: 'M',
+              sizeName: 'Size M',
+              basePriceVND: 39000,
+              unitPrice: 39000,
+              quantity: 1,
+              lineTotalVND: 39000,
+              round: 1,
+              sentToKitchen: true,
+              isNewRound: false,
+              modifiers: [],
+              preparationNote: ''
+            }
+          ]
+        }
+      },
       { id: 'S03', name: 'Sân 03', zone: 'Sân vườn', seats: 4, status: 'available', activeSession: null },
       { id: 'S04', name: 'Sân 04', zone: 'Sân vườn', seats: 6, status: 'available', activeSession: null },
       { id: 'S05', name: 'Sân 05', zone: 'Sân vườn', seats: 8, status: 'available', activeSession: null }
@@ -678,6 +973,11 @@
       // Order counters and session identifiers
       serviceNumber: 14,
       selectedTable: null,
+
+      // Dine-in navigation, zones & view states (Task 6)
+      activeTableZone: 'all', // 'all' | 'Tầng 1' | 'Tầng 2' | 'Sân vườn'
+      dineInView: 'floor',    // 'floor' | 'catalog'
+      isSettlingTable: false,
 
       // Catalog navigation & filters
       activeCategory: 'all',
@@ -717,7 +1017,50 @@
         if (newMode !== 'takeaway' && newMode !== 'dinein') return;
         if (this.mode === newMode) return;
         this.mode = newMode;
+        if (newMode === 'takeaway') {
+          this.selectedTable = null;
+          this.isSettlingTable = false;
+        } else {
+          this.dineInView = 'floor';
+          this.isSettlingTable = false;
+        }
         this.notify();
+      },
+
+      setTableZone(zone) {
+        this.activeTableZone = zone || 'all';
+        this.notify();
+      },
+
+      setDineInView(view) {
+        if (view !== 'floor' && view !== 'catalog') return;
+        this.dineInView = view;
+        this.notify();
+      },
+
+      toggleDineInView() {
+        this.dineInView = this.dineInView === 'floor' ? 'catalog' : 'floor';
+        this.notify();
+      },
+
+      selectTable(tableId) {
+        return selectTable(tableId);
+      },
+
+      submitTableRound() {
+        return submitTableRound();
+      },
+
+      settleTableBill(tableId) {
+        return settleTableBill(tableId);
+      },
+
+      cancelTableSettlement() {
+        return cancelTableSettlement();
+      },
+
+      renderFloorPlan() {
+        return renderFloorPlan(this);
       },
 
       setCategory(catId) {
@@ -868,14 +1211,23 @@
           }
 
           if (table) {
-            billTitle.textContent = `Bàn ${table.id} (${table.zone})`;
+            billTitle.textContent = `${table.name || ('Bàn ' + table.id)} (${table.zone})`;
             if (billBadge) {
-              billBadge.textContent = 'Tại bàn';
-              billBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 flex-shrink-0';
+              if (table.status === 'billing') {
+                billBadge.textContent = 'Chờ thanh toán';
+                billBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex-shrink-0';
+              } else if (table.status === 'occupied') {
+                billBadge.textContent = 'Đang ngồi';
+                billBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 flex-shrink-0';
+              } else {
+                billBadge.textContent = 'Trống';
+                billBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 flex-shrink-0';
+              }
             }
             if (billSubtitle) {
-              const dur = table.activeSession && table.activeSession.duration ? ` • ${table.activeSession.duration}` : '';
-              billSubtitle.textContent = `${table.seats} chỗ${dur}`;
+              const dur = table.activeSession && table.activeSession.duration ? ` • Ngồi ${table.activeSession.duration}` : '';
+              const round = table.activeSession && table.activeSession.roundNumber ? ` • Lượt ${table.activeSession.roundNumber}` : '';
+              billSubtitle.textContent = `${table.seats} chỗ${dur}${round}`;
             }
           } else {
             billTitle.textContent = 'Tại bàn (Chưa chọn bàn)';
@@ -901,14 +1253,53 @@
       // Sync Floor Layout vs Catalog Grid view
       const catalogGrid = document.getElementById('catalog-grid');
       const floorContainer = document.getElementById('floor-layout-container');
-      if (catalogGrid && floorContainer) {
-        if (isTakeaway) {
-          catalogGrid.classList.remove('hidden');
-          floorContainer.classList.add('hidden');
+      const categoryBar = document.getElementById('category-pills-bar');
+      const floorBar = document.getElementById('floor-pills-bar');
+      const dineinBanner = document.getElementById('dinein-catalog-banner');
+      const dineinBannerText = document.getElementById('dinein-catalog-banner-text');
+
+      if (isTakeaway) {
+        if (catalogGrid) catalogGrid.classList.remove('hidden');
+        if (floorContainer) floorContainer.classList.add('hidden');
+        if (categoryBar) categoryBar.classList.remove('hidden');
+        if (floorBar) floorBar.classList.add('hidden');
+        if (dineinBanner) dineinBanner.classList.add('hidden');
+      } else {
+        if (state.dineInView === 'catalog') {
+          if (catalogGrid) catalogGrid.classList.remove('hidden');
+          if (floorContainer) floorContainer.classList.add('hidden');
+          if (categoryBar) categoryBar.classList.remove('hidden');
+          if (floorBar) floorBar.classList.add('hidden');
+          if (dineinBanner) {
+            dineinBanner.classList.remove('hidden');
+            if (dineinBannerText) {
+              const tbl = state.selectedTable;
+              dineinBannerText.textContent = tbl ? `Đang chọn món cho: ${tbl.name || tbl.id} (${tbl.zone})` : 'Đang ở thực đơn gọi món (Chưa chọn bàn)';
+            }
+          }
         } else {
-          // Keep catalog grid visible or toggle floor plan depending on selection
-          catalogGrid.classList.remove('hidden');
-          floorContainer.classList.add('hidden');
+          if (catalogGrid) catalogGrid.classList.add('hidden');
+          if (floorContainer) floorContainer.classList.remove('hidden');
+          if (categoryBar) categoryBar.classList.add('hidden');
+          if (floorBar) floorBar.classList.remove('hidden');
+          if (dineinBanner) dineinBanner.classList.add('hidden');
+        }
+      }
+
+      // Update Catalog Area bottom status strip
+      const totalLabel = document.getElementById('catalog-total-items-label');
+      const totalVal = document.getElementById('catalog-total-items');
+      if (totalVal) {
+        if (state.mode === 'dinein' && state.dineInView === 'floor') {
+          const totalTables = (state.tables || []).length;
+          const availCount = (state.tables || []).filter(t => t.status === 'available').length;
+          const occCount = (state.tables || []).filter(t => t.status === 'occupied').length;
+          const billCount = (state.tables || []).filter(t => t.status === 'billing').length;
+          if (totalLabel) totalLabel.textContent = 'Trạng thái bàn:';
+          totalVal.textContent = `${totalTables} bàn (${availCount} trống, ${occCount} ngồi, ${billCount} chờ TT)`;
+        } else {
+          if (totalLabel) totalLabel.textContent = 'Tổng số món:';
+          totalVal.textContent = String((state.menuItems || []).length);
         }
       }
     }
@@ -1083,6 +1474,9 @@
           clearBtn.classList.add('hidden');
         }
       }
+      if (query && query.trim() !== '' && window.POS_STATE && window.POS_STATE.mode === 'dinein' && window.POS_STATE.dineInView === 'floor') {
+        window.POS_STATE.setDineInView('catalog');
+      }
       window.POS_STATE.setSearchQuery(query);
     }
 
@@ -1104,6 +1498,12 @@
       const item = (state.menuItems || []).find(it => it.id === itemId);
       if (!item) return;
 
+      if (state.mode === 'dinein' && !state.selectedTable) {
+        showToast('Vui lòng chọn bàn trước khi gọi món');
+        setDineInView('floor');
+        return;
+      }
+
       const hasModifiersOrSizes = Boolean(item.hasModifiers || (item.sizes && item.sizes.length > 1));
       if (hasModifiersOrSizes) {
         if (typeof window.openModifierModal === 'function') {
@@ -1118,6 +1518,36 @@
       const state = window.POS_STATE;
       if (!item) return;
 
+      if (state.mode === 'dinein' && !state.selectedTable) {
+        showToast('Vui lòng chọn bàn trước khi gọi món');
+        setDineInView('floor');
+        return;
+      }
+
+      const isDineIn = state.mode === 'dinein';
+      const table = isDineIn ? state.selectedTable : null;
+
+      // Determine round number and draft status for dine-in
+      let itemRound = 1;
+      let isSent = false;
+      let isNewRound = false;
+
+      if (isDineIn && table) {
+        const existingSession = table.activeSession;
+        const currentRoundNumber = (existingSession && existingSession.roundNumber) || 1;
+        const hasSentItems = (state.cart || []).some(ci => ci.sentToKitchen);
+
+        if (table.status === 'occupied' || hasSentItems) {
+          itemRound = currentRoundNumber + (hasSentItems ? 1 : 0);
+          isNewRound = true;
+          isSent = false;
+        } else {
+          itemRound = 1;
+          isNewRound = true;
+          isSent = false;
+        }
+      }
+
       const sizeId = options.sizeId || item.defaultSize || (item.sizes && item.sizes[0] ? item.sizes[0].id : null);
       const sizeObj = item.sizes ? item.sizes.find(s => s.id === sizeId) : null;
       const sizeName = sizeObj ? sizeObj.name : '';
@@ -1126,9 +1556,11 @@
       const unitPrice = options.unitPrice != null ? options.unitPrice : (baseSizePrice + toppingsSurcharge);
       const qty = options.quantity || 1;
 
-      // Check if item already exists in cart with same size and modifiers
+      // In dine-in mode, only merge with existing item if it has NOT yet been sent to kitchen
       const existingItem = state.cart.find(ci => {
-        return ci.menuItemId === item.id &&
+        const sameKitchenState = isDineIn ? (!ci.sentToKitchen && ci.round === itemRound) : true;
+        return sameKitchenState &&
+               ci.menuItemId === item.id &&
                ci.sizeId === sizeId &&
                JSON.stringify(ci.modifiers || []) === JSON.stringify(options.modifiers || []) &&
                (ci.preparationNote || '') === (options.preparationNote || '');
@@ -1149,14 +1581,18 @@
           modifiers: options.modifiers || [],
           preparationNote: options.preparationNote || '',
           quantity: qty,
-          lineTotalVND: unitPrice * qty
+          lineTotalVND: unitPrice * qty,
+          round: itemRound,
+          sentToKitchen: isSent,
+          isNewRound: isNewRound
         };
         state.cart.push(newCartItem);
       }
 
       state.notify();
       const sizeSuffix = sizeName ? ` (${sizeName})` : '';
-      showToast(`Đã thêm "${item.name}"${sizeSuffix} vào đơn hàng`);
+      const roundSuffix = (isDineIn && itemRound > 1) ? ` (Lượt ${itemRound})` : '';
+      showToast(`Đã thêm "${item.name}"${sizeSuffix}${roundSuffix} vào đơn hàng`);
     }
 
     /* =========================================================================
@@ -1636,6 +2072,16 @@
       const sizeLabel = item.sizeId || (item.sizeName ? item.sizeName.replace(/^Size\s+/i, '') : '');
       const sizeSuffix = sizeLabel ? ` <span class="font-semibold text-slate-600 text-xs">(${escapeHtml(sizeLabel)})</span>` : '';
 
+      const isDineIn = window.POS_STATE && window.POS_STATE.mode === 'dinein';
+      let roundBadgeHtml = '';
+      if (isDineIn) {
+        if (item.sentToKitchen) {
+          roundBadgeHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Lượt ${item.round || 1} • Đã gửi bếp</span>`;
+        } else {
+          roundBadgeHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 animate-pulse">Lượt ${item.round || 2} • Mới</span>`;
+        }
+      }
+
       return `
         <div class="cart-item-card bg-white rounded-xl border border-slate-200 p-3 shadow-2xs hover:border-slate-300 transition flex flex-col gap-2 select-none" data-cart-item-id="${item.id}">
           <!-- Item Info & Delete Button -->
@@ -1645,6 +2091,7 @@
                 <span class="font-bold text-slate-900 text-sm leading-snug">
                   ${escapeHtml(item.name)}${sizeSuffix}
                 </span>
+                ${roundBadgeHtml}
               </div>
               ${summaryHtml}
             </div>
@@ -1691,10 +2138,52 @@
       const cart = (state && state.cart) || [];
 
       if (cart.length === 0) {
-        if (emptyState) emptyState.classList.remove('hidden');
+        if (emptyState) {
+          emptyState.classList.remove('hidden');
+          const isDineIn = state && state.mode === 'dinein';
+          const table = isDineIn ? state.selectedTable : null;
+          if (isDineIn) {
+            if (!table) {
+              emptyState.innerHTML = `
+                <div class="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-300 mb-3 shadow-2xs">
+                  <i data-lucide="layout-grid" class="w-8 h-8 stroke-[1.5]"></i>
+                </div>
+                <p class="text-sm font-semibold text-slate-700">Chưa chọn bàn</p>
+                <p class="text-xs text-slate-400 mt-1 max-w-xs">Chạm vào một bàn trên sơ đồ để xem đơn hàng hoặc bắt đầu gọi món.</p>
+                <button type="button" onclick="setDineInView('floor')" class="mt-4 min-h-[48px] h-12 px-5 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 shadow-xs select-none transition">
+                  <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                  <span>Xem sơ đồ bàn</span>
+                </button>
+              `;
+            } else {
+              emptyState.innerHTML = `
+                <div class="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-300 mb-3 shadow-2xs">
+                  <i data-lucide="utensils" class="w-8 h-8 stroke-[1.5]"></i>
+                </div>
+                <p class="text-sm font-semibold text-slate-700">${escapeHtml(table.name || table.id)} đang trống</p>
+                <p class="text-xs text-slate-400 mt-1 max-w-xs">Chọn món từ thực đơn để mở bàn phục vụ khách.</p>
+                <button type="button" onclick="setDineInView('catalog')" class="mt-4 min-h-[48px] h-12 px-5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 shadow-xs select-none transition">
+                  <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                  <span>Chọn món từ thực đơn</span>
+                </button>
+              `;
+            }
+          } else {
+            emptyState.innerHTML = `
+              <div class="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-300 mb-3 shadow-2xs">
+                <i data-lucide="shopping-cart" class="w-8 h-8 stroke-[1.5]"></i>
+              </div>
+              <p class="text-sm font-semibold text-slate-700">Chưa có món trong đơn</p>
+              <p class="text-xs text-slate-400 mt-1 max-w-xs">Chạm vào món ở thực đơn bên trái hoặc gõ phím tắt để thêm món vào đơn hàng.</p>
+            `;
+          }
+        }
         if (cartList) {
           cartList.classList.add('hidden');
           cartList.innerHTML = '';
+        }
+        if (window.lucide) {
+          window.lucide.createIcons();
         }
         return;
       }
@@ -1748,8 +2237,20 @@
         return;
       }
 
-      const prevCount = (state.cart || []).length;
-      state.cart = [];
+      const isDineIn = state.mode === 'dinein';
+      const table = isDineIn ? state.selectedTable : null;
+
+      if (isDineIn && table && table.activeSession && Array.isArray(table.activeSession.items)) {
+        state.cart = JSON.parse(JSON.stringify(table.activeSession.items));
+        showToast(`Đã khôi phục đơn của ${table.name || table.id} về lượt đã gửi bếp`);
+      } else {
+        const prevCount = (state.cart || []).length;
+        state.cart = [];
+        if (prevCount > 0) {
+          showToast('Đã hủy toàn bộ đơn hàng');
+        }
+      }
+
       state.tenderedVND = 0;
       state.isCustomTendered = false;
 
@@ -1759,9 +2260,6 @@
       }
 
       state.notify();
-      if (prevCount > 0) {
-        showToast('Đã hủy toàn bộ đơn hàng');
-      }
     }
 
     function openClearCartModal() {
@@ -1820,11 +2318,479 @@
       if (discountEl) discountEl.textContent = formatVND(totals.discountVND);
       if (grandTotalEl) grandTotalEl.textContent = formatVND(totals.grandTotalVND);
 
+      renderDineInActions(state);
       renderQuickPayment(state);
     }
 
     /* =========================================================================
-       3.7 Quick Cash & VietQR Settlement Engine (Task 5)
+       3.7 Dine-In Floor Plan & Table Management Controller (Task 6)
+       ========================================================================= */
+
+    function setTableZone(zoneId) {
+      const state = window.POS_STATE;
+      if (!state) return;
+      state.activeTableZone = zoneId || 'all';
+      state.notify();
+    }
+
+    function setDineInView(view) {
+      const state = window.POS_STATE;
+      if (!state) return;
+      if (view !== 'floor' && view !== 'catalog') return;
+      state.dineInView = view;
+      state.notify();
+    }
+
+    function toggleDineInView() {
+      const state = window.POS_STATE;
+      if (!state) return;
+      state.dineInView = state.dineInView === 'floor' ? 'catalog' : 'floor';
+      state.notify();
+    }
+
+    function selectTable(tableId) {
+      const state = window.POS_STATE;
+      if (!state || !state.tables) return;
+
+      const table = state.tables.find(t => t.id === tableId);
+      if (!table) return;
+
+      state.selectedTable = table;
+      state.isSettlingTable = false;
+
+      // If table has an active session with items, load them into state.cart
+      if (table.activeSession && Array.isArray(table.activeSession.items) && table.activeSession.items.length > 0) {
+        state.cart = JSON.parse(JSON.stringify(table.activeSession.items)).map(it => ({
+          ...it,
+          sentToKitchen: true,
+          isNewRound: false
+        }));
+      } else {
+        state.cart = [];
+      }
+
+      // Reset payment input fields
+      state.tenderedVND = 0;
+      state.isCustomTendered = false;
+      const inputCustom = document.getElementById('input-custom-tendered');
+      if (inputCustom) {
+        inputCustom.value = '';
+      }
+
+      state.notify();
+    }
+
+    function submitTableRound() {
+      const state = window.POS_STATE;
+      if (!state || !state.selectedTable) {
+        showToast('Chưa chọn bàn để gửi bếp');
+        return;
+      }
+
+      const tableId = typeof state.selectedTable === 'object' ? state.selectedTable.id : state.selectedTable;
+      const table = (state.tables || []).find(t => t.id === tableId);
+      if (!table) return;
+
+      if (!state.cart || state.cart.length === 0) {
+        showToast('Chưa có món nào trong đơn để gửi bếp');
+        return;
+      }
+
+      const draftItems = state.cart.filter(it => !it.sentToKitchen || it.isNewRound);
+      if (draftItems.length === 0) {
+        showToast('Tất cả các món đã được gửi bếp trước đó');
+        return;
+      }
+
+      // If table was available, activate session
+      if (table.status === 'available' || !table.activeSession) {
+        table.status = 'occupied';
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        table.activeSession = {
+          startTime: timeStr,
+          duration: '1 phút',
+          durationMinutes: 1,
+          roundNumber: 1,
+          items: []
+        };
+      } else {
+        table.status = 'occupied';
+        table.activeSession.roundNumber = (table.activeSession.roundNumber || 1) + 1;
+      }
+
+      // Mark all cart items as sent to kitchen
+      state.cart.forEach(it => {
+        it.sentToKitchen = true;
+        it.isNewRound = false;
+      });
+
+      const totals = getFinancialTotals();
+      const totalItemsCount = state.cart.reduce((sum, it) => sum + (it.quantity || 1), 0);
+
+      table.activeSession.items = JSON.parse(JSON.stringify(state.cart));
+      table.activeSession.itemsCount = totalItemsCount;
+      table.activeSession.totalVND = totals.grandTotalVND;
+
+      playSuccessChirp();
+      showToast(`Đã gửi bếp ${table.name} (Lượt ${table.activeSession.roundNumber}) - ${draftItems.length} món mới`);
+
+      state.selectedTable = table;
+      state.notify();
+    }
+
+    function settleTableBill(tableId) {
+      const state = window.POS_STATE;
+      if (!state) return;
+
+      const targetId = tableId || (state.selectedTable && state.selectedTable.id);
+      if (!targetId) {
+        showToast('Chưa chọn bàn để thanh toán');
+        return;
+      }
+
+      const table = (state.tables || []).find(t => t.id === targetId);
+      if (!table) return;
+
+      state.selectedTable = table;
+      state.isSettlingTable = true;
+
+      if (table.status === 'occupied') {
+        table.status = 'billing';
+      }
+
+      if (table.activeSession && Array.isArray(table.activeSession.items) && (!state.cart || state.cart.length === 0)) {
+        state.cart = JSON.parse(JSON.stringify(table.activeSession.items)).map(it => ({
+          ...it,
+          sentToKitchen: true,
+          isNewRound: false
+        }));
+      }
+
+      state.notify();
+    }
+
+    function cancelTableSettlement() {
+      const state = window.POS_STATE;
+      if (!state) return;
+
+      state.isSettlingTable = false;
+      if (state.selectedTable && state.selectedTable.status === 'billing') {
+        state.selectedTable.status = 'occupied';
+      }
+
+      state.notify();
+    }
+
+    function renderTableCardHTML(table, state = window.POS_STATE) {
+      const isSelected = Boolean(state.selectedTable && state.selectedTable.id === table.id);
+
+      if (table.status === 'available') {
+        return `
+          <div data-table-id="${table.id}" onclick="selectTable('${table.id}')"
+            class="bg-white border-2 border-dashed ${
+              isSelected ? 'border-emerald-500 ring-2 ring-emerald-500 bg-emerald-50/20' : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50/60'
+            } min-h-[120px] rounded-xl p-3 flex flex-col justify-between cursor-pointer select-none active:scale-[0.98] transition shadow-2xs">
+            <div>
+              <div class="flex items-start justify-between gap-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-slate-900 text-base">${escapeHtml(table.name)}</span>
+                  <span class="text-[11px] text-slate-400 font-medium">${table.seats} chỗ</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">Trống</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">${escapeHtml(table.zone)}</p>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <span class="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                <span>+ Chọn bàn</span>
+              </span>
+              <span class="text-[10px] text-slate-400 font-mono">Trống</span>
+            </div>
+          </div>
+        `;
+      }
+
+      if (table.status === 'billing') {
+        const session = table.activeSession || {};
+        const durationText = session.duration || (session.durationMinutes ? `${session.durationMinutes} phút` : '45 phút');
+        const itemsCount = session.itemsCount != null ? session.itemsCount : (session.items ? session.items.reduce((s, it) => s + (it.quantity || 1), 0) : 0);
+        const totalVND = session.totalVND != null ? session.totalVND : (session.items ? session.items.reduce((s, it) => s + (it.lineTotalVND || (it.unitPrice * it.quantity)), 0) : 0);
+
+        return `
+          <div data-table-id="${table.id}" onclick="selectTable('${table.id}')"
+            class="bg-amber-50/50 border-2 ${
+              isSelected ? 'border-amber-500 ring-2 ring-amber-500 bg-amber-50/90 shadow-sm' : 'border-amber-300 hover:border-amber-400 hover:shadow-xs'
+            } animate-pulse min-h-[120px] rounded-xl p-3 flex flex-col justify-between cursor-pointer select-none active:scale-[0.98] transition">
+            <div>
+              <div class="flex items-start justify-between gap-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-slate-900 text-base">${escapeHtml(table.name)}</span>
+                  <span class="text-[11px] text-amber-700/70 font-medium">${table.seats} chỗ</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                  <span>Chờ thanh toán</span>
+                </span>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs text-amber-900/80 mt-1.5 flex-wrap">
+                <span class="flex items-center gap-1">
+                  <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-500"></i>
+                  <span>${durationText}</span>
+                </span>
+                <span>•</span>
+                <span>${itemsCount} món</span>
+              </div>
+            </div>
+            <div class="pt-2 border-t border-amber-200/80 flex items-center justify-between">
+              <span class="font-mono font-bold text-sm text-amber-950 tabular-nums">${formatVND(totalVND)}</span>
+              <button type="button" onclick="event.stopPropagation(); settleTableBill('${table.id}')"
+                class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition">
+                <i data-lucide="receipt" class="w-3 h-3"></i>
+                <span>Thanh toán</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }
+
+      // Default: Occupied (Đang phục vụ / Đang ngồi)
+      const session = table.activeSession || {};
+      const durationText = session.duration || (session.durationMinutes ? `${session.durationMinutes} phút` : '35 phút');
+      const itemsCount = session.itemsCount != null ? session.itemsCount : (session.items ? session.items.reduce((s, it) => s + (it.quantity || 1), 0) : 0);
+      const totalVND = session.totalVND != null ? session.totalVND : (session.items ? session.items.reduce((s, it) => s + (it.lineTotalVND || (it.unitPrice * it.quantity)), 0) : 0);
+      const roundText = session.roundNumber ? `Lượt ${session.roundNumber}` : '';
+
+      return `
+        <div data-table-id="${table.id}" onclick="selectTable('${table.id}')"
+          class="bg-indigo-50/50 border ${
+            isSelected ? 'border-indigo-500 ring-2 ring-indigo-500 bg-indigo-50/90 shadow-sm' : 'border-indigo-200 hover:border-indigo-400 hover:shadow-xs'
+          } min-h-[120px] rounded-xl p-3 flex flex-col justify-between cursor-pointer select-none active:scale-[0.98] transition">
+          <div>
+            <div class="flex items-start justify-between gap-1">
+              <div class="flex items-center gap-1.5">
+                <span class="font-bold text-slate-900 text-base">${escapeHtml(table.name)}</span>
+                <span class="text-[11px] text-indigo-700/70 font-medium">${table.seats} chỗ</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+                <span>Đang ngồi</span>
+              </span>
+            </div>
+            <div class="flex items-center gap-1.5 text-xs text-indigo-900/80 mt-1.5 flex-wrap">
+              <span class="flex items-center gap-1">
+                <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-500"></i>
+                <span>${durationText}</span>
+              </span>
+              <span>•</span>
+              <span>${itemsCount} món</span>
+              ${roundText ? `<span>• ${roundText}</span>` : ''}
+            </div>
+          </div>
+          <div class="pt-2 border-t border-indigo-100 flex items-center justify-between">
+            <span class="font-mono font-bold text-sm text-indigo-950 tabular-nums">${formatVND(totalVND)}</span>
+            <span class="text-[11px] font-semibold text-indigo-600 flex items-center gap-0.5">
+              <span>Chi tiết</span>
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderFloorPlan(state = window.POS_STATE) {
+      if (!state) return;
+
+      const allTables = state.tables || [];
+      const t1Count = allTables.filter(t => t.zone === 'Tầng 1').length;
+      const t2Count = allTables.filter(t => t.zone === 'Tầng 2').length;
+      const svCount = allTables.filter(t => t.zone === 'Sân vườn').length;
+
+      // 1. Zone filter pills: [Tất cả], [Tầng 1 (8 bàn)], [Tầng 2 (6 bàn)], [Sân vườn (5 bàn)]
+      const zoneDefs = [
+        { id: 'all', label: 'Tất cả' },
+        { id: 'tang1', label: `Tầng 1 (${t1Count} bàn)`, match: 'Tầng 1' },
+        { id: 'tang2', label: `Tầng 2 (${t2Count} bàn)`, match: 'Tầng 2' },
+        { id: 'sanvuon', label: `Sân vườn (${svCount} bàn)`, match: 'Sân vườn' }
+      ];
+
+      const pillsContainer = document.getElementById('floor-zone-pills-container');
+      if (pillsContainer) {
+        const activeZone = state.activeTableZone || 'all';
+        pillsContainer.innerHTML = zoneDefs.map(z => {
+          const isActive = activeZone === z.id;
+          const activeClass = isActive
+            ? 'bg-slate-900 text-white shadow-xs font-bold'
+            : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold';
+          return `
+            <button type="button" onclick="setTableZone('${z.id}')"
+              class="h-12 min-h-[48px] px-4 rounded-xl text-xs md:text-sm whitespace-nowrap transition-all flex items-center gap-2 select-none ${activeClass}">
+              <span>${escapeHtml(z.label)}</span>
+            </button>
+          `;
+        }).join('');
+      }
+
+      // 2. Filter tables for layout container
+      const activeZone = state.activeTableZone || 'all';
+      let filteredTables = allTables;
+      if (activeZone === 'tang1') {
+        filteredTables = allTables.filter(t => t.zone === 'Tầng 1');
+      } else if (activeZone === 'tang2') {
+        filteredTables = allTables.filter(t => t.zone === 'Tầng 2');
+      } else if (activeZone === 'sanvuon') {
+        filteredTables = allTables.filter(t => t.zone === 'Sân vườn');
+      }
+
+      const floorLayout = document.getElementById('floor-layout-container');
+      if (floorLayout) {
+        const availCount = allTables.filter(t => t.status === 'available').length;
+        const occCount = allTables.filter(t => t.status === 'occupied').length;
+        const billCount = allTables.filter(t => t.status === 'billing').length;
+
+        floorLayout.innerHTML = `
+          <div class="flex items-center justify-between gap-3 mb-3 px-0.5 flex-shrink-0">
+            <div class="flex items-center gap-3 text-xs">
+              <span class="flex items-center gap-1.5 text-slate-600 font-medium">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-300 border border-slate-400"></span>
+                <span>Trống: <strong class="text-slate-900 font-bold">${availCount}</strong></span>
+              </span>
+              <span class="flex items-center gap-1.5 text-indigo-700 font-medium">
+                <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+                <span>Đang phục vụ: <strong class="text-indigo-900 font-bold">${occCount}</strong></span>
+              </span>
+              <span class="flex items-center gap-1.5 text-amber-700 font-medium">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                <span>Chờ thanh toán: <strong class="text-amber-900 font-bold">${billCount}</strong></span>
+              </span>
+            </div>
+            <div class="text-xs text-slate-400 font-medium">
+              <span>Hiển thị: <strong>${filteredTables.length}</strong> bàn</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 pb-4">
+            ${filteredTables.map(t => renderTableCardHTML(t, state)).join('')}
+          </div>
+        `;
+      }
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    function renderDineInActions(state = window.POS_STATE) {
+      const container = document.getElementById('dinein-table-actions');
+      const paymentDrawer = document.getElementById('payment-settlement-drawer');
+      const dineinSettleHeader = document.getElementById('dinein-settle-header');
+      const dineinSettleTitle = document.getElementById('dinein-settle-title');
+
+      if (!container || !paymentDrawer) return;
+
+      // Mode: Takeaway
+      if (state.mode !== 'dinein') {
+        container.classList.add('hidden');
+        paymentDrawer.classList.remove('hidden');
+        if (dineinSettleHeader) dineinSettleHeader.classList.add('hidden');
+        return;
+      }
+
+      // Mode: Dine-in
+      // Case 1: No table selected
+      if (!state.selectedTable) {
+        paymentDrawer.classList.add('hidden');
+        if (dineinSettleHeader) dineinSettleHeader.classList.add('hidden');
+        container.classList.remove('hidden');
+        container.innerHTML = `
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-500">
+            <div class="w-10 h-10 mx-auto mb-2 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
+              <i data-lucide="layout-grid" class="w-5 h-5"></i>
+            </div>
+            <p class="text-xs font-semibold text-slate-700">Chưa chọn bàn phục vụ</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Chạm vào một bàn trên sơ đồ để bắt đầu gọi món hoặc xem hóa đơn</p>
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      // Case 2: Table selected and in settlement mode
+      if (state.isSettlingTable) {
+        container.classList.add('hidden');
+        paymentDrawer.classList.remove('hidden');
+        if (dineinSettleHeader) {
+          dineinSettleHeader.classList.remove('hidden');
+          if (dineinSettleTitle) {
+            dineinSettleTitle.innerHTML = `
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+              <span>Thanh toán: ${escapeHtml(state.selectedTable.name || state.selectedTable.id)}</span>
+            `;
+          }
+        }
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      // Case 3: Table selected and in ordering / rounds mode
+      paymentDrawer.classList.add('hidden');
+      if (dineinSettleHeader) dineinSettleHeader.classList.add('hidden');
+      container.classList.remove('hidden');
+
+      const draftItems = (state.cart || []).filter(it => !it.sentToKitchen || it.isNewRound);
+      const draftCount = draftItems.length;
+      const hasAnyItems = (state.cart && state.cart.length > 0) ||
+        (state.selectedTable.activeSession && state.selectedTable.activeSession.itemsCount > 0);
+
+      container.innerHTML = `
+        <div class="space-y-2">
+          ${state.dineInView === 'floor' ? `
+            <button type="button" onclick="setDineInView('catalog')"
+              class="w-full min-h-[48px] h-12 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold text-xs md:text-sm flex items-center justify-center gap-2 shadow-2xs transition select-none">
+              <i data-lucide="book-open" class="w-4 h-4 text-emerald-700"></i>
+              <span>+ Chọn món từ thực đơn</span>
+            </button>
+          ` : `
+            <button type="button" onclick="setDineInView('floor')"
+              class="w-full min-h-[48px] h-12 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs md:text-sm flex items-center justify-center gap-2 shadow-2xs transition select-none">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-indigo-600"></i>
+              <span>Quay lại Sơ đồ bàn</span>
+            </button>
+          `}
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button id="btn-table-submit-round" type="button" onclick="submitTableRound()"
+              class="min-h-[48px] h-12 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center gap-2 shadow-xs transition select-none ${
+                draftCount > 0
+                  ? 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }"
+              ${draftCount === 0 ? 'disabled' : ''}>
+              <i data-lucide="send" class="w-4 h-4"></i>
+              <span>Gửi bếp ${draftCount > 0 ? `(${draftCount})` : ''}</span>
+            </button>
+
+            <button id="btn-table-settle" type="button" onclick="settleTableBill()"
+              class="min-h-[48px] h-12 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center gap-2 shadow-xs transition select-none ${
+                hasAnyItems
+                  ? 'bg-amber-600 hover:bg-amber-700 active:scale-[0.98] text-white'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }"
+              ${!hasAnyItems ? 'disabled' : ''}>
+              <i data-lucide="receipt" class="w-4 h-4"></i>
+              <span>Thanh toán bàn</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    /* =========================================================================
+       3.8 Quick Cash & VietQR Settlement Engine (Task 5)
        ========================================================================= */
 
     function calculateSuggestedDenominations(grandTotalVND) {
@@ -2082,10 +3048,18 @@
         ctaBtn.disabled = !canCheckout;
 
         if (ctaBtnText) {
-          if (method === 'qr') {
-            ctaBtnText.textContent = 'XÁC NHẬN ĐÃ NHẬN & GỬI PHA CHẾ';
+          if (state.mode === 'dinein') {
+            if (method === 'qr') {
+              ctaBtnText.textContent = 'XÁC NHẬN ĐÃ NHẬN & HOÀN TẤT BÀN';
+            } else {
+              ctaBtnText.textContent = 'THU TIỀN & HOÀN TẤT BÀN';
+            }
           } else {
-            ctaBtnText.textContent = 'THU TIỀN & GỬI PHA CHẾ';
+            if (method === 'qr') {
+              ctaBtnText.textContent = 'XÁC NHẬN ĐÃ NHẬN & GỬI PHA CHẾ';
+            } else {
+              ctaBtnText.textContent = 'THU TIỀN & GỬI PHA CHẾ';
+            }
           }
         }
       }
@@ -2180,7 +3154,11 @@
 
       // 2. Show success toast: "Đã thu [Amount] đ - Đơn #[ServiceNumber] đã gửi Barista pha chế!"
       const toastAmountStr = formatVND(grandTotal);
-      showToast(`Đã thu ${toastAmountStr} - Đơn #${currentServiceNumber} đã gửi Barista pha chế!`);
+      if (orderSummary.mode === 'dinein' && orderSummary.table) {
+        showToast(`Đã thu ${toastAmountStr} - ${orderSummary.table.name || orderSummary.table.id} đã hoàn tất thanh toán & giải phóng bàn!`);
+      } else {
+        showToast(`Đã thu ${toastAmountStr} - Đơn #${currentServiceNumber} đã gửi Barista pha chế!`);
+      }
 
       // 3. Trigger receipt preview popup hook
       if (typeof window.openReceiptModal === 'function') {
@@ -2190,7 +3168,20 @@
       // 4. Increment serviceNumber to next number (e.g. #15)
       state.serviceNumber = currentServiceNumber + 1;
 
-      // 5. Reset cart and payment fields in < 200ms
+      // 5. If dine-in, clear table session and reset table to available
+      if (state.mode === 'dinein' && state.selectedTable) {
+        const tableId = typeof state.selectedTable === 'object' ? state.selectedTable.id : state.selectedTable;
+        const table = (state.tables || []).find(t => t.id === tableId);
+        if (table) {
+          table.status = 'available';
+          table.activeSession = null;
+        }
+        state.selectedTable = null;
+        state.isSettlingTable = false;
+        state.dineInView = 'floor';
+      }
+
+      // 6. Reset cart and payment fields in < 200ms
       state.cart = [];
       state.tenderedVND = 0;
       state.isCustomTendered = false;
@@ -2513,7 +3504,11 @@
         // F2: Tại bàn (Dine-in)
         else if (e.key === 'F2') {
           e.preventDefault();
-          window.POS_STATE.setMode('dinein');
+          if (window.POS_STATE.mode === 'dinein') {
+            window.POS_STATE.toggleDineInView();
+          } else {
+            window.POS_STATE.setMode('dinein');
+          }
         }
         // / or Ctrl+K: Quick search focus (guard when typing in inputs/textareas)
         else if ((e.key === '/' || (e.ctrlKey && e.key.toLowerCase() === 'k')) && !isInputActive) {
@@ -2533,7 +3528,7 @@
     }
 
     /* =========================================================================
-       3.8 Window Global API Bindings & Application Bootstrap
+       3.9 Window Global API Bindings & Application Bootstrap
        ========================================================================= */
     // Expose required public interfaces on window
     window.renderCatalog = renderCatalog;
@@ -2581,6 +3576,18 @@
     window.calculateSuggestedDenominations = calculateSuggestedDenominations;
     window.playSuccessChirp = playSuccessChirp;
 
+    // Task 6: Floor Plan & Dine-in table management public bindings
+    window.renderFloorPlan = renderFloorPlan;
+    window.renderTableCardHTML = renderTableCardHTML;
+    window.renderDineInActions = renderDineInActions;
+    window.selectTable = selectTable;
+    window.submitTableRound = submitTableRound;
+    window.settleTableBill = settleTableBill;
+    window.cancelTableSettlement = cancelTableSettlement;
+    window.setTableZone = setTableZone;
+    window.setDineInView = setDineInView;
+    window.toggleDineInView = toggleDineInView;
+
     document.addEventListener('DOMContentLoaded', () => {
       // 1. Initialize real-time digital clock
       initDigitalClock();
@@ -2594,6 +3601,7 @@
       window.POS_STATE.subscribe(renderCatalogItems);
       window.POS_STATE.subscribe(updateBillUI);
       window.POS_STATE.subscribe(renderQuickPayment);
+      window.POS_STATE.subscribe(renderFloorPlan);
 
       // 4. Initial render pass
       updateTopBarUI(window.POS_STATE);
@@ -2601,13 +3609,14 @@
       renderCatalogItems(window.POS_STATE);
       updateBillUI(window.POS_STATE);
       renderQuickPayment(window.POS_STATE);
+      renderFloorPlan(window.POS_STATE);
 
       // 5. Initialize icons
       if (window.lucide) {
         window.lucide.createIcons();
       }
 
-      console.log('POS Cafe: Catalog, cart, and Quick Cash / VietQR settlement engine ready.');
+      console.log('POS Cafe: Floor plan, table rounds, and settlement engine ready.');
     });
   </script>
 
