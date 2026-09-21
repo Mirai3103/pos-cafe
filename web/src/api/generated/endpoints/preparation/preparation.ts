@@ -87,87 +87,54 @@ export const postPreparationAlertsAlertIdAcknowledge = (
 
 
 
-export const getPostPreparationAlertsAlertIdAcknowledgeQueryKey = (alertId: string,
-    preparationAcknowledgeAlertCommand?: PreparationAcknowledgeAlertCommand,) => {
-    return [
-    'POST', `/preparation/alerts/${alertId}/acknowledge`, preparationAcknowledgeAlertCommand
-    ] as const;
-    }
+export const getPostPreparationAlertsAlertIdAcknowledgeMutationKey = () => ['postPreparationAlertsAlertIdAcknowledge'] as const;
 
+export const getPostPreparationAlertsAlertIdAcknowledgeMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError,PostPreparationAlertsAlertIdAcknowledgeMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError,PostPreparationAlertsAlertIdAcknowledgeMutationVariables, TContext> => {
 
-export const getPostPreparationAlertsAlertIdAcknowledgeQueryOptions = <TData = Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError = ResponseAPIResponse>(alertId: string,
-    preparationAcknowledgeAlertCommand: PreparationAcknowledgeAlertCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostPreparationAlertsAlertIdAcknowledgeQueryKey(alertId,preparationAcknowledgeAlertCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>> = ({ signal }) => postPreparationAlertsAlertIdAcknowledge(alertId,preparationAcknowledgeAlertCommand, requestOptions, signal);
+const mutationKey = getPostPreparationAlertsAlertIdAcknowledgeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, PostPreparationAlertsAlertIdAcknowledgeMutationVariables> = (props) => {
+          const {alertId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: alertId !== null && alertId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostPreparationAlertsAlertIdAcknowledgeQueryResult = NonNullable<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>>
-export type PostPreparationAlertsAlertIdAcknowledgeQueryError = ResponseAPIResponse
+          return  postPreparationAlertsAlertIdAcknowledge(alertId,data,requestOptions)
+        }
 
 
-export function usePostPreparationAlertsAlertIdAcknowledge<TData = Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError = ResponseAPIResponse>(
- alertId: string,
-    preparationAcknowledgeAlertCommand: PreparationAcknowledgeAlertCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationAlertsAlertIdAcknowledge<TData = Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError = ResponseAPIResponse>(
- alertId: string,
-    preparationAcknowledgeAlertCommand: PreparationAcknowledgeAlertCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationAlertsAlertIdAcknowledge<TData = Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError = ResponseAPIResponse>(
- alertId: string,
-    preparationAcknowledgeAlertCommand: PreparationAcknowledgeAlertCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostPreparationAlertsAlertIdAcknowledgeMutationResult = NonNullable<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>>
+    export type PostPreparationAlertsAlertIdAcknowledgeMutationBody = PreparationAcknowledgeAlertCommand
+    export type PostPreparationAlertsAlertIdAcknowledgeMutationError = ResponseAPIResponse
+    export type PostPreparationAlertsAlertIdAcknowledgeMutationVariables = {alertId: string;data: PreparationAcknowledgeAlertCommand}
+
+    /**
  * @summary Acknowledge a Preparation Alert
  */
-
-export function usePostPreparationAlertsAlertIdAcknowledge<TData = Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError = ResponseAPIResponse>(
- alertId: string,
-    preparationAcknowledgeAlertCommand: PreparationAcknowledgeAlertCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostPreparationAlertsAlertIdAcknowledgeQueryOptions(alertId,preparationAcknowledgeAlertCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostPreparationAlertsAlertIdAcknowledge = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>, TError,PostPreparationAlertsAlertIdAcknowledgeMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postPreparationAlertsAlertIdAcknowledge>>,
+        TError,
+        PostPreparationAlertsAlertIdAcknowledgeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostPreparationAlertsAlertIdAcknowledgeMutationOptions(options), queryClient);
+    }
+    /**
  * Returns active units in FIFO order with PostgreSQL observed time and current Table names. The projection contains no financial data.
  * @summary Read the active Preparation Queue
  */
@@ -186,54 +153,81 @@ export const getPreparationQueue = (
 
 
 
-export const getGetPreparationQueueMutationKey = () => ['getPreparationQueue'] as const;
-
-export const getGetPreparationQueueMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError,void, TContext> => {
-
-const mutationKey = getGetPreparationQueueMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetPreparationQueueQueryKey = () => {
+    return [
+    `/preparation/queue`
+    ] as const;
+    }
 
 
+export const getGetPreparationQueueQueryOptions = <TData = Awaited<ReturnType<typeof getPreparationQueue>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPreparationQueueQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getPreparationQueue>>, void> = () => {
 
-
-          return  getPreparationQueue(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPreparationQueue>>> = ({ signal }) => getPreparationQueue(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetPreparationQueueMutationResult = NonNullable<Awaited<ReturnType<typeof getPreparationQueue>>>
-
-    export type GetPreparationQueueMutationError = ResponseAPIResponse
+export type GetPreparationQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getPreparationQueue>>>
+export type GetPreparationQueueQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetPreparationQueue<TData = Awaited<ReturnType<typeof getPreparationQueue>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPreparationQueue>>,
+          TError,
+          Awaited<ReturnType<typeof getPreparationQueue>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPreparationQueue<TData = Awaited<ReturnType<typeof getPreparationQueue>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPreparationQueue>>,
+          TError,
+          Awaited<ReturnType<typeof getPreparationQueue>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPreparationQueue<TData = Awaited<ReturnType<typeof getPreparationQueue>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Read the active Preparation Queue
  */
-export const useGetPreparationQueue = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getPreparationQueue>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetPreparationQueueMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetPreparationQueue<TData = Awaited<ReturnType<typeof getPreparationQueue>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPreparationQueue>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPreparationQueueQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Moves one unit along the linear chain QUEUED -> IN_PREPARATION -> READY -> FULFILLED. The target state is explicit, so two baristas acting on a stale display get a conflict rather than a silent double advance. Waste, Remake, and State Correction are Phase 6B; Cancellation remains Phase 6C.
  * @summary Advance a Preparation Unit
  */
@@ -255,87 +249,54 @@ export const postPreparationUnitsUnitIdAdvance = (
 
 
 
-export const getPostPreparationUnitsUnitIdAdvanceQueryKey = (unitId: string,
-    preparationAdvanceUnitCommand?: PreparationAdvanceUnitCommand,) => {
-    return [
-    'POST', `/preparation/units/${unitId}/advance`, preparationAdvanceUnitCommand
-    ] as const;
-    }
+export const getPostPreparationUnitsUnitIdAdvanceMutationKey = () => ['postPreparationUnitsUnitIdAdvance'] as const;
 
+export const getPostPreparationUnitsUnitIdAdvanceMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError,PostPreparationUnitsUnitIdAdvanceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError,PostPreparationUnitsUnitIdAdvanceMutationVariables, TContext> => {
 
-export const getPostPreparationUnitsUnitIdAdvanceQueryOptions = <TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError = ResponseAPIResponse>(unitId: string,
-    preparationAdvanceUnitCommand: PreparationAdvanceUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostPreparationUnitsUnitIdAdvanceQueryKey(unitId,preparationAdvanceUnitCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>> = ({ signal }) => postPreparationUnitsUnitIdAdvance(unitId,preparationAdvanceUnitCommand, requestOptions, signal);
+const mutationKey = getPostPreparationUnitsUnitIdAdvanceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, PostPreparationUnitsUnitIdAdvanceMutationVariables> = (props) => {
+          const {unitId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: unitId !== null && unitId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostPreparationUnitsUnitIdAdvanceQueryResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>>
-export type PostPreparationUnitsUnitIdAdvanceQueryError = ResponseAPIResponse
+          return  postPreparationUnitsUnitIdAdvance(unitId,data,requestOptions)
+        }
 
 
-export function usePostPreparationUnitsUnitIdAdvance<TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError = ResponseAPIResponse>(
- unitId: string,
-    preparationAdvanceUnitCommand: PreparationAdvanceUnitCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsUnitIdAdvance<TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError = ResponseAPIResponse>(
- unitId: string,
-    preparationAdvanceUnitCommand: PreparationAdvanceUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsUnitIdAdvance<TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError = ResponseAPIResponse>(
- unitId: string,
-    preparationAdvanceUnitCommand: PreparationAdvanceUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostPreparationUnitsUnitIdAdvanceMutationResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>>
+    export type PostPreparationUnitsUnitIdAdvanceMutationBody = PreparationAdvanceUnitCommand
+    export type PostPreparationUnitsUnitIdAdvanceMutationError = ResponseAPIResponse
+    export type PostPreparationUnitsUnitIdAdvanceMutationVariables = {unitId: string;data: PreparationAdvanceUnitCommand}
+
+    /**
  * @summary Advance a Preparation Unit
  */
-
-export function usePostPreparationUnitsUnitIdAdvance<TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError = ResponseAPIResponse>(
- unitId: string,
-    preparationAdvanceUnitCommand: PreparationAdvanceUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostPreparationUnitsUnitIdAdvanceQueryOptions(unitId,preparationAdvanceUnitCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostPreparationUnitsUnitIdAdvance = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>, TError,PostPreparationUnitsUnitIdAdvanceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postPreparationUnitsUnitIdAdvance>>,
+        TError,
+        PostPreparationUnitsUnitIdAdvanceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostPreparationUnitsUnitIdAdvanceMutationOptions(options), queryClient);
+    }
+    /**
  * Records the terminal Waste fact, sets the unit to WASTED, and creates the unacknowledged WASTE alert in one transaction. The reason must be in the Waste catalog and the optional note is normalized before validation. Requires no Manager PIN.
  * @summary Waste a Preparation Unit
  */
@@ -357,87 +318,54 @@ export const postPreparationUnitsUnitIdWaste = (
 
 
 
-export const getPostPreparationUnitsUnitIdWasteQueryKey = (unitId: string,
-    preparationWasteUnitCommand?: PreparationWasteUnitCommand,) => {
-    return [
-    'POST', `/preparation/units/${unitId}/waste`, preparationWasteUnitCommand
-    ] as const;
-    }
+export const getPostPreparationUnitsUnitIdWasteMutationKey = () => ['postPreparationUnitsUnitIdWaste'] as const;
 
+export const getPostPreparationUnitsUnitIdWasteMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError,PostPreparationUnitsUnitIdWasteMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError,PostPreparationUnitsUnitIdWasteMutationVariables, TContext> => {
 
-export const getPostPreparationUnitsUnitIdWasteQueryOptions = <TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError = ResponseAPIResponse>(unitId: string,
-    preparationWasteUnitCommand: PreparationWasteUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostPreparationUnitsUnitIdWasteQueryKey(unitId,preparationWasteUnitCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>> = ({ signal }) => postPreparationUnitsUnitIdWaste(unitId,preparationWasteUnitCommand, requestOptions, signal);
+const mutationKey = getPostPreparationUnitsUnitIdWasteMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, PostPreparationUnitsUnitIdWasteMutationVariables> = (props) => {
+          const {unitId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: unitId !== null && unitId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostPreparationUnitsUnitIdWasteQueryResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>>
-export type PostPreparationUnitsUnitIdWasteQueryError = ResponseAPIResponse
+          return  postPreparationUnitsUnitIdWaste(unitId,data,requestOptions)
+        }
 
 
-export function usePostPreparationUnitsUnitIdWaste<TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError = ResponseAPIResponse>(
- unitId: string,
-    preparationWasteUnitCommand: PreparationWasteUnitCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsUnitIdWaste<TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError = ResponseAPIResponse>(
- unitId: string,
-    preparationWasteUnitCommand: PreparationWasteUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsUnitIdWaste<TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError = ResponseAPIResponse>(
- unitId: string,
-    preparationWasteUnitCommand: PreparationWasteUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostPreparationUnitsUnitIdWasteMutationResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>>
+    export type PostPreparationUnitsUnitIdWasteMutationBody = PreparationWasteUnitCommand
+    export type PostPreparationUnitsUnitIdWasteMutationError = ResponseAPIResponse
+    export type PostPreparationUnitsUnitIdWasteMutationVariables = {unitId: string;data: PreparationWasteUnitCommand}
+
+    /**
  * @summary Waste a Preparation Unit
  */
-
-export function usePostPreparationUnitsUnitIdWaste<TData = Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError = ResponseAPIResponse>(
- unitId: string,
-    preparationWasteUnitCommand: PreparationWasteUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostPreparationUnitsUnitIdWasteQueryOptions(unitId,preparationWasteUnitCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostPreparationUnitsUnitIdWaste = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>, TError,PostPreparationUnitsUnitIdWasteMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postPreparationUnitsUnitIdWaste>>,
+        TError,
+        PostPreparationUnitsUnitIdWasteMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostPreparationUnitsUnitIdWasteMutationOptions(options), queryClient);
+    }
+    /**
  * Advances 1 through 50 selected units. Missing or stale units are per-unit failures; unexpected failures roll back the request.
  * @summary Advance selected Preparation Units
  */
@@ -458,81 +386,54 @@ export const postPreparationUnitsAdvanceMany = (
 
 
 
-export const getPostPreparationUnitsAdvanceManyQueryKey = (preparationBulkAdvanceCommand?: PreparationBulkAdvanceCommand,) => {
-    return [
-    'POST', `/preparation/units/advance-many`, preparationBulkAdvanceCommand
-    ] as const;
-    }
+export const getPostPreparationUnitsAdvanceManyMutationKey = () => ['postPreparationUnitsAdvanceMany'] as const;
 
+export const getPostPreparationUnitsAdvanceManyMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError,PostPreparationUnitsAdvanceManyMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError,PostPreparationUnitsAdvanceManyMutationVariables, TContext> => {
 
-export const getPostPreparationUnitsAdvanceManyQueryOptions = <TData = Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError = ResponseAPIResponse>(preparationBulkAdvanceCommand: PreparationBulkAdvanceCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostPreparationUnitsAdvanceManyQueryKey(preparationBulkAdvanceCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>> = ({ signal }) => postPreparationUnitsAdvanceMany(preparationBulkAdvanceCommand, requestOptions, signal);
+const mutationKey = getPostPreparationUnitsAdvanceManyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, PostPreparationUnitsAdvanceManyMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostPreparationUnitsAdvanceManyQueryResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>>
-export type PostPreparationUnitsAdvanceManyQueryError = ResponseAPIResponse
+          return  postPreparationUnitsAdvanceMany(data,requestOptions)
+        }
 
 
-export function usePostPreparationUnitsAdvanceMany<TData = Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError = ResponseAPIResponse>(
- preparationBulkAdvanceCommand: PreparationBulkAdvanceCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsAdvanceMany<TData = Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError = ResponseAPIResponse>(
- preparationBulkAdvanceCommand: PreparationBulkAdvanceCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsAdvanceMany<TData = Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError = ResponseAPIResponse>(
- preparationBulkAdvanceCommand: PreparationBulkAdvanceCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostPreparationUnitsAdvanceManyMutationResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>>
+    export type PostPreparationUnitsAdvanceManyMutationBody = PreparationBulkAdvanceCommand
+    export type PostPreparationUnitsAdvanceManyMutationError = ResponseAPIResponse
+    export type PostPreparationUnitsAdvanceManyMutationVariables = {data: PreparationBulkAdvanceCommand}
+
+    /**
  * @summary Advance selected Preparation Units
  */
-
-export function usePostPreparationUnitsAdvanceMany<TData = Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError = ResponseAPIResponse>(
- preparationBulkAdvanceCommand: PreparationBulkAdvanceCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostPreparationUnitsAdvanceManyQueryOptions(preparationBulkAdvanceCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostPreparationUnitsAdvanceMany = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>, TError,PostPreparationUnitsAdvanceManyMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postPreparationUnitsAdvanceMany>>,
+        TError,
+        PostPreparationUnitsAdvanceManyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostPreparationUnitsAdvanceManyMutationOptions(options), queryClient);
+    }
+    /**
  * Cancels 1 through 50 queued units as one all-or-nothing batch. Each unit becomes CANCELLED with its typed transition, Cancellation fact, and CANCELLATION or CHANGE alert; each charged standard unit reduces its Check's live charge by its immutable unit price and the Check settles when the corrected balance reaches zero. A CHANGE links to an already-submitted later Order in the same active Service Session. Requires sales.operate and no Manager approval. The response carries no Check, Payment, or Refund data.
  * @summary Cancel or change queued Preparation Units
  */
@@ -553,81 +454,54 @@ export const postPreparationUnitsCancel = (
 
 
 
-export const getPostPreparationUnitsCancelQueryKey = (preparationCancelUnitsCommand?: PreparationCancelUnitsCommand,) => {
-    return [
-    'POST', `/preparation/units/cancel`, preparationCancelUnitsCommand
-    ] as const;
-    }
+export const getPostPreparationUnitsCancelMutationKey = () => ['postPreparationUnitsCancel'] as const;
 
+export const getPostPreparationUnitsCancelMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError,PostPreparationUnitsCancelMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError,PostPreparationUnitsCancelMutationVariables, TContext> => {
 
-export const getPostPreparationUnitsCancelQueryOptions = <TData = Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError = ResponseAPIResponse>(preparationCancelUnitsCommand: PreparationCancelUnitsCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostPreparationUnitsCancelQueryKey(preparationCancelUnitsCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postPreparationUnitsCancel>>> = ({ signal }) => postPreparationUnitsCancel(preparationCancelUnitsCommand, requestOptions, signal);
+const mutationKey = getPostPreparationUnitsCancelMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, PostPreparationUnitsCancelMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostPreparationUnitsCancelQueryResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsCancel>>>
-export type PostPreparationUnitsCancelQueryError = ResponseAPIResponse
+          return  postPreparationUnitsCancel(data,requestOptions)
+        }
 
 
-export function usePostPreparationUnitsCancel<TData = Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError = ResponseAPIResponse>(
- preparationCancelUnitsCommand: PreparationCancelUnitsCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsCancel>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsCancel>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsCancel<TData = Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError = ResponseAPIResponse>(
- preparationCancelUnitsCommand: PreparationCancelUnitsCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsCancel>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsCancel>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsCancel<TData = Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError = ResponseAPIResponse>(
- preparationCancelUnitsCommand: PreparationCancelUnitsCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostPreparationUnitsCancelMutationResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsCancel>>>
+    export type PostPreparationUnitsCancelMutationBody = PreparationCancelUnitsCommand
+    export type PostPreparationUnitsCancelMutationError = ResponseAPIResponse
+    export type PostPreparationUnitsCancelMutationVariables = {data: PreparationCancelUnitsCommand}
+
+    /**
  * @summary Cancel or change queued Preparation Units
  */
-
-export function usePostPreparationUnitsCancel<TData = Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError = ResponseAPIResponse>(
- preparationCancelUnitsCommand: PreparationCancelUnitsCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostPreparationUnitsCancelQueryOptions(preparationCancelUnitsCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostPreparationUnitsCancel = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsCancel>>, TError,PostPreparationUnitsCancelMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postPreparationUnitsCancel>>,
+        TError,
+        PostPreparationUnitsCancelMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostPreparationUnitsCancelMutationOptions(options), queryClient);
+    }
+    /**
  * Reverses 1 through 50 selected units one step along the chain — IN_PREPARATION to QUEUED, READY to IN_PREPARATION, FULFILLED to READY — as one all-or-nothing batch. Requires the Manager's own current PIN: the Manager role and PIN checks run inside the mutation transaction, so a wrong PIN is a collapsed 403 while a malformed PIN shape is 400 before any transaction. The PIN never appears in any response.
  * @summary Correct Preparation Unit states
  */
@@ -648,81 +522,54 @@ export const postPreparationUnitsCorrectState = (
 
 
 
-export const getPostPreparationUnitsCorrectStateQueryKey = (preparationCorrectStateCommand?: PreparationCorrectStateCommand,) => {
-    return [
-    'POST', `/preparation/units/correct-state`, preparationCorrectStateCommand
-    ] as const;
-    }
+export const getPostPreparationUnitsCorrectStateMutationKey = () => ['postPreparationUnitsCorrectState'] as const;
 
+export const getPostPreparationUnitsCorrectStateMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError,PostPreparationUnitsCorrectStateMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError,PostPreparationUnitsCorrectStateMutationVariables, TContext> => {
 
-export const getPostPreparationUnitsCorrectStateQueryOptions = <TData = Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError = ResponseAPIResponse>(preparationCorrectStateCommand: PreparationCorrectStateCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostPreparationUnitsCorrectStateQueryKey(preparationCorrectStateCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>> = ({ signal }) => postPreparationUnitsCorrectState(preparationCorrectStateCommand, requestOptions, signal);
+const mutationKey = getPostPreparationUnitsCorrectStateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, PostPreparationUnitsCorrectStateMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostPreparationUnitsCorrectStateQueryResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>>
-export type PostPreparationUnitsCorrectStateQueryError = ResponseAPIResponse
+          return  postPreparationUnitsCorrectState(data,requestOptions)
+        }
 
 
-export function usePostPreparationUnitsCorrectState<TData = Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError = ResponseAPIResponse>(
- preparationCorrectStateCommand: PreparationCorrectStateCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsCorrectState<TData = Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError = ResponseAPIResponse>(
- preparationCorrectStateCommand: PreparationCorrectStateCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationUnitsCorrectState<TData = Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError = ResponseAPIResponse>(
- preparationCorrectStateCommand: PreparationCorrectStateCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostPreparationUnitsCorrectStateMutationResult = NonNullable<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>>
+    export type PostPreparationUnitsCorrectStateMutationBody = PreparationCorrectStateCommand
+    export type PostPreparationUnitsCorrectStateMutationError = ResponseAPIResponse
+    export type PostPreparationUnitsCorrectStateMutationVariables = {data: PreparationCorrectStateCommand}
+
+    /**
  * @summary Correct Preparation Unit states
  */
-
-export function usePostPreparationUnitsCorrectState<TData = Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError = ResponseAPIResponse>(
- preparationCorrectStateCommand: PreparationCorrectStateCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostPreparationUnitsCorrectStateQueryOptions(preparationCorrectStateCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostPreparationUnitsCorrectState = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>, TError,PostPreparationUnitsCorrectStateMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postPreparationUnitsCorrectState>>,
+        TError,
+        PostPreparationUnitsCorrectStateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostPreparationUnitsCorrectStateMutationOptions(options), queryClient);
+    }
+    /**
  * Creates the linked replacement Preparation Unit — a fresh QUEUED unit with the next unit number of the same Order Item, the source's immutable preparation snapshot, and REMAKE priority — plus the Remake fact, in one transaction. The reason must be in the Remake catalog and the optional note is normalized before validation. Requires no Manager PIN.
  * @summary Remake a Waste
  */
@@ -744,83 +591,50 @@ export const postPreparationWastesWasteIdRemake = (
 
 
 
-export const getPostPreparationWastesWasteIdRemakeQueryKey = (wasteId: string,
-    preparationRemakeUnitCommand?: PreparationRemakeUnitCommand,) => {
-    return [
-    'POST', `/preparation/wastes/${wasteId}/remake`, preparationRemakeUnitCommand
-    ] as const;
-    }
+export const getPostPreparationWastesWasteIdRemakeMutationKey = () => ['postPreparationWastesWasteIdRemake'] as const;
 
+export const getPostPreparationWastesWasteIdRemakeMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError,PostPreparationWastesWasteIdRemakeMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError,PostPreparationWastesWasteIdRemakeMutationVariables, TContext> => {
 
-export const getPostPreparationWastesWasteIdRemakeQueryOptions = <TData = Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError = ResponseAPIResponse>(wasteId: string,
-    preparationRemakeUnitCommand: PreparationRemakeUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostPreparationWastesWasteIdRemakeQueryKey(wasteId,preparationRemakeUnitCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>> = ({ signal }) => postPreparationWastesWasteIdRemake(wasteId,preparationRemakeUnitCommand, requestOptions, signal);
+const mutationKey = getPostPreparationWastesWasteIdRemakeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, PostPreparationWastesWasteIdRemakeMutationVariables> = (props) => {
+          const {wasteId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: wasteId !== null && wasteId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostPreparationWastesWasteIdRemakeQueryResult = NonNullable<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>>
-export type PostPreparationWastesWasteIdRemakeQueryError = ResponseAPIResponse
+          return  postPreparationWastesWasteIdRemake(wasteId,data,requestOptions)
+        }
 
 
-export function usePostPreparationWastesWasteIdRemake<TData = Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError = ResponseAPIResponse>(
- wasteId: string,
-    preparationRemakeUnitCommand: PreparationRemakeUnitCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationWastesWasteIdRemake<TData = Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError = ResponseAPIResponse>(
- wasteId: string,
-    preparationRemakeUnitCommand: PreparationRemakeUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>,
-          TError,
-          Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostPreparationWastesWasteIdRemake<TData = Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError = ResponseAPIResponse>(
- wasteId: string,
-    preparationRemakeUnitCommand: PreparationRemakeUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostPreparationWastesWasteIdRemakeMutationResult = NonNullable<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>>
+    export type PostPreparationWastesWasteIdRemakeMutationBody = PreparationRemakeUnitCommand
+    export type PostPreparationWastesWasteIdRemakeMutationError = ResponseAPIResponse
+    export type PostPreparationWastesWasteIdRemakeMutationVariables = {wasteId: string;data: PreparationRemakeUnitCommand}
+
+    /**
  * @summary Remake a Waste
  */
-
-export function usePostPreparationWastesWasteIdRemake<TData = Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError = ResponseAPIResponse>(
- wasteId: string,
-    preparationRemakeUnitCommand: PreparationRemakeUnitCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostPreparationWastesWasteIdRemakeQueryOptions(wasteId,preparationRemakeUnitCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
+export const usePostPreparationWastesWasteIdRemake = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>, TError,PostPreparationWastesWasteIdRemakeMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postPreparationWastesWasteIdRemake>>,
+        TError,
+        PostPreparationWastesWasteIdRemakeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostPreparationWastesWasteIdRemakeMutationOptions(options), queryClient);
+    }

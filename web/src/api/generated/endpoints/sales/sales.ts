@@ -121,87 +121,54 @@ export const postSalesChecksCheckIdPaymentsCash = (
 
 
 
-export const getPostSalesChecksCheckIdPaymentsCashQueryKey = (checkId: string,
-    salesPayCashCommand?: SalesPayCashCommand,) => {
-    return [
-    'POST', `/sales/checks/${checkId}/payments/cash`, salesPayCashCommand
-    ] as const;
-    }
+export const getPostSalesChecksCheckIdPaymentsCashMutationKey = () => ['postSalesChecksCheckIdPaymentsCash'] as const;
 
+export const getPostSalesChecksCheckIdPaymentsCashMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError,PostSalesChecksCheckIdPaymentsCashMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError,PostSalesChecksCheckIdPaymentsCashMutationVariables, TContext> => {
 
-export const getPostSalesChecksCheckIdPaymentsCashQueryOptions = <TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError = ResponseAPIResponse>(checkId: string,
-    salesPayCashCommand: SalesPayCashCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesChecksCheckIdPaymentsCashQueryKey(checkId,salesPayCashCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>> = ({ signal }) => postSalesChecksCheckIdPaymentsCash(checkId,salesPayCashCommand, requestOptions, signal);
+const mutationKey = getPostSalesChecksCheckIdPaymentsCashMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, PostSalesChecksCheckIdPaymentsCashMutationVariables> = (props) => {
+          const {checkId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: checkId !== null && checkId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesChecksCheckIdPaymentsCashQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>>
-export type PostSalesChecksCheckIdPaymentsCashQueryError = ResponseAPIResponse
+          return  postSalesChecksCheckIdPaymentsCash(checkId,data,requestOptions)
+        }
 
 
-export function usePostSalesChecksCheckIdPaymentsCash<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesPayCashCommand: SalesPayCashCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesChecksCheckIdPaymentsCash<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesPayCashCommand: SalesPayCashCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesChecksCheckIdPaymentsCash<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesPayCashCommand: SalesPayCashCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesChecksCheckIdPaymentsCashMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>>
+    export type PostSalesChecksCheckIdPaymentsCashMutationBody = SalesPayCashCommand
+    export type PostSalesChecksCheckIdPaymentsCashMutationError = ResponseAPIResponse
+    export type PostSalesChecksCheckIdPaymentsCashMutationVariables = {checkId: string;data: SalesPayCashCommand}
+
+    /**
  * @summary Record a Cash Payment
  */
-
-export function usePostSalesChecksCheckIdPaymentsCash<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesPayCashCommand: SalesPayCashCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesChecksCheckIdPaymentsCashQueryOptions(checkId,salesPayCashCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesChecksCheckIdPaymentsCash = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>, TError,PostSalesChecksCheckIdPaymentsCashMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsCash>>,
+        TError,
+        PostSalesChecksCheckIdPaymentsCashMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesChecksCheckIdPaymentsCashMutationOptions(options), queryClient);
+    }
+    /**
  * Applies a bank transfer staff have confirmed as received to an open Check. receipt_observed_in_bank_app must be true, because a Manual QR Payment carries no automatic bank or gateway confirmation. The applied amount may not exceed the Check's balance. When the Payment brings the balance to zero the Check settles in the same transaction.
  * @summary Record a Manual QR Payment
  */
@@ -223,87 +190,54 @@ export const postSalesChecksCheckIdPaymentsManualQr = (
 
 
 
-export const getPostSalesChecksCheckIdPaymentsManualQrQueryKey = (checkId: string,
-    salesPayManualQRCommand?: SalesPayManualQRCommand,) => {
-    return [
-    'POST', `/sales/checks/${checkId}/payments/manual-qr`, salesPayManualQRCommand
-    ] as const;
-    }
+export const getPostSalesChecksCheckIdPaymentsManualQrMutationKey = () => ['postSalesChecksCheckIdPaymentsManualQr'] as const;
 
+export const getPostSalesChecksCheckIdPaymentsManualQrMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError,PostSalesChecksCheckIdPaymentsManualQrMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError,PostSalesChecksCheckIdPaymentsManualQrMutationVariables, TContext> => {
 
-export const getPostSalesChecksCheckIdPaymentsManualQrQueryOptions = <TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError = ResponseAPIResponse>(checkId: string,
-    salesPayManualQRCommand: SalesPayManualQRCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesChecksCheckIdPaymentsManualQrQueryKey(checkId,salesPayManualQRCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>> = ({ signal }) => postSalesChecksCheckIdPaymentsManualQr(checkId,salesPayManualQRCommand, requestOptions, signal);
+const mutationKey = getPostSalesChecksCheckIdPaymentsManualQrMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, PostSalesChecksCheckIdPaymentsManualQrMutationVariables> = (props) => {
+          const {checkId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: checkId !== null && checkId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesChecksCheckIdPaymentsManualQrQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>>
-export type PostSalesChecksCheckIdPaymentsManualQrQueryError = ResponseAPIResponse
+          return  postSalesChecksCheckIdPaymentsManualQr(checkId,data,requestOptions)
+        }
 
 
-export function usePostSalesChecksCheckIdPaymentsManualQr<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesPayManualQRCommand: SalesPayManualQRCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesChecksCheckIdPaymentsManualQr<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesPayManualQRCommand: SalesPayManualQRCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesChecksCheckIdPaymentsManualQr<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesPayManualQRCommand: SalesPayManualQRCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesChecksCheckIdPaymentsManualQrMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>>
+    export type PostSalesChecksCheckIdPaymentsManualQrMutationBody = SalesPayManualQRCommand
+    export type PostSalesChecksCheckIdPaymentsManualQrMutationError = ResponseAPIResponse
+    export type PostSalesChecksCheckIdPaymentsManualQrMutationVariables = {checkId: string;data: SalesPayManualQRCommand}
+
+    /**
  * @summary Record a Manual QR Payment
  */
-
-export function usePostSalesChecksCheckIdPaymentsManualQr<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesPayManualQRCommand: SalesPayManualQRCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesChecksCheckIdPaymentsManualQrQueryOptions(checkId,salesPayManualQRCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesChecksCheckIdPaymentsManualQr = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>, TError,PostSalesChecksCheckIdPaymentsManualQrMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesChecksCheckIdPaymentsManualQr>>,
+        TError,
+        PostSalesChecksCheckIdPaymentsManualQrMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesChecksCheckIdPaymentsManualQrMutationOptions(options), queryClient);
+    }
+    /**
  * Moves a quantity of one or more Committed Items from this Check onto another, either a newly created Check or an existing OPEN Check of the same Service Session. Rejected once either Check carries a Payment, because a paid Check is reconciliation evidence rather than a sorting tool. Neither the source nor the destination may be left with nothing charged.
  * @summary Split a Check
  */
@@ -325,87 +259,54 @@ export const postSalesChecksCheckIdSplit = (
 
 
 
-export const getPostSalesChecksCheckIdSplitQueryKey = (checkId: string,
-    salesSplitCheckCommand?: SalesSplitCheckCommand,) => {
-    return [
-    'POST', `/sales/checks/${checkId}/split`, salesSplitCheckCommand
-    ] as const;
-    }
+export const getPostSalesChecksCheckIdSplitMutationKey = () => ['postSalesChecksCheckIdSplit'] as const;
 
+export const getPostSalesChecksCheckIdSplitMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError,PostSalesChecksCheckIdSplitMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError,PostSalesChecksCheckIdSplitMutationVariables, TContext> => {
 
-export const getPostSalesChecksCheckIdSplitQueryOptions = <TData = Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError = ResponseAPIResponse>(checkId: string,
-    salesSplitCheckCommand: SalesSplitCheckCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesChecksCheckIdSplitQueryKey(checkId,salesSplitCheckCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>> = ({ signal }) => postSalesChecksCheckIdSplit(checkId,salesSplitCheckCommand, requestOptions, signal);
+const mutationKey = getPostSalesChecksCheckIdSplitMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, PostSalesChecksCheckIdSplitMutationVariables> = (props) => {
+          const {checkId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: checkId !== null && checkId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesChecksCheckIdSplitQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>>
-export type PostSalesChecksCheckIdSplitQueryError = ResponseAPIResponse
+          return  postSalesChecksCheckIdSplit(checkId,data,requestOptions)
+        }
 
 
-export function usePostSalesChecksCheckIdSplit<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesSplitCheckCommand: SalesSplitCheckCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesChecksCheckIdSplit<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesSplitCheckCommand: SalesSplitCheckCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesChecksCheckIdSplit<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesSplitCheckCommand: SalesSplitCheckCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesChecksCheckIdSplitMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>>
+    export type PostSalesChecksCheckIdSplitMutationBody = SalesSplitCheckCommand
+    export type PostSalesChecksCheckIdSplitMutationError = ResponseAPIResponse
+    export type PostSalesChecksCheckIdSplitMutationVariables = {checkId: string;data: SalesSplitCheckCommand}
+
+    /**
  * @summary Split a Check
  */
-
-export function usePostSalesChecksCheckIdSplit<TData = Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError = ResponseAPIResponse>(
- checkId: string,
-    salesSplitCheckCommand: SalesSplitCheckCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesChecksCheckIdSplitQueryOptions(checkId,salesSplitCheckCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesChecksCheckIdSplit = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>, TError,PostSalesChecksCheckIdSplitMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesChecksCheckIdSplit>>,
+        TError,
+        PostSalesChecksCheckIdSplitMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesChecksCheckIdSplitMutationOptions(options), queryClient);
+    }
+    /**
  * Absorbs one Check into another. Both must be OPEN, belong to the same Service Session, and carry no Payment. The absorbed Check keeps no charge and records the Check it merged into. The route is flat rather than nested, because merging acts on two peer Checks.
  * @summary Merge two Checks
  */
@@ -426,81 +327,54 @@ export const postSalesChecksMerge = (
 
 
 
-export const getPostSalesChecksMergeQueryKey = (salesMergeChecksCommand?: SalesMergeChecksCommand,) => {
-    return [
-    'POST', `/sales/checks/merge`, salesMergeChecksCommand
-    ] as const;
-    }
+export const getPostSalesChecksMergeMutationKey = () => ['postSalesChecksMerge'] as const;
 
+export const getPostSalesChecksMergeMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError,PostSalesChecksMergeMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError,PostSalesChecksMergeMutationVariables, TContext> => {
 
-export const getPostSalesChecksMergeQueryOptions = <TData = Awaited<ReturnType<typeof postSalesChecksMerge>>, TError = ResponseAPIResponse>(salesMergeChecksCommand: SalesMergeChecksCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesChecksMergeQueryKey(salesMergeChecksCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesChecksMerge>>> = ({ signal }) => postSalesChecksMerge(salesMergeChecksCommand, requestOptions, signal);
+const mutationKey = getPostSalesChecksMergeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesChecksMerge>>, PostSalesChecksMergeMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesChecksMergeQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesChecksMerge>>>
-export type PostSalesChecksMergeQueryError = ResponseAPIResponse
+          return  postSalesChecksMerge(data,requestOptions)
+        }
 
 
-export function usePostSalesChecksMerge<TData = Awaited<ReturnType<typeof postSalesChecksMerge>>, TError = ResponseAPIResponse>(
- salesMergeChecksCommand: SalesMergeChecksCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesChecksMerge>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesChecksMerge>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesChecksMerge<TData = Awaited<ReturnType<typeof postSalesChecksMerge>>, TError = ResponseAPIResponse>(
- salesMergeChecksCommand: SalesMergeChecksCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesChecksMerge>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesChecksMerge>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesChecksMerge<TData = Awaited<ReturnType<typeof postSalesChecksMerge>>, TError = ResponseAPIResponse>(
- salesMergeChecksCommand: SalesMergeChecksCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesChecksMergeMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesChecksMerge>>>
+    export type PostSalesChecksMergeMutationBody = SalesMergeChecksCommand
+    export type PostSalesChecksMergeMutationError = ResponseAPIResponse
+    export type PostSalesChecksMergeMutationVariables = {data: SalesMergeChecksCommand}
+
+    /**
  * @summary Merge two Checks
  */
-
-export function usePostSalesChecksMerge<TData = Awaited<ReturnType<typeof postSalesChecksMerge>>, TError = ResponseAPIResponse>(
- salesMergeChecksCommand: SalesMergeChecksCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesChecksMergeQueryOptions(salesMergeChecksCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesChecksMerge = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesChecksMerge>>, TError,PostSalesChecksMergeMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesChecksMerge>>,
+        TError,
+        PostSalesChecksMergeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesChecksMergeMutationOptions(options), queryClient);
+    }
+    /**
  * Returns one immutable Completed Sale with its Checks, Orders, Preparation Units, and the recorded preparation history, by Completed Sale id.
  * @summary Get a Completed Sale
  */
@@ -519,54 +393,81 @@ export const getSalesCompletedSalesId = (
 
 
 
-export const getGetSalesCompletedSalesIdMutationKey = () => ['getSalesCompletedSalesId'] as const;
-
-export const getGetSalesCompletedSalesIdMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError,GetSalesCompletedSalesIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError,GetSalesCompletedSalesIdMutationVariables, TContext> => {
-
-const mutationKey = getGetSalesCompletedSalesIdMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetSalesCompletedSalesIdQueryKey = (id: string,) => {
+    return [
+    `/sales/completed-sales/${id}`
+    ] as const;
+    }
 
 
+export const getGetSalesCompletedSalesIdQueryOptions = <TData = Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError = ResponseAPIResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSalesCompletedSalesIdQueryKey(id);
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, GetSalesCompletedSalesIdMutationVariables> = (props) => {
-          const {id} = props ?? {};
 
-          return  getSalesCompletedSalesId(id,requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalesCompletedSalesId>>> = ({ signal }) => getSalesCompletedSalesId(id, requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
+export type GetSalesCompletedSalesIdQueryResult = NonNullable<Awaited<ReturnType<typeof getSalesCompletedSalesId>>>
+export type GetSalesCompletedSalesIdQueryError = ResponseAPIResponse
 
-    export type GetSalesCompletedSalesIdMutationResult = NonNullable<Awaited<ReturnType<typeof getSalesCompletedSalesId>>>
 
-    export type GetSalesCompletedSalesIdMutationError = ResponseAPIResponse
-    export type GetSalesCompletedSalesIdMutationVariables = {id: string}
-
-    /**
+export function useGetSalesCompletedSalesId<TData = Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError = ResponseAPIResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSalesCompletedSalesId>>,
+          TError,
+          Awaited<ReturnType<typeof getSalesCompletedSalesId>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSalesCompletedSalesId<TData = Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSalesCompletedSalesId>>,
+          TError,
+          Awaited<ReturnType<typeof getSalesCompletedSalesId>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSalesCompletedSalesId<TData = Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Get a Completed Sale
  */
-export const useGetSalesCompletedSalesId = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError,GetSalesCompletedSalesIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getSalesCompletedSalesId>>,
-        TError,
-        GetSalesCompletedSalesIdMutationVariables,
-        TContext
-      > => {
-      return useMutation(getGetSalesCompletedSalesIdMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetSalesCompletedSalesId<TData = Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesCompletedSalesId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSalesCompletedSalesIdQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Declares one whole Payment incorrect while its original Sales Shift is still open, appends an immutable reversal without editing or deleting the source Payment, recomputes the Check's corrected financials, and reopens the Check with all settlement evidence cleared when the remaining valid coverage no longer covers its charge. Rejected for a merged Check, an already-voided Payment, any Payment carrying a Refund allocation (pending or completed), a closed Service Session, and a Payment whose original Shift is closed or is no longer the currently open one. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately. The Void is always for the entire applied amount, and a replacement Payment is recorded through the ordinary Cash or Manual QR command.
  * @summary Void a whole Payment
  */
@@ -588,87 +489,54 @@ export const postSalesPaymentsPaymentIdVoid = (
 
 
 
-export const getPostSalesPaymentsPaymentIdVoidQueryKey = (paymentId: string,
-    salesVoidPaymentCommand?: SalesVoidPaymentCommand,) => {
-    return [
-    'POST', `/sales/payments/${paymentId}/void`, salesVoidPaymentCommand
-    ] as const;
-    }
+export const getPostSalesPaymentsPaymentIdVoidMutationKey = () => ['postSalesPaymentsPaymentIdVoid'] as const;
 
+export const getPostSalesPaymentsPaymentIdVoidMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError,PostSalesPaymentsPaymentIdVoidMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError,PostSalesPaymentsPaymentIdVoidMutationVariables, TContext> => {
 
-export const getPostSalesPaymentsPaymentIdVoidQueryOptions = <TData = Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError = ResponseAPIResponse>(paymentId: string,
-    salesVoidPaymentCommand: SalesVoidPaymentCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesPaymentsPaymentIdVoidQueryKey(paymentId,salesVoidPaymentCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>> = ({ signal }) => postSalesPaymentsPaymentIdVoid(paymentId,salesVoidPaymentCommand, requestOptions, signal);
+const mutationKey = getPostSalesPaymentsPaymentIdVoidMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, PostSalesPaymentsPaymentIdVoidMutationVariables> = (props) => {
+          const {paymentId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: paymentId !== null && paymentId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesPaymentsPaymentIdVoidQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>>
-export type PostSalesPaymentsPaymentIdVoidQueryError = ResponseAPIResponse
+          return  postSalesPaymentsPaymentIdVoid(paymentId,data,requestOptions)
+        }
 
 
-export function usePostSalesPaymentsPaymentIdVoid<TData = Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError = ResponseAPIResponse>(
- paymentId: string,
-    salesVoidPaymentCommand: SalesVoidPaymentCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesPaymentsPaymentIdVoid<TData = Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError = ResponseAPIResponse>(
- paymentId: string,
-    salesVoidPaymentCommand: SalesVoidPaymentCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesPaymentsPaymentIdVoid<TData = Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError = ResponseAPIResponse>(
- paymentId: string,
-    salesVoidPaymentCommand: SalesVoidPaymentCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesPaymentsPaymentIdVoidMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>>
+    export type PostSalesPaymentsPaymentIdVoidMutationBody = SalesVoidPaymentCommand
+    export type PostSalesPaymentsPaymentIdVoidMutationError = ResponseAPIResponse
+    export type PostSalesPaymentsPaymentIdVoidMutationVariables = {paymentId: string;data: SalesVoidPaymentCommand}
+
+    /**
  * @summary Void a whole Payment
  */
-
-export function usePostSalesPaymentsPaymentIdVoid<TData = Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError = ResponseAPIResponse>(
- paymentId: string,
-    salesVoidPaymentCommand: SalesVoidPaymentCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesPaymentsPaymentIdVoidQueryOptions(paymentId,salesVoidPaymentCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesPaymentsPaymentIdVoid = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>, TError,PostSalesPaymentsPaymentIdVoidMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesPaymentsPaymentIdVoid>>,
+        TError,
+        PostSalesPaymentsPaymentIdVoidMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesPaymentsPaymentIdVoidMutationOptions(options), queryClient);
+    }
+    /**
  * Returns real money through the original Payment method while consuming both corrected Charge Adjustment capacity and original Payment refundable capacity in equal sums. A live Refund resolves the active Service Session's pending Refund and returns the updated Service Session. A post-sale Refund consumes a POST_SALE correction of the Completed Sale, links to it, and returns its additive correction history without rewriting any closed row. A CASH Refund completes in the same transaction; a MANUAL_QR Refund stays PENDING until staff confirm the outbound transfer. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately.
  * @summary Record a Refund
  */
@@ -689,81 +557,54 @@ export const postSalesRefunds = (
 
 
 
-export const getPostSalesRefundsQueryKey = (salesRecordRefundCommand?: SalesRecordRefundCommand,) => {
-    return [
-    'POST', `/sales/refunds`, salesRecordRefundCommand
-    ] as const;
-    }
+export const getPostSalesRefundsMutationKey = () => ['postSalesRefunds'] as const;
 
+export const getPostSalesRefundsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError,PostSalesRefundsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError,PostSalesRefundsMutationVariables, TContext> => {
 
-export const getPostSalesRefundsQueryOptions = <TData = Awaited<ReturnType<typeof postSalesRefunds>>, TError = ResponseAPIResponse>(salesRecordRefundCommand: SalesRecordRefundCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesRefundsQueryKey(salesRecordRefundCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesRefunds>>> = ({ signal }) => postSalesRefunds(salesRecordRefundCommand, requestOptions, signal);
+const mutationKey = getPostSalesRefundsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesRefunds>>, PostSalesRefundsMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesRefundsQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesRefunds>>>
-export type PostSalesRefundsQueryError = ResponseAPIResponse
+          return  postSalesRefunds(data,requestOptions)
+        }
 
 
-export function usePostSalesRefunds<TData = Awaited<ReturnType<typeof postSalesRefunds>>, TError = ResponseAPIResponse>(
- salesRecordRefundCommand: SalesRecordRefundCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesRefunds>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesRefunds>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesRefunds<TData = Awaited<ReturnType<typeof postSalesRefunds>>, TError = ResponseAPIResponse>(
- salesRecordRefundCommand: SalesRecordRefundCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesRefunds>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesRefunds>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesRefunds<TData = Awaited<ReturnType<typeof postSalesRefunds>>, TError = ResponseAPIResponse>(
- salesRecordRefundCommand: SalesRecordRefundCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesRefundsMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesRefunds>>>
+    export type PostSalesRefundsMutationBody = SalesRecordRefundCommand
+    export type PostSalesRefundsMutationError = ResponseAPIResponse
+    export type PostSalesRefundsMutationVariables = {data: SalesRecordRefundCommand}
+
+    /**
  * @summary Record a Refund
  */
-
-export function usePostSalesRefunds<TData = Awaited<ReturnType<typeof postSalesRefunds>>, TError = ResponseAPIResponse>(
- salesRecordRefundCommand: SalesRecordRefundCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesRefundsQueryOptions(salesRecordRefundCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesRefunds = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesRefunds>>, TError,PostSalesRefundsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesRefunds>>,
+        TError,
+        PostSalesRefundsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesRefundsMutationOptions(options), queryClient);
+    }
+    /**
  * Completes an approved Manual QR Refund once staff confirm the outbound bank transfer. The Refund must exist, use MANUAL_QR, lack a completion, and belong to the current open Shift. Confirmation re-derives the obligation under the Check lock — the Check's pending Refund for a live Refund, the Completed Sale's outstanding correction for a post-sale Refund — and refuses an amount above it, so a completed Refund can never make a Check's balance positive. It appends exactly one completion with the confirmer identity and session, records an optional trimmed transaction_reference of at most 100 characters, writes MANUAL_QR_REFUND_COMPLETED, and never edits the Refund row or its allocations. Requires current sales.operate and no second Manager Approval. Exact replay returns the stored result; another request id after completion answers REFUND_ALREADY_COMPLETED.
  * @summary Confirm a Manual QR Refund
  */
@@ -785,87 +626,54 @@ export const postSalesRefundsRefundIdConfirm = (
 
 
 
-export const getPostSalesRefundsRefundIdConfirmQueryKey = (refundId: string,
-    salesConfirmManualQRRefundCommand?: SalesConfirmManualQRRefundCommand,) => {
-    return [
-    'POST', `/sales/refunds/${refundId}/confirm`, salesConfirmManualQRRefundCommand
-    ] as const;
-    }
+export const getPostSalesRefundsRefundIdConfirmMutationKey = () => ['postSalesRefundsRefundIdConfirm'] as const;
 
+export const getPostSalesRefundsRefundIdConfirmMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError,PostSalesRefundsRefundIdConfirmMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError,PostSalesRefundsRefundIdConfirmMutationVariables, TContext> => {
 
-export const getPostSalesRefundsRefundIdConfirmQueryOptions = <TData = Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError = ResponseAPIResponse>(refundId: string,
-    salesConfirmManualQRRefundCommand: SalesConfirmManualQRRefundCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesRefundsRefundIdConfirmQueryKey(refundId,salesConfirmManualQRRefundCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>> = ({ signal }) => postSalesRefundsRefundIdConfirm(refundId,salesConfirmManualQRRefundCommand, requestOptions, signal);
+const mutationKey = getPostSalesRefundsRefundIdConfirmMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, PostSalesRefundsRefundIdConfirmMutationVariables> = (props) => {
+          const {refundId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: refundId !== null && refundId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesRefundsRefundIdConfirmQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>>
-export type PostSalesRefundsRefundIdConfirmQueryError = ResponseAPIResponse
+          return  postSalesRefundsRefundIdConfirm(refundId,data,requestOptions)
+        }
 
 
-export function usePostSalesRefundsRefundIdConfirm<TData = Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError = ResponseAPIResponse>(
- refundId: string,
-    salesConfirmManualQRRefundCommand: SalesConfirmManualQRRefundCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesRefundsRefundIdConfirm<TData = Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError = ResponseAPIResponse>(
- refundId: string,
-    salesConfirmManualQRRefundCommand: SalesConfirmManualQRRefundCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesRefundsRefundIdConfirm<TData = Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError = ResponseAPIResponse>(
- refundId: string,
-    salesConfirmManualQRRefundCommand: SalesConfirmManualQRRefundCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesRefundsRefundIdConfirmMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>>
+    export type PostSalesRefundsRefundIdConfirmMutationBody = SalesConfirmManualQRRefundCommand
+    export type PostSalesRefundsRefundIdConfirmMutationError = ResponseAPIResponse
+    export type PostSalesRefundsRefundIdConfirmMutationVariables = {refundId: string;data: SalesConfirmManualQRRefundCommand}
+
+    /**
  * @summary Confirm a Manual QR Refund
  */
-
-export function usePostSalesRefundsRefundIdConfirm<TData = Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError = ResponseAPIResponse>(
- refundId: string,
-    salesConfirmManualQRRefundCommand: SalesConfirmManualQRRefundCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesRefundsRefundIdConfirmQueryOptions(refundId,salesConfirmManualQRRefundCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesRefundsRefundIdConfirm = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>, TError,PostSalesRefundsRefundIdConfirmMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesRefundsRefundIdConfirm>>,
+        TError,
+        PostSalesRefundsRefundIdConfirmMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesRefundsRefundIdConfirmMutationOptions(options), queryClient);
+    }
+    /**
  * Returns every ACTIVE Service Session with its full projection, ordered by creation. This is the cashier's open-tabs view.
  * @summary List active Service Sessions
  */
@@ -884,54 +692,81 @@ export const getSalesServiceSessions = (
 
 
 
-export const getGetSalesServiceSessionsMutationKey = () => ['getSalesServiceSessions'] as const;
-
-export const getGetSalesServiceSessionsMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError,void, TContext> => {
-
-const mutationKey = getGetSalesServiceSessionsMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetSalesServiceSessionsQueryKey = () => {
+    return [
+    `/sales/service-sessions`
+    ] as const;
+    }
 
 
+export const getGetSalesServiceSessionsQueryOptions = <TData = Awaited<ReturnType<typeof getSalesServiceSessions>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSalesServiceSessionsQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getSalesServiceSessions>>, void> = () => {
 
-
-          return  getSalesServiceSessions(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalesServiceSessions>>> = ({ signal }) => getSalesServiceSessions(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetSalesServiceSessionsMutationResult = NonNullable<Awaited<ReturnType<typeof getSalesServiceSessions>>>
-
-    export type GetSalesServiceSessionsMutationError = ResponseAPIResponse
+export type GetSalesServiceSessionsQueryResult = NonNullable<Awaited<ReturnType<typeof getSalesServiceSessions>>>
+export type GetSalesServiceSessionsQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetSalesServiceSessions<TData = Awaited<ReturnType<typeof getSalesServiceSessions>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSalesServiceSessions>>,
+          TError,
+          Awaited<ReturnType<typeof getSalesServiceSessions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSalesServiceSessions<TData = Awaited<ReturnType<typeof getSalesServiceSessions>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSalesServiceSessions>>,
+          TError,
+          Awaited<ReturnType<typeof getSalesServiceSessions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSalesServiceSessions<TData = Awaited<ReturnType<typeof getSalesServiceSessions>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary List active Service Sessions
  */
-export const useGetSalesServiceSessions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getSalesServiceSessions>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetSalesServiceSessionsMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetSalesServiceSessions<TData = Awaited<ReturnType<typeof getSalesServiceSessions>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessions>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSalesServiceSessionsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Returns one Service Session with its current Tables and Order Draft. checks is filled by Phase 5B, orders and preparation_units by Phase 5D; each is an empty array until then.
  * @summary Get a Service Session
  */
@@ -950,54 +785,81 @@ export const getSalesServiceSessionsId = (
 
 
 
-export const getGetSalesServiceSessionsIdMutationKey = () => ['getSalesServiceSessionsId'] as const;
-
-export const getGetSalesServiceSessionsIdMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError,GetSalesServiceSessionsIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError,GetSalesServiceSessionsIdMutationVariables, TContext> => {
-
-const mutationKey = getGetSalesServiceSessionsIdMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetSalesServiceSessionsIdQueryKey = (id: string,) => {
+    return [
+    `/sales/service-sessions/${id}`
+    ] as const;
+    }
 
 
+export const getGetSalesServiceSessionsIdQueryOptions = <TData = Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError = ResponseAPIResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSalesServiceSessionsIdQueryKey(id);
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, GetSalesServiceSessionsIdMutationVariables> = (props) => {
-          const {id} = props ?? {};
 
-          return  getSalesServiceSessionsId(id,requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalesServiceSessionsId>>> = ({ signal }) => getSalesServiceSessionsId(id, requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
+export type GetSalesServiceSessionsIdQueryResult = NonNullable<Awaited<ReturnType<typeof getSalesServiceSessionsId>>>
+export type GetSalesServiceSessionsIdQueryError = ResponseAPIResponse
 
-    export type GetSalesServiceSessionsIdMutationResult = NonNullable<Awaited<ReturnType<typeof getSalesServiceSessionsId>>>
 
-    export type GetSalesServiceSessionsIdMutationError = ResponseAPIResponse
-    export type GetSalesServiceSessionsIdMutationVariables = {id: string}
-
-    /**
+export function useGetSalesServiceSessionsId<TData = Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError = ResponseAPIResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSalesServiceSessionsId>>,
+          TError,
+          Awaited<ReturnType<typeof getSalesServiceSessionsId>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSalesServiceSessionsId<TData = Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSalesServiceSessionsId>>,
+          TError,
+          Awaited<ReturnType<typeof getSalesServiceSessionsId>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSalesServiceSessionsId<TData = Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Get a Service Session
  */
-export const useGetSalesServiceSessionsId = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError,GetSalesServiceSessionsIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getSalesServiceSessionsId>>,
-        TError,
-        GetSalesServiceSessionsIdMutationVariables,
-        TContext
-      > => {
-      return useMutation(getGetSalesServiceSessionsIdMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetSalesServiceSessionsId<TData = Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSalesServiceSessionsIdQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Freezes an eligible Service Session into an immutable Completed Sale and releases every held Table Assignment. A Session closes only when, in this order of refusal: every Check is settled, every committed item has been submitted to the bar, the Session carries at least one Order, and every Preparation Unit is terminal. Closing an already-closed Session returns its existing Completed Sale rather than an error.
  * @summary Close the Service Session
  */
@@ -1019,87 +881,54 @@ export const postSalesServiceSessionsIdClose = (
 
 
 
-export const getPostSalesServiceSessionsIdCloseQueryKey = (id: string,
-    salesCloseServiceSessionCommand?: SalesCloseServiceSessionCommand,) => {
-    return [
-    'POST', `/sales/service-sessions/${id}/close`, salesCloseServiceSessionCommand
-    ] as const;
-    }
+export const getPostSalesServiceSessionsIdCloseMutationKey = () => ['postSalesServiceSessionsIdClose'] as const;
 
+export const getPostSalesServiceSessionsIdCloseMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError,PostSalesServiceSessionsIdCloseMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError,PostSalesServiceSessionsIdCloseMutationVariables, TContext> => {
 
-export const getPostSalesServiceSessionsIdCloseQueryOptions = <TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError = ResponseAPIResponse>(id: string,
-    salesCloseServiceSessionCommand: SalesCloseServiceSessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesServiceSessionsIdCloseQueryKey(id,salesCloseServiceSessionCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>> = ({ signal }) => postSalesServiceSessionsIdClose(id,salesCloseServiceSessionCommand, requestOptions, signal);
+const mutationKey = getPostSalesServiceSessionsIdCloseMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, PostSalesServiceSessionsIdCloseMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesServiceSessionsIdCloseQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>>
-export type PostSalesServiceSessionsIdCloseQueryError = ResponseAPIResponse
+          return  postSalesServiceSessionsIdClose(id,data,requestOptions)
+        }
 
 
-export function usePostSalesServiceSessionsIdClose<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError = ResponseAPIResponse>(
- id: string,
-    salesCloseServiceSessionCommand: SalesCloseServiceSessionCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdClose<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError = ResponseAPIResponse>(
- id: string,
-    salesCloseServiceSessionCommand: SalesCloseServiceSessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdClose<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError = ResponseAPIResponse>(
- id: string,
-    salesCloseServiceSessionCommand: SalesCloseServiceSessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsIdCloseMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>>
+    export type PostSalesServiceSessionsIdCloseMutationBody = SalesCloseServiceSessionCommand
+    export type PostSalesServiceSessionsIdCloseMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsIdCloseMutationVariables = {id: string;data: SalesCloseServiceSessionCommand}
+
+    /**
  * @summary Close the Service Session
  */
-
-export function usePostSalesServiceSessionsIdClose<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError = ResponseAPIResponse>(
- id: string,
-    salesCloseServiceSessionCommand: SalesCloseServiceSessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesServiceSessionsIdCloseQueryOptions(id,salesCloseServiceSessionCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesServiceSessionsIdClose = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>, TError,PostSalesServiceSessionsIdCloseMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsIdClose>>,
+        TError,
+        PostSalesServiceSessionsIdCloseMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsIdCloseMutationOptions(options), queryClient);
+    }
+    /**
  * Returns the immutable Completed Sale of one Service Session with its Checks, Orders, Preparation Units, and the recorded preparation history. A Session that has not closed has no Completed Sale and answers 404.
  * @summary Get a Service Session's Completed Sale
  */
@@ -1118,54 +947,81 @@ export const getSalesServiceSessionsIdCompletedSale = (
 
 
 
-export const getGetSalesServiceSessionsIdCompletedSaleMutationKey = () => ['getSalesServiceSessionsIdCompletedSale'] as const;
-
-export const getGetSalesServiceSessionsIdCompletedSaleMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError,GetSalesServiceSessionsIdCompletedSaleMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError,GetSalesServiceSessionsIdCompletedSaleMutationVariables, TContext> => {
-
-const mutationKey = getGetSalesServiceSessionsIdCompletedSaleMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetSalesServiceSessionsIdCompletedSaleQueryKey = (id: string,) => {
+    return [
+    `/sales/service-sessions/${id}/completed-sale`
+    ] as const;
+    }
 
 
+export const getGetSalesServiceSessionsIdCompletedSaleQueryOptions = <TData = Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError = ResponseAPIResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSalesServiceSessionsIdCompletedSaleQueryKey(id);
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, GetSalesServiceSessionsIdCompletedSaleMutationVariables> = (props) => {
-          const {id} = props ?? {};
 
-          return  getSalesServiceSessionsIdCompletedSale(id,requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>> = ({ signal }) => getSalesServiceSessionsIdCompletedSale(id, requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
+export type GetSalesServiceSessionsIdCompletedSaleQueryResult = NonNullable<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>>
+export type GetSalesServiceSessionsIdCompletedSaleQueryError = ResponseAPIResponse
 
-    export type GetSalesServiceSessionsIdCompletedSaleMutationResult = NonNullable<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>>
 
-    export type GetSalesServiceSessionsIdCompletedSaleMutationError = ResponseAPIResponse
-    export type GetSalesServiceSessionsIdCompletedSaleMutationVariables = {id: string}
-
-    /**
+export function useGetSalesServiceSessionsIdCompletedSale<TData = Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError = ResponseAPIResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>,
+          TError,
+          Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSalesServiceSessionsIdCompletedSale<TData = Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>,
+          TError,
+          Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSalesServiceSessionsIdCompletedSale<TData = Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Get a Service Session's Completed Sale
  */
-export const useGetSalesServiceSessionsIdCompletedSale = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError,GetSalesServiceSessionsIdCompletedSaleMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>,
-        TError,
-        GetSalesServiceSessionsIdCompletedSaleMutationVariables,
-        TContext
-      > => {
-      return useMutation(getGetSalesServiceSessionsIdCompletedSaleMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetSalesServiceSessionsIdCompletedSale<TData = Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError = ResponseAPIResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSalesServiceSessionsIdCompletedSale>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSalesServiceSessionsIdCompletedSaleQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Opens the Service Session's next Order Draft. Rejected while the Session holds an editable draft, or a committed draft with no Order — in Phase 5B the latter blocks every committed draft, because Submit arrives in 5D.
  * @summary Start a new Order Draft
  */
@@ -1187,87 +1043,54 @@ export const postSalesServiceSessionsIdDraft = (
 
 
 
-export const getPostSalesServiceSessionsIdDraftQueryKey = (id: string,
-    salesStartNewOrderDraftCommand?: SalesStartNewOrderDraftCommand,) => {
-    return [
-    'POST', `/sales/service-sessions/${id}/draft`, salesStartNewOrderDraftCommand
-    ] as const;
-    }
+export const getPostSalesServiceSessionsIdDraftMutationKey = () => ['postSalesServiceSessionsIdDraft'] as const;
 
+export const getPostSalesServiceSessionsIdDraftMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError,PostSalesServiceSessionsIdDraftMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError,PostSalesServiceSessionsIdDraftMutationVariables, TContext> => {
 
-export const getPostSalesServiceSessionsIdDraftQueryOptions = <TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError = ResponseAPIResponse>(id: string,
-    salesStartNewOrderDraftCommand: SalesStartNewOrderDraftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesServiceSessionsIdDraftQueryKey(id,salesStartNewOrderDraftCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>> = ({ signal }) => postSalesServiceSessionsIdDraft(id,salesStartNewOrderDraftCommand, requestOptions, signal);
+const mutationKey = getPostSalesServiceSessionsIdDraftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, PostSalesServiceSessionsIdDraftMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesServiceSessionsIdDraftQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>>
-export type PostSalesServiceSessionsIdDraftQueryError = ResponseAPIResponse
+          return  postSalesServiceSessionsIdDraft(id,data,requestOptions)
+        }
 
 
-export function usePostSalesServiceSessionsIdDraft<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError = ResponseAPIResponse>(
- id: string,
-    salesStartNewOrderDraftCommand: SalesStartNewOrderDraftCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdDraft<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError = ResponseAPIResponse>(
- id: string,
-    salesStartNewOrderDraftCommand: SalesStartNewOrderDraftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdDraft<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError = ResponseAPIResponse>(
- id: string,
-    salesStartNewOrderDraftCommand: SalesStartNewOrderDraftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsIdDraftMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>>
+    export type PostSalesServiceSessionsIdDraftMutationBody = SalesStartNewOrderDraftCommand
+    export type PostSalesServiceSessionsIdDraftMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsIdDraftMutationVariables = {id: string;data: SalesStartNewOrderDraftCommand}
+
+    /**
  * @summary Start a new Order Draft
  */
-
-export function usePostSalesServiceSessionsIdDraft<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError = ResponseAPIResponse>(
- id: string,
-    salesStartNewOrderDraftCommand: SalesStartNewOrderDraftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesServiceSessionsIdDraftQueryOptions(id,salesStartNewOrderDraftCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesServiceSessionsIdDraft = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>, TError,PostSalesServiceSessionsIdDraftMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsIdDraft>>,
+        TError,
+        PostSalesServiceSessionsIdDraftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsIdDraftMutationOptions(options), queryClient);
+    }
+    /**
  * Steers where the next Commit's charges land. CURRENT_UNPAID reuses the Session's most recent open Check; NEW_CHECK always opens one. The target belongs to the draft and resets when a new draft opens.
  * @summary Set the Order Draft's Check target
  */
@@ -1289,87 +1112,54 @@ export const putSalesServiceSessionsIdDraftCheckTarget = (
 
 
 
-export const getPutSalesServiceSessionsIdDraftCheckTargetQueryKey = (id: string,
-    salesSetCheckTargetCommand?: SalesSetCheckTargetCommand,) => {
-    return [
-    'PUT', `/sales/service-sessions/${id}/draft/check-target`, salesSetCheckTargetCommand
-    ] as const;
-    }
+export const getPutSalesServiceSessionsIdDraftCheckTargetMutationKey = () => ['putSalesServiceSessionsIdDraftCheckTarget'] as const;
 
+export const getPutSalesServiceSessionsIdDraftCheckTargetMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError,PutSalesServiceSessionsIdDraftCheckTargetMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError,PutSalesServiceSessionsIdDraftCheckTargetMutationVariables, TContext> => {
 
-export const getPutSalesServiceSessionsIdDraftCheckTargetQueryOptions = <TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError = ResponseAPIResponse>(id: string,
-    salesSetCheckTargetCommand: SalesSetCheckTargetCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPutSalesServiceSessionsIdDraftCheckTargetQueryKey(id,salesSetCheckTargetCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>> = ({ signal }) => putSalesServiceSessionsIdDraftCheckTarget(id,salesSetCheckTargetCommand, requestOptions, signal);
+const mutationKey = getPutSalesServiceSessionsIdDraftCheckTargetMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, PutSalesServiceSessionsIdDraftCheckTargetMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PutSalesServiceSessionsIdDraftCheckTargetQueryResult = NonNullable<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>>
-export type PutSalesServiceSessionsIdDraftCheckTargetQueryError = ResponseAPIResponse
+          return  putSalesServiceSessionsIdDraftCheckTarget(id,data,requestOptions)
+        }
 
 
-export function usePutSalesServiceSessionsIdDraftCheckTarget<TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSetCheckTargetCommand: SalesSetCheckTargetCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>,
-          TError,
-          Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePutSalesServiceSessionsIdDraftCheckTarget<TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSetCheckTargetCommand: SalesSetCheckTargetCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>,
-          TError,
-          Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePutSalesServiceSessionsIdDraftCheckTarget<TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSetCheckTargetCommand: SalesSetCheckTargetCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutSalesServiceSessionsIdDraftCheckTargetMutationResult = NonNullable<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>>
+    export type PutSalesServiceSessionsIdDraftCheckTargetMutationBody = SalesSetCheckTargetCommand
+    export type PutSalesServiceSessionsIdDraftCheckTargetMutationError = ResponseAPIResponse
+    export type PutSalesServiceSessionsIdDraftCheckTargetMutationVariables = {id: string;data: SalesSetCheckTargetCommand}
+
+    /**
  * @summary Set the Order Draft's Check target
  */
-
-export function usePutSalesServiceSessionsIdDraftCheckTarget<TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSetCheckTargetCommand: SalesSetCheckTargetCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPutSalesServiceSessionsIdDraftCheckTargetQueryOptions(id,salesSetCheckTargetCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePutSalesServiceSessionsIdDraftCheckTarget = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>, TError,PutSalesServiceSessionsIdDraftCheckTargetMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putSalesServiceSessionsIdDraftCheckTarget>>,
+        TError,
+        PutSalesServiceSessionsIdDraftCheckTargetMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutSalesServiceSessionsIdDraftCheckTargetMutationOptions(options), queryClient);
+    }
+    /**
  * Revalidates the draft, freezes prices into immutable Committed Items, and charges a Check. The response's checks[].payments and checks[].total_applied_vnd are filled by Phase 5C; allocations[].submitted is filled by Phase 5D.
  * @summary Commit the Order Draft
  */
@@ -1391,87 +1181,54 @@ export const postSalesServiceSessionsIdDraftCommit = (
 
 
 
-export const getPostSalesServiceSessionsIdDraftCommitQueryKey = (id: string,
-    salesCommitOrderDraftCommand?: SalesCommitOrderDraftCommand,) => {
-    return [
-    'POST', `/sales/service-sessions/${id}/draft/commit`, salesCommitOrderDraftCommand
-    ] as const;
-    }
+export const getPostSalesServiceSessionsIdDraftCommitMutationKey = () => ['postSalesServiceSessionsIdDraftCommit'] as const;
 
+export const getPostSalesServiceSessionsIdDraftCommitMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError,PostSalesServiceSessionsIdDraftCommitMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError,PostSalesServiceSessionsIdDraftCommitMutationVariables, TContext> => {
 
-export const getPostSalesServiceSessionsIdDraftCommitQueryOptions = <TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError = ResponseAPIResponse>(id: string,
-    salesCommitOrderDraftCommand: SalesCommitOrderDraftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesServiceSessionsIdDraftCommitQueryKey(id,salesCommitOrderDraftCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>> = ({ signal }) => postSalesServiceSessionsIdDraftCommit(id,salesCommitOrderDraftCommand, requestOptions, signal);
+const mutationKey = getPostSalesServiceSessionsIdDraftCommitMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, PostSalesServiceSessionsIdDraftCommitMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesServiceSessionsIdDraftCommitQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>>
-export type PostSalesServiceSessionsIdDraftCommitQueryError = ResponseAPIResponse
+          return  postSalesServiceSessionsIdDraftCommit(id,data,requestOptions)
+        }
 
 
-export function usePostSalesServiceSessionsIdDraftCommit<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError = ResponseAPIResponse>(
- id: string,
-    salesCommitOrderDraftCommand: SalesCommitOrderDraftCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdDraftCommit<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError = ResponseAPIResponse>(
- id: string,
-    salesCommitOrderDraftCommand: SalesCommitOrderDraftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdDraftCommit<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError = ResponseAPIResponse>(
- id: string,
-    salesCommitOrderDraftCommand: SalesCommitOrderDraftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsIdDraftCommitMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>>
+    export type PostSalesServiceSessionsIdDraftCommitMutationBody = SalesCommitOrderDraftCommand
+    export type PostSalesServiceSessionsIdDraftCommitMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsIdDraftCommitMutationVariables = {id: string;data: SalesCommitOrderDraftCommand}
+
+    /**
  * @summary Commit the Order Draft
  */
-
-export function usePostSalesServiceSessionsIdDraftCommit<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError = ResponseAPIResponse>(
- id: string,
-    salesCommitOrderDraftCommand: SalesCommitOrderDraftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesServiceSessionsIdDraftCommitQueryOptions(id,salesCommitOrderDraftCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesServiceSessionsIdDraftCommit = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>, TError,PostSalesServiceSessionsIdDraftCommitMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftCommit>>,
+        TError,
+        PostSalesServiceSessionsIdDraftCommitMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsIdDraftCommitMutationOptions(options), queryClient);
+    }
+    /**
  * Adds one unit of a configured Menu Item, merging into an existing line of the same composition. Omit modifier_option_ids to apply the menu's default options; send an empty array to apply none. The draft accepts an incomplete configuration; completeness is checked at Commit in Phase 5B.
  * @summary Add an Order Draft item
  */
@@ -1493,87 +1250,54 @@ export const postSalesServiceSessionsIdDraftItems = (
 
 
 
-export const getPostSalesServiceSessionsIdDraftItemsQueryKey = (id: string,
-    salesAddDraftItemCommand?: SalesAddDraftItemCommand,) => {
-    return [
-    'POST', `/sales/service-sessions/${id}/draft/items`, salesAddDraftItemCommand
-    ] as const;
-    }
+export const getPostSalesServiceSessionsIdDraftItemsMutationKey = () => ['postSalesServiceSessionsIdDraftItems'] as const;
 
+export const getPostSalesServiceSessionsIdDraftItemsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError,PostSalesServiceSessionsIdDraftItemsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError,PostSalesServiceSessionsIdDraftItemsMutationVariables, TContext> => {
 
-export const getPostSalesServiceSessionsIdDraftItemsQueryOptions = <TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError = ResponseAPIResponse>(id: string,
-    salesAddDraftItemCommand: SalesAddDraftItemCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesServiceSessionsIdDraftItemsQueryKey(id,salesAddDraftItemCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>> = ({ signal }) => postSalesServiceSessionsIdDraftItems(id,salesAddDraftItemCommand, requestOptions, signal);
+const mutationKey = getPostSalesServiceSessionsIdDraftItemsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, PostSalesServiceSessionsIdDraftItemsMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesServiceSessionsIdDraftItemsQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>>
-export type PostSalesServiceSessionsIdDraftItemsQueryError = ResponseAPIResponse
+          return  postSalesServiceSessionsIdDraftItems(id,data,requestOptions)
+        }
 
 
-export function usePostSalesServiceSessionsIdDraftItems<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError = ResponseAPIResponse>(
- id: string,
-    salesAddDraftItemCommand: SalesAddDraftItemCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdDraftItems<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError = ResponseAPIResponse>(
- id: string,
-    salesAddDraftItemCommand: SalesAddDraftItemCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdDraftItems<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError = ResponseAPIResponse>(
- id: string,
-    salesAddDraftItemCommand: SalesAddDraftItemCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsIdDraftItemsMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>>
+    export type PostSalesServiceSessionsIdDraftItemsMutationBody = SalesAddDraftItemCommand
+    export type PostSalesServiceSessionsIdDraftItemsMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsIdDraftItemsMutationVariables = {id: string;data: SalesAddDraftItemCommand}
+
+    /**
  * @summary Add an Order Draft item
  */
-
-export function usePostSalesServiceSessionsIdDraftItems<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError = ResponseAPIResponse>(
- id: string,
-    salesAddDraftItemCommand: SalesAddDraftItemCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesServiceSessionsIdDraftItemsQueryOptions(id,salesAddDraftItemCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesServiceSessionsIdDraftItems = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>, TError,PostSalesServiceSessionsIdDraftItemsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsIdDraftItems>>,
+        TError,
+        PostSalesServiceSessionsIdDraftItemsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsIdDraftItemsMutationOptions(options), queryClient);
+    }
+    /**
  * Removes one Order Draft item and its selected options, returning the whole Service Session projection with 200 rather than 204 so a client sees the resulting draft without a follow-up read. request_id may be sent as a query parameter instead of in the body, since some clients and proxies strip a DELETE request's body.
  * @summary Remove a draft item
  */
@@ -1598,99 +1322,54 @@ export const deleteSalesServiceSessionsIdDraftItemsItemId = (
 
 
 
-export const getDeleteSalesServiceSessionsIdDraftItemsItemIdQueryKey = (id: string,
-    itemId: string,
-    salesRemoveDraftItemCommand?: SalesRemoveDraftItemCommand,
-    params?: DeleteSalesServiceSessionsIdDraftItemsItemIdParams,) => {
-    return [
-    'DELETE', `/sales/service-sessions/${id}/draft/items/${itemId}`, ...(params ? [params] : []), salesRemoveDraftItemCommand
-    ] as const;
-    }
+export const getDeleteSalesServiceSessionsIdDraftItemsItemIdMutationKey = () => ['deleteSalesServiceSessionsIdDraftItemsItemId'] as const;
 
+export const getDeleteSalesServiceSessionsIdDraftItemsItemIdMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError,DeleteSalesServiceSessionsIdDraftItemsItemIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError,DeleteSalesServiceSessionsIdDraftItemsItemIdMutationVariables, TContext> => {
 
-export const getDeleteSalesServiceSessionsIdDraftItemsItemIdQueryOptions = <TData = Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError = ResponseAPIResponse>(id: string,
-    itemId: string,
-    salesRemoveDraftItemCommand?: SalesRemoveDraftItemCommand,
-    params?: DeleteSalesServiceSessionsIdDraftItemsItemIdParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getDeleteSalesServiceSessionsIdDraftItemsItemIdQueryKey(id,itemId,salesRemoveDraftItemCommand,params);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>> = ({ signal }) => deleteSalesServiceSessionsIdDraftItemsItemId(id,itemId,salesRemoveDraftItemCommand,params, requestOptions, signal);
+const mutationKey = getDeleteSalesServiceSessionsIdDraftItemsItemIdMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, DeleteSalesServiceSessionsIdDraftItemsItemIdMutationVariables> = (props) => {
+          const {id,itemId,data,params} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type DeleteSalesServiceSessionsIdDraftItemsItemIdQueryResult = NonNullable<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>>
-export type DeleteSalesServiceSessionsIdDraftItemsItemIdQueryError = ResponseAPIResponse
+          return  deleteSalesServiceSessionsIdDraftItemsItemId(id,itemId,data,params,requestOptions)
+        }
 
 
-export function useDeleteSalesServiceSessionsIdDraftItemsItemId<TData = Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesRemoveDraftItemCommand: undefined |  SalesRemoveDraftItemCommand,
-    params: undefined |  DeleteSalesServiceSessionsIdDraftItemsItemIdParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>,
-          TError,
-          Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDeleteSalesServiceSessionsIdDraftItemsItemId<TData = Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesRemoveDraftItemCommand?: SalesRemoveDraftItemCommand,
-    params?: DeleteSalesServiceSessionsIdDraftItemsItemIdParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>,
-          TError,
-          Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDeleteSalesServiceSessionsIdDraftItemsItemId<TData = Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesRemoveDraftItemCommand?: SalesRemoveDraftItemCommand,
-    params?: DeleteSalesServiceSessionsIdDraftItemsItemIdParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSalesServiceSessionsIdDraftItemsItemIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>>
+    export type DeleteSalesServiceSessionsIdDraftItemsItemIdMutationBody = SalesRemoveDraftItemCommand | undefined
+    export type DeleteSalesServiceSessionsIdDraftItemsItemIdMutationError = ResponseAPIResponse
+    export type DeleteSalesServiceSessionsIdDraftItemsItemIdMutationVariables = {id: string;itemId: string;data?: SalesRemoveDraftItemCommand;params?: DeleteSalesServiceSessionsIdDraftItemsItemIdParams}
+
+    /**
  * @summary Remove a draft item
  */
-
-export function useDeleteSalesServiceSessionsIdDraftItemsItemId<TData = Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesRemoveDraftItemCommand?: SalesRemoveDraftItemCommand,
-    params?: DeleteSalesServiceSessionsIdDraftItemsItemIdParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getDeleteSalesServiceSessionsIdDraftItemsItemIdQueryOptions(id,itemId,salesRemoveDraftItemCommand,params,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const useDeleteSalesServiceSessionsIdDraftItemsItemId = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>, TError,DeleteSalesServiceSessionsIdDraftItemsItemIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSalesServiceSessionsIdDraftItemsItemId>>,
+        TError,
+        DeleteSalesServiceSessionsIdDraftItemsItemIdMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteSalesServiceSessionsIdDraftItemsItemIdMutationOptions(options), queryClient);
+    }
+    /**
  * Replaces one Order Draft item's selected Modifier Options. Unlike adding an item, the list is taken literally: an empty modifier_option_ids selects no options and no defaults are applied. If the edit makes the item identical in composition to another line of the same draft, the two MERGE: the pre-existing line's quantity grows by this one's, this line's id is deleted, and the returned projection reflects the merge. A merged quantity above 9999 is rejected. Returns the whole Service Session projection.
  * @summary Set a draft item's Modifier Options
  */
@@ -1713,93 +1392,54 @@ export const patchSalesServiceSessionsIdDraftItemsItemIdModifiers = (
 
 
 
-export const getPatchSalesServiceSessionsIdDraftItemsItemIdModifiersQueryKey = (id: string,
-    itemId: string,
-    salesSetDraftItemModifiersCommand?: SalesSetDraftItemModifiersCommand,) => {
-    return [
-    'PATCH', `/sales/service-sessions/${id}/draft/items/${itemId}/modifiers`, salesSetDraftItemModifiersCommand
-    ] as const;
-    }
+export const getPatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationKey = () => ['patchSalesServiceSessionsIdDraftItemsItemIdModifiers'] as const;
 
+export const getPatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationVariables, TContext> => {
 
-export const getPatchSalesServiceSessionsIdDraftItemsItemIdModifiersQueryOptions = <TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError = ResponseAPIResponse>(id: string,
-    itemId: string,
-    salesSetDraftItemModifiersCommand: SalesSetDraftItemModifiersCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchSalesServiceSessionsIdDraftItemsItemIdModifiersQueryKey(id,itemId,salesSetDraftItemModifiersCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>> = ({ signal }) => patchSalesServiceSessionsIdDraftItemsItemIdModifiers(id,itemId,salesSetDraftItemModifiersCommand, requestOptions, signal);
+const mutationKey = getPatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationVariables> = (props) => {
+          const {id,itemId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchSalesServiceSessionsIdDraftItemsItemIdModifiersQueryResult = NonNullable<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>>
-export type PatchSalesServiceSessionsIdDraftItemsItemIdModifiersQueryError = ResponseAPIResponse
+          return  patchSalesServiceSessionsIdDraftItemsItemIdModifiers(id,itemId,data,requestOptions)
+        }
 
 
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdModifiers<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemModifiersCommand: SalesSetDraftItemModifiersCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>,
-          TError,
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdModifiers<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemModifiersCommand: SalesSetDraftItemModifiersCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>,
-          TError,
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdModifiers<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemModifiersCommand: SalesSetDraftItemModifiersCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationResult = NonNullable<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>>
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationBody = SalesSetDraftItemModifiersCommand
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationError = ResponseAPIResponse
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationVariables = {id: string;itemId: string;data: SalesSetDraftItemModifiersCommand}
+
+    /**
  * @summary Set a draft item's Modifier Options
  */
-
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdModifiers<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemModifiersCommand: SalesSetDraftItemModifiersCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchSalesServiceSessionsIdDraftItemsItemIdModifiersQueryOptions(id,itemId,salesSetDraftItemModifiersCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchSalesServiceSessionsIdDraftItemsItemIdModifiers = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdModifiers>>,
+        TError,
+        PatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchSalesServiceSessionsIdDraftItemsItemIdModifiersMutationOptions(options), queryClient);
+    }
+    /**
  * Sets or clears one Order Draft item's Preparation Note. The note is trimmed and may be at most 200 characters; a null or blank preparation_note clears it. If the edit makes the item identical in composition to another line of the same draft, the two MERGE: the pre-existing line's quantity grows by this one's, this line's id is deleted, and the returned projection reflects the merge. A merged quantity above 9999 is rejected. Returns the whole Service Session projection.
  * @summary Set a draft item's Preparation Note
  */
@@ -1822,93 +1462,54 @@ export const patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote = (
 
 
 
-export const getPatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteQueryKey = (id: string,
-    itemId: string,
-    salesSetDraftItemNoteCommand?: SalesSetDraftItemNoteCommand,) => {
-    return [
-    'PATCH', `/sales/service-sessions/${id}/draft/items/${itemId}/preparation-note`, salesSetDraftItemNoteCommand
-    ] as const;
-    }
+export const getPatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationKey = () => ['patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote'] as const;
 
+export const getPatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationVariables, TContext> => {
 
-export const getPatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteQueryOptions = <TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError = ResponseAPIResponse>(id: string,
-    itemId: string,
-    salesSetDraftItemNoteCommand: SalesSetDraftItemNoteCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteQueryKey(id,itemId,salesSetDraftItemNoteCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>> = ({ signal }) => patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote(id,itemId,salesSetDraftItemNoteCommand, requestOptions, signal);
+const mutationKey = getPatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationVariables> = (props) => {
+          const {id,itemId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteQueryResult = NonNullable<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>>
-export type PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteQueryError = ResponseAPIResponse
+          return  patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote(id,itemId,data,requestOptions)
+        }
 
 
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdPreparationNote<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemNoteCommand: SalesSetDraftItemNoteCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>,
-          TError,
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdPreparationNote<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemNoteCommand: SalesSetDraftItemNoteCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>,
-          TError,
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdPreparationNote<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemNoteCommand: SalesSetDraftItemNoteCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationResult = NonNullable<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>>
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationBody = SalesSetDraftItemNoteCommand
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationError = ResponseAPIResponse
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationVariables = {id: string;itemId: string;data: SalesSetDraftItemNoteCommand}
+
+    /**
  * @summary Set a draft item's Preparation Note
  */
-
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdPreparationNote<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemNoteCommand: SalesSetDraftItemNoteCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteQueryOptions(id,itemId,salesSetDraftItemNoteCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchSalesServiceSessionsIdDraftItemsItemIdPreparationNote = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdPreparationNote>>,
+        TError,
+        PatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchSalesServiceSessionsIdDraftItemsItemIdPreparationNoteMutationOptions(options), queryClient);
+    }
+    /**
  * Sets an absolute quantity between 1 and 9999 on one Order Draft item. Zero is rejected: removal is its own command. Returns the whole Service Session projection.
  * @summary Set a draft item's quantity
  */
@@ -1931,93 +1532,54 @@ export const patchSalesServiceSessionsIdDraftItemsItemIdQuantity = (
 
 
 
-export const getPatchSalesServiceSessionsIdDraftItemsItemIdQuantityQueryKey = (id: string,
-    itemId: string,
-    salesSetDraftItemQuantityCommand?: SalesSetDraftItemQuantityCommand,) => {
-    return [
-    'PATCH', `/sales/service-sessions/${id}/draft/items/${itemId}/quantity`, salesSetDraftItemQuantityCommand
-    ] as const;
-    }
+export const getPatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationKey = () => ['patchSalesServiceSessionsIdDraftItemsItemIdQuantity'] as const;
 
+export const getPatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationVariables, TContext> => {
 
-export const getPatchSalesServiceSessionsIdDraftItemsItemIdQuantityQueryOptions = <TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError = ResponseAPIResponse>(id: string,
-    itemId: string,
-    salesSetDraftItemQuantityCommand: SalesSetDraftItemQuantityCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchSalesServiceSessionsIdDraftItemsItemIdQuantityQueryKey(id,itemId,salesSetDraftItemQuantityCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>> = ({ signal }) => patchSalesServiceSessionsIdDraftItemsItemIdQuantity(id,itemId,salesSetDraftItemQuantityCommand, requestOptions, signal);
+const mutationKey = getPatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationVariables> = (props) => {
+          const {id,itemId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchSalesServiceSessionsIdDraftItemsItemIdQuantityQueryResult = NonNullable<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>>
-export type PatchSalesServiceSessionsIdDraftItemsItemIdQuantityQueryError = ResponseAPIResponse
+          return  patchSalesServiceSessionsIdDraftItemsItemIdQuantity(id,itemId,data,requestOptions)
+        }
 
 
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdQuantity<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemQuantityCommand: SalesSetDraftItemQuantityCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>,
-          TError,
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdQuantity<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemQuantityCommand: SalesSetDraftItemQuantityCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>,
-          TError,
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdQuantity<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemQuantityCommand: SalesSetDraftItemQuantityCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationResult = NonNullable<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>>
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationBody = SalesSetDraftItemQuantityCommand
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationError = ResponseAPIResponse
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationVariables = {id: string;itemId: string;data: SalesSetDraftItemQuantityCommand}
+
+    /**
  * @summary Set a draft item's quantity
  */
-
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdQuantity<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemQuantityCommand: SalesSetDraftItemQuantityCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchSalesServiceSessionsIdDraftItemsItemIdQuantityQueryOptions(id,itemId,salesSetDraftItemQuantityCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchSalesServiceSessionsIdDraftItemsItemIdQuantity = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdQuantity>>,
+        TError,
+        PatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchSalesServiceSessionsIdDraftItemsItemIdQuantityMutationOptions(options), queryClient);
+    }
+    /**
  * Sets or clears one Order Draft item's Size. A null size_id clears the Size and is accepted: the draft tolerates an incomplete configuration until Commit in Phase 5B. If the edit makes the item identical in composition to another line of the same draft, the two MERGE: the pre-existing line's quantity grows by this one's, this line's id is deleted, and the returned projection reflects the merge. A merged quantity above 9999 is rejected. Returns the whole Service Session projection.
  * @summary Set a draft item's Size
  */
@@ -2040,93 +1602,54 @@ export const patchSalesServiceSessionsIdDraftItemsItemIdSize = (
 
 
 
-export const getPatchSalesServiceSessionsIdDraftItemsItemIdSizeQueryKey = (id: string,
-    itemId: string,
-    salesSetDraftItemSizeCommand?: SalesSetDraftItemSizeCommand,) => {
-    return [
-    'PATCH', `/sales/service-sessions/${id}/draft/items/${itemId}/size`, salesSetDraftItemSizeCommand
-    ] as const;
-    }
+export const getPatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationKey = () => ['patchSalesServiceSessionsIdDraftItemsItemIdSize'] as const;
 
+export const getPatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationVariables, TContext> => {
 
-export const getPatchSalesServiceSessionsIdDraftItemsItemIdSizeQueryOptions = <TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError = ResponseAPIResponse>(id: string,
-    itemId: string,
-    salesSetDraftItemSizeCommand: SalesSetDraftItemSizeCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchSalesServiceSessionsIdDraftItemsItemIdSizeQueryKey(id,itemId,salesSetDraftItemSizeCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>> = ({ signal }) => patchSalesServiceSessionsIdDraftItemsItemIdSize(id,itemId,salesSetDraftItemSizeCommand, requestOptions, signal);
+const mutationKey = getPatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationVariables> = (props) => {
+          const {id,itemId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchSalesServiceSessionsIdDraftItemsItemIdSizeQueryResult = NonNullable<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>>
-export type PatchSalesServiceSessionsIdDraftItemsItemIdSizeQueryError = ResponseAPIResponse
+          return  patchSalesServiceSessionsIdDraftItemsItemIdSize(id,itemId,data,requestOptions)
+        }
 
 
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdSize<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemSizeCommand: SalesSetDraftItemSizeCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>,
-          TError,
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdSize<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemSizeCommand: SalesSetDraftItemSizeCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>,
-          TError,
-          Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdSize<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemSizeCommand: SalesSetDraftItemSizeCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationResult = NonNullable<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>>
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationBody = SalesSetDraftItemSizeCommand
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationError = ResponseAPIResponse
+    export type PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationVariables = {id: string;itemId: string;data: SalesSetDraftItemSizeCommand}
+
+    /**
  * @summary Set a draft item's Size
  */
-
-export function usePatchSalesServiceSessionsIdDraftItemsItemIdSize<TData = Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError = ResponseAPIResponse>(
- id: string,
-    itemId: string,
-    salesSetDraftItemSizeCommand: SalesSetDraftItemSizeCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchSalesServiceSessionsIdDraftItemsItemIdSizeQueryOptions(id,itemId,salesSetDraftItemSizeCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchSalesServiceSessionsIdDraftItemsItemIdSize = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>, TError,PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchSalesServiceSessionsIdDraftItemsItemIdSize>>,
+        TError,
+        PatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchSalesServiceSessionsIdDraftItemsItemIdSizeMutationOptions(options), queryClient);
+    }
+    /**
  * Turns the Service Session's committed Order Draft into an Order, its Order Items, and one Preparation Unit per unit of ordered quantity, repricing nothing. A takeaway Session requires every Check settled first; a dine-in Session does not, because both Commit -> Submit -> Payment and Commit -> Payment -> Submit are valid service.
  * @summary Submit the committed round to the bar
  */
@@ -2148,87 +1671,54 @@ export const postSalesServiceSessionsIdSubmit = (
 
 
 
-export const getPostSalesServiceSessionsIdSubmitQueryKey = (id: string,
-    salesSubmitOrderCommand?: SalesSubmitOrderCommand,) => {
-    return [
-    'POST', `/sales/service-sessions/${id}/submit`, salesSubmitOrderCommand
-    ] as const;
-    }
+export const getPostSalesServiceSessionsIdSubmitMutationKey = () => ['postSalesServiceSessionsIdSubmit'] as const;
 
+export const getPostSalesServiceSessionsIdSubmitMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError,PostSalesServiceSessionsIdSubmitMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError,PostSalesServiceSessionsIdSubmitMutationVariables, TContext> => {
 
-export const getPostSalesServiceSessionsIdSubmitQueryOptions = <TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError = ResponseAPIResponse>(id: string,
-    salesSubmitOrderCommand: SalesSubmitOrderCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesServiceSessionsIdSubmitQueryKey(id,salesSubmitOrderCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>> = ({ signal }) => postSalesServiceSessionsIdSubmit(id,salesSubmitOrderCommand, requestOptions, signal);
+const mutationKey = getPostSalesServiceSessionsIdSubmitMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, PostSalesServiceSessionsIdSubmitMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesServiceSessionsIdSubmitQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>>
-export type PostSalesServiceSessionsIdSubmitQueryError = ResponseAPIResponse
+          return  postSalesServiceSessionsIdSubmit(id,data,requestOptions)
+        }
 
 
-export function usePostSalesServiceSessionsIdSubmit<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSubmitOrderCommand: SalesSubmitOrderCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdSubmit<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSubmitOrderCommand: SalesSubmitOrderCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsIdSubmit<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSubmitOrderCommand: SalesSubmitOrderCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsIdSubmitMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>>
+    export type PostSalesServiceSessionsIdSubmitMutationBody = SalesSubmitOrderCommand
+    export type PostSalesServiceSessionsIdSubmitMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsIdSubmitMutationVariables = {id: string;data: SalesSubmitOrderCommand}
+
+    /**
  * @summary Submit the committed round to the bar
  */
-
-export function usePostSalesServiceSessionsIdSubmit<TData = Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSubmitOrderCommand: SalesSubmitOrderCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesServiceSessionsIdSubmitQueryOptions(id,salesSubmitOrderCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesServiceSessionsIdSubmit = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>, TError,PostSalesServiceSessionsIdSubmitMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsIdSubmit>>,
+        TError,
+        PostSalesServiceSessionsIdSubmitMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsIdSubmitMutationOptions(options), queryClient);
+    }
+    /**
  * Replaces a Dine-in Session's current Table set. Tables no longer listed are released, preserving history. An empty table_ids releases every Table and is permitted. Rejected for a Takeaway Session.
  * @summary Set a Service Session's Tables
  */
@@ -2250,87 +1740,54 @@ export const putSalesServiceSessionsIdTables = (
 
 
 
-export const getPutSalesServiceSessionsIdTablesQueryKey = (id: string,
-    salesSetSessionTablesCommand?: SalesSetSessionTablesCommand,) => {
-    return [
-    'PUT', `/sales/service-sessions/${id}/tables`, salesSetSessionTablesCommand
-    ] as const;
-    }
+export const getPutSalesServiceSessionsIdTablesMutationKey = () => ['putSalesServiceSessionsIdTables'] as const;
 
+export const getPutSalesServiceSessionsIdTablesMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError,PutSalesServiceSessionsIdTablesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError,PutSalesServiceSessionsIdTablesMutationVariables, TContext> => {
 
-export const getPutSalesServiceSessionsIdTablesQueryOptions = <TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError = ResponseAPIResponse>(id: string,
-    salesSetSessionTablesCommand: SalesSetSessionTablesCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPutSalesServiceSessionsIdTablesQueryKey(id,salesSetSessionTablesCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>> = ({ signal }) => putSalesServiceSessionsIdTables(id,salesSetSessionTablesCommand, requestOptions, signal);
+const mutationKey = getPutSalesServiceSessionsIdTablesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, PutSalesServiceSessionsIdTablesMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PutSalesServiceSessionsIdTablesQueryResult = NonNullable<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>>
-export type PutSalesServiceSessionsIdTablesQueryError = ResponseAPIResponse
+          return  putSalesServiceSessionsIdTables(id,data,requestOptions)
+        }
 
 
-export function usePutSalesServiceSessionsIdTables<TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSetSessionTablesCommand: SalesSetSessionTablesCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>,
-          TError,
-          Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePutSalesServiceSessionsIdTables<TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSetSessionTablesCommand: SalesSetSessionTablesCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>,
-          TError,
-          Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePutSalesServiceSessionsIdTables<TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSetSessionTablesCommand: SalesSetSessionTablesCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutSalesServiceSessionsIdTablesMutationResult = NonNullable<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>>
+    export type PutSalesServiceSessionsIdTablesMutationBody = SalesSetSessionTablesCommand
+    export type PutSalesServiceSessionsIdTablesMutationError = ResponseAPIResponse
+    export type PutSalesServiceSessionsIdTablesMutationVariables = {id: string;data: SalesSetSessionTablesCommand}
+
+    /**
  * @summary Set a Service Session's Tables
  */
-
-export function usePutSalesServiceSessionsIdTables<TData = Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError = ResponseAPIResponse>(
- id: string,
-    salesSetSessionTablesCommand: SalesSetSessionTablesCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPutSalesServiceSessionsIdTablesQueryOptions(id,salesSetSessionTablesCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePutSalesServiceSessionsIdTables = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>, TError,PutSalesServiceSessionsIdTablesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putSalesServiceSessionsIdTables>>,
+        TError,
+        PutSalesServiceSessionsIdTablesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutSalesServiceSessionsIdTablesMutationOptions(options), queryClient);
+    }
+    /**
  * Opens a Dine-in Service Session assigned to one or more Tables. A Table may carry more than one active Service Session. Requires an open Sales Shift.
  * @summary Open a Dine-in Service Session
  */
@@ -2351,81 +1808,54 @@ export const postSalesServiceSessionsDineIn = (
 
 
 
-export const getPostSalesServiceSessionsDineInQueryKey = (salesStartDineInSessionCommand?: SalesStartDineInSessionCommand,) => {
-    return [
-    'POST', `/sales/service-sessions/dine-in`, salesStartDineInSessionCommand
-    ] as const;
-    }
+export const getPostSalesServiceSessionsDineInMutationKey = () => ['postSalesServiceSessionsDineIn'] as const;
 
+export const getPostSalesServiceSessionsDineInMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError,PostSalesServiceSessionsDineInMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError,PostSalesServiceSessionsDineInMutationVariables, TContext> => {
 
-export const getPostSalesServiceSessionsDineInQueryOptions = <TData = Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError = ResponseAPIResponse>(salesStartDineInSessionCommand: SalesStartDineInSessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesServiceSessionsDineInQueryKey(salesStartDineInSessionCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>> = ({ signal }) => postSalesServiceSessionsDineIn(salesStartDineInSessionCommand, requestOptions, signal);
+const mutationKey = getPostSalesServiceSessionsDineInMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, PostSalesServiceSessionsDineInMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesServiceSessionsDineInQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>>
-export type PostSalesServiceSessionsDineInQueryError = ResponseAPIResponse
+          return  postSalesServiceSessionsDineIn(data,requestOptions)
+        }
 
 
-export function usePostSalesServiceSessionsDineIn<TData = Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError = ResponseAPIResponse>(
- salesStartDineInSessionCommand: SalesStartDineInSessionCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsDineIn<TData = Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError = ResponseAPIResponse>(
- salesStartDineInSessionCommand: SalesStartDineInSessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsDineIn<TData = Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError = ResponseAPIResponse>(
- salesStartDineInSessionCommand: SalesStartDineInSessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsDineInMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>>
+    export type PostSalesServiceSessionsDineInMutationBody = SalesStartDineInSessionCommand
+    export type PostSalesServiceSessionsDineInMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsDineInMutationVariables = {data: SalesStartDineInSessionCommand}
+
+    /**
  * @summary Open a Dine-in Service Session
  */
-
-export function usePostSalesServiceSessionsDineIn<TData = Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError = ResponseAPIResponse>(
- salesStartDineInSessionCommand: SalesStartDineInSessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesServiceSessionsDineInQueryOptions(salesStartDineInSessionCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesServiceSessionsDineIn = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>, TError,PostSalesServiceSessionsDineInMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsDineIn>>,
+        TError,
+        PostSalesServiceSessionsDineInMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsDineInMutationOptions(options), queryClient);
+    }
+    /**
  * Opens an anonymous Takeaway Service Session with an empty editable Order Draft. Requires an open Sales Shift. The Service Number is sequential within that Shift (ADR-011).
  * @summary Open a Takeaway Service Session
  */
@@ -2446,81 +1876,54 @@ export const postSalesServiceSessionsTakeaway = (
 
 
 
-export const getPostSalesServiceSessionsTakeawayQueryKey = (salesStartTakeawaySessionCommand?: SalesStartTakeawaySessionCommand,) => {
-    return [
-    'POST', `/sales/service-sessions/takeaway`, salesStartTakeawaySessionCommand
-    ] as const;
-    }
+export const getPostSalesServiceSessionsTakeawayMutationKey = () => ['postSalesServiceSessionsTakeaway'] as const;
 
+export const getPostSalesServiceSessionsTakeawayMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError,PostSalesServiceSessionsTakeawayMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError,PostSalesServiceSessionsTakeawayMutationVariables, TContext> => {
 
-export const getPostSalesServiceSessionsTakeawayQueryOptions = <TData = Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError = ResponseAPIResponse>(salesStartTakeawaySessionCommand: SalesStartTakeawaySessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesServiceSessionsTakeawayQueryKey(salesStartTakeawaySessionCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>> = ({ signal }) => postSalesServiceSessionsTakeaway(salesStartTakeawaySessionCommand, requestOptions, signal);
+const mutationKey = getPostSalesServiceSessionsTakeawayMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, PostSalesServiceSessionsTakeawayMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesServiceSessionsTakeawayQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>>
-export type PostSalesServiceSessionsTakeawayQueryError = ResponseAPIResponse
+          return  postSalesServiceSessionsTakeaway(data,requestOptions)
+        }
 
 
-export function usePostSalesServiceSessionsTakeaway<TData = Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError = ResponseAPIResponse>(
- salesStartTakeawaySessionCommand: SalesStartTakeawaySessionCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsTakeaway<TData = Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError = ResponseAPIResponse>(
- salesStartTakeawaySessionCommand: SalesStartTakeawaySessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesServiceSessionsTakeaway<TData = Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError = ResponseAPIResponse>(
- salesStartTakeawaySessionCommand: SalesStartTakeawaySessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsTakeawayMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>>
+    export type PostSalesServiceSessionsTakeawayMutationBody = SalesStartTakeawaySessionCommand
+    export type PostSalesServiceSessionsTakeawayMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsTakeawayMutationVariables = {data: SalesStartTakeawaySessionCommand}
+
+    /**
  * @summary Open a Takeaway Service Session
  */
-
-export function usePostSalesServiceSessionsTakeaway<TData = Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError = ResponseAPIResponse>(
- salesStartTakeawaySessionCommand: SalesStartTakeawaySessionCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesServiceSessionsTakeawayQueryOptions(salesStartTakeawaySessionCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostSalesServiceSessionsTakeaway = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>, TError,PostSalesServiceSessionsTakeawayMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsTakeaway>>,
+        TError,
+        PostSalesServiceSessionsTakeawayMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsTakeawayMutationOptions(options), queryClient);
+    }
+    /**
  * Waives the charge of one charged Wasted standard unit through one Manager-approved append-only correction. An active Service Session's Comp writes a LIVE_CHECK Charge Adjustment, updates the Check charge, settles the Check when the corrected balance reaches zero, and returns the updated Service Session. A closed Session's Comp writes a POST_SALE adjustment linked to its Completed Sale without rewriting the closed Check or sale, and returns the Completed Sale id, the outstanding post-sale correction amount, and the additive correction history. Requires the initiator's sales.operate and one inline Manager Approval for sales.operate; self-approval is permitted and initiator and approver are recorded separately. A Wasted Remake is uncharged and rejected.
  * @summary Comp a charged Waste
  */
@@ -2542,83 +1945,50 @@ export const postSalesWastesWasteIdComp = (
 
 
 
-export const getPostSalesWastesWasteIdCompQueryKey = (wasteId: string,
-    salesCompWasteCommand?: SalesCompWasteCommand,) => {
-    return [
-    'POST', `/sales/wastes/${wasteId}/comp`, salesCompWasteCommand
-    ] as const;
-    }
+export const getPostSalesWastesWasteIdCompMutationKey = () => ['postSalesWastesWasteIdComp'] as const;
 
+export const getPostSalesWastesWasteIdCompMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError,PostSalesWastesWasteIdCompMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError,PostSalesWastesWasteIdCompMutationVariables, TContext> => {
 
-export const getPostSalesWastesWasteIdCompQueryOptions = <TData = Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError = ResponseAPIResponse>(wasteId: string,
-    salesCompWasteCommand: SalesCompWasteCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostSalesWastesWasteIdCompQueryKey(wasteId,salesCompWasteCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>> = ({ signal }) => postSalesWastesWasteIdComp(wasteId,salesCompWasteCommand, requestOptions, signal);
+const mutationKey = getPostSalesWastesWasteIdCompMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, PostSalesWastesWasteIdCompMutationVariables> = (props) => {
+          const {wasteId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: wasteId !== null && wasteId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostSalesWastesWasteIdCompQueryResult = NonNullable<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>>
-export type PostSalesWastesWasteIdCompQueryError = ResponseAPIResponse
+          return  postSalesWastesWasteIdComp(wasteId,data,requestOptions)
+        }
 
 
-export function usePostSalesWastesWasteIdComp<TData = Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError = ResponseAPIResponse>(
- wasteId: string,
-    salesCompWasteCommand: SalesCompWasteCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesWastesWasteIdComp<TData = Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError = ResponseAPIResponse>(
- wasteId: string,
-    salesCompWasteCommand: SalesCompWasteCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>,
-          TError,
-          Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostSalesWastesWasteIdComp<TData = Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError = ResponseAPIResponse>(
- wasteId: string,
-    salesCompWasteCommand: SalesCompWasteCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesWastesWasteIdCompMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>>
+    export type PostSalesWastesWasteIdCompMutationBody = SalesCompWasteCommand
+    export type PostSalesWastesWasteIdCompMutationError = ResponseAPIResponse
+    export type PostSalesWastesWasteIdCompMutationVariables = {wasteId: string;data: SalesCompWasteCommand}
+
+    /**
  * @summary Comp a charged Waste
  */
-
-export function usePostSalesWastesWasteIdComp<TData = Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError = ResponseAPIResponse>(
- wasteId: string,
-    salesCompWasteCommand: SalesCompWasteCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostSalesWastesWasteIdCompQueryOptions(wasteId,salesCompWasteCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
+export const usePostSalesWastesWasteIdComp = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>, TError,PostSalesWastesWasteIdCompMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesWastesWasteIdComp>>,
+        TError,
+        PostSalesWastesWasteIdCompMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesWastesWasteIdCompMutationOptions(options), queryClient);
+    }

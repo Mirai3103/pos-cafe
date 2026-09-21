@@ -109,54 +109,81 @@ export const getCatalogAuditEvents = (
 
 
 
-export const getGetCatalogAuditEventsMutationKey = () => ['getCatalogAuditEvents'] as const;
-
-export const getGetCatalogAuditEventsMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError,GetCatalogAuditEventsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError,GetCatalogAuditEventsMutationVariables, TContext> => {
-
-const mutationKey = getGetCatalogAuditEventsMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetCatalogAuditEventsQueryKey = (params?: GetCatalogAuditEventsParams,) => {
+    return [
+    `/catalog/audit-events`, ...(params ? [params] : [])
+    ] as const;
+    }
 
 
+export const getGetCatalogAuditEventsQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError = ResponseAPIResponse>(params?: GetCatalogAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogAuditEventsQueryKey(params);
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getCatalogAuditEvents>>, GetCatalogAuditEventsMutationVariables> = (props) => {
-          const {params} = props ?? {};
 
-          return  getCatalogAuditEvents(params,requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogAuditEvents>>> = ({ signal }) => getCatalogAuditEvents(params, requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
+export type GetCatalogAuditEventsQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogAuditEvents>>>
+export type GetCatalogAuditEventsQueryError = ResponseAPIResponse
 
-    export type GetCatalogAuditEventsMutationResult = NonNullable<Awaited<ReturnType<typeof getCatalogAuditEvents>>>
 
-    export type GetCatalogAuditEventsMutationError = ResponseAPIResponse
-    export type GetCatalogAuditEventsMutationVariables = {params?: GetCatalogAuditEventsParams}
-
-    /**
+export function useGetCatalogAuditEvents<TData = Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError = ResponseAPIResponse>(
+ params: undefined |  GetCatalogAuditEventsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogAuditEvents>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogAuditEvents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogAuditEvents<TData = Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError = ResponseAPIResponse>(
+ params?: GetCatalogAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogAuditEvents>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogAuditEvents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogAuditEvents<TData = Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError = ResponseAPIResponse>(
+ params?: GetCatalogAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Danh sách nhật ký kiểm toán catalog
  */
-export const useGetCatalogAuditEvents = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError,GetCatalogAuditEventsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getCatalogAuditEvents>>,
-        TError,
-        GetCatalogAuditEventsMutationVariables,
-        TContext
-      > => {
-      return useMutation(getGetCatalogAuditEventsMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetCatalogAuditEvents<TData = Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError = ResponseAPIResponse>(
+ params?: GetCatalogAuditEventsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogAuditEvents>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCatalogAuditEventsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Tạo một danh mục mới trong catalog. Yêu cầu quyền catalog.administer_structure.
  * @summary Tạo danh mục thực đơn
  */
@@ -177,81 +204,54 @@ export const postCatalogCategories = (
 
 
 
-export const getPostCatalogCategoriesQueryKey = (catalogCreateCategoryCommand?: CatalogCreateCategoryCommand,) => {
-    return [
-    'POST', `/catalog/categories`, catalogCreateCategoryCommand
-    ] as const;
-    }
+export const getPostCatalogCategoriesMutationKey = () => ['postCatalogCategories'] as const;
 
+export const getPostCatalogCategoriesMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError,PostCatalogCategoriesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError,PostCatalogCategoriesMutationVariables, TContext> => {
 
-export const getPostCatalogCategoriesQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogCategories>>, TError = ResponseAPIResponse>(catalogCreateCategoryCommand: CatalogCreateCategoryCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogCategoriesQueryKey(catalogCreateCategoryCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogCategories>>> = ({ signal }) => postCatalogCategories(catalogCreateCategoryCommand, requestOptions, signal);
+const mutationKey = getPostCatalogCategoriesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogCategories>>, PostCatalogCategoriesMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogCategoriesQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogCategories>>>
-export type PostCatalogCategoriesQueryError = ResponseAPIResponse
+          return  postCatalogCategories(data,requestOptions)
+        }
 
 
-export function usePostCatalogCategories<TData = Awaited<ReturnType<typeof postCatalogCategories>>, TError = ResponseAPIResponse>(
- catalogCreateCategoryCommand: CatalogCreateCategoryCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogCategories>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogCategories>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogCategories<TData = Awaited<ReturnType<typeof postCatalogCategories>>, TError = ResponseAPIResponse>(
- catalogCreateCategoryCommand: CatalogCreateCategoryCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogCategories>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogCategories>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogCategories<TData = Awaited<ReturnType<typeof postCatalogCategories>>, TError = ResponseAPIResponse>(
- catalogCreateCategoryCommand: CatalogCreateCategoryCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogCategoriesMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogCategories>>>
+    export type PostCatalogCategoriesMutationBody = CatalogCreateCategoryCommand
+    export type PostCatalogCategoriesMutationError = ResponseAPIResponse
+    export type PostCatalogCategoriesMutationVariables = {data: CatalogCreateCategoryCommand}
+
+    /**
  * @summary Tạo danh mục thực đơn
  */
-
-export function usePostCatalogCategories<TData = Awaited<ReturnType<typeof postCatalogCategories>>, TError = ResponseAPIResponse>(
- catalogCreateCategoryCommand: CatalogCreateCategoryCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogCategoriesQueryOptions(catalogCreateCategoryCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogCategories = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategories>>, TError,PostCatalogCategoriesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogCategories>>,
+        TError,
+        PostCatalogCategoriesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogCategoriesMutationOptions(options), queryClient);
+    }
+    /**
  * Gắn một nhóm modifier vào danh mục để các món con kế thừa. Yêu cầu quyền catalog.administer_structure.
  * @summary Gắn nhóm tùy chọn vào danh mục
  */
@@ -274,93 +274,54 @@ export const postCatalogCategoriesCategoryIdModifierGroupsGroupId = (
 
 
 
-export const getPostCatalogCategoriesCategoryIdModifierGroupsGroupIdQueryKey = (categoryId: string,
-    groupId: string,
-    catalogMutationRequest?: CatalogMutationRequest,) => {
-    return [
-    'POST', `/catalog/categories/${categoryId}/modifier-groups/${groupId}`, catalogMutationRequest
-    ] as const;
-    }
+export const getPostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationKey = () => ['postCatalogCategoriesCategoryIdModifierGroupsGroupId'] as const;
 
+export const getPostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError,PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError,PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationVariables, TContext> => {
 
-export const getPostCatalogCategoriesCategoryIdModifierGroupsGroupIdQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(categoryId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogCategoriesCategoryIdModifierGroupsGroupIdQueryKey(categoryId,groupId,catalogMutationRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>> = ({ signal }) => postCatalogCategoriesCategoryIdModifierGroupsGroupId(categoryId,groupId,catalogMutationRequest, requestOptions, signal);
+const mutationKey = getPostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationVariables> = (props) => {
+          const {categoryId,groupId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: categoryId !== null && categoryId !== undefined && groupId !== null && groupId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogCategoriesCategoryIdModifierGroupsGroupIdQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>>
-export type PostCatalogCategoriesCategoryIdModifierGroupsGroupIdQueryError = ResponseAPIResponse
+          return  postCatalogCategoriesCategoryIdModifierGroupsGroupId(categoryId,groupId,data,requestOptions)
+        }
 
 
-export function usePostCatalogCategoriesCategoryIdModifierGroupsGroupId<TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogCategoriesCategoryIdModifierGroupsGroupId<TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogCategoriesCategoryIdModifierGroupsGroupId<TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>>
+    export type PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationBody = CatalogMutationRequest
+    export type PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationError = ResponseAPIResponse
+    export type PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationVariables = {categoryId: string;groupId: string;data: CatalogMutationRequest}
+
+    /**
  * @summary Gắn nhóm tùy chọn vào danh mục
  */
-
-export function usePostCatalogCategoriesCategoryIdModifierGroupsGroupId<TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogCategoriesCategoryIdModifierGroupsGroupIdQueryOptions(categoryId,groupId,catalogMutationRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogCategoriesCategoryIdModifierGroupsGroupId = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>, TError,PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdModifierGroupsGroupId>>,
+        TError,
+        PostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogCategoriesCategoryIdModifierGroupsGroupIdMutationOptions(options), queryClient);
+    }
+    /**
  * Đổi tên danh mục hiện có. Yêu cầu quyền catalog.administer_structure.
  * @summary Đổi tên danh mục thực đơn
  */
@@ -382,87 +343,54 @@ export const patchCatalogCategoriesCategoryIdName = (
 
 
 
-export const getPatchCatalogCategoriesCategoryIdNameQueryKey = (categoryId: string,
-    catalogRenameRequest?: CatalogRenameRequest,) => {
-    return [
-    'PATCH', `/catalog/categories/${categoryId}/name`, catalogRenameRequest
-    ] as const;
-    }
+export const getPatchCatalogCategoriesCategoryIdNameMutationKey = () => ['patchCatalogCategoriesCategoryIdName'] as const;
 
+export const getPatchCatalogCategoriesCategoryIdNameMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError,PatchCatalogCategoriesCategoryIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError,PatchCatalogCategoriesCategoryIdNameMutationVariables, TContext> => {
 
-export const getPatchCatalogCategoriesCategoryIdNameQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError = ResponseAPIResponse>(categoryId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogCategoriesCategoryIdNameQueryKey(categoryId,catalogRenameRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>> = ({ signal }) => patchCatalogCategoriesCategoryIdName(categoryId,catalogRenameRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogCategoriesCategoryIdNameMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, PatchCatalogCategoriesCategoryIdNameMutationVariables> = (props) => {
+          const {categoryId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: categoryId !== null && categoryId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogCategoriesCategoryIdNameQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>>
-export type PatchCatalogCategoriesCategoryIdNameQueryError = ResponseAPIResponse
+          return  patchCatalogCategoriesCategoryIdName(categoryId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogCategoriesCategoryIdName<TData = Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    catalogRenameRequest: CatalogRenameRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogCategoriesCategoryIdName<TData = Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogCategoriesCategoryIdName<TData = Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogCategoriesCategoryIdNameMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>>
+    export type PatchCatalogCategoriesCategoryIdNameMutationBody = CatalogRenameRequest
+    export type PatchCatalogCategoriesCategoryIdNameMutationError = ResponseAPIResponse
+    export type PatchCatalogCategoriesCategoryIdNameMutationVariables = {categoryId: string;data: CatalogRenameRequest}
+
+    /**
  * @summary Đổi tên danh mục thực đơn
  */
-
-export function usePatchCatalogCategoriesCategoryIdName<TData = Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogCategoriesCategoryIdNameQueryOptions(categoryId,catalogRenameRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogCategoriesCategoryIdName = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>, TError,PatchCatalogCategoriesCategoryIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdName>>,
+        TError,
+        PatchCatalogCategoriesCategoryIdNameMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogCategoriesCategoryIdNameMutationOptions(options), queryClient);
+    }
+    /**
  * Đánh dấu ngừng kinh doanh vĩnh viễn danh mục thực đơn. Yêu cầu quyền catalog.administer_structure.
  * @summary Ngừng kinh doanh danh mục thực đơn
  */
@@ -484,87 +412,54 @@ export const postCatalogCategoriesCategoryIdRetirement = (
 
 
 
-export const getPostCatalogCategoriesCategoryIdRetirementQueryKey = (categoryId: string,
-    catalogRetireRequest?: CatalogRetireRequest,) => {
-    return [
-    'POST', `/catalog/categories/${categoryId}/retirement`, catalogRetireRequest
-    ] as const;
-    }
+export const getPostCatalogCategoriesCategoryIdRetirementMutationKey = () => ['postCatalogCategoriesCategoryIdRetirement'] as const;
 
+export const getPostCatalogCategoriesCategoryIdRetirementMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError,PostCatalogCategoriesCategoryIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError,PostCatalogCategoriesCategoryIdRetirementMutationVariables, TContext> => {
 
-export const getPostCatalogCategoriesCategoryIdRetirementQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError = ResponseAPIResponse>(categoryId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogCategoriesCategoryIdRetirementQueryKey(categoryId,catalogRetireRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>> = ({ signal }) => postCatalogCategoriesCategoryIdRetirement(categoryId,catalogRetireRequest, requestOptions, signal);
+const mutationKey = getPostCatalogCategoriesCategoryIdRetirementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, PostCatalogCategoriesCategoryIdRetirementMutationVariables> = (props) => {
+          const {categoryId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: categoryId !== null && categoryId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogCategoriesCategoryIdRetirementQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>>
-export type PostCatalogCategoriesCategoryIdRetirementQueryError = ResponseAPIResponse
+          return  postCatalogCategoriesCategoryIdRetirement(categoryId,data,requestOptions)
+        }
 
 
-export function usePostCatalogCategoriesCategoryIdRetirement<TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    catalogRetireRequest: CatalogRetireRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogCategoriesCategoryIdRetirement<TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogCategoriesCategoryIdRetirement<TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogCategoriesCategoryIdRetirementMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>>
+    export type PostCatalogCategoriesCategoryIdRetirementMutationBody = CatalogRetireRequest
+    export type PostCatalogCategoriesCategoryIdRetirementMutationError = ResponseAPIResponse
+    export type PostCatalogCategoriesCategoryIdRetirementMutationVariables = {categoryId: string;data: CatalogRetireRequest}
+
+    /**
  * @summary Ngừng kinh doanh danh mục thực đơn
  */
-
-export function usePostCatalogCategoriesCategoryIdRetirement<TData = Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError = ResponseAPIResponse>(
- categoryId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogCategoriesCategoryIdRetirementQueryOptions(categoryId,catalogRetireRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogCategoriesCategoryIdRetirement = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>, TError,PostCatalogCategoriesCategoryIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogCategoriesCategoryIdRetirement>>,
+        TError,
+        PostCatalogCategoriesCategoryIdRetirementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogCategoriesCategoryIdRetirementMutationOptions(options), queryClient);
+    }
+    /**
  * Tạo món có giá trực tiếp hoặc món có các kích thước (size). Yêu cầu quyền catalog.administer_structure và catalog.change_price.
  * @summary Tạo món thực đơn
  */
@@ -585,81 +480,54 @@ export const postCatalogItems = (
 
 
 
-export const getPostCatalogItemsQueryKey = (catalogCreateItemCommand?: CatalogCreateItemCommand,) => {
-    return [
-    'POST', `/catalog/items`, catalogCreateItemCommand
-    ] as const;
-    }
+export const getPostCatalogItemsMutationKey = () => ['postCatalogItems'] as const;
 
+export const getPostCatalogItemsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError,PostCatalogItemsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError,PostCatalogItemsMutationVariables, TContext> => {
 
-export const getPostCatalogItemsQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogItems>>, TError = ResponseAPIResponse>(catalogCreateItemCommand: CatalogCreateItemCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogItemsQueryKey(catalogCreateItemCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogItems>>> = ({ signal }) => postCatalogItems(catalogCreateItemCommand, requestOptions, signal);
+const mutationKey = getPostCatalogItemsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogItems>>, PostCatalogItemsMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogItemsQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogItems>>>
-export type PostCatalogItemsQueryError = ResponseAPIResponse
+          return  postCatalogItems(data,requestOptions)
+        }
 
 
-export function usePostCatalogItems<TData = Awaited<ReturnType<typeof postCatalogItems>>, TError = ResponseAPIResponse>(
- catalogCreateItemCommand: CatalogCreateItemCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogItems>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogItems>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogItems<TData = Awaited<ReturnType<typeof postCatalogItems>>, TError = ResponseAPIResponse>(
- catalogCreateItemCommand: CatalogCreateItemCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogItems>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogItems>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogItems<TData = Awaited<ReturnType<typeof postCatalogItems>>, TError = ResponseAPIResponse>(
- catalogCreateItemCommand: CatalogCreateItemCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogItemsMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogItems>>>
+    export type PostCatalogItemsMutationBody = CatalogCreateItemCommand
+    export type PostCatalogItemsMutationError = ResponseAPIResponse
+    export type PostCatalogItemsMutationVariables = {data: CatalogCreateItemCommand}
+
+    /**
  * @summary Tạo món thực đơn
  */
-
-export function usePostCatalogItems<TData = Awaited<ReturnType<typeof postCatalogItems>>, TError = ResponseAPIResponse>(
- catalogCreateItemCommand: CatalogCreateItemCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogItemsQueryOptions(catalogCreateItemCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogItems = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItems>>, TError,PostCatalogItemsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogItems>>,
+        TError,
+        PostCatalogItemsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogItemsMutationOptions(options), queryClient);
+    }
+    /**
  * Bật hoặc tắt trạng thái khả dụng (còn hàng/hết hàng) của món. Yêu cầu quyền catalog.manage_availability.
  * @summary Cập nhật trạng thái khả dụng của món
  */
@@ -681,87 +549,54 @@ export const patchCatalogItemsItemIdAvailability = (
 
 
 
-export const getPatchCatalogItemsItemIdAvailabilityQueryKey = (itemId: string,
-    catalogSetAvailabilityRequest?: CatalogSetAvailabilityRequest,) => {
-    return [
-    'PATCH', `/catalog/items/${itemId}/availability`, catalogSetAvailabilityRequest
-    ] as const;
-    }
+export const getPatchCatalogItemsItemIdAvailabilityMutationKey = () => ['patchCatalogItemsItemIdAvailability'] as const;
 
+export const getPatchCatalogItemsItemIdAvailabilityMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError,PatchCatalogItemsItemIdAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError,PatchCatalogItemsItemIdAvailabilityMutationVariables, TContext> => {
 
-export const getPatchCatalogItemsItemIdAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError = ResponseAPIResponse>(itemId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogItemsItemIdAvailabilityQueryKey(itemId,catalogSetAvailabilityRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>> = ({ signal }) => patchCatalogItemsItemIdAvailability(itemId,catalogSetAvailabilityRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogItemsItemIdAvailabilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, PatchCatalogItemsItemIdAvailabilityMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogItemsItemIdAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>>
-export type PatchCatalogItemsItemIdAvailabilityQueryError = ResponseAPIResponse
+          return  patchCatalogItemsItemIdAvailability(itemId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogItemsItemIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogItemsItemIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogItemsItemIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogItemsItemIdAvailabilityMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>>
+    export type PatchCatalogItemsItemIdAvailabilityMutationBody = CatalogSetAvailabilityRequest
+    export type PatchCatalogItemsItemIdAvailabilityMutationError = ResponseAPIResponse
+    export type PatchCatalogItemsItemIdAvailabilityMutationVariables = {itemId: string;data: CatalogSetAvailabilityRequest}
+
+    /**
  * @summary Cập nhật trạng thái khả dụng của món
  */
-
-export function usePatchCatalogItemsItemIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogItemsItemIdAvailabilityQueryOptions(itemId,catalogSetAvailabilityRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogItemsItemIdAvailability = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>, TError,PatchCatalogItemsItemIdAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogItemsItemIdAvailability>>,
+        TError,
+        PatchCatalogItemsItemIdAvailabilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogItemsItemIdAvailabilityMutationOptions(options), queryClient);
+    }
+    /**
  * Đánh dấu loại trừ một nhóm modifier kế thừa từ danh mục cho món cụ thể. Yêu cầu quyền catalog.administer_structure.
  * @summary Loại trừ nhóm tùy chọn kế thừa cho món
  */
@@ -784,93 +619,54 @@ export const postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId = (
 
 
 
-export const getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdQueryKey = (itemId: string,
-    groupId: string,
-    catalogMutationRequest?: CatalogMutationRequest,) => {
-    return [
-    'POST', `/catalog/items/${itemId}/inherited-modifier-group-exclusions/${groupId}`, catalogMutationRequest
-    ] as const;
-    }
+export const getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationKey = () => ['postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId'] as const;
 
+export const getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError,PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError,PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationVariables, TContext> => {
 
-export const getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError = ResponseAPIResponse>(itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdQueryKey(itemId,groupId,catalogMutationRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>> = ({ signal }) => postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId(itemId,groupId,catalogMutationRequest, requestOptions, signal);
+const mutationKey = getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationVariables> = (props) => {
+          const {itemId,groupId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: itemId !== null && itemId !== undefined && groupId !== null && groupId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>>
-export type PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdQueryError = ResponseAPIResponse
+          return  postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId(itemId,groupId,data,requestOptions)
+        }
 
 
-export function usePostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError = ResponseAPIResponse>(
- itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError = ResponseAPIResponse>(
- itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError = ResponseAPIResponse>(
- itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>>
+    export type PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationBody = CatalogMutationRequest
+    export type PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationError = ResponseAPIResponse
+    export type PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationVariables = {itemId: string;groupId: string;data: CatalogMutationRequest}
+
+    /**
  * @summary Loại trừ nhóm tùy chọn kế thừa cho món
  */
-
-export function usePostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError = ResponseAPIResponse>(
- itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdQueryOptions(itemId,groupId,catalogMutationRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>, TError,PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId>>,
+        TError,
+        PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationOptions(options), queryClient);
+    }
+    /**
  * Gắn một nhóm modifier trực tiếp vào món thực đơn. Yêu cầu quyền catalog.administer_structure.
  * @summary Gắn nhóm tùy chọn trực tiếp vào món
  */
@@ -893,93 +689,54 @@ export const postCatalogItemsItemIdModifierGroupsGroupId = (
 
 
 
-export const getPostCatalogItemsItemIdModifierGroupsGroupIdQueryKey = (itemId: string,
-    groupId: string,
-    catalogMutationRequest?: CatalogMutationRequest,) => {
-    return [
-    'POST', `/catalog/items/${itemId}/modifier-groups/${groupId}`, catalogMutationRequest
-    ] as const;
-    }
+export const getPostCatalogItemsItemIdModifierGroupsGroupIdMutationKey = () => ['postCatalogItemsItemIdModifierGroupsGroupId'] as const;
 
+export const getPostCatalogItemsItemIdModifierGroupsGroupIdMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError,PostCatalogItemsItemIdModifierGroupsGroupIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError,PostCatalogItemsItemIdModifierGroupsGroupIdMutationVariables, TContext> => {
 
-export const getPostCatalogItemsItemIdModifierGroupsGroupIdQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogItemsItemIdModifierGroupsGroupIdQueryKey(itemId,groupId,catalogMutationRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>> = ({ signal }) => postCatalogItemsItemIdModifierGroupsGroupId(itemId,groupId,catalogMutationRequest, requestOptions, signal);
+const mutationKey = getPostCatalogItemsItemIdModifierGroupsGroupIdMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, PostCatalogItemsItemIdModifierGroupsGroupIdMutationVariables> = (props) => {
+          const {itemId,groupId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: itemId !== null && itemId !== undefined && groupId !== null && groupId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogItemsItemIdModifierGroupsGroupIdQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>>
-export type PostCatalogItemsItemIdModifierGroupsGroupIdQueryError = ResponseAPIResponse
+          return  postCatalogItemsItemIdModifierGroupsGroupId(itemId,groupId,data,requestOptions)
+        }
 
 
-export function usePostCatalogItemsItemIdModifierGroupsGroupId<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(
- itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogItemsItemIdModifierGroupsGroupId<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(
- itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogItemsItemIdModifierGroupsGroupId<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(
- itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogItemsItemIdModifierGroupsGroupIdMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>>
+    export type PostCatalogItemsItemIdModifierGroupsGroupIdMutationBody = CatalogMutationRequest
+    export type PostCatalogItemsItemIdModifierGroupsGroupIdMutationError = ResponseAPIResponse
+    export type PostCatalogItemsItemIdModifierGroupsGroupIdMutationVariables = {itemId: string;groupId: string;data: CatalogMutationRequest}
+
+    /**
  * @summary Gắn nhóm tùy chọn trực tiếp vào món
  */
-
-export function usePostCatalogItemsItemIdModifierGroupsGroupId<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError = ResponseAPIResponse>(
- itemId: string,
-    groupId: string,
-    catalogMutationRequest: CatalogMutationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogItemsItemIdModifierGroupsGroupIdQueryOptions(itemId,groupId,catalogMutationRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogItemsItemIdModifierGroupsGroupId = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>, TError,PostCatalogItemsItemIdModifierGroupsGroupIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogItemsItemIdModifierGroupsGroupId>>,
+        TError,
+        PostCatalogItemsItemIdModifierGroupsGroupIdMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogItemsItemIdModifierGroupsGroupIdMutationOptions(options), queryClient);
+    }
+    /**
  * Đổi tên món hiện có trong thực đơn. Yêu cầu quyền catalog.administer_structure.
  * @summary Đổi tên món thực đơn
  */
@@ -1001,87 +758,54 @@ export const patchCatalogItemsItemIdName = (
 
 
 
-export const getPatchCatalogItemsItemIdNameQueryKey = (itemId: string,
-    catalogRenameRequest?: CatalogRenameRequest,) => {
-    return [
-    'PATCH', `/catalog/items/${itemId}/name`, catalogRenameRequest
-    ] as const;
-    }
+export const getPatchCatalogItemsItemIdNameMutationKey = () => ['patchCatalogItemsItemIdName'] as const;
 
+export const getPatchCatalogItemsItemIdNameMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError,PatchCatalogItemsItemIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError,PatchCatalogItemsItemIdNameMutationVariables, TContext> => {
 
-export const getPatchCatalogItemsItemIdNameQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError = ResponseAPIResponse>(itemId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogItemsItemIdNameQueryKey(itemId,catalogRenameRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>> = ({ signal }) => patchCatalogItemsItemIdName(itemId,catalogRenameRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogItemsItemIdNameMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, PatchCatalogItemsItemIdNameMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogItemsItemIdNameQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>>
-export type PatchCatalogItemsItemIdNameQueryError = ResponseAPIResponse
+          return  patchCatalogItemsItemIdName(itemId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogItemsItemIdName<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRenameRequest: CatalogRenameRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogItemsItemIdName<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogItemsItemIdName<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogItemsItemIdNameMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>>
+    export type PatchCatalogItemsItemIdNameMutationBody = CatalogRenameRequest
+    export type PatchCatalogItemsItemIdNameMutationError = ResponseAPIResponse
+    export type PatchCatalogItemsItemIdNameMutationVariables = {itemId: string;data: CatalogRenameRequest}
+
+    /**
  * @summary Đổi tên món thực đơn
  */
-
-export function usePatchCatalogItemsItemIdName<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogItemsItemIdNameQueryOptions(itemId,catalogRenameRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogItemsItemIdName = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>, TError,PatchCatalogItemsItemIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogItemsItemIdName>>,
+        TError,
+        PatchCatalogItemsItemIdNameMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogItemsItemIdNameMutationOptions(options), queryClient);
+    }
+    /**
  * Thay đổi giá của món bán trực tiếp. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.
  * @summary Cập nhật giá món trực tiếp
  */
@@ -1103,87 +827,54 @@ export const patchCatalogItemsItemIdPrice = (
 
 
 
-export const getPatchCatalogItemsItemIdPriceQueryKey = (itemId: string,
-    catalogRepriceRequest?: CatalogRepriceRequest,) => {
-    return [
-    'PATCH', `/catalog/items/${itemId}/price`, catalogRepriceRequest
-    ] as const;
-    }
+export const getPatchCatalogItemsItemIdPriceMutationKey = () => ['patchCatalogItemsItemIdPrice'] as const;
 
+export const getPatchCatalogItemsItemIdPriceMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError,PatchCatalogItemsItemIdPriceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError,PatchCatalogItemsItemIdPriceMutationVariables, TContext> => {
 
-export const getPatchCatalogItemsItemIdPriceQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError = ResponseAPIResponse>(itemId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogItemsItemIdPriceQueryKey(itemId,catalogRepriceRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>> = ({ signal }) => patchCatalogItemsItemIdPrice(itemId,catalogRepriceRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogItemsItemIdPriceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, PatchCatalogItemsItemIdPriceMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogItemsItemIdPriceQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>>
-export type PatchCatalogItemsItemIdPriceQueryError = ResponseAPIResponse
+          return  patchCatalogItemsItemIdPrice(itemId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogItemsItemIdPrice<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogItemsItemIdPrice<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogItemsItemIdPrice<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogItemsItemIdPriceMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>>
+    export type PatchCatalogItemsItemIdPriceMutationBody = CatalogRepriceRequest
+    export type PatchCatalogItemsItemIdPriceMutationError = ResponseAPIResponse
+    export type PatchCatalogItemsItemIdPriceMutationVariables = {itemId: string;data: CatalogRepriceRequest}
+
+    /**
  * @summary Cập nhật giá món trực tiếp
  */
-
-export function usePatchCatalogItemsItemIdPrice<TData = Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogItemsItemIdPriceQueryOptions(itemId,catalogRepriceRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogItemsItemIdPrice = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>, TError,PatchCatalogItemsItemIdPriceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogItemsItemIdPrice>>,
+        TError,
+        PatchCatalogItemsItemIdPriceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogItemsItemIdPriceMutationOptions(options), queryClient);
+    }
+    /**
  * Đánh dấu ngừng kinh doanh vĩnh viễn món thực đơn. Yêu cầu quyền catalog.administer_structure.
  * @summary Ngừng kinh doanh món thực đơn
  */
@@ -1205,87 +896,54 @@ export const postCatalogItemsItemIdRetirement = (
 
 
 
-export const getPostCatalogItemsItemIdRetirementQueryKey = (itemId: string,
-    catalogRetireRequest?: CatalogRetireRequest,) => {
-    return [
-    'POST', `/catalog/items/${itemId}/retirement`, catalogRetireRequest
-    ] as const;
-    }
+export const getPostCatalogItemsItemIdRetirementMutationKey = () => ['postCatalogItemsItemIdRetirement'] as const;
 
+export const getPostCatalogItemsItemIdRetirementMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError,PostCatalogItemsItemIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError,PostCatalogItemsItemIdRetirementMutationVariables, TContext> => {
 
-export const getPostCatalogItemsItemIdRetirementQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError = ResponseAPIResponse>(itemId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogItemsItemIdRetirementQueryKey(itemId,catalogRetireRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>> = ({ signal }) => postCatalogItemsItemIdRetirement(itemId,catalogRetireRequest, requestOptions, signal);
+const mutationKey = getPostCatalogItemsItemIdRetirementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, PostCatalogItemsItemIdRetirementMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: itemId !== null && itemId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogItemsItemIdRetirementQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>>
-export type PostCatalogItemsItemIdRetirementQueryError = ResponseAPIResponse
+          return  postCatalogItemsItemIdRetirement(itemId,data,requestOptions)
+        }
 
 
-export function usePostCatalogItemsItemIdRetirement<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRetireRequest: CatalogRetireRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogItemsItemIdRetirement<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogItemsItemIdRetirement<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogItemsItemIdRetirementMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>>
+    export type PostCatalogItemsItemIdRetirementMutationBody = CatalogRetireRequest
+    export type PostCatalogItemsItemIdRetirementMutationError = ResponseAPIResponse
+    export type PostCatalogItemsItemIdRetirementMutationVariables = {itemId: string;data: CatalogRetireRequest}
+
+    /**
  * @summary Ngừng kinh doanh món thực đơn
  */
-
-export function usePostCatalogItemsItemIdRetirement<TData = Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError = ResponseAPIResponse>(
- itemId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogItemsItemIdRetirementQueryOptions(itemId,catalogRetireRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogItemsItemIdRetirement = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>, TError,PostCatalogItemsItemIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogItemsItemIdRetirement>>,
+        TError,
+        PostCatalogItemsItemIdRetirementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogItemsItemIdRetirementMutationOptions(options), queryClient);
+    }
+    /**
  * Trả về projection nhẹ danh mục, món, size, tùy chọn và cờ khả dụng để thu ngân/pha chế bật tắt nhanh. Yêu cầu quyền catalog.manage_availability.
  * @summary Lấy thực đơn trạng thái khả dụng (Availability Menu)
  */
@@ -1304,54 +962,81 @@ export const getCatalogMenuAvailability = (
 
 
 
-export const getGetCatalogMenuAvailabilityMutationKey = () => ['getCatalogMenuAvailability'] as const;
-
-export const getGetCatalogMenuAvailabilityMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError,void, TContext> => {
-
-const mutationKey = getGetCatalogMenuAvailabilityMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetCatalogMenuAvailabilityQueryKey = () => {
+    return [
+    `/catalog/menu/availability`
+    ] as const;
+    }
 
 
+export const getGetCatalogMenuAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogMenuAvailabilityQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, void> = () => {
 
-
-          return  getCatalogMenuAvailability(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogMenuAvailability>>> = ({ signal }) => getCatalogMenuAvailability(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetCatalogMenuAvailabilityMutationResult = NonNullable<Awaited<ReturnType<typeof getCatalogMenuAvailability>>>
-
-    export type GetCatalogMenuAvailabilityMutationError = ResponseAPIResponse
+export type GetCatalogMenuAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogMenuAvailability>>>
+export type GetCatalogMenuAvailabilityQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetCatalogMenuAvailability<TData = Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogMenuAvailability>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogMenuAvailability>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogMenuAvailability<TData = Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogMenuAvailability>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogMenuAvailability>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogMenuAvailability<TData = Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Lấy thực đơn trạng thái khả dụng (Availability Menu)
  */
-export const useGetCatalogMenuAvailability = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getCatalogMenuAvailability>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetCatalogMenuAvailabilityMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetCatalogMenuAvailability<TData = Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCatalogMenuAvailabilityQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Trả về toàn bộ danh mục, món, kích thước (bao gồm cả món đã ngừng bán hoặc hết hàng) phục vụ quản trị. Yêu cầu quyền catalog.view_prices.
  * @summary Lấy thực đơn quản lý (Management Menu)
  */
@@ -1370,54 +1055,81 @@ export const getCatalogMenuManage = (
 
 
 
-export const getGetCatalogMenuManageMutationKey = () => ['getCatalogMenuManage'] as const;
-
-export const getGetCatalogMenuManageMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError,void, TContext> => {
-
-const mutationKey = getGetCatalogMenuManageMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetCatalogMenuManageQueryKey = () => {
+    return [
+    `/catalog/menu/manage`
+    ] as const;
+    }
 
 
+export const getGetCatalogMenuManageQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogMenuManage>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogMenuManageQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getCatalogMenuManage>>, void> = () => {
 
-
-          return  getCatalogMenuManage(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogMenuManage>>> = ({ signal }) => getCatalogMenuManage(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetCatalogMenuManageMutationResult = NonNullable<Awaited<ReturnType<typeof getCatalogMenuManage>>>
-
-    export type GetCatalogMenuManageMutationError = ResponseAPIResponse
+export type GetCatalogMenuManageQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogMenuManage>>>
+export type GetCatalogMenuManageQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetCatalogMenuManage<TData = Awaited<ReturnType<typeof getCatalogMenuManage>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogMenuManage>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogMenuManage>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogMenuManage<TData = Awaited<ReturnType<typeof getCatalogMenuManage>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogMenuManage>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogMenuManage>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogMenuManage<TData = Awaited<ReturnType<typeof getCatalogMenuManage>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Lấy thực đơn quản lý (Management Menu)
  */
-export const useGetCatalogMenuManage = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getCatalogMenuManage>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetCatalogMenuManageMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetCatalogMenuManage<TData = Awaited<ReturnType<typeof getCatalogMenuManage>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuManage>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCatalogMenuManageQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Trả về projection thực đơn chỉ bao gồm các món và kích thước còn hàng, sẵn sàng để bán. Yêu cầu quyền catalog.view_prices.
  * @summary Lấy thực đơn bán hàng (Sellable Menu)
  */
@@ -1436,54 +1148,81 @@ export const getCatalogMenuSellable = (
 
 
 
-export const getGetCatalogMenuSellableMutationKey = () => ['getCatalogMenuSellable'] as const;
-
-export const getGetCatalogMenuSellableMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError,void, TContext> => {
-
-const mutationKey = getGetCatalogMenuSellableMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetCatalogMenuSellableQueryKey = () => {
+    return [
+    `/catalog/menu/sellable`
+    ] as const;
+    }
 
 
+export const getGetCatalogMenuSellableQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogMenuSellableQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getCatalogMenuSellable>>, void> = () => {
 
-
-          return  getCatalogMenuSellable(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogMenuSellable>>> = ({ signal }) => getCatalogMenuSellable(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetCatalogMenuSellableMutationResult = NonNullable<Awaited<ReturnType<typeof getCatalogMenuSellable>>>
-
-    export type GetCatalogMenuSellableMutationError = ResponseAPIResponse
+export type GetCatalogMenuSellableQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogMenuSellable>>>
+export type GetCatalogMenuSellableQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetCatalogMenuSellable<TData = Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogMenuSellable>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogMenuSellable>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogMenuSellable<TData = Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogMenuSellable>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogMenuSellable>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogMenuSellable<TData = Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Lấy thực đơn bán hàng (Sellable Menu)
  */
-export const useGetCatalogMenuSellable = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getCatalogMenuSellable>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetCatalogMenuSellableMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetCatalogMenuSellable<TData = Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogMenuSellable>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCatalogMenuSellableQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Trả về danh sách tất cả các nhóm modifier cùng các tùy chọn và cấu hình mặc định. Yêu cầu quyền catalog.view_prices.
  * @summary Danh sách nhóm tùy chọn / topping quản lý
  */
@@ -1502,54 +1241,81 @@ export const getCatalogModifierGroups = (
 
 
 
-export const getGetCatalogModifierGroupsMutationKey = () => ['getCatalogModifierGroups'] as const;
-
-export const getGetCatalogModifierGroupsMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError,void, TContext> => {
-
-const mutationKey = getGetCatalogModifierGroupsMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetCatalogModifierGroupsQueryKey = () => {
+    return [
+    `/catalog/modifier-groups`
+    ] as const;
+    }
 
 
+export const getGetCatalogModifierGroupsQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogModifierGroupsQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getCatalogModifierGroups>>, void> = () => {
 
-
-          return  getCatalogModifierGroups(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogModifierGroups>>> = ({ signal }) => getCatalogModifierGroups(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetCatalogModifierGroupsMutationResult = NonNullable<Awaited<ReturnType<typeof getCatalogModifierGroups>>>
-
-    export type GetCatalogModifierGroupsMutationError = ResponseAPIResponse
+export type GetCatalogModifierGroupsQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogModifierGroups>>>
+export type GetCatalogModifierGroupsQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetCatalogModifierGroups<TData = Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogModifierGroups>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogModifierGroups>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogModifierGroups<TData = Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCatalogModifierGroups>>,
+          TError,
+          Awaited<ReturnType<typeof getCatalogModifierGroups>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCatalogModifierGroups<TData = Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Danh sách nhóm tùy chọn / topping quản lý
  */
-export const useGetCatalogModifierGroups = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getCatalogModifierGroups>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetCatalogModifierGroupsMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetCatalogModifierGroups<TData = Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCatalogModifierGroups>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCatalogModifierGroupsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Tạo nhóm modifier mới kèm danh sách tùy chọn. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.
  * @summary Tạo nhóm tùy chọn / topping
  */
@@ -1570,81 +1336,54 @@ export const postCatalogModifierGroups = (
 
 
 
-export const getPostCatalogModifierGroupsQueryKey = (catalogCreateModifierGroupCommand?: CatalogCreateModifierGroupCommand,) => {
-    return [
-    'POST', `/catalog/modifier-groups`, catalogCreateModifierGroupCommand
-    ] as const;
-    }
+export const getPostCatalogModifierGroupsMutationKey = () => ['postCatalogModifierGroups'] as const;
 
+export const getPostCatalogModifierGroupsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError,PostCatalogModifierGroupsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError,PostCatalogModifierGroupsMutationVariables, TContext> => {
 
-export const getPostCatalogModifierGroupsQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError = ResponseAPIResponse>(catalogCreateModifierGroupCommand: CatalogCreateModifierGroupCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogModifierGroupsQueryKey(catalogCreateModifierGroupCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogModifierGroups>>> = ({ signal }) => postCatalogModifierGroups(catalogCreateModifierGroupCommand, requestOptions, signal);
+const mutationKey = getPostCatalogModifierGroupsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogModifierGroups>>, PostCatalogModifierGroupsMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogModifierGroupsQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogModifierGroups>>>
-export type PostCatalogModifierGroupsQueryError = ResponseAPIResponse
+          return  postCatalogModifierGroups(data,requestOptions)
+        }
 
 
-export function usePostCatalogModifierGroups<TData = Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError = ResponseAPIResponse>(
- catalogCreateModifierGroupCommand: CatalogCreateModifierGroupCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogModifierGroups>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogModifierGroups>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogModifierGroups<TData = Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError = ResponseAPIResponse>(
- catalogCreateModifierGroupCommand: CatalogCreateModifierGroupCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogModifierGroups>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogModifierGroups>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogModifierGroups<TData = Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError = ResponseAPIResponse>(
- catalogCreateModifierGroupCommand: CatalogCreateModifierGroupCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogModifierGroupsMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogModifierGroups>>>
+    export type PostCatalogModifierGroupsMutationBody = CatalogCreateModifierGroupCommand
+    export type PostCatalogModifierGroupsMutationError = ResponseAPIResponse
+    export type PostCatalogModifierGroupsMutationVariables = {data: CatalogCreateModifierGroupCommand}
+
+    /**
  * @summary Tạo nhóm tùy chọn / topping
  */
-
-export function usePostCatalogModifierGroups<TData = Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError = ResponseAPIResponse>(
- catalogCreateModifierGroupCommand: CatalogCreateModifierGroupCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogModifierGroupsQueryOptions(catalogCreateModifierGroupCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogModifierGroups = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroups>>, TError,PostCatalogModifierGroupsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogModifierGroups>>,
+        TError,
+        PostCatalogModifierGroupsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogModifierGroupsMutationOptions(options), queryClient);
+    }
+    /**
  * Thiết lập danh sách tùy chọn mặc định cho nhóm modifier. Yêu cầu quyền catalog.administer_structure.
  * @summary Cập nhật tùy chọn mặc định của nhóm
  */
@@ -1666,87 +1405,54 @@ export const putCatalogModifierGroupsGroupIdDefaults = (
 
 
 
-export const getPutCatalogModifierGroupsGroupIdDefaultsQueryKey = (groupId: string,
-    catalogSetModifierGroupDefaultsRequest?: CatalogSetModifierGroupDefaultsRequest,) => {
-    return [
-    'PUT', `/catalog/modifier-groups/${groupId}/defaults`, catalogSetModifierGroupDefaultsRequest
-    ] as const;
-    }
+export const getPutCatalogModifierGroupsGroupIdDefaultsMutationKey = () => ['putCatalogModifierGroupsGroupIdDefaults'] as const;
 
+export const getPutCatalogModifierGroupsGroupIdDefaultsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError,PutCatalogModifierGroupsGroupIdDefaultsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError,PutCatalogModifierGroupsGroupIdDefaultsMutationVariables, TContext> => {
 
-export const getPutCatalogModifierGroupsGroupIdDefaultsQueryOptions = <TData = Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError = ResponseAPIResponse>(groupId: string,
-    catalogSetModifierGroupDefaultsRequest: CatalogSetModifierGroupDefaultsRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPutCatalogModifierGroupsGroupIdDefaultsQueryKey(groupId,catalogSetModifierGroupDefaultsRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>> = ({ signal }) => putCatalogModifierGroupsGroupIdDefaults(groupId,catalogSetModifierGroupDefaultsRequest, requestOptions, signal);
+const mutationKey = getPutCatalogModifierGroupsGroupIdDefaultsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, PutCatalogModifierGroupsGroupIdDefaultsMutationVariables> = (props) => {
+          const {groupId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: groupId !== null && groupId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PutCatalogModifierGroupsGroupIdDefaultsQueryResult = NonNullable<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>>
-export type PutCatalogModifierGroupsGroupIdDefaultsQueryError = ResponseAPIResponse
+          return  putCatalogModifierGroupsGroupIdDefaults(groupId,data,requestOptions)
+        }
 
 
-export function usePutCatalogModifierGroupsGroupIdDefaults<TData = Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogSetModifierGroupDefaultsRequest: CatalogSetModifierGroupDefaultsRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>,
-          TError,
-          Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePutCatalogModifierGroupsGroupIdDefaults<TData = Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogSetModifierGroupDefaultsRequest: CatalogSetModifierGroupDefaultsRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>,
-          TError,
-          Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePutCatalogModifierGroupsGroupIdDefaults<TData = Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogSetModifierGroupDefaultsRequest: CatalogSetModifierGroupDefaultsRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutCatalogModifierGroupsGroupIdDefaultsMutationResult = NonNullable<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>>
+    export type PutCatalogModifierGroupsGroupIdDefaultsMutationBody = CatalogSetModifierGroupDefaultsRequest
+    export type PutCatalogModifierGroupsGroupIdDefaultsMutationError = ResponseAPIResponse
+    export type PutCatalogModifierGroupsGroupIdDefaultsMutationVariables = {groupId: string;data: CatalogSetModifierGroupDefaultsRequest}
+
+    /**
  * @summary Cập nhật tùy chọn mặc định của nhóm
  */
-
-export function usePutCatalogModifierGroupsGroupIdDefaults<TData = Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogSetModifierGroupDefaultsRequest: CatalogSetModifierGroupDefaultsRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPutCatalogModifierGroupsGroupIdDefaultsQueryOptions(groupId,catalogSetModifierGroupDefaultsRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePutCatalogModifierGroupsGroupIdDefaults = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>, TError,PutCatalogModifierGroupsGroupIdDefaultsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdDefaults>>,
+        TError,
+        PutCatalogModifierGroupsGroupIdDefaultsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutCatalogModifierGroupsGroupIdDefaultsMutationOptions(options), queryClient);
+    }
+    /**
  * Đổi tên nhóm modifier hiện có. Yêu cầu quyền catalog.administer_structure.
  * @summary Đổi tên nhóm tùy chọn
  */
@@ -1768,87 +1474,54 @@ export const patchCatalogModifierGroupsGroupIdName = (
 
 
 
-export const getPatchCatalogModifierGroupsGroupIdNameQueryKey = (groupId: string,
-    catalogRenameRequest?: CatalogRenameRequest,) => {
-    return [
-    'PATCH', `/catalog/modifier-groups/${groupId}/name`, catalogRenameRequest
-    ] as const;
-    }
+export const getPatchCatalogModifierGroupsGroupIdNameMutationKey = () => ['patchCatalogModifierGroupsGroupIdName'] as const;
 
+export const getPatchCatalogModifierGroupsGroupIdNameMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError,PatchCatalogModifierGroupsGroupIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError,PatchCatalogModifierGroupsGroupIdNameMutationVariables, TContext> => {
 
-export const getPatchCatalogModifierGroupsGroupIdNameQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError = ResponseAPIResponse>(groupId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogModifierGroupsGroupIdNameQueryKey(groupId,catalogRenameRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>> = ({ signal }) => patchCatalogModifierGroupsGroupIdName(groupId,catalogRenameRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogModifierGroupsGroupIdNameMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, PatchCatalogModifierGroupsGroupIdNameMutationVariables> = (props) => {
+          const {groupId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: groupId !== null && groupId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogModifierGroupsGroupIdNameQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>>
-export type PatchCatalogModifierGroupsGroupIdNameQueryError = ResponseAPIResponse
+          return  patchCatalogModifierGroupsGroupIdName(groupId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogModifierGroupsGroupIdName<TData = Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogRenameRequest: CatalogRenameRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogModifierGroupsGroupIdName<TData = Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogModifierGroupsGroupIdName<TData = Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogModifierGroupsGroupIdNameMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>>
+    export type PatchCatalogModifierGroupsGroupIdNameMutationBody = CatalogRenameRequest
+    export type PatchCatalogModifierGroupsGroupIdNameMutationError = ResponseAPIResponse
+    export type PatchCatalogModifierGroupsGroupIdNameMutationVariables = {groupId: string;data: CatalogRenameRequest}
+
+    /**
  * @summary Đổi tên nhóm tùy chọn
  */
-
-export function usePatchCatalogModifierGroupsGroupIdName<TData = Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogModifierGroupsGroupIdNameQueryOptions(groupId,catalogRenameRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogModifierGroupsGroupIdName = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>, TError,PatchCatalogModifierGroupsGroupIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogModifierGroupsGroupIdName>>,
+        TError,
+        PatchCatalogModifierGroupsGroupIdNameMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogModifierGroupsGroupIdNameMutationOptions(options), queryClient);
+    }
+    /**
  * Đánh dấu ngừng kinh doanh vĩnh viễn nhóm modifier. Yêu cầu quyền catalog.administer_structure.
  * @summary Ngừng kinh doanh nhóm tùy chọn
  */
@@ -1870,87 +1543,54 @@ export const postCatalogModifierGroupsGroupIdRetirement = (
 
 
 
-export const getPostCatalogModifierGroupsGroupIdRetirementQueryKey = (groupId: string,
-    catalogRetireRequest?: CatalogRetireRequest,) => {
-    return [
-    'POST', `/catalog/modifier-groups/${groupId}/retirement`, catalogRetireRequest
-    ] as const;
-    }
+export const getPostCatalogModifierGroupsGroupIdRetirementMutationKey = () => ['postCatalogModifierGroupsGroupIdRetirement'] as const;
 
+export const getPostCatalogModifierGroupsGroupIdRetirementMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError,PostCatalogModifierGroupsGroupIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError,PostCatalogModifierGroupsGroupIdRetirementMutationVariables, TContext> => {
 
-export const getPostCatalogModifierGroupsGroupIdRetirementQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError = ResponseAPIResponse>(groupId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogModifierGroupsGroupIdRetirementQueryKey(groupId,catalogRetireRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>> = ({ signal }) => postCatalogModifierGroupsGroupIdRetirement(groupId,catalogRetireRequest, requestOptions, signal);
+const mutationKey = getPostCatalogModifierGroupsGroupIdRetirementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, PostCatalogModifierGroupsGroupIdRetirementMutationVariables> = (props) => {
+          const {groupId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: groupId !== null && groupId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogModifierGroupsGroupIdRetirementQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>>
-export type PostCatalogModifierGroupsGroupIdRetirementQueryError = ResponseAPIResponse
+          return  postCatalogModifierGroupsGroupIdRetirement(groupId,data,requestOptions)
+        }
 
 
-export function usePostCatalogModifierGroupsGroupIdRetirement<TData = Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogRetireRequest: CatalogRetireRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogModifierGroupsGroupIdRetirement<TData = Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogModifierGroupsGroupIdRetirement<TData = Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogModifierGroupsGroupIdRetirementMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>>
+    export type PostCatalogModifierGroupsGroupIdRetirementMutationBody = CatalogRetireRequest
+    export type PostCatalogModifierGroupsGroupIdRetirementMutationError = ResponseAPIResponse
+    export type PostCatalogModifierGroupsGroupIdRetirementMutationVariables = {groupId: string;data: CatalogRetireRequest}
+
+    /**
  * @summary Ngừng kinh doanh nhóm tùy chọn
  */
-
-export function usePostCatalogModifierGroupsGroupIdRetirement<TData = Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError = ResponseAPIResponse>(
- groupId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogModifierGroupsGroupIdRetirementQueryOptions(groupId,catalogRetireRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogModifierGroupsGroupIdRetirement = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>, TError,PostCatalogModifierGroupsGroupIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdRetirement>>,
+        TError,
+        PostCatalogModifierGroupsGroupIdRetirementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogModifierGroupsGroupIdRetirementMutationOptions(options), queryClient);
+    }
+    /**
  * Bật hoặc tắt trạng thái khả dụng của tùy chọn modifier. Yêu cầu quyền catalog.manage_availability.
  * @summary Cập nhật trạng thái khả dụng của tùy chọn
  */
@@ -1972,87 +1612,54 @@ export const patchCatalogModifierOptionsOptionIdAvailability = (
 
 
 
-export const getPatchCatalogModifierOptionsOptionIdAvailabilityQueryKey = (optionId: string,
-    catalogSetAvailabilityRequest?: CatalogSetAvailabilityRequest,) => {
-    return [
-    'PATCH', `/catalog/modifier-options/${optionId}/availability`, catalogSetAvailabilityRequest
-    ] as const;
-    }
+export const getPatchCatalogModifierOptionsOptionIdAvailabilityMutationKey = () => ['patchCatalogModifierOptionsOptionIdAvailability'] as const;
 
+export const getPatchCatalogModifierOptionsOptionIdAvailabilityMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError,PatchCatalogModifierOptionsOptionIdAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError,PatchCatalogModifierOptionsOptionIdAvailabilityMutationVariables, TContext> => {
 
-export const getPatchCatalogModifierOptionsOptionIdAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError = ResponseAPIResponse>(optionId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogModifierOptionsOptionIdAvailabilityQueryKey(optionId,catalogSetAvailabilityRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>> = ({ signal }) => patchCatalogModifierOptionsOptionIdAvailability(optionId,catalogSetAvailabilityRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogModifierOptionsOptionIdAvailabilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, PatchCatalogModifierOptionsOptionIdAvailabilityMutationVariables> = (props) => {
+          const {optionId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: optionId !== null && optionId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogModifierOptionsOptionIdAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>>
-export type PatchCatalogModifierOptionsOptionIdAvailabilityQueryError = ResponseAPIResponse
+          return  patchCatalogModifierOptionsOptionIdAvailability(optionId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogModifierOptionsOptionIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogModifierOptionsOptionIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogModifierOptionsOptionIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogModifierOptionsOptionIdAvailabilityMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>>
+    export type PatchCatalogModifierOptionsOptionIdAvailabilityMutationBody = CatalogSetAvailabilityRequest
+    export type PatchCatalogModifierOptionsOptionIdAvailabilityMutationError = ResponseAPIResponse
+    export type PatchCatalogModifierOptionsOptionIdAvailabilityMutationVariables = {optionId: string;data: CatalogSetAvailabilityRequest}
+
+    /**
  * @summary Cập nhật trạng thái khả dụng của tùy chọn
  */
-
-export function usePatchCatalogModifierOptionsOptionIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogModifierOptionsOptionIdAvailabilityQueryOptions(optionId,catalogSetAvailabilityRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogModifierOptionsOptionIdAvailability = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>, TError,PatchCatalogModifierOptionsOptionIdAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdAvailability>>,
+        TError,
+        PatchCatalogModifierOptionsOptionIdAvailabilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogModifierOptionsOptionIdAvailabilityMutationOptions(options), queryClient);
+    }
+    /**
  * Đổi tên tùy chọn hiện có. Yêu cầu quyền catalog.administer_structure.
  * @summary Đổi tên tùy chọn modifier
  */
@@ -2074,87 +1681,54 @@ export const patchCatalogModifierOptionsOptionIdName = (
 
 
 
-export const getPatchCatalogModifierOptionsOptionIdNameQueryKey = (optionId: string,
-    catalogRenameRequest?: CatalogRenameRequest,) => {
-    return [
-    'PATCH', `/catalog/modifier-options/${optionId}/name`, catalogRenameRequest
-    ] as const;
-    }
+export const getPatchCatalogModifierOptionsOptionIdNameMutationKey = () => ['patchCatalogModifierOptionsOptionIdName'] as const;
 
+export const getPatchCatalogModifierOptionsOptionIdNameMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError,PatchCatalogModifierOptionsOptionIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError,PatchCatalogModifierOptionsOptionIdNameMutationVariables, TContext> => {
 
-export const getPatchCatalogModifierOptionsOptionIdNameQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError = ResponseAPIResponse>(optionId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogModifierOptionsOptionIdNameQueryKey(optionId,catalogRenameRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>> = ({ signal }) => patchCatalogModifierOptionsOptionIdName(optionId,catalogRenameRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogModifierOptionsOptionIdNameMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, PatchCatalogModifierOptionsOptionIdNameMutationVariables> = (props) => {
+          const {optionId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: optionId !== null && optionId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogModifierOptionsOptionIdNameQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>>
-export type PatchCatalogModifierOptionsOptionIdNameQueryError = ResponseAPIResponse
+          return  patchCatalogModifierOptionsOptionIdName(optionId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogModifierOptionsOptionIdName<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRenameRequest: CatalogRenameRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogModifierOptionsOptionIdName<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogModifierOptionsOptionIdName<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogModifierOptionsOptionIdNameMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>>
+    export type PatchCatalogModifierOptionsOptionIdNameMutationBody = CatalogRenameRequest
+    export type PatchCatalogModifierOptionsOptionIdNameMutationError = ResponseAPIResponse
+    export type PatchCatalogModifierOptionsOptionIdNameMutationVariables = {optionId: string;data: CatalogRenameRequest}
+
+    /**
  * @summary Đổi tên tùy chọn modifier
  */
-
-export function usePatchCatalogModifierOptionsOptionIdName<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogModifierOptionsOptionIdNameQueryOptions(optionId,catalogRenameRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogModifierOptionsOptionIdName = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>, TError,PatchCatalogModifierOptionsOptionIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdName>>,
+        TError,
+        PatchCatalogModifierOptionsOptionIdNameMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogModifierOptionsOptionIdNameMutationOptions(options), queryClient);
+    }
+    /**
  * Thay đổi số tiền phụ thu của tùy chọn. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.
  * @summary Cập nhật phụ thu tùy chọn modifier
  */
@@ -2176,87 +1750,54 @@ export const patchCatalogModifierOptionsOptionIdPrice = (
 
 
 
-export const getPatchCatalogModifierOptionsOptionIdPriceQueryKey = (optionId: string,
-    catalogRepriceModifierOptionRequest?: CatalogRepriceModifierOptionRequest,) => {
-    return [
-    'PATCH', `/catalog/modifier-options/${optionId}/price`, catalogRepriceModifierOptionRequest
-    ] as const;
-    }
+export const getPatchCatalogModifierOptionsOptionIdPriceMutationKey = () => ['patchCatalogModifierOptionsOptionIdPrice'] as const;
 
+export const getPatchCatalogModifierOptionsOptionIdPriceMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError,PatchCatalogModifierOptionsOptionIdPriceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError,PatchCatalogModifierOptionsOptionIdPriceMutationVariables, TContext> => {
 
-export const getPatchCatalogModifierOptionsOptionIdPriceQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError = ResponseAPIResponse>(optionId: string,
-    catalogRepriceModifierOptionRequest: CatalogRepriceModifierOptionRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogModifierOptionsOptionIdPriceQueryKey(optionId,catalogRepriceModifierOptionRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>> = ({ signal }) => patchCatalogModifierOptionsOptionIdPrice(optionId,catalogRepriceModifierOptionRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogModifierOptionsOptionIdPriceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, PatchCatalogModifierOptionsOptionIdPriceMutationVariables> = (props) => {
+          const {optionId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: optionId !== null && optionId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogModifierOptionsOptionIdPriceQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>>
-export type PatchCatalogModifierOptionsOptionIdPriceQueryError = ResponseAPIResponse
+          return  patchCatalogModifierOptionsOptionIdPrice(optionId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogModifierOptionsOptionIdPrice<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRepriceModifierOptionRequest: CatalogRepriceModifierOptionRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogModifierOptionsOptionIdPrice<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRepriceModifierOptionRequest: CatalogRepriceModifierOptionRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogModifierOptionsOptionIdPrice<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRepriceModifierOptionRequest: CatalogRepriceModifierOptionRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogModifierOptionsOptionIdPriceMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>>
+    export type PatchCatalogModifierOptionsOptionIdPriceMutationBody = CatalogRepriceModifierOptionRequest
+    export type PatchCatalogModifierOptionsOptionIdPriceMutationError = ResponseAPIResponse
+    export type PatchCatalogModifierOptionsOptionIdPriceMutationVariables = {optionId: string;data: CatalogRepriceModifierOptionRequest}
+
+    /**
  * @summary Cập nhật phụ thu tùy chọn modifier
  */
-
-export function usePatchCatalogModifierOptionsOptionIdPrice<TData = Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRepriceModifierOptionRequest: CatalogRepriceModifierOptionRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogModifierOptionsOptionIdPriceQueryOptions(optionId,catalogRepriceModifierOptionRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogModifierOptionsOptionIdPrice = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>, TError,PatchCatalogModifierOptionsOptionIdPriceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogModifierOptionsOptionIdPrice>>,
+        TError,
+        PatchCatalogModifierOptionsOptionIdPriceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogModifierOptionsOptionIdPriceMutationOptions(options), queryClient);
+    }
+    /**
  * Đánh dấu ngừng kinh doanh vĩnh viễn tùy chọn modifier. Yêu cầu quyền catalog.administer_structure.
  * @summary Ngừng kinh doanh tùy chọn modifier
  */
@@ -2278,87 +1819,54 @@ export const postCatalogModifierOptionsOptionIdRetirement = (
 
 
 
-export const getPostCatalogModifierOptionsOptionIdRetirementQueryKey = (optionId: string,
-    catalogRetireRequest?: CatalogRetireRequest,) => {
-    return [
-    'POST', `/catalog/modifier-options/${optionId}/retirement`, catalogRetireRequest
-    ] as const;
-    }
+export const getPostCatalogModifierOptionsOptionIdRetirementMutationKey = () => ['postCatalogModifierOptionsOptionIdRetirement'] as const;
 
+export const getPostCatalogModifierOptionsOptionIdRetirementMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError,PostCatalogModifierOptionsOptionIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError,PostCatalogModifierOptionsOptionIdRetirementMutationVariables, TContext> => {
 
-export const getPostCatalogModifierOptionsOptionIdRetirementQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError = ResponseAPIResponse>(optionId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogModifierOptionsOptionIdRetirementQueryKey(optionId,catalogRetireRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>> = ({ signal }) => postCatalogModifierOptionsOptionIdRetirement(optionId,catalogRetireRequest, requestOptions, signal);
+const mutationKey = getPostCatalogModifierOptionsOptionIdRetirementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, PostCatalogModifierOptionsOptionIdRetirementMutationVariables> = (props) => {
+          const {optionId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: optionId !== null && optionId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogModifierOptionsOptionIdRetirementQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>>
-export type PostCatalogModifierOptionsOptionIdRetirementQueryError = ResponseAPIResponse
+          return  postCatalogModifierOptionsOptionIdRetirement(optionId,data,requestOptions)
+        }
 
 
-export function usePostCatalogModifierOptionsOptionIdRetirement<TData = Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRetireRequest: CatalogRetireRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogModifierOptionsOptionIdRetirement<TData = Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogModifierOptionsOptionIdRetirement<TData = Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogModifierOptionsOptionIdRetirementMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>>
+    export type PostCatalogModifierOptionsOptionIdRetirementMutationBody = CatalogRetireRequest
+    export type PostCatalogModifierOptionsOptionIdRetirementMutationError = ResponseAPIResponse
+    export type PostCatalogModifierOptionsOptionIdRetirementMutationVariables = {optionId: string;data: CatalogRetireRequest}
+
+    /**
  * @summary Ngừng kinh doanh tùy chọn modifier
  */
-
-export function usePostCatalogModifierOptionsOptionIdRetirement<TData = Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError = ResponseAPIResponse>(
- optionId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogModifierOptionsOptionIdRetirementQueryOptions(optionId,catalogRetireRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostCatalogModifierOptionsOptionIdRetirement = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>, TError,PostCatalogModifierOptionsOptionIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogModifierOptionsOptionIdRetirement>>,
+        TError,
+        PostCatalogModifierOptionsOptionIdRetirementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogModifierOptionsOptionIdRetirementMutationOptions(options), queryClient);
+    }
+    /**
  * Bật hoặc tắt trạng thái khả dụng của size món. Yêu cầu quyền catalog.manage_availability.
  * @summary Cập nhật trạng thái khả dụng của kích thước
  */
@@ -2380,87 +1888,54 @@ export const patchCatalogSizesSizeIdAvailability = (
 
 
 
-export const getPatchCatalogSizesSizeIdAvailabilityQueryKey = (sizeId: string,
-    catalogSetAvailabilityRequest?: CatalogSetAvailabilityRequest,) => {
-    return [
-    'PATCH', `/catalog/sizes/${sizeId}/availability`, catalogSetAvailabilityRequest
-    ] as const;
-    }
+export const getPatchCatalogSizesSizeIdAvailabilityMutationKey = () => ['patchCatalogSizesSizeIdAvailability'] as const;
 
+export const getPatchCatalogSizesSizeIdAvailabilityMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError,PatchCatalogSizesSizeIdAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError,PatchCatalogSizesSizeIdAvailabilityMutationVariables, TContext> => {
 
-export const getPatchCatalogSizesSizeIdAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError = ResponseAPIResponse>(sizeId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogSizesSizeIdAvailabilityQueryKey(sizeId,catalogSetAvailabilityRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>> = ({ signal }) => patchCatalogSizesSizeIdAvailability(sizeId,catalogSetAvailabilityRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogSizesSizeIdAvailabilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, PatchCatalogSizesSizeIdAvailabilityMutationVariables> = (props) => {
+          const {sizeId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: sizeId !== null && sizeId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogSizesSizeIdAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>>
-export type PatchCatalogSizesSizeIdAvailabilityQueryError = ResponseAPIResponse
+          return  patchCatalogSizesSizeIdAvailability(sizeId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogSizesSizeIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogSizesSizeIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogSizesSizeIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogSizesSizeIdAvailabilityMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>>
+    export type PatchCatalogSizesSizeIdAvailabilityMutationBody = CatalogSetAvailabilityRequest
+    export type PatchCatalogSizesSizeIdAvailabilityMutationError = ResponseAPIResponse
+    export type PatchCatalogSizesSizeIdAvailabilityMutationVariables = {sizeId: string;data: CatalogSetAvailabilityRequest}
+
+    /**
  * @summary Cập nhật trạng thái khả dụng của kích thước
  */
-
-export function usePatchCatalogSizesSizeIdAvailability<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogSetAvailabilityRequest: CatalogSetAvailabilityRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogSizesSizeIdAvailabilityQueryOptions(sizeId,catalogSetAvailabilityRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogSizesSizeIdAvailability = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>, TError,PatchCatalogSizesSizeIdAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogSizesSizeIdAvailability>>,
+        TError,
+        PatchCatalogSizesSizeIdAvailabilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogSizesSizeIdAvailabilityMutationOptions(options), queryClient);
+    }
+    /**
  * Đổi tên size của món. Yêu cầu quyền catalog.administer_structure.
  * @summary Đổi tên kích thước món
  */
@@ -2482,87 +1957,54 @@ export const patchCatalogSizesSizeIdName = (
 
 
 
-export const getPatchCatalogSizesSizeIdNameQueryKey = (sizeId: string,
-    catalogRenameRequest?: CatalogRenameRequest,) => {
-    return [
-    'PATCH', `/catalog/sizes/${sizeId}/name`, catalogRenameRequest
-    ] as const;
-    }
+export const getPatchCatalogSizesSizeIdNameMutationKey = () => ['patchCatalogSizesSizeIdName'] as const;
 
+export const getPatchCatalogSizesSizeIdNameMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError,PatchCatalogSizesSizeIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError,PatchCatalogSizesSizeIdNameMutationVariables, TContext> => {
 
-export const getPatchCatalogSizesSizeIdNameQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError = ResponseAPIResponse>(sizeId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogSizesSizeIdNameQueryKey(sizeId,catalogRenameRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>> = ({ signal }) => patchCatalogSizesSizeIdName(sizeId,catalogRenameRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogSizesSizeIdNameMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, PatchCatalogSizesSizeIdNameMutationVariables> = (props) => {
+          const {sizeId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: sizeId !== null && sizeId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogSizesSizeIdNameQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>>
-export type PatchCatalogSizesSizeIdNameQueryError = ResponseAPIResponse
+          return  patchCatalogSizesSizeIdName(sizeId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogSizesSizeIdName<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRenameRequest: CatalogRenameRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogSizesSizeIdName<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogSizesSizeIdName<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogSizesSizeIdNameMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>>
+    export type PatchCatalogSizesSizeIdNameMutationBody = CatalogRenameRequest
+    export type PatchCatalogSizesSizeIdNameMutationError = ResponseAPIResponse
+    export type PatchCatalogSizesSizeIdNameMutationVariables = {sizeId: string;data: CatalogRenameRequest}
+
+    /**
  * @summary Đổi tên kích thước món
  */
-
-export function usePatchCatalogSizesSizeIdName<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRenameRequest: CatalogRenameRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogSizesSizeIdNameQueryOptions(sizeId,catalogRenameRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogSizesSizeIdName = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>, TError,PatchCatalogSizesSizeIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogSizesSizeIdName>>,
+        TError,
+        PatchCatalogSizesSizeIdNameMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogSizesSizeIdNameMutationOptions(options), queryClient);
+    }
+    /**
  * Thay đổi giá tuyệt đối của size món. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.
  * @summary Cập nhật giá kích thước món
  */
@@ -2584,87 +2026,54 @@ export const patchCatalogSizesSizeIdPrice = (
 
 
 
-export const getPatchCatalogSizesSizeIdPriceQueryKey = (sizeId: string,
-    catalogRepriceRequest?: CatalogRepriceRequest,) => {
-    return [
-    'PATCH', `/catalog/sizes/${sizeId}/price`, catalogRepriceRequest
-    ] as const;
-    }
+export const getPatchCatalogSizesSizeIdPriceMutationKey = () => ['patchCatalogSizesSizeIdPrice'] as const;
 
+export const getPatchCatalogSizesSizeIdPriceMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError,PatchCatalogSizesSizeIdPriceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError,PatchCatalogSizesSizeIdPriceMutationVariables, TContext> => {
 
-export const getPatchCatalogSizesSizeIdPriceQueryOptions = <TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError = ResponseAPIResponse>(sizeId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchCatalogSizesSizeIdPriceQueryKey(sizeId,catalogRepriceRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>> = ({ signal }) => patchCatalogSizesSizeIdPrice(sizeId,catalogRepriceRequest, requestOptions, signal);
+const mutationKey = getPatchCatalogSizesSizeIdPriceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, PatchCatalogSizesSizeIdPriceMutationVariables> = (props) => {
+          const {sizeId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: sizeId !== null && sizeId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchCatalogSizesSizeIdPriceQueryResult = NonNullable<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>>
-export type PatchCatalogSizesSizeIdPriceQueryError = ResponseAPIResponse
+          return  patchCatalogSizesSizeIdPrice(sizeId,data,requestOptions)
+        }
 
 
-export function usePatchCatalogSizesSizeIdPrice<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogSizesSizeIdPrice<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>,
-          TError,
-          Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchCatalogSizesSizeIdPrice<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogSizesSizeIdPriceMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>>
+    export type PatchCatalogSizesSizeIdPriceMutationBody = CatalogRepriceRequest
+    export type PatchCatalogSizesSizeIdPriceMutationError = ResponseAPIResponse
+    export type PatchCatalogSizesSizeIdPriceMutationVariables = {sizeId: string;data: CatalogRepriceRequest}
+
+    /**
  * @summary Cập nhật giá kích thước món
  */
-
-export function usePatchCatalogSizesSizeIdPrice<TData = Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRepriceRequest: CatalogRepriceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchCatalogSizesSizeIdPriceQueryOptions(sizeId,catalogRepriceRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchCatalogSizesSizeIdPrice = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>, TError,PatchCatalogSizesSizeIdPriceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogSizesSizeIdPrice>>,
+        TError,
+        PatchCatalogSizesSizeIdPriceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogSizesSizeIdPriceMutationOptions(options), queryClient);
+    }
+    /**
  * Đánh dấu ngừng kinh doanh vĩnh viễn size món. Yêu cầu quyền catalog.administer_structure.
  * @summary Ngừng kinh doanh kích thước món
  */
@@ -2686,83 +2095,50 @@ export const postCatalogSizesSizeIdRetirement = (
 
 
 
-export const getPostCatalogSizesSizeIdRetirementQueryKey = (sizeId: string,
-    catalogRetireRequest?: CatalogRetireRequest,) => {
-    return [
-    'POST', `/catalog/sizes/${sizeId}/retirement`, catalogRetireRequest
-    ] as const;
-    }
+export const getPostCatalogSizesSizeIdRetirementMutationKey = () => ['postCatalogSizesSizeIdRetirement'] as const;
 
+export const getPostCatalogSizesSizeIdRetirementMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError,PostCatalogSizesSizeIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError,PostCatalogSizesSizeIdRetirementMutationVariables, TContext> => {
 
-export const getPostCatalogSizesSizeIdRetirementQueryOptions = <TData = Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError = ResponseAPIResponse>(sizeId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostCatalogSizesSizeIdRetirementQueryKey(sizeId,catalogRetireRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>> = ({ signal }) => postCatalogSizesSizeIdRetirement(sizeId,catalogRetireRequest, requestOptions, signal);
+const mutationKey = getPostCatalogSizesSizeIdRetirementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, PostCatalogSizesSizeIdRetirementMutationVariables> = (props) => {
+          const {sizeId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: sizeId !== null && sizeId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostCatalogSizesSizeIdRetirementQueryResult = NonNullable<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>>
-export type PostCatalogSizesSizeIdRetirementQueryError = ResponseAPIResponse
+          return  postCatalogSizesSizeIdRetirement(sizeId,data,requestOptions)
+        }
 
 
-export function usePostCatalogSizesSizeIdRetirement<TData = Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRetireRequest: CatalogRetireRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogSizesSizeIdRetirement<TData = Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>,
-          TError,
-          Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostCatalogSizesSizeIdRetirement<TData = Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogSizesSizeIdRetirementMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>>
+    export type PostCatalogSizesSizeIdRetirementMutationBody = CatalogRetireRequest
+    export type PostCatalogSizesSizeIdRetirementMutationError = ResponseAPIResponse
+    export type PostCatalogSizesSizeIdRetirementMutationVariables = {sizeId: string;data: CatalogRetireRequest}
+
+    /**
  * @summary Ngừng kinh doanh kích thước món
  */
-
-export function usePostCatalogSizesSizeIdRetirement<TData = Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError = ResponseAPIResponse>(
- sizeId: string,
-    catalogRetireRequest: CatalogRetireRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostCatalogSizesSizeIdRetirementQueryOptions(sizeId,catalogRetireRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
+export const usePostCatalogSizesSizeIdRetirement = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>, TError,PostCatalogSizesSizeIdRetirementMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogSizesSizeIdRetirement>>,
+        TError,
+        PostCatalogSizesSizeIdRetirementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogSizesSizeIdRetirementMutationOptions(options), queryClient);
+    }

@@ -82,81 +82,54 @@ export const postAuthActivity = (
 
 
 
-export const getPostAuthActivityQueryKey = () => {
-    return [
-    'POST', `/auth/activity`
-    ] as const;
-    }
+export const getPostAuthActivityMutationKey = () => ['postAuthActivity'] as const;
 
+export const getPostAuthActivityMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError,void, TContext> => {
 
-export const getPostAuthActivityQueryOptions = <TData = Awaited<ReturnType<typeof postAuthActivity>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostAuthActivityQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postAuthActivity>>> = ({ signal }) => postAuthActivity(requestOptions, signal);
+const mutationKey = getPostAuthActivityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
-
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostAuthActivityQueryResult = NonNullable<Awaited<ReturnType<typeof postAuthActivity>>>
-export type PostAuthActivityQueryError = ResponseAPIResponse
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postAuthActivity>>, void> = () => {
 
 
-export function usePostAuthActivity<TData = Awaited<ReturnType<typeof postAuthActivity>>, TError = ResponseAPIResponse>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthActivity>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthActivity>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthActivity<TData = Awaited<ReturnType<typeof postAuthActivity>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthActivity>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthActivity>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthActivity<TData = Awaited<ReturnType<typeof postAuthActivity>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+          return  postAuthActivity(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostAuthActivityMutationResult = NonNullable<Awaited<ReturnType<typeof postAuthActivity>>>
+
+    export type PostAuthActivityMutationError = ResponseAPIResponse
+
+
+    /**
  * @summary Ghi nhận hoạt động người dùng
  */
-
-export function usePostAuthActivity<TData = Awaited<ReturnType<typeof postAuthActivity>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostAuthActivityQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostAuthActivity = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthActivity>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postAuthActivity>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPostAuthActivityMutationOptions(options), queryClient);
+    }
+    /**
  * Thiết lập tài khoản quản lý đầu tiên cho hệ thống POS. Chỉ thực hiện được khi chưa có quản lý nào.
  * @summary Khởi tạo tài khoản Quản lý đầu tiên (Bootstrap)
  */
@@ -177,81 +150,54 @@ export const postAuthBootstrap = (
 
 
 
-export const getPostAuthBootstrapQueryKey = (authBootstrapManagerRequest?: AuthBootstrapManagerRequest,) => {
-    return [
-    'POST', `/auth/bootstrap`, authBootstrapManagerRequest
-    ] as const;
-    }
+export const getPostAuthBootstrapMutationKey = () => ['postAuthBootstrap'] as const;
 
+export const getPostAuthBootstrapMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError,PostAuthBootstrapMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError,PostAuthBootstrapMutationVariables, TContext> => {
 
-export const getPostAuthBootstrapQueryOptions = <TData = Awaited<ReturnType<typeof postAuthBootstrap>>, TError = ResponseAPIResponse>(authBootstrapManagerRequest: AuthBootstrapManagerRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostAuthBootstrapQueryKey(authBootstrapManagerRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postAuthBootstrap>>> = ({ signal }) => postAuthBootstrap(authBootstrapManagerRequest, requestOptions, signal);
+const mutationKey = getPostAuthBootstrapMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postAuthBootstrap>>, PostAuthBootstrapMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostAuthBootstrapQueryResult = NonNullable<Awaited<ReturnType<typeof postAuthBootstrap>>>
-export type PostAuthBootstrapQueryError = ResponseAPIResponse
+          return  postAuthBootstrap(data,requestOptions)
+        }
 
 
-export function usePostAuthBootstrap<TData = Awaited<ReturnType<typeof postAuthBootstrap>>, TError = ResponseAPIResponse>(
- authBootstrapManagerRequest: AuthBootstrapManagerRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthBootstrap>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthBootstrap>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthBootstrap<TData = Awaited<ReturnType<typeof postAuthBootstrap>>, TError = ResponseAPIResponse>(
- authBootstrapManagerRequest: AuthBootstrapManagerRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthBootstrap>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthBootstrap>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthBootstrap<TData = Awaited<ReturnType<typeof postAuthBootstrap>>, TError = ResponseAPIResponse>(
- authBootstrapManagerRequest: AuthBootstrapManagerRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostAuthBootstrapMutationResult = NonNullable<Awaited<ReturnType<typeof postAuthBootstrap>>>
+    export type PostAuthBootstrapMutationBody = AuthBootstrapManagerRequest
+    export type PostAuthBootstrapMutationError = ResponseAPIResponse
+    export type PostAuthBootstrapMutationVariables = {data: AuthBootstrapManagerRequest}
+
+    /**
  * @summary Khởi tạo tài khoản Quản lý đầu tiên (Bootstrap)
  */
-
-export function usePostAuthBootstrap<TData = Awaited<ReturnType<typeof postAuthBootstrap>>, TError = ResponseAPIResponse>(
- authBootstrapManagerRequest: AuthBootstrapManagerRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostAuthBootstrapQueryOptions(authBootstrapManagerRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostAuthBootstrap = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthBootstrap>>, TError,PostAuthBootstrapMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postAuthBootstrap>>,
+        TError,
+        PostAuthBootstrapMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostAuthBootstrapMutationOptions(options), queryClient);
+    }
+    /**
  * Trả về danh sách tên hiển thị và mã đăng nhập của nhân viên đang hoạt động (dùng cho màn hình chọn nhân viên POS)
  * @summary Danh sách định danh nhân viên đang hoạt động
  */
@@ -270,54 +216,81 @@ export const getAuthIdentities = (
 
 
 
-export const getGetAuthIdentitiesMutationKey = () => ['getAuthIdentities'] as const;
-
-export const getGetAuthIdentitiesMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError,void, TContext> => {
-
-const mutationKey = getGetAuthIdentitiesMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetAuthIdentitiesQueryKey = () => {
+    return [
+    `/auth/identities`
+    ] as const;
+    }
 
 
+export const getGetAuthIdentitiesQueryOptions = <TData = Awaited<ReturnType<typeof getAuthIdentities>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthIdentitiesQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getAuthIdentities>>, void> = () => {
 
-
-          return  getAuthIdentities(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthIdentities>>> = ({ signal }) => getAuthIdentities(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetAuthIdentitiesMutationResult = NonNullable<Awaited<ReturnType<typeof getAuthIdentities>>>
-
-    export type GetAuthIdentitiesMutationError = ResponseAPIResponse
+export type GetAuthIdentitiesQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthIdentities>>>
+export type GetAuthIdentitiesQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetAuthIdentities<TData = Awaited<ReturnType<typeof getAuthIdentities>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAuthIdentities>>,
+          TError,
+          Awaited<ReturnType<typeof getAuthIdentities>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAuthIdentities<TData = Awaited<ReturnType<typeof getAuthIdentities>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAuthIdentities>>,
+          TError,
+          Awaited<ReturnType<typeof getAuthIdentities>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAuthIdentities<TData = Awaited<ReturnType<typeof getAuthIdentities>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Danh sách định danh nhân viên đang hoạt động
  */
-export const useGetAuthIdentities = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getAuthIdentities>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetAuthIdentitiesMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetAuthIdentities<TData = Awaited<ReturnType<typeof getAuthIdentities>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthIdentities>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAuthIdentitiesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Chuyển trạng thái phiên làm việc hiện tại sang locked
  * @summary Khóa phiên làm việc
  */
@@ -336,81 +309,54 @@ export const postAuthLock = (
 
 
 
-export const getPostAuthLockQueryKey = () => {
-    return [
-    'POST', `/auth/lock`
-    ] as const;
-    }
+export const getPostAuthLockMutationKey = () => ['postAuthLock'] as const;
 
+export const getPostAuthLockMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthLock>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postAuthLock>>, TError,void, TContext> => {
 
-export const getPostAuthLockQueryOptions = <TData = Awaited<ReturnType<typeof postAuthLock>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthLock>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostAuthLockQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postAuthLock>>> = ({ signal }) => postAuthLock(requestOptions, signal);
+const mutationKey = getPostAuthLockMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
-
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postAuthLock>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostAuthLockQueryResult = NonNullable<Awaited<ReturnType<typeof postAuthLock>>>
-export type PostAuthLockQueryError = ResponseAPIResponse
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postAuthLock>>, void> = () => {
 
 
-export function usePostAuthLock<TData = Awaited<ReturnType<typeof postAuthLock>>, TError = ResponseAPIResponse>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthLock>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthLock>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthLock>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthLock<TData = Awaited<ReturnType<typeof postAuthLock>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthLock>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthLock>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthLock>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthLock<TData = Awaited<ReturnType<typeof postAuthLock>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthLock>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+          return  postAuthLock(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostAuthLockMutationResult = NonNullable<Awaited<ReturnType<typeof postAuthLock>>>
+
+    export type PostAuthLockMutationError = ResponseAPIResponse
+
+
+    /**
  * @summary Khóa phiên làm việc
  */
-
-export function usePostAuthLock<TData = Awaited<ReturnType<typeof postAuthLock>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthLock>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostAuthLockQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostAuthLock = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthLock>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postAuthLock>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPostAuthLockMutationOptions(options), queryClient);
+    }
+    /**
  * Kiểm tra và trả về trạng thái phiên làm việc hiện tại (authenticated, locked, signed_out) qua Bearer token hoặc cookie
  * @summary Lấy trạng thái phiên làm việc hiện tại
  */
@@ -429,54 +375,81 @@ export const getAuthSession = (
 
 
 
-export const getGetAuthSessionMutationKey = () => ['getAuthSession'] as const;
-
-export const getGetAuthSessionMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAuthSession>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getAuthSession>>, TError,void, TContext> => {
-
-const mutationKey = getGetAuthSessionMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetAuthSessionQueryKey = () => {
+    return [
+    `/auth/session`
+    ] as const;
+    }
 
 
+export const getGetAuthSessionQueryOptions = <TData = Awaited<ReturnType<typeof getAuthSession>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthSessionQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getAuthSession>>, void> = () => {
 
-
-          return  getAuthSession(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthSession>>> = ({ signal }) => getAuthSession(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetAuthSessionMutationResult = NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
-
-    export type GetAuthSessionMutationError = ResponseAPIResponse
+export type GetAuthSessionQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+export type GetAuthSessionQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetAuthSession<TData = Awaited<ReturnType<typeof getAuthSession>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAuthSession>>,
+          TError,
+          Awaited<ReturnType<typeof getAuthSession>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAuthSession<TData = Awaited<ReturnType<typeof getAuthSession>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAuthSession>>,
+          TError,
+          Awaited<ReturnType<typeof getAuthSession>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAuthSession<TData = Awaited<ReturnType<typeof getAuthSession>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Lấy trạng thái phiên làm việc hiện tại
  */
-export const useGetAuthSession = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAuthSession>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getAuthSession>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetAuthSessionMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetAuthSession<TData = Awaited<ReturnType<typeof getAuthSession>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAuthSession>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAuthSessionQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Xác thực nhân viên bằng login_code và pin 4-8 số
  * @summary Đăng nhập bằng mã PIN
  */
@@ -497,81 +470,54 @@ export const postAuthSignIn = (
 
 
 
-export const getPostAuthSignInQueryKey = (authSignInRequest?: AuthSignInRequest,) => {
-    return [
-    'POST', `/auth/sign-in`, authSignInRequest
-    ] as const;
-    }
+export const getPostAuthSignInMutationKey = () => ['postAuthSignIn'] as const;
 
+export const getPostAuthSignInMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError,PostAuthSignInMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError,PostAuthSignInMutationVariables, TContext> => {
 
-export const getPostAuthSignInQueryOptions = <TData = Awaited<ReturnType<typeof postAuthSignIn>>, TError = ResponseAPIResponse>(authSignInRequest: AuthSignInRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostAuthSignInQueryKey(authSignInRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postAuthSignIn>>> = ({ signal }) => postAuthSignIn(authSignInRequest, requestOptions, signal);
+const mutationKey = getPostAuthSignInMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postAuthSignIn>>, PostAuthSignInMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostAuthSignInQueryResult = NonNullable<Awaited<ReturnType<typeof postAuthSignIn>>>
-export type PostAuthSignInQueryError = ResponseAPIResponse
+          return  postAuthSignIn(data,requestOptions)
+        }
 
 
-export function usePostAuthSignIn<TData = Awaited<ReturnType<typeof postAuthSignIn>>, TError = ResponseAPIResponse>(
- authSignInRequest: AuthSignInRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthSignIn>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthSignIn>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthSignIn<TData = Awaited<ReturnType<typeof postAuthSignIn>>, TError = ResponseAPIResponse>(
- authSignInRequest: AuthSignInRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthSignIn>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthSignIn>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthSignIn<TData = Awaited<ReturnType<typeof postAuthSignIn>>, TError = ResponseAPIResponse>(
- authSignInRequest: AuthSignInRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostAuthSignInMutationResult = NonNullable<Awaited<ReturnType<typeof postAuthSignIn>>>
+    export type PostAuthSignInMutationBody = AuthSignInRequest
+    export type PostAuthSignInMutationError = ResponseAPIResponse
+    export type PostAuthSignInMutationVariables = {data: AuthSignInRequest}
+
+    /**
  * @summary Đăng nhập bằng mã PIN
  */
-
-export function usePostAuthSignIn<TData = Awaited<ReturnType<typeof postAuthSignIn>>, TError = ResponseAPIResponse>(
- authSignInRequest: AuthSignInRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostAuthSignInQueryOptions(authSignInRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostAuthSignIn = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthSignIn>>, TError,PostAuthSignInMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postAuthSignIn>>,
+        TError,
+        PostAuthSignInMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostAuthSignInMutationOptions(options), queryClient);
+    }
+    /**
  * Thu hồi phiên làm việc hiện tại và xóa cookie phiên
  * @summary Đăng xuất phiên làm việc
  */
@@ -590,81 +536,54 @@ export const postAuthSignOut = (
 
 
 
-export const getPostAuthSignOutQueryKey = () => {
-    return [
-    'POST', `/auth/sign-out`
-    ] as const;
-    }
+export const getPostAuthSignOutMutationKey = () => ['postAuthSignOut'] as const;
 
+export const getPostAuthSignOutMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError,void, TContext> => {
 
-export const getPostAuthSignOutQueryOptions = <TData = Awaited<ReturnType<typeof postAuthSignOut>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostAuthSignOutQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postAuthSignOut>>> = ({ signal }) => postAuthSignOut(requestOptions, signal);
+const mutationKey = getPostAuthSignOutMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
-
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostAuthSignOutQueryResult = NonNullable<Awaited<ReturnType<typeof postAuthSignOut>>>
-export type PostAuthSignOutQueryError = ResponseAPIResponse
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postAuthSignOut>>, void> = () => {
 
 
-export function usePostAuthSignOut<TData = Awaited<ReturnType<typeof postAuthSignOut>>, TError = ResponseAPIResponse>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthSignOut>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthSignOut>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthSignOut<TData = Awaited<ReturnType<typeof postAuthSignOut>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthSignOut>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthSignOut>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthSignOut<TData = Awaited<ReturnType<typeof postAuthSignOut>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+          return  postAuthSignOut(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostAuthSignOutMutationResult = NonNullable<Awaited<ReturnType<typeof postAuthSignOut>>>
+
+    export type PostAuthSignOutMutationError = ResponseAPIResponse
+
+
+    /**
  * @summary Đăng xuất phiên làm việc
  */
-
-export function usePostAuthSignOut<TData = Awaited<ReturnType<typeof postAuthSignOut>>, TError = ResponseAPIResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostAuthSignOutQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostAuthSignOut = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthSignOut>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postAuthSignOut>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPostAuthSignOutMutationOptions(options), queryClient);
+    }
+    /**
  * Mở khóa phiên làm việc đang bị khóa (locked) bằng mã PIN của nhân viên
  * @summary Mở khóa phiên làm việc
  */
@@ -685,81 +604,54 @@ export const postAuthUnlock = (
 
 
 
-export const getPostAuthUnlockQueryKey = (authUnlockRequest?: AuthUnlockRequest,) => {
-    return [
-    'POST', `/auth/unlock`, authUnlockRequest
-    ] as const;
-    }
+export const getPostAuthUnlockMutationKey = () => ['postAuthUnlock'] as const;
 
+export const getPostAuthUnlockMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError,PostAuthUnlockMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError,PostAuthUnlockMutationVariables, TContext> => {
 
-export const getPostAuthUnlockQueryOptions = <TData = Awaited<ReturnType<typeof postAuthUnlock>>, TError = ResponseAPIResponse>(authUnlockRequest: AuthUnlockRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostAuthUnlockQueryKey(authUnlockRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postAuthUnlock>>> = ({ signal }) => postAuthUnlock(authUnlockRequest, requestOptions, signal);
+const mutationKey = getPostAuthUnlockMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postAuthUnlock>>, PostAuthUnlockMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostAuthUnlockQueryResult = NonNullable<Awaited<ReturnType<typeof postAuthUnlock>>>
-export type PostAuthUnlockQueryError = ResponseAPIResponse
+          return  postAuthUnlock(data,requestOptions)
+        }
 
 
-export function usePostAuthUnlock<TData = Awaited<ReturnType<typeof postAuthUnlock>>, TError = ResponseAPIResponse>(
- authUnlockRequest: AuthUnlockRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthUnlock>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthUnlock>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthUnlock<TData = Awaited<ReturnType<typeof postAuthUnlock>>, TError = ResponseAPIResponse>(
- authUnlockRequest: AuthUnlockRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthUnlock>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthUnlock>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthUnlock<TData = Awaited<ReturnType<typeof postAuthUnlock>>, TError = ResponseAPIResponse>(
- authUnlockRequest: AuthUnlockRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostAuthUnlockMutationResult = NonNullable<Awaited<ReturnType<typeof postAuthUnlock>>>
+    export type PostAuthUnlockMutationBody = AuthUnlockRequest
+    export type PostAuthUnlockMutationError = ResponseAPIResponse
+    export type PostAuthUnlockMutationVariables = {data: AuthUnlockRequest}
+
+    /**
  * @summary Mở khóa phiên làm việc
  */
-
-export function usePostAuthUnlock<TData = Awaited<ReturnType<typeof postAuthUnlock>>, TError = ResponseAPIResponse>(
- authUnlockRequest: AuthUnlockRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostAuthUnlockQueryOptions(authUnlockRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostAuthUnlock = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthUnlock>>, TError,PostAuthUnlockMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postAuthUnlock>>,
+        TError,
+        PostAuthUnlockMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostAuthUnlockMutationOptions(options), queryClient);
+    }
+    /**
  * Khai báo khu vực làm việc (cashier, manager, preparation) cho phiên làm việc hiện tại
  * @summary Chọn khu vực làm việc (Workspace)
  */
@@ -780,77 +672,50 @@ export const postAuthWorkspace = (
 
 
 
-export const getPostAuthWorkspaceQueryKey = (authDeclareWorkspaceRequest?: AuthDeclareWorkspaceRequest,) => {
-    return [
-    'POST', `/auth/workspace`, authDeclareWorkspaceRequest
-    ] as const;
-    }
+export const getPostAuthWorkspaceMutationKey = () => ['postAuthWorkspace'] as const;
 
+export const getPostAuthWorkspaceMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError,PostAuthWorkspaceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError,PostAuthWorkspaceMutationVariables, TContext> => {
 
-export const getPostAuthWorkspaceQueryOptions = <TData = Awaited<ReturnType<typeof postAuthWorkspace>>, TError = ResponseAPIResponse>(authDeclareWorkspaceRequest: AuthDeclareWorkspaceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostAuthWorkspaceQueryKey(authDeclareWorkspaceRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postAuthWorkspace>>> = ({ signal }) => postAuthWorkspace(authDeclareWorkspaceRequest, requestOptions, signal);
+const mutationKey = getPostAuthWorkspaceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postAuthWorkspace>>, PostAuthWorkspaceMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostAuthWorkspaceQueryResult = NonNullable<Awaited<ReturnType<typeof postAuthWorkspace>>>
-export type PostAuthWorkspaceQueryError = ResponseAPIResponse
+          return  postAuthWorkspace(data,requestOptions)
+        }
 
 
-export function usePostAuthWorkspace<TData = Awaited<ReturnType<typeof postAuthWorkspace>>, TError = ResponseAPIResponse>(
- authDeclareWorkspaceRequest: AuthDeclareWorkspaceRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthWorkspace>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthWorkspace>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthWorkspace<TData = Awaited<ReturnType<typeof postAuthWorkspace>>, TError = ResponseAPIResponse>(
- authDeclareWorkspaceRequest: AuthDeclareWorkspaceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postAuthWorkspace>>,
-          TError,
-          Awaited<ReturnType<typeof postAuthWorkspace>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostAuthWorkspace<TData = Awaited<ReturnType<typeof postAuthWorkspace>>, TError = ResponseAPIResponse>(
- authDeclareWorkspaceRequest: AuthDeclareWorkspaceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostAuthWorkspaceMutationResult = NonNullable<Awaited<ReturnType<typeof postAuthWorkspace>>>
+    export type PostAuthWorkspaceMutationBody = AuthDeclareWorkspaceRequest
+    export type PostAuthWorkspaceMutationError = ResponseAPIResponse
+    export type PostAuthWorkspaceMutationVariables = {data: AuthDeclareWorkspaceRequest}
+
+    /**
  * @summary Chọn khu vực làm việc (Workspace)
  */
-
-export function usePostAuthWorkspace<TData = Awaited<ReturnType<typeof postAuthWorkspace>>, TError = ResponseAPIResponse>(
- authDeclareWorkspaceRequest: AuthDeclareWorkspaceRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostAuthWorkspaceQueryOptions(authDeclareWorkspaceRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
+export const usePostAuthWorkspace = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAuthWorkspace>>, TError,PostAuthWorkspaceMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postAuthWorkspace>>,
+        TError,
+        PostAuthWorkspaceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostAuthWorkspaceMutationOptions(options), queryClient);
+    }
