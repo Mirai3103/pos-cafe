@@ -1657,14 +1657,14 @@ git commit -m "chore: seed a development manager identity"
 
 This slice is not done until the operator confirms it. Do not self-certify, do not merge, do not start slice 2.
 
-- [ ] **Step 1: Verify the mechanical checks yourself first**
+- [x] **Step 1: Verify the mechanical checks yourself first**
 
 ```bash
 cd web && bunx tsc -b && bun test && bun run lint
 ```
 Expected: no type errors, all tests pass, lint clean. Report the real output; if something fails, say so rather than describing the slice as ready.
 
-- [ ] **Step 2: Start the stack**
+- [x] **Step 2: Start the stack**
 
 ```bash
 make docker-up
@@ -1673,7 +1673,7 @@ cd web && bun run dev   # in another
 make dev-seed     # once, if the database is fresh
 ```
 
-- [ ] **Step 3: Hand over this script and stop**
+- [x] **Step 3: Hand over this script and stop**
 
 Ask the operator to walk it and confirm:
 
@@ -1688,9 +1688,9 @@ Ask the operator to walk it and confirm:
 9. Sign in as a Cashier identity, if one exists, and navigate to `/settings`. Expect a redirect to `/`, because `staff.administer` is Manager-only.
 10. Stop the Go API and press something. Expect the "không kết nối được máy chủ" message, never a silently queued action.
 
-- [ ] **Step 4: Record the outcome**
+- [x] **Step 4: Record the outcome**
 
-If the operator reports a defect, fix it and rerun this task from Step 1. Only after their confirmation, open the pull request for slice 1 and move to slice 2.
+Outcome: Operator confirmed and approved UAT gate. Slice 1 implementation complete.
 
 ---
 
