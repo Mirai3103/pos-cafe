@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { getSoundEnabled, setSoundEnabled, playTapChirp, playSuccessChirp, playErrorBuzz } from "./sound";
+import { getSoundEnabled, setSoundEnabled, playTapChirp, playSuccessChirp, playErrorBuzz, playSuccess } from "./sound";
 
 describe("sound utility", () => {
   beforeEach(() => {
@@ -23,5 +23,6 @@ describe("sound utility", () => {
     expect(() => playTapChirp()).not.toThrow();
     expect(() => playSuccessChirp()).not.toThrow();
     expect(() => playErrorBuzz()).not.toThrow();
+    expect(() => playSuccess()).not.toThrow();
   });
 });
