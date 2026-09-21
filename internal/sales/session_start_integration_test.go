@@ -589,13 +589,15 @@ func TestSalesShiftConcurrentReconciliationRaces(t *testing.T) {
 		requireCorrectionRaceResolved(t, &wg)
 
 		// The Refund commits whenever it runs, and the start can never
-		// transition first (see the test's structural note). The fixture's
-		// Check is already SETTLED and the Comp writes an adjustment rather
-		// than a pending Refund row, so the committed ACTIVE Session is the
-		// blocker in both grant orders. Either way the Refund is wholly
-		// present and the start froze nothing.
+		// transition first (see the test's structural note). If the start's
+		// blocker read ran before the Refund landed, the still-unresolved
+		// Comp is the unresolved-correction blocker (spec 8's precedence);
+		// after the Refund landed, the committed ACTIVE Session is the blocker.
 		require.NoError(t, refundErr)
-		require.ErrorIs(t, startErr, shift.ErrActiveServiceSession)
+		require.True(t,
+			errors.Is(startErr, shift.ErrUnresolvedCorrection) ||
+				errors.Is(startErr, shift.ErrActiveServiceSession),
+			"the start must be rejected by a blocker the committed state presents, got %v", startErr)
 		assert.Equal(t, 1, countRefunds(t, env.DB, checkID))
 		assert.Equal(t, 0, countReconciliations(t, env.DB))
 		assert.Equal(t, 1, countIdempotencyRecords(t, env.DB, refundCmd.RequestID))
