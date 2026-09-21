@@ -10,10 +10,13 @@ import {
   Settings,
   Lock,
   LogOut,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/use-session-store";
 import { useLock, useSignOut } from "@/features/auth/api/use-auth";
+import { useSound, playTapChirp } from "@/lib/sound";
 
 const navItems = [
   { to: "/", label: "Bán hàng", icon: ShoppingCart },
@@ -37,6 +40,7 @@ export function PosHeader() {
   const workspace = useSessionStore((s) => s.workspace);
   const lock = useLock();
   const signOut = useSignOut();
+  const { enabled: soundEnabled, toggle: toggleSound } = useSound();
 
   const [time, setTime] = React.useState<string>("");
 
@@ -95,6 +99,22 @@ export function PosHeader() {
 
       {/* Right Shell Controls */}
       <div className="flex items-center gap-3">
+        {/* Sound Feedback Toggle */}
+        <button
+          type="button"
+          onClick={toggleSound}
+          className={`flex h-10 w-10 min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-xl border transition select-none active:scale-95 focus:outline-none focus:ring-2 ${
+            soundEnabled
+              ? "border-emerald-200 bg-emerald-50/70 text-emerald-700 hover:bg-emerald-100/70 focus:ring-emerald-500/20 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+              : "border-border bg-muted text-muted-foreground hover:bg-muted/80 focus:ring-muted"
+          }`}
+          title={soundEnabled ? "Âm thanh phản hồi: Đang bật (Click để tắt)" : "Âm thanh phản hồi: Đang tắt (Click để bật)"}
+          aria-label="Bật/tắt âm thanh"
+          aria-pressed={soundEnabled}
+        >
+          {soundEnabled ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+        </button>
+
         {/* Real-time Digital Clock */}
         <div className="hidden sm:flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5">
           <Clock className="h-4 w-4 text-muted-foreground" />
@@ -115,7 +135,10 @@ export function PosHeader() {
             className="h-12 w-12 rounded-xl"
             aria-label="Khóa màn hình"
             disabled={lock.isPending}
-            onClick={() => lock.mutate()}
+            onClick={() => {
+              playTapChirp();
+              lock.mutate();
+            }}
           >
             <Lock className="size-5" />
           </Button>
@@ -125,7 +148,10 @@ export function PosHeader() {
             className="h-12 w-12 rounded-xl"
             aria-label="Đăng xuất"
             disabled={signOut.isPending}
-            onClick={() => signOut.mutate()}
+            onClick={() => {
+              playTapChirp();
+              signOut.mutate();
+            }}
           >
             <LogOut className="size-5" />
           </Button>
