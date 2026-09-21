@@ -7,6 +7,7 @@ import { ClosingReconciliationView } from "./closing-reconciliation-view";
 import { CashCountDialog } from "./cash-count-dialog";
 import { QRObservationDialog } from "./qr-observation-dialog";
 import { CloseShiftDialog } from "./close-shift-dialog";
+import { ShiftView } from "./shift-view";
 
 describe("shift components", () => {
   it("exports shift view and dialog component functions", () => {
@@ -18,5 +19,6 @@ describe("shift components", () => {
     expect(typeof CashCountDialog).toBe("function");
     expect(typeof QRObservationDialog).toBe("function");
     expect(typeof CloseShiftDialog).toBe("function");
+    expect(typeof ShiftView).toBe("function");
   });
 });
