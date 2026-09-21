@@ -144,12 +144,14 @@ export function OpenShiftDashboard({ shift: rawShift }: OpenShiftDashboardProps)
       </div>
 
       {/* Cash Movement Dialog */}
-      <CashMovementDialog
-        shiftId={shift.id}
-        isOpen={cashMovementOpen}
-        onClose={() => setCashMovementOpen(false)}
-        defaultMethod={movementMethod}
-      />
+      {cashMovementOpen && (
+        <CashMovementDialog
+          shiftId={shift.id}
+          isOpen={cashMovementOpen}
+          onClose={() => setCashMovementOpen(false)}
+          defaultMethod={movementMethod}
+        />
+      )}
 
       {/* Reconcile Prompt Modal */}
       {showReconcileDialog && (

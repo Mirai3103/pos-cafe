@@ -45,6 +45,17 @@ export function ClosingReconciliationView({ shift: rawShift }: ClosingReconcilia
   const starterName = recon.starter?.display_name ?? "—";
   const dimensions = recon.preview?.dimensions ?? [];
 
+  const qrReceivedDim = dimensions.find((d) => d.dimension === "MANUAL_QR_RECEIVED");
+  const qrRefundedDim = dimensions.find((d) => d.dimension === "MANUAL_QR_REFUNDED");
+  const latestQrObs =
+    recon.qr_observations && recon.qr_observations.length > 0
+      ? recon.qr_observations[recon.qr_observations.length - 1]
+      : undefined;
+  const qrReceivedObserved =
+    qrReceivedDim?.observed_vnd ?? latestQrObs?.observed_received_vnd ?? 0;
+  const qrRefundedObserved =
+    qrRefundedDim?.observed_vnd ?? latestQrObs?.observed_refunded_vnd ?? 0;
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto p-4 sm:p-6 animate-in fade-in duration-200">
       {/* Header Bar */}
@@ -170,9 +181,29 @@ export function ClosingReconciliationView({ shift: rawShift }: ClosingReconcilia
       </div>
 
       {/* Sub-modals */}
-      <CashCountDialog shiftId={shiftId} isOpen={recountOpen} onClose={() => setRecountOpen(false)} />
-      <QRObservationDialog shiftId={shiftId} isOpen={qrOpen} onClose={() => setQrOpen(false)} />
-      <CloseShiftDialog shift={rawShift} isOpen={closeDialogOpen} onClose={() => setCloseDialogOpen(false)} />
+      {recountOpen && (
+        <CashCountDialog
+          shiftId={shiftId}
+          isOpen={recountOpen}
+          onClose={() => setRecountOpen(false)}
+        />
+      )}
+      {qrOpen && (
+        <QRObservationDialog
+          shiftId={shiftId}
+          isOpen={qrOpen}
+          onClose={() => setQrOpen(false)}
+          initialReceived={qrReceivedObserved}
+          initialRefunded={qrRefundedObserved}
+        />
+      )}
+      {closeDialogOpen && (
+        <CloseShiftDialog
+          shift={rawShift}
+          isOpen={closeDialogOpen}
+          onClose={() => setCloseDialogOpen(false)}
+        />
+      )}
     </div>
   );
 }

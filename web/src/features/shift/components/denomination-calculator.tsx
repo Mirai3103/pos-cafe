@@ -47,6 +47,7 @@ export function DenominationCalculator({ counts, onChange }: DenominationCalcula
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
+                  aria-label="Giảm số lượng tờ"
                   onClick={() => handleDelta(denom, -1)}
                   disabled={qty <= 0}
                   className="w-8 h-8 rounded-lg border border-input bg-background hover:bg-muted disabled:opacity-40 flex items-center justify-center text-foreground transition active:scale-95"
@@ -63,6 +64,7 @@ export function DenominationCalculator({ counts, onChange }: DenominationCalcula
                 />
                 <button
                   type="button"
+                  aria-label="Tăng số lượng tờ"
                   onClick={() => handleDelta(denom, 1)}
                   className="w-8 h-8 rounded-lg border border-input bg-background hover:bg-muted flex items-center justify-center text-foreground transition active:scale-95"
                 >

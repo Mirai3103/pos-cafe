@@ -41,4 +41,29 @@ describe("useManagerApprovalStore", () => {
     expect(promptPromise).rejects.toThrow("MANAGER_APPROVAL_CANCELLED");
     expect(useManagerApprovalStore.getState().isOpen).toBe(false);
   });
+
+  it("rejects previous promise with MANAGER_APPROVAL_SUPERSEDED if promptApproval is called again", async () => {
+    const store = useManagerApprovalStore.getState();
+    const firstPromise = store.promptApproval({
+      title: "Yêu cầu 1",
+      description: "Thao tác 1",
+    });
+
+    const secondPromise = store.promptApproval({
+      title: "Yêu cầu 2",
+      description: "Thao tác 2",
+    });
+
+    await expect(firstPromise).rejects.toThrow("MANAGER_APPROVAL_SUPERSEDED");
+
+    useManagerApprovalStore.getState().confirm({
+      approverLoginCode: "MGR02",
+      managerPin: "9999",
+    });
+
+    const secondResult = await secondPromise;
+    expect(secondResult.approverLoginCode).toBe("MGR02");
+    expect(secondResult.managerPin).toBe("9999");
+    expect(useManagerApprovalStore.getState().isOpen).toBe(false);
+  });
 });

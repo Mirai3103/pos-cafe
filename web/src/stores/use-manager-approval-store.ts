@@ -28,6 +28,10 @@ export const useManagerApprovalStore = create<ManagerApprovalState>((set, get) =
   reject: null,
 
   promptApproval: (request) => {
+    const { reject: existingReject } = get();
+    if (existingReject) {
+      existingReject(new Error("MANAGER_APPROVAL_SUPERSEDED"));
+    }
     return new Promise<ManagerApprovalCredentials>((resolve, reject) => {
       set({
         isOpen: true,

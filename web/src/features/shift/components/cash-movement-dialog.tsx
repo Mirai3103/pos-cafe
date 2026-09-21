@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,17 @@ export function CashMovementDialog({
   const [reason, setReason] = useState<ShiftRecordCashMovementCommandReason>("ADD_CHANGE_FUND");
   const [note, setNote] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      // oxlint-disable-next-line react/set-state-in-effect
+      setMethod(defaultMethod);
+      setAmount("100000");
+      setReason("ADD_CHANGE_FUND");
+      setNote("");
+      setError(null);
+    }
+  }, [isOpen, defaultMethod]);
 
   if (!isOpen) return null;
 

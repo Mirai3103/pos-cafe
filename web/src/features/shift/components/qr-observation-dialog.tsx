@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,15 @@ export function QRObservationDialog({
   const [received, setReceived] = useState(initialReceived.toString());
   const [refunded, setRefunded] = useState(initialRefunded.toString());
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      // oxlint-disable-next-line react/set-state-in-effect
+      setReceived(initialReceived.toString());
+      setRefunded(initialRefunded.toString());
+      setError(null);
+    }
+  }, [isOpen, initialReceived, initialRefunded]);
 
   if (!isOpen) return null;
 

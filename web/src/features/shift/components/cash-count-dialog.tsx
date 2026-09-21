@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DenominationCalculator } from "./denomination-calculator";
@@ -21,6 +21,14 @@ export function CashCountDialog({ shiftId, isOpen, onClose }: CashCountDialogPro
   const { recordCashCount, isPending } = useRecordCashCount(shiftId);
   const [counts, setCounts] = useState<DenominationCounts>({});
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      // oxlint-disable-next-line react/set-state-in-effect
+      setCounts({});
+      setError(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
