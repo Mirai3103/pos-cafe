@@ -2,8 +2,9 @@
 
 - **Author:** Antigravity & Team
 - **Date:** 2026-09-20
-- **Status:** In-Review
+- **Status:** Approved. The prototype landed in `8bf00a9` (#16).
 - **Target:** `design-system/pos-cafe/index.html`
+- **Successor:** [`2026-09-21-web-frontend-slice-sequence-design.md`](2026-09-21-web-frontend-slice-sequence-design.md) — this prototype is the visual authority for POS slices 3 through 5 there, not source to convert.
 - **Domain Authority:** [`CONTEXT.md`](../../CONTEXT.md), [`ROADMAP.md`](../../ROADMAP.md), [`spec/decisions.md`](../../spec/decisions.md)
 - **Design Skill:** `design-taste-frontend` (Light Mode, Anti-AI Slop, High Ergonomics)
 

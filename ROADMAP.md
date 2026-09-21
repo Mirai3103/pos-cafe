@@ -4,7 +4,9 @@ Phases 0 through 6C are complete. The TypeScript-to-Go migration is **closed**
 (ADR-047): this repository has passed its source, and every phase from 07 onward is
 designed from [`CONTEXT.md`](CONTEXT.md) rather than ported from TypeScript code.
 
-Phase **08** is unblocked and is the work to pick up next.
+Phase **08** is unblocked and is the next backend work to pick up. Phase **11**'s UI
+half is now in design and is being delivered as nine reviewable slices; see
+[the slice sequence](docs/superpowers/specs/2026-09-21-web-frontend-slice-sequence-design.md).
 
 ---
 
@@ -46,6 +48,15 @@ When `CONTEXT.md` and an implementation disagree, `CONTEXT.md` states the intent
 Supporting: [PostgreSQL template integration tests](docs/superpowers/specs/2026-09-15-postgres-template-integration-tests-design.md),
 [roadmap migration and closure](docs/superpowers/specs/2026-09-18-roadmap-migration-design.md).
 
+Frontend, all under Phase 11's UI half:
+[web architecture and placeholders](docs/superpowers/specs/2026-09-20-web-architecture-design.md) (delivered in `8bf00a9`),
+[cashier screen prototype](docs/superpowers/specs/2026-09-20-cashier-screen-design.md),
+[multi-screen suite prototype](docs/superpowers/specs/2026-09-20-pos-screens-suite-design.md),
+[admin menu and topping forms](docs/superpowers/specs/2026-09-20-admin-menu-topping-forms-design.md),
+[slice sequence](docs/superpowers/specs/2026-09-21-web-frontend-slice-sequence-design.md) (in review).
+The first four produced the static prototype in `design-system/pos-cafe/` and the
+placeholder React shell. The fifth orders their replacement by API-backed screens.
+
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
 `preparation`. Fifty-two architecture decisions are recorded.
 
@@ -64,6 +75,11 @@ criteria live in the ticket, not here.
 | **10** | Recover numbered-paper outage Sales | 09 | [ticket](docs/backlog/phase-10-recover-numbered-paper-outage-sales.md) |
 | **11** | Serve clients over LAN, single-binary packaging, frontend | none | [ticket](docs/backlog/phase-11-clients-over-lan-and-single-binary.md) |
 | **12** | Back up, restore, update, verify readiness | 10, 11 | [ticket](docs/backlog/phase-12-backup-restore-update-readiness.md) |
+
+Phase 11 is the one exception to "no approved Go design exists": its UI half has a
+design, and slices 1 through 6 of the sequence satisfy its Sign-in, Cashier, and
+Preparation Queue criteria. Its packaging, LAN-binding, and Local Access QR half is
+still `ready-for-design`.
 
 ```
 07 ─┐

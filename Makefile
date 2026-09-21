@@ -1,4 +1,4 @@
-.PHONY: help run build build-web build-app test test-integration test-integration-fast test-db-clean test-all coverage fmt vet lint vuln check sqlc swagger tidy clean \
+.PHONY: help run build build-web build-app test test-integration test-integration-fast test-db-clean test-all coverage fmt vet lint vuln check sqlc swagger tidy clean dev-seed \
 	docker-up docker-down docker-logs db-wait
 
 # Single source of truth for the integration-test database.
@@ -92,3 +92,8 @@ tidy: ## Tidy go.mod / go.sum
 
 clean: ## Remove build artifacts
 	rm -rf bin/ build/ *.db*
+
+## --- Development seed (dev only, never for production) ---
+
+dev-seed: ## Seed a development Manager identity against a running API (never for production)
+	cd web && bun run ../scripts/dev-seed.ts
