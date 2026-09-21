@@ -129,3 +129,8 @@ export function useSound() {
 
   return { enabled, toggle };
 }
+
+/** Semantic aliases matching action / prompt naming */
+export const playClick = playTapChirp;
+export const playAction = playSuccessChirp;
+export const playError = playErrorBuzz;
