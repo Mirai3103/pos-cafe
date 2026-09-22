@@ -9,7 +9,7 @@ import {
   usePostShiftsShiftIdClose,
   getGetShiftsCurrentQueryKey,
 } from "@/api/generated/endpoints/shifts/shifts";
-import { unwrap } from "@/lib/unwrap";
+import { unwrap, unwrapNullable } from "@/lib/unwrap";
 import type {
   ShiftOpenShiftCommand,
   ShiftRecordCashMovementCommand,
@@ -22,7 +22,7 @@ import type {
 export function useCurrentShift() {
   return useGetShiftsCurrent({
     query: {
-      select: unwrap,
+      select: unwrapNullable,
       staleTime: 15_000,
     },
   });
