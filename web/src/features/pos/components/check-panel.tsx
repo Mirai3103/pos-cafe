@@ -120,7 +120,7 @@ export function CheckPanel({
           <>
             <div className="flex items-baseline justify-between text-xs text-muted-foreground">
               <span>Đã thu</span>
-              <span className="font-mono font-semibold text-foreground">
+              <span className="font-mono tabular-nums font-semibold text-foreground">
                 {formatVND(totalApplied)}
               </span>
             </div>

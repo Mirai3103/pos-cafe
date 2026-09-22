@@ -96,5 +96,6 @@ describe("CheckPanel", () => {
       />,
     );
     expect(html).toContain("nhiều hóa đơn");
+    expect(html).toContain("disabled");
   });
 });

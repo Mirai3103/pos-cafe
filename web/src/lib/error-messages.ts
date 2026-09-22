@@ -53,6 +53,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   CHECK_HAS_PAYMENT: "Hóa đơn này đã được thanh toán.",
   PAYMENT_EXCEEDS_CHECK_BALANCE: "Số tiền thu vượt quá số còn phải thu của hóa đơn.",
   INSUFFICIENT_CASH_TENDERED: "Tiền khách đưa ít hơn số tiền cần thu.",
+  REQUEST_CONFLICT: "Yêu cầu này đã được gửi với số tiền khác. Vui lòng đóng và thử lại.",
 };
 
 const NETWORK_MESSAGE = "Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại.";

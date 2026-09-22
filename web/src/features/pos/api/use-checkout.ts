@@ -9,7 +9,12 @@ import { unwrap, ApiError } from "@/lib/unwrap";
 import { newRequestId } from "@/lib/command";
 import { messageForError } from "@/lib/error-messages";
 import { playSuccessChirp, playErrorBuzz } from "@/lib/sound";
-import { selectOpenCheck, findCheckById, type PosPhase } from "../utils/phase";
+import {
+  selectOpenCheck,
+  findCheckById,
+  hasMultipleOpenChecks,
+  type PosPhase,
+} from "../utils/phase";
 import { latestPaymentChangeDue } from "../utils/payment";
 import type {
   SalesPayCashCommand,
@@ -146,6 +151,9 @@ export function useCheckoutFlow(options: CheckoutFlowOptions): CheckoutFlow {
     if (!isShiftOpen && phase === "DRAFTING") return;
     if (phase !== "DRAFTING" && phase !== "AWAITING_PAYMENT") return;
     if (phase === "DRAFTING" && draftItemCount === 0) return;
+    // An ambiguous session (more than one open Check) has no single Check to
+    // collect against; refuse via every entry point, not just the button.
+    if (phase === "AWAITING_PAYMENT" && hasMultipleOpenChecks(session)) return;
 
     commitRequestIdRef.current = commitRequestIdRef.current ?? newRequestId();
     payRequestIdRef.current = payRequestIdRef.current ?? newRequestId();

@@ -60,6 +60,7 @@ describe("commit and payment error codes", () => {
     "CHECK_HAS_PAYMENT",
     "PAYMENT_EXCEEDS_CHECK_BALANCE",
     "INSUFFICIENT_CASH_TENDERED",
+    "REQUEST_CONFLICT",
   ];
 
   it("translates every commit and payment code", () => {
@@ -72,5 +73,12 @@ describe("commit and payment error codes", () => {
   it("reads the payment shortfall message through messageForError", () => {
     const error = new ApiError(409, "INSUFFICIENT_CASH_TENDERED", "cash tendered is below");
     expect(messageForError(error)).toBe("Tiền khách đưa ít hơn số tiền cần thu.");
+  });
+
+  it("reads the request-id replay conflict message through messageForError", () => {
+    const error = new ApiError(409, "REQUEST_CONFLICT", "request_id reused with a different fingerprint");
+    expect(messageForError(error)).toBe(
+      "Yêu cầu này đã được gửi với số tiền khác. Vui lòng đóng và thử lại.",
+    );
   });
 });

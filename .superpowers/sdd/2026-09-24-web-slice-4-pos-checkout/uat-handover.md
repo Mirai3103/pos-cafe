@@ -43,3 +43,19 @@
 - A settled Session stays `ACTIVE` and cannot be closed: Submit arrives in
   Slice 5. Taking the next customer opens a new Session rather than reusing this
   one. Recorded in the design spec, section 2.
+- The menu grid is disabled whenever the Check is `AWAITING_PAYMENT` (chốt,
+  chờ thu tiền) or `SETTLED` (đã thanh toán). There is no editable draft to add
+  items to in either phase, so a tester should not expect to tap a menu item to
+  add more items there — the way to progress is the labeled action button
+  (**Thu tiền (F9)** / **Khách tiếp theo (F9)**).
+- The commit-then-pay-cash sequencing inside `useCheckoutFlow` (retaining one
+  request id per intent across retries so a replay after a network failure
+  reproduces the original outcome, and applying the two-request money path —
+  commit freezes the Check, then cash payment charges it) is currently verified
+  only by code review against the actual Go backend behavior (idempotency-inside-
+  transaction in `executor.go`, fingerprinting in `payments.go`), not by an
+  executable test. This repo has no hook-testing infrastructure
+  (`renderHook`/`@testing-library/react-hooks`), and the plan deliberately
+  scoped tests to pure logic and `renderToString`. TODO for Slice 5: Slice 5
+  adds a second multi-step sequence (Submit/Close), which will make adding
+  that infrastructure worthwhile — revisit then.

@@ -307,7 +307,7 @@ export function PosView() {
           <MenuGrid
             categories={menu?.categories}
             onSelectItem={handleSelectItem}
-            disabled={!isShiftOpen}
+            disabled={!isShiftOpen || phase === "AWAITING_PAYMENT" || phase === "SETTLED"}
           />
         </ResizablePanel>
 
