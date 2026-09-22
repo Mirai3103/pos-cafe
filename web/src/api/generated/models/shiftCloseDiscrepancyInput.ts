@@ -6,8 +6,19 @@
  * OpenAPI spec version: 1.0
  */
 
+export type ShiftCloseDiscrepancyInputDimension =
+  | "CASH"
+  | "MANUAL_QR_RECEIVED"
+  | "MANUAL_QR_REFUNDED";
+
+export type ShiftCloseDiscrepancyInputReason =
+  | "CASH_COUNT_DIFFERENCE"
+  | "QR_OBSERVATION_DIFFERENCE"
+  | "UNEXPLAINED"
+  | "OTHER";
+
 export interface ShiftCloseDiscrepancyInput {
-  dimension?: string;
+  dimension?: ShiftCloseDiscrepancyInputDimension;
   note?: string;
-  reason?: string;
+  reason?: ShiftCloseDiscrepancyInputReason;
 }

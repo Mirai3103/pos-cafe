@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { PosHeader } from "@/components/layout/pos-header";
 import { LockOverlay } from "@/features/auth/components/lock-overlay";
+import { ManagerApprovalDialog } from "@/components/feedback/manager-approval-dialog";
 import { useActivityPing } from "@/hooks/use-activity-ping";
 import { requireAuthenticated } from "@/lib/guards";
 import { useSessionStore } from "@/stores/use-session-store";
@@ -21,6 +22,7 @@ function AppLayout() {
         <Outlet />
       </main>
       {state === "locked" && <LockOverlay />}
+      <ManagerApprovalDialog />
     </div>
   );
 }

@@ -79,54 +79,81 @@ export const getStaff = (
 
 
 
-export const getGetStaffMutationKey = () => ['getStaff'] as const;
-
-export const getGetStaffMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getStaff>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getStaff>>, TError,void, TContext> => {
-
-const mutationKey = getGetStaffMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetStaffQueryKey = () => {
+    return [
+    `/staff`
+    ] as const;
+    }
 
 
+export const getGetStaffQueryOptions = <TData = Awaited<ReturnType<typeof getStaff>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaff>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStaffQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getStaff>>, void> = () => {
 
-
-          return  getStaff(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStaff>>> = ({ signal }) => getStaff(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStaff>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetStaffMutationResult = NonNullable<Awaited<ReturnType<typeof getStaff>>>
-
-    export type GetStaffMutationError = ResponseAPIResponse
+export type GetStaffQueryResult = NonNullable<Awaited<ReturnType<typeof getStaff>>>
+export type GetStaffQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetStaff<TData = Awaited<ReturnType<typeof getStaff>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaff>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStaff>>,
+          TError,
+          Awaited<ReturnType<typeof getStaff>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStaff<TData = Awaited<ReturnType<typeof getStaff>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaff>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStaff>>,
+          TError,
+          Awaited<ReturnType<typeof getStaff>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStaff<TData = Awaited<ReturnType<typeof getStaff>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaff>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Danh sách tất cả nhân viên
  */
-export const useGetStaff = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getStaff>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getStaff>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetStaffMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetStaff<TData = Awaited<ReturnType<typeof getStaff>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaff>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetStaffQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Quản lý tạo nhân viên mới với mã đăng nhập, mã PIN và danh sách vai trò
  * @summary Tạo tài khoản nhân viên mới
  */
@@ -147,81 +174,54 @@ export const postStaff = (
 
 
 
-export const getPostStaffQueryKey = (authCreateStaffRequest?: AuthCreateStaffRequest,) => {
-    return [
-    'POST', `/staff`, authCreateStaffRequest
-    ] as const;
-    }
+export const getPostStaffMutationKey = () => ['postStaff'] as const;
 
+export const getPostStaffMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postStaff>>, TError,PostStaffMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postStaff>>, TError,PostStaffMutationVariables, TContext> => {
 
-export const getPostStaffQueryOptions = <TData = Awaited<ReturnType<typeof postStaff>>, TError = ResponseAPIResponse>(authCreateStaffRequest: AuthCreateStaffRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaff>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostStaffQueryKey(authCreateStaffRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postStaff>>> = ({ signal }) => postStaff(authCreateStaffRequest, requestOptions, signal);
+const mutationKey = getPostStaffMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postStaff>>, PostStaffMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postStaff>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostStaffQueryResult = NonNullable<Awaited<ReturnType<typeof postStaff>>>
-export type PostStaffQueryError = ResponseAPIResponse
+          return  postStaff(data,requestOptions)
+        }
 
 
-export function usePostStaff<TData = Awaited<ReturnType<typeof postStaff>>, TError = ResponseAPIResponse>(
- authCreateStaffRequest: AuthCreateStaffRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaff>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postStaff>>,
-          TError,
-          Awaited<ReturnType<typeof postStaff>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostStaff<TData = Awaited<ReturnType<typeof postStaff>>, TError = ResponseAPIResponse>(
- authCreateStaffRequest: AuthCreateStaffRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaff>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postStaff>>,
-          TError,
-          Awaited<ReturnType<typeof postStaff>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostStaff<TData = Awaited<ReturnType<typeof postStaff>>, TError = ResponseAPIResponse>(
- authCreateStaffRequest: AuthCreateStaffRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaff>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostStaffMutationResult = NonNullable<Awaited<ReturnType<typeof postStaff>>>
+    export type PostStaffMutationBody = AuthCreateStaffRequest
+    export type PostStaffMutationError = ResponseAPIResponse
+    export type PostStaffMutationVariables = {data: AuthCreateStaffRequest}
+
+    /**
  * @summary Tạo tài khoản nhân viên mới
  */
-
-export function usePostStaff<TData = Awaited<ReturnType<typeof postStaff>>, TError = ResponseAPIResponse>(
- authCreateStaffRequest: AuthCreateStaffRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaff>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostStaffQueryOptions(authCreateStaffRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostStaff = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postStaff>>, TError,PostStaffMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postStaff>>,
+        TError,
+        PostStaffMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostStaffMutationOptions(options), queryClient);
+    }
+    /**
  * Kích hoạt hoặc ngưng kích hoạt tài khoản nhân viên
  * @summary Bật hoặc vô hiệu hóa tài khoản nhân viên
  */
@@ -243,87 +243,54 @@ export const patchStaffIdEnabled = (
 
 
 
-export const getPatchStaffIdEnabledQueryKey = (id: string,
-    authSetStaffEnabledRequest?: AuthSetStaffEnabledRequest,) => {
-    return [
-    'PATCH', `/staff/${id}/enabled`, authSetStaffEnabledRequest
-    ] as const;
-    }
+export const getPatchStaffIdEnabledMutationKey = () => ['patchStaffIdEnabled'] as const;
 
+export const getPatchStaffIdEnabledMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError,PatchStaffIdEnabledMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError,PatchStaffIdEnabledMutationVariables, TContext> => {
 
-export const getPatchStaffIdEnabledQueryOptions = <TData = Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError = ResponseAPIResponse>(id: string,
-    authSetStaffEnabledRequest: AuthSetStaffEnabledRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchStaffIdEnabledQueryKey(id,authSetStaffEnabledRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchStaffIdEnabled>>> = ({ signal }) => patchStaffIdEnabled(id,authSetStaffEnabledRequest, requestOptions, signal);
+const mutationKey = getPatchStaffIdEnabledMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchStaffIdEnabled>>, PatchStaffIdEnabledMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchStaffIdEnabledQueryResult = NonNullable<Awaited<ReturnType<typeof patchStaffIdEnabled>>>
-export type PatchStaffIdEnabledQueryError = ResponseAPIResponse
+          return  patchStaffIdEnabled(id,data,requestOptions)
+        }
 
 
-export function usePatchStaffIdEnabled<TData = Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError = ResponseAPIResponse>(
- id: string,
-    authSetStaffEnabledRequest: AuthSetStaffEnabledRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchStaffIdEnabled>>,
-          TError,
-          Awaited<ReturnType<typeof patchStaffIdEnabled>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchStaffIdEnabled<TData = Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError = ResponseAPIResponse>(
- id: string,
-    authSetStaffEnabledRequest: AuthSetStaffEnabledRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchStaffIdEnabled>>,
-          TError,
-          Awaited<ReturnType<typeof patchStaffIdEnabled>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchStaffIdEnabled<TData = Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError = ResponseAPIResponse>(
- id: string,
-    authSetStaffEnabledRequest: AuthSetStaffEnabledRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchStaffIdEnabledMutationResult = NonNullable<Awaited<ReturnType<typeof patchStaffIdEnabled>>>
+    export type PatchStaffIdEnabledMutationBody = AuthSetStaffEnabledRequest
+    export type PatchStaffIdEnabledMutationError = ResponseAPIResponse
+    export type PatchStaffIdEnabledMutationVariables = {id: string;data: AuthSetStaffEnabledRequest}
+
+    /**
  * @summary Bật hoặc vô hiệu hóa tài khoản nhân viên
  */
-
-export function usePatchStaffIdEnabled<TData = Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError = ResponseAPIResponse>(
- id: string,
-    authSetStaffEnabledRequest: AuthSetStaffEnabledRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchStaffIdEnabledQueryOptions(id,authSetStaffEnabledRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchStaffIdEnabled = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchStaffIdEnabled>>, TError,PatchStaffIdEnabledMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchStaffIdEnabled>>,
+        TError,
+        PatchStaffIdEnabledMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchStaffIdEnabledMutationOptions(options), queryClient);
+    }
+    /**
  * Quản lý đặt lại mã PIN cho nhân viên và thu hồi các phiên đăng nhập hiện tại
  * @summary Đặt lại mã PIN nhân viên
  */
@@ -345,87 +312,54 @@ export const postStaffIdResetPin = (
 
 
 
-export const getPostStaffIdResetPinQueryKey = (id: string,
-    authResetStaffPinRequest?: AuthResetStaffPinRequest,) => {
-    return [
-    'POST', `/staff/${id}/reset-pin`, authResetStaffPinRequest
-    ] as const;
-    }
+export const getPostStaffIdResetPinMutationKey = () => ['postStaffIdResetPin'] as const;
 
+export const getPostStaffIdResetPinMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError,PostStaffIdResetPinMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError,PostStaffIdResetPinMutationVariables, TContext> => {
 
-export const getPostStaffIdResetPinQueryOptions = <TData = Awaited<ReturnType<typeof postStaffIdResetPin>>, TError = ResponseAPIResponse>(id: string,
-    authResetStaffPinRequest: AuthResetStaffPinRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostStaffIdResetPinQueryKey(id,authResetStaffPinRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postStaffIdResetPin>>> = ({ signal }) => postStaffIdResetPin(id,authResetStaffPinRequest, requestOptions, signal);
+const mutationKey = getPostStaffIdResetPinMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postStaffIdResetPin>>, PostStaffIdResetPinMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostStaffIdResetPinQueryResult = NonNullable<Awaited<ReturnType<typeof postStaffIdResetPin>>>
-export type PostStaffIdResetPinQueryError = ResponseAPIResponse
+          return  postStaffIdResetPin(id,data,requestOptions)
+        }
 
 
-export function usePostStaffIdResetPin<TData = Awaited<ReturnType<typeof postStaffIdResetPin>>, TError = ResponseAPIResponse>(
- id: string,
-    authResetStaffPinRequest: AuthResetStaffPinRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postStaffIdResetPin>>,
-          TError,
-          Awaited<ReturnType<typeof postStaffIdResetPin>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostStaffIdResetPin<TData = Awaited<ReturnType<typeof postStaffIdResetPin>>, TError = ResponseAPIResponse>(
- id: string,
-    authResetStaffPinRequest: AuthResetStaffPinRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postStaffIdResetPin>>,
-          TError,
-          Awaited<ReturnType<typeof postStaffIdResetPin>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostStaffIdResetPin<TData = Awaited<ReturnType<typeof postStaffIdResetPin>>, TError = ResponseAPIResponse>(
- id: string,
-    authResetStaffPinRequest: AuthResetStaffPinRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostStaffIdResetPinMutationResult = NonNullable<Awaited<ReturnType<typeof postStaffIdResetPin>>>
+    export type PostStaffIdResetPinMutationBody = AuthResetStaffPinRequest
+    export type PostStaffIdResetPinMutationError = ResponseAPIResponse
+    export type PostStaffIdResetPinMutationVariables = {id: string;data: AuthResetStaffPinRequest}
+
+    /**
  * @summary Đặt lại mã PIN nhân viên
  */
-
-export function usePostStaffIdResetPin<TData = Awaited<ReturnType<typeof postStaffIdResetPin>>, TError = ResponseAPIResponse>(
- id: string,
-    authResetStaffPinRequest: AuthResetStaffPinRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostStaffIdResetPinQueryOptions(id,authResetStaffPinRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostStaffIdResetPin = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postStaffIdResetPin>>, TError,PostStaffIdResetPinMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postStaffIdResetPin>>,
+        TError,
+        PostStaffIdResetPinMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostStaffIdResetPinMutationOptions(options), queryClient);
+    }
+    /**
  * Thay thế toàn bộ vai trò của nhân viên bằng danh sách mới
  * @summary Cập nhật danh sách vai trò nhân viên
  */
@@ -447,87 +381,54 @@ export const putStaffIdRoles = (
 
 
 
-export const getPutStaffIdRolesQueryKey = (id: string,
-    authReplaceStaffRolesRequest?: AuthReplaceStaffRolesRequest,) => {
-    return [
-    'PUT', `/staff/${id}/roles`, authReplaceStaffRolesRequest
-    ] as const;
-    }
+export const getPutStaffIdRolesMutationKey = () => ['putStaffIdRoles'] as const;
 
+export const getPutStaffIdRolesMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError,PutStaffIdRolesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError,PutStaffIdRolesMutationVariables, TContext> => {
 
-export const getPutStaffIdRolesQueryOptions = <TData = Awaited<ReturnType<typeof putStaffIdRoles>>, TError = ResponseAPIResponse>(id: string,
-    authReplaceStaffRolesRequest: AuthReplaceStaffRolesRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPutStaffIdRolesQueryKey(id,authReplaceStaffRolesRequest);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof putStaffIdRoles>>> = ({ signal }) => putStaffIdRoles(id,authReplaceStaffRolesRequest, requestOptions, signal);
+const mutationKey = getPutStaffIdRolesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putStaffIdRoles>>, PutStaffIdRolesMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PutStaffIdRolesQueryResult = NonNullable<Awaited<ReturnType<typeof putStaffIdRoles>>>
-export type PutStaffIdRolesQueryError = ResponseAPIResponse
+          return  putStaffIdRoles(id,data,requestOptions)
+        }
 
 
-export function usePutStaffIdRoles<TData = Awaited<ReturnType<typeof putStaffIdRoles>>, TError = ResponseAPIResponse>(
- id: string,
-    authReplaceStaffRolesRequest: AuthReplaceStaffRolesRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putStaffIdRoles>>,
-          TError,
-          Awaited<ReturnType<typeof putStaffIdRoles>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePutStaffIdRoles<TData = Awaited<ReturnType<typeof putStaffIdRoles>>, TError = ResponseAPIResponse>(
- id: string,
-    authReplaceStaffRolesRequest: AuthReplaceStaffRolesRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof putStaffIdRoles>>,
-          TError,
-          Awaited<ReturnType<typeof putStaffIdRoles>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePutStaffIdRoles<TData = Awaited<ReturnType<typeof putStaffIdRoles>>, TError = ResponseAPIResponse>(
- id: string,
-    authReplaceStaffRolesRequest: AuthReplaceStaffRolesRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutStaffIdRolesMutationResult = NonNullable<Awaited<ReturnType<typeof putStaffIdRoles>>>
+    export type PutStaffIdRolesMutationBody = AuthReplaceStaffRolesRequest
+    export type PutStaffIdRolesMutationError = ResponseAPIResponse
+    export type PutStaffIdRolesMutationVariables = {id: string;data: AuthReplaceStaffRolesRequest}
+
+    /**
  * @summary Cập nhật danh sách vai trò nhân viên
  */
-
-export function usePutStaffIdRoles<TData = Awaited<ReturnType<typeof putStaffIdRoles>>, TError = ResponseAPIResponse>(
- id: string,
-    authReplaceStaffRolesRequest: AuthReplaceStaffRolesRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPutStaffIdRolesQueryOptions(id,authReplaceStaffRolesRequest,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePutStaffIdRoles = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putStaffIdRoles>>, TError,PutStaffIdRolesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putStaffIdRoles>>,
+        TError,
+        PutStaffIdRolesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutStaffIdRolesMutationOptions(options), queryClient);
+    }
+    /**
  * Trả về thông tin hồ sơ và quyền hạn của nhân viên đang đăng nhập
  * @summary Lấy thông tin tài khoản hiện tại
  */
@@ -546,50 +447,77 @@ export const getStaffMe = (
 
 
 
-export const getGetStaffMeMutationKey = () => ['getStaffMe'] as const;
-
-export const getGetStaffMeMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getStaffMe>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getStaffMe>>, TError,void, TContext> => {
-
-const mutationKey = getGetStaffMeMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetStaffMeQueryKey = () => {
+    return [
+    `/staff/me`
+    ] as const;
+    }
 
 
+export const getGetStaffMeQueryOptions = <TData = Awaited<ReturnType<typeof getStaffMe>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaffMe>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStaffMeQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getStaffMe>>, void> = () => {
 
-
-          return  getStaffMe(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStaffMe>>> = ({ signal }) => getStaffMe(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStaffMe>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetStaffMeMutationResult = NonNullable<Awaited<ReturnType<typeof getStaffMe>>>
-
-    export type GetStaffMeMutationError = ResponseAPIResponse
+export type GetStaffMeQueryResult = NonNullable<Awaited<ReturnType<typeof getStaffMe>>>
+export type GetStaffMeQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetStaffMe<TData = Awaited<ReturnType<typeof getStaffMe>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaffMe>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStaffMe>>,
+          TError,
+          Awaited<ReturnType<typeof getStaffMe>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStaffMe<TData = Awaited<ReturnType<typeof getStaffMe>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaffMe>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getStaffMe>>,
+          TError,
+          Awaited<ReturnType<typeof getStaffMe>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetStaffMe<TData = Awaited<ReturnType<typeof getStaffMe>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaffMe>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Lấy thông tin tài khoản hiện tại
  */
-export const useGetStaffMe = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getStaffMe>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getStaffMe>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetStaffMeMutationOptions(options), queryClient);
-    }
+
+export function useGetStaffMe<TData = Awaited<ReturnType<typeof getStaffMe>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getStaffMe>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetStaffMeQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

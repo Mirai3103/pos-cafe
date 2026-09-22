@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ApiError, unwrap } from "./unwrap";
+import { ApiError, unwrap, unwrapNullable } from "./unwrap";
 
 describe("unwrap", () => {
   it("returns the payload of a successful envelope", () => {
@@ -31,3 +31,28 @@ describe("unwrap", () => {
     expect(unwrap<number>({ success: true, data: 0 })).toBe(0);
   });
 });
+
+describe("unwrapNullable", () => {
+  it("returns the payload of a successful envelope", () => {
+    expect(unwrapNullable({ success: true, data: { id: "s1" } })).toEqual({ id: "s1" });
+  });
+
+  it("returns null when data is null", () => {
+    expect(unwrapNullable({ success: true, data: null })).toBeNull();
+  });
+
+  it("returns null when data is undefined / absent", () => {
+    expect(unwrapNullable({ success: true })).toBeNull();
+  });
+
+  it("throws ApiError when success is false", () => {
+    expect(() =>
+      unwrapNullable({ success: false, error: { code: "UNAUTHORIZED", message: "sai mã PIN" } }),
+    ).toThrow(ApiError);
+  });
+
+  it("does not treat a false-y payload as null", () => {
+    expect(unwrapNullable<number>({ success: true, data: 0 })).toBe(0);
+  });
+});
+

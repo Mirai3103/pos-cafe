@@ -17,8 +17,6 @@ export default defineConfig({
           name: "customAxiosInstance",
         },
         query: {
-          useQuery: true,
-          useMutation: true,
           options: {
             staleTime: 1000 * 30,
           },

@@ -86,54 +86,81 @@ export const getShifts = (
 
 
 
-export const getGetShiftsMutationKey = () => ['getShifts'] as const;
-
-export const getGetShiftsMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getShifts>>, TError,GetShiftsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getShifts>>, TError,GetShiftsMutationVariables, TContext> => {
-
-const mutationKey = getGetShiftsMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetShiftsQueryKey = (params?: GetShiftsParams,) => {
+    return [
+    `/shifts`, ...(params ? [params] : [])
+    ] as const;
+    }
 
 
+export const getGetShiftsQueryOptions = <TData = Awaited<ReturnType<typeof getShifts>>, TError = ResponseAPIResponse>(params: GetShiftsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShifts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetShiftsQueryKey(params);
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getShifts>>, GetShiftsMutationVariables> = (props) => {
-          const {params} = props ?? {};
 
-          return  getShifts(params,requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getShifts>>> = ({ signal }) => getShifts(params, requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getShifts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
+export type GetShiftsQueryResult = NonNullable<Awaited<ReturnType<typeof getShifts>>>
+export type GetShiftsQueryError = ResponseAPIResponse
 
-    export type GetShiftsMutationResult = NonNullable<Awaited<ReturnType<typeof getShifts>>>
 
-    export type GetShiftsMutationError = ResponseAPIResponse
-    export type GetShiftsMutationVariables = {params: GetShiftsParams}
-
-    /**
+export function useGetShifts<TData = Awaited<ReturnType<typeof getShifts>>, TError = ResponseAPIResponse>(
+ params: GetShiftsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShifts>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getShifts>>,
+          TError,
+          Awaited<ReturnType<typeof getShifts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetShifts<TData = Awaited<ReturnType<typeof getShifts>>, TError = ResponseAPIResponse>(
+ params: GetShiftsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShifts>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getShifts>>,
+          TError,
+          Awaited<ReturnType<typeof getShifts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetShifts<TData = Awaited<ReturnType<typeof getShifts>>, TError = ResponseAPIResponse>(
+ params: GetShiftsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShifts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary List closed Sales Shifts
  */
-export const useGetShifts = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getShifts>>, TError,GetShiftsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getShifts>>,
-        TError,
-        GetShiftsMutationVariables,
-        TContext
-      > => {
-      return useMutation(getGetShiftsMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetShifts<TData = Awaited<ReturnType<typeof getShifts>>, TError = ResponseAPIResponse>(
+ params: GetShiftsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShifts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetShiftsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Opens a Sales Shift with a counted Opening Float. At most one Sales Shift may be open across the whole system.
  * @summary Open a Sales Shift
  */
@@ -154,81 +181,54 @@ export const postShifts = (
 
 
 
-export const getPostShiftsQueryKey = (shiftOpenShiftCommand?: ShiftOpenShiftCommand,) => {
-    return [
-    'POST', `/shifts`, shiftOpenShiftCommand
-    ] as const;
-    }
+export const getPostShiftsMutationKey = () => ['postShifts'] as const;
 
+export const getPostShiftsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShifts>>, TError,PostShiftsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postShifts>>, TError,PostShiftsMutationVariables, TContext> => {
 
-export const getPostShiftsQueryOptions = <TData = Awaited<ReturnType<typeof postShifts>>, TError = ResponseAPIResponse>(shiftOpenShiftCommand: ShiftOpenShiftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShifts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostShiftsQueryKey(shiftOpenShiftCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postShifts>>> = ({ signal }) => postShifts(shiftOpenShiftCommand, requestOptions, signal);
+const mutationKey = getPostShiftsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postShifts>>, PostShiftsMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postShifts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostShiftsQueryResult = NonNullable<Awaited<ReturnType<typeof postShifts>>>
-export type PostShiftsQueryError = ResponseAPIResponse
+          return  postShifts(data,requestOptions)
+        }
 
 
-export function usePostShifts<TData = Awaited<ReturnType<typeof postShifts>>, TError = ResponseAPIResponse>(
- shiftOpenShiftCommand: ShiftOpenShiftCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShifts>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShifts>>,
-          TError,
-          Awaited<ReturnType<typeof postShifts>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShifts<TData = Awaited<ReturnType<typeof postShifts>>, TError = ResponseAPIResponse>(
- shiftOpenShiftCommand: ShiftOpenShiftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShifts>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShifts>>,
-          TError,
-          Awaited<ReturnType<typeof postShifts>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShifts<TData = Awaited<ReturnType<typeof postShifts>>, TError = ResponseAPIResponse>(
- shiftOpenShiftCommand: ShiftOpenShiftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShifts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostShiftsMutationResult = NonNullable<Awaited<ReturnType<typeof postShifts>>>
+    export type PostShiftsMutationBody = ShiftOpenShiftCommand
+    export type PostShiftsMutationError = ResponseAPIResponse
+    export type PostShiftsMutationVariables = {data: ShiftOpenShiftCommand}
+
+    /**
  * @summary Open a Sales Shift
  */
-
-export function usePostShifts<TData = Awaited<ReturnType<typeof postShifts>>, TError = ResponseAPIResponse>(
- shiftOpenShiftCommand: ShiftOpenShiftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShifts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostShiftsQueryOptions(shiftOpenShiftCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostShifts = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShifts>>, TError,PostShiftsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postShifts>>,
+        TError,
+        PostShiftsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostShiftsMutationOptions(options), queryClient);
+    }
+    /**
  * Returns one closed Sales Shift's immutable detail: the summary, the complete frozen source scalars, the reconciliation starter, every Cash Count and Manual QR observation, the discrepancy rows, and the approving Manager when the close was discrepant. Only closed Shifts are exposed: an unknown id and a Shift that is still OPEN or CLOSING both return 404. Requires the audit.inspect capability; no fresh PIN is needed.
  * @summary Read a closed Sales Shift
  */
@@ -247,54 +247,81 @@ export const getShiftsShiftId = (
 
 
 
-export const getGetShiftsShiftIdMutationKey = () => ['getShiftsShiftId'] as const;
-
-export const getGetShiftsShiftIdMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError,GetShiftsShiftIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError,GetShiftsShiftIdMutationVariables, TContext> => {
-
-const mutationKey = getGetShiftsShiftIdMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetShiftsShiftIdQueryKey = (shiftId: string,) => {
+    return [
+    `/shifts/${shiftId}`
+    ] as const;
+    }
 
 
+export const getGetShiftsShiftIdQueryOptions = <TData = Awaited<ReturnType<typeof getShiftsShiftId>>, TError = ResponseAPIResponse>(shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetShiftsShiftIdQueryKey(shiftId);
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getShiftsShiftId>>, GetShiftsShiftIdMutationVariables> = (props) => {
-          const {shiftId} = props ?? {};
 
-          return  getShiftsShiftId(shiftId,requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getShiftsShiftId>>> = ({ signal }) => getShiftsShiftId(shiftId, requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn, enabled: shiftId !== null && shiftId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
+export type GetShiftsShiftIdQueryResult = NonNullable<Awaited<ReturnType<typeof getShiftsShiftId>>>
+export type GetShiftsShiftIdQueryError = ResponseAPIResponse
 
-    export type GetShiftsShiftIdMutationResult = NonNullable<Awaited<ReturnType<typeof getShiftsShiftId>>>
 
-    export type GetShiftsShiftIdMutationError = ResponseAPIResponse
-    export type GetShiftsShiftIdMutationVariables = {shiftId: string}
-
-    /**
+export function useGetShiftsShiftId<TData = Awaited<ReturnType<typeof getShiftsShiftId>>, TError = ResponseAPIResponse>(
+ shiftId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getShiftsShiftId>>,
+          TError,
+          Awaited<ReturnType<typeof getShiftsShiftId>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetShiftsShiftId<TData = Awaited<ReturnType<typeof getShiftsShiftId>>, TError = ResponseAPIResponse>(
+ shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getShiftsShiftId>>,
+          TError,
+          Awaited<ReturnType<typeof getShiftsShiftId>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetShiftsShiftId<TData = Awaited<ReturnType<typeof getShiftsShiftId>>, TError = ResponseAPIResponse>(
+ shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Read a closed Sales Shift
  */
-export const useGetShiftsShiftId = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError,GetShiftsShiftIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getShiftsShiftId>>,
-        TError,
-        GetShiftsShiftIdMutationVariables,
-        TContext
-      > => {
-      return useMutation(getGetShiftsShiftIdMutationOptions(options), queryClient);
-    }
-    /**
+
+export function useGetShiftsShiftId<TData = Awaited<ReturnType<typeof getShiftsShiftId>>, TError = ResponseAPIResponse>(
+ shiftId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsShiftId>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetShiftsShiftIdQueryOptions(shiftId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * Records a Pay In or Pay Out against an open Sales Shift. Requires inline approval by an enabled Manager, who authenticates with their own login code and PIN. The response carries the recorded movement only: while the Shift is OPEN, no Expected Cash or derivation total crosses the boundary (spec 9.5).
  * @summary Record a Cash Movement
  */
@@ -316,87 +343,54 @@ export const postShiftsShiftIdCashMovements = (
 
 
 
-export const getPostShiftsShiftIdCashMovementsQueryKey = (shiftId: string,
-    shiftRecordCashMovementCommand?: ShiftRecordCashMovementCommand,) => {
-    return [
-    'POST', `/shifts/${shiftId}/cash-movements`, shiftRecordCashMovementCommand
-    ] as const;
-    }
+export const getPostShiftsShiftIdCashMovementsMutationKey = () => ['postShiftsShiftIdCashMovements'] as const;
 
+export const getPostShiftsShiftIdCashMovementsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError,PostShiftsShiftIdCashMovementsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError,PostShiftsShiftIdCashMovementsMutationVariables, TContext> => {
 
-export const getPostShiftsShiftIdCashMovementsQueryOptions = <TData = Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError = ResponseAPIResponse>(shiftId: string,
-    shiftRecordCashMovementCommand: ShiftRecordCashMovementCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostShiftsShiftIdCashMovementsQueryKey(shiftId,shiftRecordCashMovementCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>> = ({ signal }) => postShiftsShiftIdCashMovements(shiftId,shiftRecordCashMovementCommand, requestOptions, signal);
+const mutationKey = getPostShiftsShiftIdCashMovementsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, PostShiftsShiftIdCashMovementsMutationVariables> = (props) => {
+          const {shiftId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: shiftId !== null && shiftId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostShiftsShiftIdCashMovementsQueryResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>>
-export type PostShiftsShiftIdCashMovementsQueryError = ResponseAPIResponse
+          return  postShiftsShiftIdCashMovements(shiftId,data,requestOptions)
+        }
 
 
-export function usePostShiftsShiftIdCashMovements<TData = Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordCashMovementCommand: ShiftRecordCashMovementCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdCashMovements<TData = Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordCashMovementCommand: ShiftRecordCashMovementCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdCashMovements<TData = Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordCashMovementCommand: ShiftRecordCashMovementCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostShiftsShiftIdCashMovementsMutationResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>>
+    export type PostShiftsShiftIdCashMovementsMutationBody = ShiftRecordCashMovementCommand
+    export type PostShiftsShiftIdCashMovementsMutationError = ResponseAPIResponse
+    export type PostShiftsShiftIdCashMovementsMutationVariables = {shiftId: string;data: ShiftRecordCashMovementCommand}
+
+    /**
  * @summary Record a Cash Movement
  */
-
-export function usePostShiftsShiftIdCashMovements<TData = Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordCashMovementCommand: ShiftRecordCashMovementCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostShiftsShiftIdCashMovementsQueryOptions(shiftId,shiftRecordCashMovementCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostShiftsShiftIdCashMovements = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>, TError,PostShiftsShiftIdCashMovementsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postShiftsShiftIdCashMovements>>,
+        TError,
+        PostShiftsShiftIdCashMovementsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostShiftsShiftIdCashMovementsMutationOptions(options), queryClient);
+    }
+    /**
  * Performs the Final Close of a CLOSING Sales Shift. The request carries the final evidence ids and, for a discrepant close, one reason per nonzero dimension. Amounts are always derived server-side from the frozen snapshot and the final evidence. A non-null empty discrepancies array closes exactly; any entry selects the discrepant close, which requires inline approval by an enabled Manager holding the MANAGER role, who authenticates with their own login code and PIN. Returns the immutable closed-Shift detail for both outcomes.
  * @summary Close a reconciled Sales Shift
  */
@@ -418,87 +412,54 @@ export const postShiftsShiftIdClose = (
 
 
 
-export const getPostShiftsShiftIdCloseQueryKey = (shiftId: string,
-    shiftCloseShiftCommand?: ShiftCloseShiftCommand,) => {
-    return [
-    'POST', `/shifts/${shiftId}/close`, shiftCloseShiftCommand
-    ] as const;
-    }
+export const getPostShiftsShiftIdCloseMutationKey = () => ['postShiftsShiftIdClose'] as const;
 
+export const getPostShiftsShiftIdCloseMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError,PostShiftsShiftIdCloseMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError,PostShiftsShiftIdCloseMutationVariables, TContext> => {
 
-export const getPostShiftsShiftIdCloseQueryOptions = <TData = Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError = ResponseAPIResponse>(shiftId: string,
-    shiftCloseShiftCommand: ShiftCloseShiftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostShiftsShiftIdCloseQueryKey(shiftId,shiftCloseShiftCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postShiftsShiftIdClose>>> = ({ signal }) => postShiftsShiftIdClose(shiftId,shiftCloseShiftCommand, requestOptions, signal);
+const mutationKey = getPostShiftsShiftIdCloseMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, PostShiftsShiftIdCloseMutationVariables> = (props) => {
+          const {shiftId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: shiftId !== null && shiftId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostShiftsShiftIdCloseQueryResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdClose>>>
-export type PostShiftsShiftIdCloseQueryError = ResponseAPIResponse
+          return  postShiftsShiftIdClose(shiftId,data,requestOptions)
+        }
 
 
-export function usePostShiftsShiftIdClose<TData = Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftCloseShiftCommand: ShiftCloseShiftCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdClose>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdClose>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdClose<TData = Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftCloseShiftCommand: ShiftCloseShiftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdClose>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdClose>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdClose<TData = Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftCloseShiftCommand: ShiftCloseShiftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostShiftsShiftIdCloseMutationResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdClose>>>
+    export type PostShiftsShiftIdCloseMutationBody = ShiftCloseShiftCommand
+    export type PostShiftsShiftIdCloseMutationError = ResponseAPIResponse
+    export type PostShiftsShiftIdCloseMutationVariables = {shiftId: string;data: ShiftCloseShiftCommand}
+
+    /**
  * @summary Close a reconciled Sales Shift
  */
-
-export function usePostShiftsShiftIdClose<TData = Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftCloseShiftCommand: ShiftCloseShiftCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostShiftsShiftIdCloseQueryOptions(shiftId,shiftCloseShiftCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostShiftsShiftIdClose = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdClose>>, TError,PostShiftsShiftIdCloseMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postShiftsShiftIdClose>>,
+        TError,
+        PostShiftsShiftIdCloseMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostShiftsShiftIdCloseMutationOptions(options), queryClient);
+    }
+    /**
  * Starts the blind reconciliation of an open Sales Shift: it freezes the financial snapshot, records the submitted cash count as the blind initial count (sequence 1), and moves the Shift to CLOSING. The counted amount is submitted before any expected value is revealed. Returns the CLOSING Shift with its frozen reconciliation.
  * @summary Start Sales Shift reconciliation
  */
@@ -520,87 +481,54 @@ export const postShiftsShiftIdReconciliation = (
 
 
 
-export const getPostShiftsShiftIdReconciliationQueryKey = (shiftId: string,
-    shiftStartReconciliationCommand?: ShiftStartReconciliationCommand,) => {
-    return [
-    'POST', `/shifts/${shiftId}/reconciliation`, shiftStartReconciliationCommand
-    ] as const;
-    }
+export const getPostShiftsShiftIdReconciliationMutationKey = () => ['postShiftsShiftIdReconciliation'] as const;
 
+export const getPostShiftsShiftIdReconciliationMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError,PostShiftsShiftIdReconciliationMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError,PostShiftsShiftIdReconciliationMutationVariables, TContext> => {
 
-export const getPostShiftsShiftIdReconciliationQueryOptions = <TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError = ResponseAPIResponse>(shiftId: string,
-    shiftStartReconciliationCommand: ShiftStartReconciliationCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostShiftsShiftIdReconciliationQueryKey(shiftId,shiftStartReconciliationCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>> = ({ signal }) => postShiftsShiftIdReconciliation(shiftId,shiftStartReconciliationCommand, requestOptions, signal);
+const mutationKey = getPostShiftsShiftIdReconciliationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, PostShiftsShiftIdReconciliationMutationVariables> = (props) => {
+          const {shiftId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: shiftId !== null && shiftId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostShiftsShiftIdReconciliationQueryResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>>
-export type PostShiftsShiftIdReconciliationQueryError = ResponseAPIResponse
+          return  postShiftsShiftIdReconciliation(shiftId,data,requestOptions)
+        }
 
 
-export function usePostShiftsShiftIdReconciliation<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftStartReconciliationCommand: ShiftStartReconciliationCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdReconciliation<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftStartReconciliationCommand: ShiftStartReconciliationCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdReconciliation<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftStartReconciliationCommand: ShiftStartReconciliationCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostShiftsShiftIdReconciliationMutationResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>>
+    export type PostShiftsShiftIdReconciliationMutationBody = ShiftStartReconciliationCommand
+    export type PostShiftsShiftIdReconciliationMutationError = ResponseAPIResponse
+    export type PostShiftsShiftIdReconciliationMutationVariables = {shiftId: string;data: ShiftStartReconciliationCommand}
+
+    /**
  * @summary Start Sales Shift reconciliation
  */
-
-export function usePostShiftsShiftIdReconciliation<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftStartReconciliationCommand: ShiftStartReconciliationCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostShiftsShiftIdReconciliationQueryOptions(shiftId,shiftStartReconciliationCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostShiftsShiftIdReconciliation = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>, TError,PostShiftsShiftIdReconciliationMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postShiftsShiftIdReconciliation>>,
+        TError,
+        PostShiftsShiftIdReconciliationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostShiftsShiftIdReconciliationMutationOptions(options), queryClient);
+    }
+    /**
  * Appends one immutable Cash Count attempt (a recount) to a CLOSING Sales Shift's reconciliation. The Shift must be CLOSING; an OPEN Shift has no reconciliation to append to. Zero is a valid count. Returns the appended attempt plus the full preview built from the latest evidence.
  * @summary Append a Cash Count
  */
@@ -622,87 +550,54 @@ export const postShiftsShiftIdReconciliationCashCounts = (
 
 
 
-export const getPostShiftsShiftIdReconciliationCashCountsQueryKey = (shiftId: string,
-    shiftRecordCashCountCommand?: ShiftRecordCashCountCommand,) => {
-    return [
-    'POST', `/shifts/${shiftId}/reconciliation/cash-counts`, shiftRecordCashCountCommand
-    ] as const;
-    }
+export const getPostShiftsShiftIdReconciliationCashCountsMutationKey = () => ['postShiftsShiftIdReconciliationCashCounts'] as const;
 
+export const getPostShiftsShiftIdReconciliationCashCountsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError,PostShiftsShiftIdReconciliationCashCountsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError,PostShiftsShiftIdReconciliationCashCountsMutationVariables, TContext> => {
 
-export const getPostShiftsShiftIdReconciliationCashCountsQueryOptions = <TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError = ResponseAPIResponse>(shiftId: string,
-    shiftRecordCashCountCommand: ShiftRecordCashCountCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostShiftsShiftIdReconciliationCashCountsQueryKey(shiftId,shiftRecordCashCountCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>> = ({ signal }) => postShiftsShiftIdReconciliationCashCounts(shiftId,shiftRecordCashCountCommand, requestOptions, signal);
+const mutationKey = getPostShiftsShiftIdReconciliationCashCountsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, PostShiftsShiftIdReconciliationCashCountsMutationVariables> = (props) => {
+          const {shiftId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: shiftId !== null && shiftId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostShiftsShiftIdReconciliationCashCountsQueryResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>>
-export type PostShiftsShiftIdReconciliationCashCountsQueryError = ResponseAPIResponse
+          return  postShiftsShiftIdReconciliationCashCounts(shiftId,data,requestOptions)
+        }
 
 
-export function usePostShiftsShiftIdReconciliationCashCounts<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordCashCountCommand: ShiftRecordCashCountCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdReconciliationCashCounts<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordCashCountCommand: ShiftRecordCashCountCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdReconciliationCashCounts<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordCashCountCommand: ShiftRecordCashCountCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostShiftsShiftIdReconciliationCashCountsMutationResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>>
+    export type PostShiftsShiftIdReconciliationCashCountsMutationBody = ShiftRecordCashCountCommand
+    export type PostShiftsShiftIdReconciliationCashCountsMutationError = ResponseAPIResponse
+    export type PostShiftsShiftIdReconciliationCashCountsMutationVariables = {shiftId: string;data: ShiftRecordCashCountCommand}
+
+    /**
  * @summary Append a Cash Count
  */
-
-export function usePostShiftsShiftIdReconciliationCashCounts<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordCashCountCommand: ShiftRecordCashCountCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostShiftsShiftIdReconciliationCashCountsQueryOptions(shiftId,shiftRecordCashCountCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostShiftsShiftIdReconciliationCashCounts = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>, TError,PostShiftsShiftIdReconciliationCashCountsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postShiftsShiftIdReconciliationCashCounts>>,
+        TError,
+        PostShiftsShiftIdReconciliationCashCountsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostShiftsShiftIdReconciliationCashCountsMutationOptions(options), queryClient);
+    }
+    /**
  * Appends one immutable Manual QR observation attempt (a recheck) to a CLOSING Sales Shift's reconciliation. Both observed values are mandatory together and explicit, including zero; one without the other is rejected. Returns the appended observation plus the full preview built from the latest evidence.
  * @summary Append a Manual QR Observation
  */
@@ -724,87 +619,54 @@ export const postShiftsShiftIdReconciliationQrObservations = (
 
 
 
-export const getPostShiftsShiftIdReconciliationQrObservationsQueryKey = (shiftId: string,
-    shiftRecordQRObservationCommand?: ShiftRecordQRObservationCommand,) => {
-    return [
-    'POST', `/shifts/${shiftId}/reconciliation/qr-observations`, shiftRecordQRObservationCommand
-    ] as const;
-    }
+export const getPostShiftsShiftIdReconciliationQrObservationsMutationKey = () => ['postShiftsShiftIdReconciliationQrObservations'] as const;
 
+export const getPostShiftsShiftIdReconciliationQrObservationsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError,PostShiftsShiftIdReconciliationQrObservationsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError,PostShiftsShiftIdReconciliationQrObservationsMutationVariables, TContext> => {
 
-export const getPostShiftsShiftIdReconciliationQrObservationsQueryOptions = <TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError = ResponseAPIResponse>(shiftId: string,
-    shiftRecordQRObservationCommand: ShiftRecordQRObservationCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostShiftsShiftIdReconciliationQrObservationsQueryKey(shiftId,shiftRecordQRObservationCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>> = ({ signal }) => postShiftsShiftIdReconciliationQrObservations(shiftId,shiftRecordQRObservationCommand, requestOptions, signal);
+const mutationKey = getPostShiftsShiftIdReconciliationQrObservationsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, PostShiftsShiftIdReconciliationQrObservationsMutationVariables> = (props) => {
+          const {shiftId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: shiftId !== null && shiftId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostShiftsShiftIdReconciliationQrObservationsQueryResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>>
-export type PostShiftsShiftIdReconciliationQrObservationsQueryError = ResponseAPIResponse
+          return  postShiftsShiftIdReconciliationQrObservations(shiftId,data,requestOptions)
+        }
 
 
-export function usePostShiftsShiftIdReconciliationQrObservations<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordQRObservationCommand: ShiftRecordQRObservationCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdReconciliationQrObservations<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordQRObservationCommand: ShiftRecordQRObservationCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>,
-          TError,
-          Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostShiftsShiftIdReconciliationQrObservations<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordQRObservationCommand: ShiftRecordQRObservationCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostShiftsShiftIdReconciliationQrObservationsMutationResult = NonNullable<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>>
+    export type PostShiftsShiftIdReconciliationQrObservationsMutationBody = ShiftRecordQRObservationCommand
+    export type PostShiftsShiftIdReconciliationQrObservationsMutationError = ResponseAPIResponse
+    export type PostShiftsShiftIdReconciliationQrObservationsMutationVariables = {shiftId: string;data: ShiftRecordQRObservationCommand}
+
+    /**
  * @summary Append a Manual QR Observation
  */
-
-export function usePostShiftsShiftIdReconciliationQrObservations<TData = Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError = ResponseAPIResponse>(
- shiftId: string,
-    shiftRecordQRObservationCommand: ShiftRecordQRObservationCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostShiftsShiftIdReconciliationQrObservationsQueryOptions(shiftId,shiftRecordQRObservationCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostShiftsShiftIdReconciliationQrObservations = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>, TError,PostShiftsShiftIdReconciliationQrObservationsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postShiftsShiftIdReconciliationQrObservations>>,
+        TError,
+        PostShiftsShiftIdReconciliationQrObservationsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostShiftsShiftIdReconciliationQrObservationsMutationOptions(options), queryClient);
+    }
+    /**
  * Returns the active Sales Shift's state-dispatched read (spec 9.5), or null when no Shift is open. While the Shift is OPEN the response is the redacted metadata shape only (id, state, opened_at, opener): no Opening Float, Expected Cash, or derivation input crosses the boundary before the blind initial count commits. While the Shift is CLOSING the response is the Shift metadata plus its frozen reconciliation, carrying every attempt and the preview built from the latest evidence. Requires the sales_shift.operate capability.
  * @summary Current Sales Shift
  */
@@ -823,50 +685,77 @@ export const getShiftsCurrent = (
 
 
 
-export const getGetShiftsCurrentMutationKey = () => ['getShiftsCurrent'] as const;
-
-export const getGetShiftsCurrentMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError,void, TContext> => {
-
-const mutationKey = getGetShiftsCurrentMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetShiftsCurrentQueryKey = () => {
+    return [
+    `/shifts/current`
+    ] as const;
+    }
 
 
+export const getGetShiftsCurrentQueryOptions = <TData = Awaited<ReturnType<typeof getShiftsCurrent>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetShiftsCurrentQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getShiftsCurrent>>, void> = () => {
 
-
-          return  getShiftsCurrent(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getShiftsCurrent>>> = ({ signal }) => getShiftsCurrent(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetShiftsCurrentMutationResult = NonNullable<Awaited<ReturnType<typeof getShiftsCurrent>>>
-
-    export type GetShiftsCurrentMutationError = ResponseAPIResponse
+export type GetShiftsCurrentQueryResult = NonNullable<Awaited<ReturnType<typeof getShiftsCurrent>>>
+export type GetShiftsCurrentQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetShiftsCurrent<TData = Awaited<ReturnType<typeof getShiftsCurrent>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getShiftsCurrent>>,
+          TError,
+          Awaited<ReturnType<typeof getShiftsCurrent>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetShiftsCurrent<TData = Awaited<ReturnType<typeof getShiftsCurrent>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getShiftsCurrent>>,
+          TError,
+          Awaited<ReturnType<typeof getShiftsCurrent>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetShiftsCurrent<TData = Awaited<ReturnType<typeof getShiftsCurrent>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Current Sales Shift
  */
-export const useGetShiftsCurrent = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getShiftsCurrent>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetShiftsCurrentMutationOptions(options), queryClient);
-    }
+
+export function useGetShiftsCurrent<TData = Awaited<ReturnType<typeof getShiftsCurrent>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getShiftsCurrent>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetShiftsCurrentQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

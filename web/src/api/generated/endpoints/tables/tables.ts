@@ -78,81 +78,54 @@ export const postTables = (
 
 
 
-export const getPostTablesQueryKey = (tablesCreateTableCommand?: TablesCreateTableCommand,) => {
-    return [
-    'POST', `/tables`, tablesCreateTableCommand
-    ] as const;
-    }
+export const getPostTablesMutationKey = () => ['postTables'] as const;
 
+export const getPostTablesMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTables>>, TError,PostTablesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postTables>>, TError,PostTablesMutationVariables, TContext> => {
 
-export const getPostTablesQueryOptions = <TData = Awaited<ReturnType<typeof postTables>>, TError = ResponseAPIResponse>(tablesCreateTableCommand: TablesCreateTableCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postTables>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPostTablesQueryKey(tablesCreateTableCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof postTables>>> = ({ signal }) => postTables(tablesCreateTableCommand, requestOptions, signal);
+const mutationKey = getPostTablesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postTables>>, PostTablesMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof postTables>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PostTablesQueryResult = NonNullable<Awaited<ReturnType<typeof postTables>>>
-export type PostTablesQueryError = ResponseAPIResponse
+          return  postTables(data,requestOptions)
+        }
 
 
-export function usePostTables<TData = Awaited<ReturnType<typeof postTables>>, TError = ResponseAPIResponse>(
- tablesCreateTableCommand: TablesCreateTableCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof postTables>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postTables>>,
-          TError,
-          Awaited<ReturnType<typeof postTables>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostTables<TData = Awaited<ReturnType<typeof postTables>>, TError = ResponseAPIResponse>(
- tablesCreateTableCommand: TablesCreateTableCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postTables>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof postTables>>,
-          TError,
-          Awaited<ReturnType<typeof postTables>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePostTables<TData = Awaited<ReturnType<typeof postTables>>, TError = ResponseAPIResponse>(
- tablesCreateTableCommand: TablesCreateTableCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postTables>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostTablesMutationResult = NonNullable<Awaited<ReturnType<typeof postTables>>>
+    export type PostTablesMutationBody = TablesCreateTableCommand
+    export type PostTablesMutationError = ResponseAPIResponse
+    export type PostTablesMutationVariables = {data: TablesCreateTableCommand}
+
+    /**
  * @summary Create a Table
  */
-
-export function usePostTables<TData = Awaited<ReturnType<typeof postTables>>, TError = ResponseAPIResponse>(
- tablesCreateTableCommand: TablesCreateTableCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof postTables>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPostTablesQueryOptions(tablesCreateTableCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePostTables = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTables>>, TError,PostTablesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postTables>>,
+        TError,
+        PostTablesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostTablesMutationOptions(options), queryClient);
+    }
+    /**
  * Sets whether a Table is eligible for new work. Setting the current value again is a successful no-op.
  * @summary Set Table Availability
  */
@@ -174,87 +147,54 @@ export const patchTablesTableIdAvailability = (
 
 
 
-export const getPatchTablesTableIdAvailabilityQueryKey = (tableId: string,
-    tablesSetTableAvailabilityCommand?: TablesSetTableAvailabilityCommand,) => {
-    return [
-    'PATCH', `/tables/${tableId}/availability`, tablesSetTableAvailabilityCommand
-    ] as const;
-    }
+export const getPatchTablesTableIdAvailabilityMutationKey = () => ['patchTablesTableIdAvailability'] as const;
 
+export const getPatchTablesTableIdAvailabilityMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError,PatchTablesTableIdAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError,PatchTablesTableIdAvailabilityMutationVariables, TContext> => {
 
-export const getPatchTablesTableIdAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError = ResponseAPIResponse>(tableId: string,
-    tablesSetTableAvailabilityCommand: TablesSetTableAvailabilityCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchTablesTableIdAvailabilityQueryKey(tableId,tablesSetTableAvailabilityCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>> = ({ signal }) => patchTablesTableIdAvailability(tableId,tablesSetTableAvailabilityCommand, requestOptions, signal);
+const mutationKey = getPatchTablesTableIdAvailabilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, PatchTablesTableIdAvailabilityMutationVariables> = (props) => {
+          const {tableId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: tableId !== null && tableId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchTablesTableIdAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>>
-export type PatchTablesTableIdAvailabilityQueryError = ResponseAPIResponse
+          return  patchTablesTableIdAvailability(tableId,data,requestOptions)
+        }
 
 
-export function usePatchTablesTableIdAvailability<TData = Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError = ResponseAPIResponse>(
- tableId: string,
-    tablesSetTableAvailabilityCommand: TablesSetTableAvailabilityCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchTablesTableIdAvailability>>,
-          TError,
-          Awaited<ReturnType<typeof patchTablesTableIdAvailability>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchTablesTableIdAvailability<TData = Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError = ResponseAPIResponse>(
- tableId: string,
-    tablesSetTableAvailabilityCommand: TablesSetTableAvailabilityCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchTablesTableIdAvailability>>,
-          TError,
-          Awaited<ReturnType<typeof patchTablesTableIdAvailability>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchTablesTableIdAvailability<TData = Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError = ResponseAPIResponse>(
- tableId: string,
-    tablesSetTableAvailabilityCommand: TablesSetTableAvailabilityCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchTablesTableIdAvailabilityMutationResult = NonNullable<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>>
+    export type PatchTablesTableIdAvailabilityMutationBody = TablesSetTableAvailabilityCommand
+    export type PatchTablesTableIdAvailabilityMutationError = ResponseAPIResponse
+    export type PatchTablesTableIdAvailabilityMutationVariables = {tableId: string;data: TablesSetTableAvailabilityCommand}
+
+    /**
  * @summary Set Table Availability
  */
-
-export function usePatchTablesTableIdAvailability<TData = Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError = ResponseAPIResponse>(
- tableId: string,
-    tablesSetTableAvailabilityCommand: TablesSetTableAvailabilityCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchTablesTableIdAvailabilityQueryOptions(tableId,tablesSetTableAvailabilityCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchTablesTableIdAvailability = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchTablesTableIdAvailability>>, TError,PatchTablesTableIdAvailabilityMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchTablesTableIdAvailability>>,
+        TError,
+        PatchTablesTableIdAvailabilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchTablesTableIdAvailabilityMutationOptions(options), queryClient);
+    }
+    /**
  * Renames a Table, preserving its identity and history
  * @summary Rename a Table
  */
@@ -276,87 +216,54 @@ export const patchTablesTableIdName = (
 
 
 
-export const getPatchTablesTableIdNameQueryKey = (tableId: string,
-    tablesRenameTableCommand?: TablesRenameTableCommand,) => {
-    return [
-    'PATCH', `/tables/${tableId}/name`, tablesRenameTableCommand
-    ] as const;
-    }
+export const getPatchTablesTableIdNameMutationKey = () => ['patchTablesTableIdName'] as const;
 
+export const getPatchTablesTableIdNameMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError,PatchTablesTableIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError,PatchTablesTableIdNameMutationVariables, TContext> => {
 
-export const getPatchTablesTableIdNameQueryOptions = <TData = Awaited<ReturnType<typeof patchTablesTableIdName>>, TError = ResponseAPIResponse>(tableId: string,
-    tablesRenameTableCommand: TablesRenameTableCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getPatchTablesTableIdNameQueryKey(tableId,tablesRenameTableCommand);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof patchTablesTableIdName>>> = ({ signal }) => patchTablesTableIdName(tableId,tablesRenameTableCommand, requestOptions, signal);
+const mutationKey = getPatchTablesTableIdNameMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
 
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchTablesTableIdName>>, PatchTablesTableIdNameMutationVariables> = (props) => {
+          const {tableId,data} = props ?? {};
 
-   return  { queryKey, queryFn, enabled: tableId !== null && tableId !== undefined,  staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type PatchTablesTableIdNameQueryResult = NonNullable<Awaited<ReturnType<typeof patchTablesTableIdName>>>
-export type PatchTablesTableIdNameQueryError = ResponseAPIResponse
+          return  patchTablesTableIdName(tableId,data,requestOptions)
+        }
 
 
-export function usePatchTablesTableIdName<TData = Awaited<ReturnType<typeof patchTablesTableIdName>>, TError = ResponseAPIResponse>(
- tableId: string,
-    tablesRenameTableCommand: TablesRenameTableCommand, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchTablesTableIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchTablesTableIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchTablesTableIdName<TData = Awaited<ReturnType<typeof patchTablesTableIdName>>, TError = ResponseAPIResponse>(
- tableId: string,
-    tablesRenameTableCommand: TablesRenameTableCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof patchTablesTableIdName>>,
-          TError,
-          Awaited<ReturnType<typeof patchTablesTableIdName>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function usePatchTablesTableIdName<TData = Awaited<ReturnType<typeof patchTablesTableIdName>>, TError = ResponseAPIResponse>(
- tableId: string,
-    tablesRenameTableCommand: TablesRenameTableCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchTablesTableIdNameMutationResult = NonNullable<Awaited<ReturnType<typeof patchTablesTableIdName>>>
+    export type PatchTablesTableIdNameMutationBody = TablesRenameTableCommand
+    export type PatchTablesTableIdNameMutationError = ResponseAPIResponse
+    export type PatchTablesTableIdNameMutationVariables = {tableId: string;data: TablesRenameTableCommand}
+
+    /**
  * @summary Rename a Table
  */
-
-export function usePatchTablesTableIdName<TData = Awaited<ReturnType<typeof patchTablesTableIdName>>, TError = ResponseAPIResponse>(
- tableId: string,
-    tablesRenameTableCommand: TablesRenameTableCommand, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getPatchTablesTableIdNameQueryOptions(tableId,tablesRenameTableCommand,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-/**
+export const usePatchTablesTableIdName = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchTablesTableIdName>>, TError,PatchTablesTableIdNameMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchTablesTableIdName>>,
+        TError,
+        PatchTablesTableIdNameMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchTablesTableIdNameMutationOptions(options), queryClient);
+    }
+    /**
  * Lists every Table with the active Service Sessions occupying it
  * @summary Table overview
  */
@@ -375,50 +282,77 @@ export const getTablesOverview = (
 
 
 
-export const getGetTablesOverviewMutationKey = () => ['getTablesOverview'] as const;
-
-export const getGetTablesOverviewMutationOptions = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError,void, TContext> => {
-
-const mutationKey = getGetTablesOverviewMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
+export const getGetTablesOverviewQueryKey = () => {
+    return [
+    `/tables/overview`
+    ] as const;
+    }
 
 
+export const getGetTablesOverviewQueryOptions = <TData = Awaited<ReturnType<typeof getTablesOverview>>, TError = ResponseAPIResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTablesOverviewQueryKey();
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getTablesOverview>>, void> = () => {
 
-
-          return  getTablesOverview(requestOptions)
-        }
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTablesOverview>>> = ({ signal }) => getTablesOverview(requestOptions, signal);
 
 
 
 
 
+   return  { queryKey, queryFn,   staleTime: 30000,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
 
-  return  { mutationFn, ...mutationOptions }}
-
-    export type GetTablesOverviewMutationResult = NonNullable<Awaited<ReturnType<typeof getTablesOverview>>>
-
-    export type GetTablesOverviewMutationError = ResponseAPIResponse
+export type GetTablesOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof getTablesOverview>>>
+export type GetTablesOverviewQueryError = ResponseAPIResponse
 
 
-    /**
+export function useGetTablesOverview<TData = Awaited<ReturnType<typeof getTablesOverview>>, TError = ResponseAPIResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTablesOverview>>,
+          TError,
+          Awaited<ReturnType<typeof getTablesOverview>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTablesOverview<TData = Awaited<ReturnType<typeof getTablesOverview>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTablesOverview>>,
+          TError,
+          Awaited<ReturnType<typeof getTablesOverview>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTablesOverview<TData = Awaited<ReturnType<typeof getTablesOverview>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
  * @summary Table overview
  */
-export const useGetTablesOverview = <TError = ResponseAPIResponse,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError,void, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof getTablesOverview>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getGetTablesOverviewMutationOptions(options), queryClient);
-    }
+
+export function useGetTablesOverview<TData = Awaited<ReturnType<typeof getTablesOverview>>, TError = ResponseAPIResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTablesOverview>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetTablesOverviewQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

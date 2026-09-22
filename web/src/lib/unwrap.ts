@@ -31,3 +31,15 @@ export function unwrap<T>(res: ApiEnvelope<T>): T {
   }
   return res.data;
 }
+
+/**
+ * Narrows a Go API envelope to its payload, returning null instead of throwing
+ * when data is absent or explicitly null (e.g. no active shift).
+ */
+export function unwrapNullable<T>(res: ApiEnvelope<T>): T | null {
+  if (res.success === false || res.error) {
+    throw new ApiError(0, res.error?.code ?? "UNKNOWN", res.error?.message ?? "Đã xảy ra lỗi");
+  }
+  return res.data ?? null;
+}
+
