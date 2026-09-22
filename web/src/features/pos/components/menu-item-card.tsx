@@ -46,7 +46,7 @@ export function MenuItemCard({
       }`}
     >
       {/* Media Well with Fallback */}
-      <div className="relative h-28 w-full overflow-hidden rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
+      <div className="relative aspect-[16/10] min-h-[110px] w-full overflow-hidden rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
         {!imageError ? (
           <img
             src={`https://placewaifu.com/image/300/200?id=${item.id?.slice(0, 4) ?? "1"}`}

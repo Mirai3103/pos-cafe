@@ -16,6 +16,11 @@ import {
 import { MenuGrid } from "./menu-grid";
 import { DraftPanel } from "./draft-panel";
 import { ItemPickerDialog, type ItemPickerConfig } from "./item-picker-dialog";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { matchesDraftItemConfig, diffDraftItemEdits } from "../utils/selection";
 import type {
   CatalogSellableItemResponse,
@@ -327,22 +332,43 @@ export function PosView() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col md:flex-row overflow-hidden">
-      {/* Zone 1: Menu Grid */}
-      <MenuGrid
-        categories={menu?.categories}
-        onSelectItem={handleSelectItem}
-        disabled={!isShiftOpen}
-      />
+    <div className="flex h-full w-full flex-col overflow-hidden">
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="flex-1 overflow-hidden"
+      >
+        {/* Zone 1: Menu Grid */}
+        <ResizablePanel
+          defaultSize={62}
+          minSize={35}
+          className="flex flex-col min-w-[320px] overflow-hidden"
+        >
+          <MenuGrid
+            categories={menu?.categories}
+            onSelectItem={handleSelectItem}
+            disabled={!isShiftOpen}
+          />
+        </ResizablePanel>
 
-      {/* Zone 2: Order Bill Aside */}
-      <DraftPanel
-        session={session ?? null}
-        isShiftOpen={isShiftOpen}
-        onEditItem={handleEditDraftItem}
-        onQuantityChange={handleQuantityChange}
-        onRemoveItem={handleRemoveItem}
-      />
+        <ResizableHandle withHandle />
+
+        {/* Zone 2: Order Bill Aside */}
+        <ResizablePanel
+          defaultSize={38}
+          minSize={25}
+          maxSize={60}
+          className="flex flex-col min-w-[300px] overflow-hidden"
+        >
+          <DraftPanel
+            session={session ?? null}
+            isShiftOpen={isShiftOpen}
+            onEditItem={handleEditDraftItem}
+            onQuantityChange={handleQuantityChange}
+            onRemoveItem={handleRemoveItem}
+            className="w-full h-full flex-1"
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {/* Item Configuration Modal */}
       <ItemPickerDialog

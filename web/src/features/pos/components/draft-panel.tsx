@@ -16,6 +16,7 @@ interface DraftPanelProps {
   onQuantityChange: (itemId: string, nextQty: number) => void;
   onRemoveItem: (itemId: string) => void;
   disabled?: boolean;
+  className?: string;
 }
 
 export function DraftPanel({
@@ -25,10 +26,13 @@ export function DraftPanel({
   onQuantityChange,
   onRemoveItem,
   disabled = false,
+  className,
 }: DraftPanelProps) {
+  const asideLayout = className ?? "w-full md:w-[380px] lg:w-[420px] shrink-0 border-l border-border";
+
   if (!isShiftOpen) {
     return (
-      <aside className="flex w-full md:w-[380px] lg:w-[420px] shrink-0 flex-col border-l border-border bg-card overflow-hidden select-none">
+      <aside className={`flex flex-col bg-card overflow-hidden select-none ${asideLayout}`}>
         <NoShiftNotice />
       </aside>
     );
@@ -39,7 +43,7 @@ export function DraftPanel({
   const serviceNumber = session?.service_number;
 
   return (
-    <aside className="flex w-full md:w-[380px] lg:w-[420px] shrink-0 flex-col border-l border-border bg-card overflow-hidden select-none">
+    <aside className={`flex flex-col bg-card overflow-hidden select-none ${asideLayout}`}>
       {/* Bill Header */}
       <div className="flex items-center justify-between border-b border-border p-4 bg-muted/20 shrink-0">
         <div className="flex items-center gap-2.5">

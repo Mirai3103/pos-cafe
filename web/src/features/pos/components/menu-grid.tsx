@@ -159,7 +159,7 @@ export function MenuGrid({
       {/* Product Card Grid Container */}
       <div className="flex-1 overflow-y-auto p-4">
         {filteredItems.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] 2xl:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 sm:gap-3.5">
             {filteredItems.map((item) => (
               <MenuItemCard
                 key={item.id}
