@@ -6,6 +6,7 @@ import {
   isSelectionValid,
   normalizePreparationNote,
   matchesDraftItemConfig,
+  diffDraftItemEdits,
 } from "./selection";
 import type {
   CatalogSellableItemResponse,
@@ -280,6 +281,94 @@ describe("selection utilities", () => {
           selectedOptionIds: ["opt-1", "opt-3"],
         }),
       ).toBe(false);
+    });
+  });
+
+  describe("diffDraftItemEdits", () => {
+    const initial = {
+      sizeId: "sz-m",
+      selectedOptionIds: ["opt-1", "opt-2"],
+      preparationNote: "it da",
+      quantity: 2,
+    };
+
+    it("detects no changes when configuration matches initial values", () => {
+      const diff = diffDraftItemEdits(initial, {
+        sizeId: "sz-m",
+        selectedOptionIds: ["opt-2", "opt-1"], // same options, different order
+        preparationNote: "it da",
+        quantity: 2,
+      });
+
+      expect(diff.quantityChanged).toBe(false);
+      expect(diff.modifiersChanged).toBe(false);
+      expect(diff.noteChanged).toBe(false);
+      expect(diff.sizeChanged).toBe(false);
+    });
+
+    it("detects quantity change", () => {
+      const diff = diffDraftItemEdits(initial, {
+        ...initial,
+        quantity: 3,
+      });
+
+      expect(diff.quantityChanged).toBe(true);
+      expect(diff.modifiersChanged).toBe(false);
+      expect(diff.noteChanged).toBe(false);
+      expect(diff.sizeChanged).toBe(false);
+    });
+
+    it("detects modifier changes when options are added, removed, or replaced", () => {
+      const diffAdded = diffDraftItemEdits(initial, {
+        ...initial,
+        selectedOptionIds: ["opt-1", "opt-2", "opt-3"],
+      });
+      expect(diffAdded.modifiersChanged).toBe(true);
+
+      const diffRemoved = diffDraftItemEdits(initial, {
+        ...initial,
+        selectedOptionIds: ["opt-1"],
+      });
+      expect(diffRemoved.modifiersChanged).toBe(true);
+
+      const diffReplaced = diffDraftItemEdits(initial, {
+        ...initial,
+        selectedOptionIds: ["opt-1", "opt-4"],
+      });
+      expect(diffReplaced.modifiersChanged).toBe(true);
+    });
+
+    it("detects preparation note change", () => {
+      const diff = diffDraftItemEdits(initial, {
+        ...initial,
+        preparationNote: "khong duong",
+      });
+
+      expect(diff.quantityChanged).toBe(false);
+      expect(diff.modifiersChanged).toBe(false);
+      expect(diff.noteChanged).toBe(true);
+      expect(diff.sizeChanged).toBe(false);
+    });
+
+    it("detects size change when different sizeId is specified", () => {
+      const diff = diffDraftItemEdits(initial, {
+        ...initial,
+        sizeId: "sz-l",
+      });
+
+      expect(diff.quantityChanged).toBe(false);
+      expect(diff.modifiersChanged).toBe(false);
+      expect(diff.noteChanged).toBe(false);
+      expect(diff.sizeChanged).toBe(true);
+    });
+
+    it("does not report sizeChanged when sizeId is omitted/undefined", () => {
+      const diff = diffDraftItemEdits(initial, {
+        ...initial,
+        sizeId: undefined,
+      });
+
+      expect(diff.sizeChanged).toBe(false);
     });
   });
 });

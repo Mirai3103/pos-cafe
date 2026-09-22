@@ -157,3 +157,44 @@ export function matchesDraftItemConfig(
   return itemOptionIds === configOptionIds;
 }
 
+export interface DraftItemEditsDiff {
+  quantityChanged: boolean;
+  modifiersChanged: boolean;
+  noteChanged: boolean;
+  sizeChanged: boolean;
+}
+
+/**
+ * Diffs current picker configuration against initial values to only update modified attributes.
+ */
+export function diffDraftItemEdits(
+  initialValues: Partial<DraftItemConfigLike> | undefined,
+  config: DraftItemConfigLike,
+): DraftItemEditsDiff {
+  const quantityChanged =
+    initialValues?.quantity !== undefined &&
+    config.quantity !== undefined &&
+    config.quantity !== initialValues.quantity;
+
+  const prevModIds = [...(initialValues?.selectedOptionIds ?? [])]
+    .sort()
+    .join(",");
+  const nextModIds = [...config.selectedOptionIds].sort().join(",");
+  const modifiersChanged = prevModIds !== nextModIds;
+
+  const prevNote = initialValues?.preparationNote ?? "";
+  const nextNote = config.preparationNote ?? "";
+  const noteChanged = prevNote !== nextNote;
+
+  const sizeChanged = Boolean(
+    config.sizeId && config.sizeId !== initialValues?.sizeId,
+  );
+
+  return {
+    quantityChanged,
+    modifiersChanged,
+    noteChanged,
+    sizeChanged,
+  };
+}
+

@@ -16,7 +16,7 @@ import {
 import { MenuGrid } from "./menu-grid";
 import { DraftPanel } from "./draft-panel";
 import { ItemPickerDialog, type ItemPickerConfig } from "./item-picker-dialog";
-import { matchesDraftItemConfig } from "../utils/selection";
+import { matchesDraftItemConfig, diffDraftItemEdits } from "../utils/selection";
 import type {
   CatalogSellableItemResponse,
   SalesDraftItemResponse,
@@ -50,6 +50,8 @@ export function PosView() {
   React.useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
+
+  const creatingSessionPromiseRef = React.useRef<Promise<string> | null>(null);
 
   const {
     data: session,
@@ -99,16 +101,32 @@ export function PosView() {
   // Ensure active session exists, lazily opening one if needed
   const ensureSessionId = async (): Promise<string> => {
     if (activeSessionIdRef.current) return activeSessionIdRef.current;
-    const newSession = await startTakeaway();
-    const id = newSession.id ?? "";
-    try {
-      sessionStorage.setItem(STORAGE_SESSION_KEY, id);
-    } catch {
-      // ignore storage errors
+    if (creatingSessionPromiseRef.current) {
+      return await creatingSessionPromiseRef.current;
     }
-    activeSessionIdRef.current = id;
-    setActiveSessionId(id);
-    return id;
+
+    const promise = (async () => {
+      try {
+        const newSession = await startTakeaway();
+        if (!newSession.id) {
+          throw new Error("Không thể khởi tạo phiên phục vụ: thiếu mã phiên");
+        }
+        const id = newSession.id;
+        try {
+          sessionStorage.setItem(STORAGE_SESSION_KEY, id);
+        } catch {
+          // ignore storage errors
+        }
+        activeSessionIdRef.current = id;
+        setActiveSessionId(id);
+        return id;
+      } finally {
+        creatingSessionPromiseRef.current = null;
+      }
+    })();
+
+    creatingSessionPromiseRef.current = promise;
+    return await promise;
   };
 
   // Add Item Handler
@@ -183,17 +201,32 @@ export function PosView() {
 
     try {
       if (editingDraftItemId) {
-        // Edit existing draft item: apply updates
-        if (config.sizeId) {
+        // Edit existing draft item: apply updates only for attributes that changed
+        const diff = diffDraftItemEdits(pickerInitialValues, config);
+
+        // 1. Update quantity if changed
+        if (diff.quantityChanged && config.quantity !== undefined) {
+          await updateQuantity(editingDraftItemId, { quantity: config.quantity });
+        }
+
+        // 2. Update modifiers if changed
+        if (diff.modifiersChanged) {
+          await updateModifiers(editingDraftItemId, {
+            modifier_option_ids: config.selectedOptionIds,
+          });
+        }
+
+        // 3. Update preparation note if changed
+        if (diff.noteChanged) {
+          await updatePreparationNote(editingDraftItemId, {
+            preparation_note: config.preparationNote,
+          });
+        }
+
+        // 4. Update size if changed (execute last to avoid backend merge-deletion race)
+        if (diff.sizeChanged && config.sizeId) {
           await updateSize(editingDraftItemId, { size_id: config.sizeId });
         }
-        await updateModifiers(editingDraftItemId, {
-          modifier_option_ids: config.selectedOptionIds,
-        });
-        await updatePreparationNote(editingDraftItemId, {
-          preparation_note: config.preparationNote,
-        });
-        await updateQuantity(editingDraftItemId, { quantity: config.quantity });
       } else {
         // Add new draft item
         const prevItem = session?.draft?.items?.find((it) =>
