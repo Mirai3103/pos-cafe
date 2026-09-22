@@ -78,14 +78,19 @@ export function useAddDraftItem(sessionId: string) {
 
   return {
     ...mutation,
-    addDraftItem: async (command: SalesAddDraftItemCommand, requestId?: string) => {
+    addDraftItem: async (
+      command: SalesAddDraftItemCommand,
+      requestId?: string,
+      targetSessionId?: string,
+    ) => {
+      const sid = targetSessionId || sessionId;
       const rid = requestId ?? command.request_id ?? newRequestId();
       const res = await mutation.mutateAsync({
-        id: sessionId,
+        id: sid,
         data: { ...command, request_id: rid },
       });
       const data = unwrap(res);
-      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sessionId), res);
+      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sid), res);
       return data;
     },
   };
@@ -104,15 +109,17 @@ export function useUpdateDraftItemQuantity(sessionId: string) {
       itemId: string,
       command: SalesSetDraftItemQuantityCommand,
       requestId?: string,
+      targetSessionId?: string,
     ) => {
+      const sid = targetSessionId || sessionId;
       const rid = requestId ?? command.request_id ?? newRequestId();
       const res = await mutation.mutateAsync({
-        id: sessionId,
+        id: sid,
         itemId,
         data: { ...command, request_id: rid },
       });
       const data = unwrap(res);
-      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sessionId), res);
+      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sid), res);
       return data;
     },
   };
@@ -131,15 +138,17 @@ export function useUpdateDraftItemSize(sessionId: string) {
       itemId: string,
       command: SalesSetDraftItemSizeCommand,
       requestId?: string,
+      targetSessionId?: string,
     ) => {
+      const sid = targetSessionId || sessionId;
       const rid = requestId ?? command.request_id ?? newRequestId();
       const res = await mutation.mutateAsync({
-        id: sessionId,
+        id: sid,
         itemId,
         data: { ...command, request_id: rid },
       });
       const data = unwrap(res);
-      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sessionId), res);
+      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sid), res);
       return data;
     },
   };
@@ -158,15 +167,17 @@ export function useUpdateDraftItemModifiers(sessionId: string) {
       itemId: string,
       command: SalesSetDraftItemModifiersCommand,
       requestId?: string,
+      targetSessionId?: string,
     ) => {
+      const sid = targetSessionId || sessionId;
       const rid = requestId ?? command.request_id ?? newRequestId();
       const res = await mutation.mutateAsync({
-        id: sessionId,
+        id: sid,
         itemId,
         data: { ...command, request_id: rid },
       });
       const data = unwrap(res);
-      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sessionId), res);
+      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sid), res);
       return data;
     },
   };
@@ -185,15 +196,17 @@ export function useUpdateDraftItemPreparationNote(sessionId: string) {
       itemId: string,
       command: SalesSetDraftItemNoteCommand,
       requestId?: string,
+      targetSessionId?: string,
     ) => {
+      const sid = targetSessionId || sessionId;
       const rid = requestId ?? command.request_id ?? newRequestId();
       const res = await mutation.mutateAsync({
-        id: sessionId,
+        id: sid,
         itemId,
         data: { ...command, request_id: rid },
       });
       const data = unwrap(res);
-      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sessionId), res);
+      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sid), res);
       return data;
     },
   };
@@ -208,16 +221,21 @@ export function useRemoveDraftItem(sessionId: string) {
 
   return {
     ...mutation,
-    removeDraftItem: async (itemId: string, requestId?: string) => {
+    removeDraftItem: async (
+      itemId: string,
+      requestId?: string,
+      targetSessionId?: string,
+    ) => {
+      const sid = targetSessionId || sessionId;
       const rid = requestId ?? newRequestId();
       const res = await mutation.mutateAsync({
-        id: sessionId,
+        id: sid,
         itemId,
         data: { request_id: rid },
         params: { request_id: rid },
       });
       const data = unwrap(res);
-      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sessionId), res);
+      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sid), res);
       return data;
     },
   };

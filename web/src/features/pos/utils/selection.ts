@@ -117,3 +117,43 @@ export function normalizePreparationNote(note: string): string {
   }
   return trimmed;
 }
+
+export interface DraftItemConfigLike {
+  sizeId?: string;
+  selectedOptionIds: string[];
+  preparationNote: string;
+  quantity?: number;
+}
+
+/**
+ * Checks whether a draft line item matches a desired item picker configuration.
+ */
+export function matchesDraftItemConfig(
+  draftItem: {
+    menu_item_id?: string;
+    size_id?: string;
+    preparation_note?: string;
+    selected_modifier_options?: Array<{ id?: string }>;
+  },
+  menuItemId: string,
+  config: DraftItemConfigLike,
+): boolean {
+  if (draftItem.menu_item_id !== menuItemId) return false;
+  const itemSizeId = draftItem.size_id || undefined;
+  const configSizeId = config.sizeId || undefined;
+  if (itemSizeId !== configSizeId) return false;
+
+  const itemNote = draftItem.preparation_note || "";
+  const configNote = config.preparationNote || "";
+  if (itemNote !== configNote) return false;
+
+  const itemOptionIds = (draftItem.selected_modifier_options ?? [])
+    .map((opt) => opt.id)
+    .filter(Boolean)
+    .sort()
+    .join(",");
+  const configOptionIds = [...config.selectedOptionIds].sort().join(",");
+
+  return itemOptionIds === configOptionIds;
+}
+

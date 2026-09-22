@@ -5,6 +5,7 @@ import {
   toggleModifierOption,
   isSelectionValid,
   normalizePreparationNote,
+  matchesDraftItemConfig,
 } from "./selection";
 import type {
   CatalogSellableItemResponse,
@@ -210,6 +211,75 @@ describe("selection utilities", () => {
       const normalized = normalizePreparationNote(longUnicode);
       expect(Array.from(normalized).length).toBe(200);
       expect(normalized).toBe(unicodeChar.repeat(200));
+    });
+  });
+
+  describe("matchesDraftItemConfig", () => {
+    const baseItem = {
+      menu_item_id: "cf-1",
+      size_id: "sz-m",
+      preparation_note: "it da",
+      selected_modifier_options: [{ id: "opt-1" }, { id: "opt-2" }],
+    };
+
+    it("matches identical configuration", () => {
+      expect(
+        matchesDraftItemConfig(baseItem, "cf-1", {
+          sizeId: "sz-m",
+          preparationNote: "it da",
+          selectedOptionIds: ["opt-1", "opt-2"],
+        }),
+      ).toBe(true);
+    });
+
+    it("matches irrespective of option array sorting", () => {
+      expect(
+        matchesDraftItemConfig(baseItem, "cf-1", {
+          sizeId: "sz-m",
+          preparationNote: "it da",
+          selectedOptionIds: ["opt-2", "opt-1"],
+        }),
+      ).toBe(true);
+    });
+
+    it("does not match when menu item id differs", () => {
+      expect(
+        matchesDraftItemConfig(baseItem, "cf-2", {
+          sizeId: "sz-m",
+          preparationNote: "it da",
+          selectedOptionIds: ["opt-1", "opt-2"],
+        }),
+      ).toBe(false);
+    });
+
+    it("does not match when size differs", () => {
+      expect(
+        matchesDraftItemConfig(baseItem, "cf-1", {
+          sizeId: "sz-l",
+          preparationNote: "it da",
+          selectedOptionIds: ["opt-1", "opt-2"],
+        }),
+      ).toBe(false);
+    });
+
+    it("does not match when note differs", () => {
+      expect(
+        matchesDraftItemConfig(baseItem, "cf-1", {
+          sizeId: "sz-m",
+          preparationNote: "nhieu da",
+          selectedOptionIds: ["opt-1", "opt-2"],
+        }),
+      ).toBe(false);
+    });
+
+    it("does not match when option ids differ", () => {
+      expect(
+        matchesDraftItemConfig(baseItem, "cf-1", {
+          sizeId: "sz-m",
+          preparationNote: "it da",
+          selectedOptionIds: ["opt-1", "opt-3"],
+        }),
+      ).toBe(false);
     });
   });
 });
