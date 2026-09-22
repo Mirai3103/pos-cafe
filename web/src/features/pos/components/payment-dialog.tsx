@@ -161,7 +161,7 @@ export function PaymentDialog({
                     playTapChirp();
                     setRawTendered(String(amount));
                   }}
-                  className="min-h-[48px] rounded-xl border border-border bg-card px-3 text-sm font-bold text-foreground hover:bg-muted select-none active:scale-[0.98] transition"
+                  className="min-h-[48px] rounded-xl border border-border bg-card px-3 text-sm font-mono font-bold text-foreground tabular-nums hover:bg-muted select-none active:scale-[0.98] transition"
                 >
                   {index === 0 ? "Đúng tiền" : formatVND(amount)}
                 </button>
