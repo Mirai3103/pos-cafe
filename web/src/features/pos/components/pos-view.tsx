@@ -339,8 +339,8 @@ export function PosView() {
       >
         {/* Zone 1: Menu Grid */}
         <ResizablePanel
-          defaultSize={80}
-          minSize={40}
+          defaultSize="80%"
+          minSize="40%"
           className="flex flex-col min-w-[320px] overflow-hidden"
         >
           <MenuGrid
@@ -354,10 +354,10 @@ export function PosView() {
 
         {/* Zone 2: Order Bill Aside */}
         <ResizablePanel
-          defaultSize={20}
-          minSize={15}
-          maxSize={60}
-          className="flex flex-col min-w-[280px] overflow-hidden"
+          defaultSize="20%"
+          minSize="280px"
+          maxSize="60%"
+          className="flex flex-col overflow-hidden"
         >
           <DraftPanel
             session={session ?? null}
