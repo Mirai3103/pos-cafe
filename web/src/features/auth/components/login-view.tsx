@@ -8,7 +8,8 @@ import { PinPad } from "./pin-pad";
 import { useSignIn } from "../api/use-auth";
 import { messageForError } from "@/lib/error-messages";
 import { playErrorBuzz, playSuccessChirp, playTapChirp } from "@/lib/sound";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
+import { useKeypadHotkeys } from "@/hooks/use-keypad-hotkeys";
 
 export function LoginView() {
   const [loginCode, setLoginCode] = React.useState("");
@@ -42,48 +43,23 @@ export function LoginView() {
   }, [canSubmit, loginCode, pin, signIn, navigate]);
 
   // Physical keyboard support matching design-system/pos-cafe/pages/auth.html
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if user is actively typing in the loginCode input
-      if (document.activeElement?.tagName === "INPUT" && (document.activeElement as HTMLInputElement).type === "text") {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          submit();
-        }
-        return;
-      }
+  useKeypadHotkeys({
+    onDigit: (digit) => {
+      playTapChirp();
+      setPin((prev) => (prev.length < 8 ? prev + digit : prev));
+    },
+    onBackspace: () => {
+      playTapChirp();
+      setPin((prev) => prev.slice(0, -1));
+    },
+    onClear: () => {
+      playTapChirp();
+      setPin("");
+    },
+    onSubmit: submit,
+    enabled: !signIn.isPending,
+  });
 
-      if (/^[0-9]$/.test(e.key)) {
-        e.preventDefault();
-        playTapChirp();
-        setPin((prev) => (prev.length < 8 ? prev + e.key : prev));
-        return;
-      }
-
-      if (e.key === "Backspace") {
-        e.preventDefault();
-        playTapChirp();
-        setPin((prev) => prev.slice(0, -1));
-        return;
-      }
-
-      if (e.key === "Escape" || e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        playTapChirp();
-        setPin("");
-        return;
-      }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        submit();
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [submit]);
 
   // Determine slot count (at least 4, up to pin length)
   const slotCount = Math.max(4, pin.length);

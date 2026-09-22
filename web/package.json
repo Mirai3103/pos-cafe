@@ -28,7 +28,6 @@
     "class-variance-authority": "^0.7.1",
     "cn": "^0.3.0",
     "dayjs": "^1.11.23",
-    "install": "^0.13.0",
     "lucide-react": "^1.47.0",
     "motion": "^13.4.0",
     "react": "^19.3.0",

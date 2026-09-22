@@ -7,7 +7,7 @@ import { useDeclareWorkspace } from "../api/use-auth";
 import { rememberedWorkspace, useSessionStore, type Workspace } from "@/stores/use-session-store";
 import { messageForError } from "@/lib/error-messages";
 import { playSuccessChirp, playTapChirp } from "@/lib/sound";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 
 interface WorkspaceChoice {
   value: Workspace;

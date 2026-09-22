@@ -6,7 +6,8 @@ import { useSignOut, useUnlock } from "../api/use-auth";
 import { useSessionStore } from "@/stores/use-session-store";
 import { messageForError } from "@/lib/error-messages";
 import { playErrorBuzz, playSuccessChirp, playTapChirp } from "@/lib/sound";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
+import { useKeypadHotkeys } from "@/hooks/use-keypad-hotkeys";
 
 export function LockOverlay() {
   const [pin, setPin] = React.useState("");
@@ -35,39 +36,23 @@ export function LockOverlay() {
   }, [pin, unlock]);
 
   // Physical keyboard listener matching auth.html
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (/^[0-9]$/.test(e.key)) {
-        e.preventDefault();
-        playTapChirp();
-        setPin((prev) => (prev.length < 8 ? prev + e.key : prev));
-        return;
-      }
+  useKeypadHotkeys({
+    onDigit: (digit) => {
+      playTapChirp();
+      setPin((prev) => (prev.length < 8 ? prev + digit : prev));
+    },
+    onBackspace: () => {
+      playTapChirp();
+      setPin((prev) => prev.slice(0, -1));
+    },
+    onClear: () => {
+      playTapChirp();
+      setPin("");
+    },
+    onSubmit: submit,
+    enabled: !unlock.isPending,
+  });
 
-      if (e.key === "Backspace") {
-        e.preventDefault();
-        playTapChirp();
-        setPin((prev) => prev.slice(0, -1));
-        return;
-      }
-
-      if (e.key === "Escape" || e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        playTapChirp();
-        setPin("");
-        return;
-      }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        submit();
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [submit]);
 
   const slotCount = Math.max(4, pin.length);
 

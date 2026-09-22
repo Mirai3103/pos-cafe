@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { ShieldCheck, X } from "lucide-react";
 import {
   useManagerApprovalStore,
@@ -8,6 +8,7 @@ import { useSessionStore } from "@/stores/use-session-store";
 import { PinPad } from "@/features/auth/components/pin-pad";
 import { Input } from "@/components/ui/input";
 import { playClick, playError, playAction } from "@/lib/sound";
+import { useKeypadHotkeys } from "@/hooks/use-keypad-hotkeys";
 
 export function ManagerApprovalDialog() {
   const isOpen = useManagerApprovalStore((s) => s.isOpen);
@@ -78,53 +79,14 @@ function ManagerApprovalDialogModal({ request }: { request: ManagerApprovalReque
   }, [cancel]);
 
   // Physical keyboard support for POS terminals
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement?.tagName === "INPUT") {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          handleClose();
-        } else if (e.key === "Enter") {
-          e.preventDefault();
-          handleConfirm();
-        }
-        return;
-      }
+  useKeypadHotkeys({
+    onDigit: handleDigit,
+    onBackspace: handleBackspace,
+    onClear: handleClear,
+    onClose: handleClose,
+    onSubmit: handleConfirm,
+  });
 
-      if (/^[0-9]$/.test(e.key)) {
-        e.preventDefault();
-        handleDigit(e.key);
-        return;
-      }
-
-      if (e.key === "Backspace") {
-        e.preventDefault();
-        handleBackspace();
-        return;
-      }
-
-      if (e.key === "Escape") {
-        e.preventDefault();
-        handleClose();
-        return;
-      }
-
-      if (e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        handleClear();
-        return;
-      }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleConfirm();
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleDigit, handleBackspace, handleClear, handleConfirm, handleClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
