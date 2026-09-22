@@ -13,7 +13,7 @@ import {
   useRemoveDraftItem,
 } from "../api/use-pos";
 import { usePosSession } from "../api/use-pos-session";
-import { useCommitDraft, usePayCash } from "../api/use-checkout";
+import { useCheckoutFlow } from "../api/use-checkout";
 import { MenuGrid } from "./menu-grid";
 import { DraftPanel } from "./draft-panel";
 import { CheckPanel } from "./check-panel";
@@ -25,33 +25,13 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { matchesDraftItemConfig, diffDraftItemEdits } from "../utils/selection";
-import { derivePosPhase, selectOpenCheck, findCheckById } from "../utils/phase";
-import { latestPaymentChangeDue } from "../utils/payment";
+import { derivePosPhase, selectOpenCheck } from "../utils/phase";
 import { calculateDraftSubtotal } from "../utils/pricing";
 import type {
   CatalogSellableItemResponse,
   SalesDraftItemResponse,
 } from "@/api/generated/models";
 import { messageForError } from "@/lib/error-messages";
-import { ApiError } from "@/lib/unwrap";
-import { playSuccessChirp, playErrorBuzz } from "@/lib/sound";
-import { newRequestId } from "@/lib/command";
-
-/** Commit-time revalidation failures that send the cashier back to the draft. */
-const COMMIT_FAILURE_CODES = new Set([
-  "EMPTY_DRAFT",
-  "COMMIT_MENU_ITEM_UNAVAILABLE",
-  "COMMIT_MENU_ITEM_RETIRED",
-  "COMMIT_SIZE_REQUIRED",
-  "COMMIT_SIZE_INVALID",
-  "COMMIT_SIZE_UNAVAILABLE",
-  "COMMIT_SIZE_RETIRED",
-  "COMMIT_MODIFIER_OPTION_INVALID",
-  "COMMIT_MODIFIER_OPTION_UNAVAILABLE",
-  "COMMIT_MODIFIER_OPTION_RETIRED",
-  "COMMIT_MODIFIER_GROUP_INVALID",
-  "COMMIT_MODIFIER_GROUP_RETIRED",
-]);
 
 export function PosView() {
   const { data: shift, isLoading: isShiftLoading } = useCurrentShift();
@@ -74,8 +54,6 @@ export function PosView() {
   const { updateModifiers } = useUpdateDraftItemModifiers(activeSessionId ?? "");
   const { updatePreparationNote } = useUpdateDraftItemPreparationNote(activeSessionId ?? "");
   const { removeDraftItem } = useRemoveDraftItem(activeSessionId ?? "");
-  const { commitDraft } = useCommitDraft(activeSessionId ?? "");
-  const { payCash } = usePayCash(activeSessionId ?? "");
 
   // Modal State
   const [pickerItem, setPickerItem] = React.useState<CatalogSellableItemResponse | null>(null);
@@ -85,17 +63,6 @@ export function PosView() {
   const [isSubmittingPicker, setIsSubmittingPicker] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
-  // Checkout State
-  const [isPaymentOpen, setIsPaymentOpen] = React.useState(false);
-  const [isPaying, setIsPaying] = React.useState(false);
-  const [paymentError, setPaymentError] = React.useState<string | null>(null);
-  const [changeDueVnd, setChangeDueVnd] = React.useState<number | null>(null);
-
-  // One request id per intent, retained across retries so a replay after a
-  // network failure reproduces the original outcome instead of charging twice.
-  const commitRequestIdRef = React.useRef<string | null>(null);
-  const payRequestIdRef = React.useRef<string | null>(null);
-
   // Where the sale stands is the server projection, never local state.
   const phase = derivePosPhase(session);
   const draftItems = session?.draft?.items ?? [];
@@ -104,6 +71,16 @@ export function PosView() {
     phase === "AWAITING_PAYMENT"
       ? (openCheck?.balance_vnd ?? 0)
       : calculateDraftSubtotal(draftItems);
+
+  const checkout = useCheckoutFlow({
+    activeSessionId,
+    session,
+    phase,
+    isShiftOpen,
+    draftItemCount: draftItems.length,
+    clearSession,
+    onDraftError: setErrorMessage,
+  });
 
   // Add Item Handler
   const handleSelectItem = async (item: CatalogSellableItemResponse) => {
@@ -268,97 +245,13 @@ export function PosView() {
     }
   };
 
-  const openPaymentDialog = () => {
-    if (!isShiftOpen && phase === "DRAFTING") return;
-    if (phase !== "DRAFTING" && phase !== "AWAITING_PAYMENT") return;
-    if (phase === "DRAFTING" && draftItems.length === 0) return;
-
-    commitRequestIdRef.current = commitRequestIdRef.current ?? newRequestId();
-    payRequestIdRef.current = payRequestIdRef.current ?? newRequestId();
-    setPaymentError(null);
-    setChangeDueVnd(null);
-    setIsPaymentOpen(true);
-  };
-
-  const closePaymentDialog = () => {
-    if (isPaying) return;
-    setIsPaymentOpen(false);
-    setPaymentError(null);
-  };
-
-  /**
-   * Commit, then take the cash.
-   *
-   * The applied amount comes from the commit response, never from the
-   * client-side subtotal: commit revalidates and freezes prices, so the Check
-   * is the only authority on what is owed.
-   */
-  const handleConfirmPayment = async (tenderedVnd: number) => {
-    if (!activeSessionId) return;
-    setPaymentError(null);
-    setIsPaying(true);
-
-    try {
-      let projection = session;
-
-      if (phase === "DRAFTING") {
-        projection = await commitDraft(commitRequestIdRef.current ?? undefined, activeSessionId);
-      }
-
-      const check = selectOpenCheck(projection);
-      if (!check?.id) {
-        throw new ApiError(0, "CHECK_NOT_FOUND", "Không tìm thấy hóa đơn vừa chốt");
-      }
-
-      const paid = await payCash(
-        check.id,
-        {
-          applied_amount_vnd: check.balance_vnd ?? 0,
-          cash_tendered_vnd: tenderedVnd,
-        },
-        payRequestIdRef.current ?? undefined,
-        activeSessionId,
-      );
-
-      setChangeDueVnd(latestPaymentChangeDue(findCheckById(paid, check.id)));
-      playSuccessChirp();
-    } catch (err) {
-      playErrorBuzz();
-      const message = messageForError(err);
-      // A failed commit leaves the draft editable, so the cashier belongs back
-      // on the bill to fix whatever the server rejected.
-      if (err instanceof ApiError && COMMIT_FAILURE_CODES.has(err.code)) {
-        setIsPaymentOpen(false);
-        setErrorMessage(message);
-      } else {
-        setPaymentError(message);
-      }
-    } finally {
-      setIsPaying(false);
-    }
-  };
-
-  const handlePaymentDone = () => {
-    setIsPaymentOpen(false);
-    setChangeDueVnd(null);
-    setPaymentError(null);
-    commitRequestIdRef.current = null;
-    payRequestIdRef.current = null;
-  };
-
-  const handleNextCustomer = () => {
-    commitRequestIdRef.current = null;
-    payRequestIdRef.current = null;
-    clearSession();
-  };
-
   useHotkeys(
     "f9",
     (event) => {
       event.preventDefault();
-      if (isPaymentOpen) return;
-      if (phase === "SETTLED") handleNextCustomer();
-      else openPaymentDialog();
+      if (checkout.isPaymentOpen) return;
+      if (phase === "SETTLED") checkout.nextCustomer();
+      else checkout.openPaymentDialog();
     },
     { enableOnFormTags: true },
   );
@@ -429,8 +322,8 @@ export function PosView() {
             <CheckPanel
               session={session}
               phase={phase}
-              onCollect={openPaymentDialog}
-              onNextCustomer={handleNextCustomer}
+              onCollect={checkout.openPaymentDialog}
+              onNextCustomer={checkout.nextCustomer}
               className="w-full h-full flex-1"
             />
           ) : (
@@ -440,7 +333,7 @@ export function PosView() {
               onEditItem={handleEditDraftItem}
               onQuantityChange={handleQuantityChange}
               onRemoveItem={handleRemoveItem}
-              onCheckout={openPaymentDialog}
+              onCheckout={checkout.openPaymentDialog}
               canCheckout={isShiftOpen && draftItems.length > 0}
               className="w-full h-full flex-1"
             />
@@ -461,16 +354,16 @@ export function PosView() {
 
       {/* Cash Payment Modal */}
       <PaymentDialog
-        isOpen={isPaymentOpen}
+        isOpen={checkout.isPaymentOpen}
         serviceNumber={session?.service_number}
         totalVnd={paymentTotal}
         isCommitted={phase === "AWAITING_PAYMENT"}
-        isSubmitting={isPaying}
-        errorMessage={paymentError}
-        changeDueVnd={changeDueVnd}
-        onClose={closePaymentDialog}
-        onConfirm={handleConfirmPayment}
-        onDone={handlePaymentDone}
+        isSubmitting={checkout.isPaying}
+        errorMessage={checkout.paymentError}
+        changeDueVnd={checkout.changeDueVnd}
+        onClose={checkout.closePaymentDialog}
+        onConfirm={checkout.confirmPayment}
+        onDone={checkout.finishPayment}
       />
 
       {/* Global Error Toast Bar if mutation fails */}

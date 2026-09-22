@@ -93,6 +93,19 @@ mock.module("../api/use-checkout", () => ({
   usePayCash: () => ({
     payCash: async () => ({}),
   }),
+  // PosView drives checkout through this hook, so stubbing it is what keeps
+  // the render tests off the real mutation hooks.
+  useCheckoutFlow: () => ({
+    isPaymentOpen: false,
+    isPaying: false,
+    paymentError: null,
+    changeDueVnd: null,
+    openPaymentDialog: () => {},
+    closePaymentDialog: () => {},
+    confirmPayment: async () => {},
+    finishPayment: () => {},
+    nextCustomer: () => {},
+  }),
 }));
 
 import { PosView } from "./pos-view";
