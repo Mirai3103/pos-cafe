@@ -1,0 +1,119 @@
+import type {
+  CatalogSellableItemResponse,
+  CatalogSellableModifierGroupResponse,
+} from "@/api/generated/models";
+
+export interface InitialSelection {
+  sizeId?: string;
+  selectedOptionIds: string[];
+  note: string;
+  quantity: number;
+}
+
+export const MAX_PREPARATION_NOTE_LENGTH = 200;
+
+/**
+ * Resolves default size and option selections when opening configuration dialog.
+ */
+export function resolveInitialSelection(
+  item: CatalogSellableItemResponse,
+): InitialSelection {
+  const sizeId =
+    item.sizes && item.sizes.length > 0 ? item.sizes[0].id : undefined;
+
+  const defaultOptionIds: string[] = [];
+  if (item.modifier_groups) {
+    for (const group of item.modifier_groups) {
+      if (group.default_option_ids) {
+        defaultOptionIds.push(...group.default_option_ids);
+      }
+    }
+  }
+
+  return {
+    sizeId,
+    selectedOptionIds: defaultOptionIds,
+    note: "",
+    quantity: 1,
+  };
+}
+
+/**
+ * Toggles a modifier option within a group, respecting min/max bounds and radio replacement.
+ */
+export function toggleModifierOption(
+  _groupId: string,
+  optionId: string,
+  currentSelectedIds: string[],
+  group: CatalogSellableModifierGroupResponse,
+): string[] {
+  const groupOptionIds = new Set((group.options ?? []).map((o) => o.id));
+  const maxSelections = group.max_selections ?? 1;
+
+  // Single choice group: radio replacement
+  if (maxSelections === 1) {
+    const withoutGroup = currentSelectedIds.filter((id) => !groupOptionIds.has(id));
+    return [...withoutGroup, optionId];
+  }
+
+  // Multi-choice group
+  const isSelected = currentSelectedIds.includes(optionId);
+  if (isSelected) {
+    return currentSelectedIds.filter((id) => id !== optionId);
+  }
+
+  // Check capacity in this group
+  const currentCountInGroup = currentSelectedIds.filter((id) =>
+    groupOptionIds.has(id),
+  ).length;
+
+  if (currentCountInGroup >= maxSelections) {
+    return currentSelectedIds;
+  }
+
+  return [...currentSelectedIds, optionId];
+}
+
+/**
+ * Checks if the configured item satisfies all required rules (size selected, min selections).
+ */
+export function isSelectionValid(
+  item: CatalogSellableItemResponse,
+  sizeId: string | undefined,
+  selectedOptionIds: string[],
+): boolean {
+  // Size requirement
+  if (item.sizes && item.sizes.length > 0 && !sizeId) {
+    return false;
+  }
+
+  // Modifier group min_selections requirement
+  if (item.modifier_groups) {
+    for (const group of item.modifier_groups) {
+      const min = group.min_selections ?? 0;
+      if (min > 0) {
+        const groupOptionIds = new Set((group.options ?? []).map((o) => o.id));
+        const selectedCountInGroup = selectedOptionIds.filter((id) =>
+          groupOptionIds.has(id),
+        ).length;
+        if (selectedCountInGroup < min) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Normalizes preparation note: trims whitespace and caps at 200 characters.
+ */
+export function normalizePreparationNote(note: string): string {
+  const trimmed = note.trim();
+  const chars = Array.from(trimmed);
+  if (chars.length > MAX_PREPARATION_NOTE_LENGTH) {
+    return chars.slice(0, MAX_PREPARATION_NOTE_LENGTH).join("");
+  }
+  return trimmed;
+}
