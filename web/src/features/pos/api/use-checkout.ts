@@ -71,7 +71,7 @@ export function usePayCash(sessionId: string) {
 }
 
 /** Commit-time revalidation failures that send the cashier back to the draft. */
-const COMMIT_FAILURE_CODES = new Set([
+export const COMMIT_FAILURE_CODES = new Set([
   "EMPTY_DRAFT",
   "COMMIT_MENU_ITEM_UNAVAILABLE",
   "COMMIT_MENU_ITEM_RETIRED",

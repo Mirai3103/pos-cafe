@@ -249,7 +249,9 @@ export function PosView() {
     "f9",
     (event) => {
       event.preventDefault();
-      if (checkout.isPaymentOpen) return;
+      // The item picker is a configuration-in-progress: opening payment over it
+      // would commit the draft without the line the cashier is still building.
+      if (checkout.isPaymentOpen || isPickerOpen) return;
       if (phase === "SETTLED") checkout.nextCustomer();
       else checkout.openPaymentDialog();
     },
