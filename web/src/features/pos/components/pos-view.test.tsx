@@ -86,6 +86,15 @@ mock.module("../api/use-pos", () => ({
   }),
 }));
 
+mock.module("../api/use-checkout", () => ({
+  useCommitDraft: () => ({
+    commitDraft: async () => ({}),
+  }),
+  usePayCash: () => ({
+    payCash: async () => ({}),
+  }),
+}));
+
 import { PosView } from "./pos-view";
 import { matchesDraftItemConfig } from "../utils/selection";
 
@@ -304,6 +313,43 @@ describe("pos-view coordinator", () => {
       expect(html).toContain("#088");
       expect(html).toContain("60.000"); // 30000 * 2 line total and subtotal
       expect(html).toContain("Cà phê sữa đá");
+    });
+
+    it("swaps the draft panel for the check panel once the draft is committed", () => {
+      mockShiftState.data = { state: "OPEN" };
+      mockSessionState.data = {
+        id: "session-committed-1",
+        service_number: "091",
+        service_mode: "takeaway",
+        state: "ACTIVE",
+        checks: [
+          {
+            id: "check-1",
+            state: "OPEN",
+            charge_vnd: 47000,
+            balance_vnd: 47000,
+            created_at: "2026-09-24T01:00:00Z",
+            payments: [],
+            allocations: [
+              {
+                id: "alloc-1",
+                name: "Cà phê sữa đá",
+                allocated_quantity: 2,
+                amount_vnd: 47000,
+                modifiers: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      const html = renderToString(<PosView />);
+      expect(html).toContain("Còn phải thu");
+      expect(html).toContain("Thu tiền (F9)");
+      expect(html).toContain("47.000");
+      // The editable-draft affordances are gone.
+      expect(html).not.toContain("Thanh toán (F9)");
+      expect(html).not.toContain("Tạm tính");
     });
   });
 });

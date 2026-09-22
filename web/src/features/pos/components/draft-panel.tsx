@@ -15,6 +15,8 @@ interface DraftPanelProps {
   onEditItem: (item: SalesDraftItemResponse) => void;
   onQuantityChange: (itemId: string, nextQty: number) => void;
   onRemoveItem: (itemId: string) => void;
+  onCheckout: () => void;
+  canCheckout: boolean;
   disabled?: boolean;
   className?: string;
 }
@@ -25,6 +27,8 @@ export function DraftPanel({
   onEditItem,
   onQuantityChange,
   onRemoveItem,
+  onCheckout,
+  canCheckout,
   disabled = false,
   className,
 }: DraftPanelProps) {
@@ -107,7 +111,7 @@ export function DraftPanel({
         </div>
       </div>
 
-      {/* Bill Actions / Checkout Drawer (Disabled in Slice 3) */}
+      {/* Bill Actions / Checkout Drawer */}
       <div className="border-t border-border bg-muted/20 p-4 space-y-2.5 shrink-0">
         {/* Mode Switcher: Dine-In Disabled */}
         <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl border border-border">
@@ -126,26 +130,32 @@ export function DraftPanel({
           </button>
         </div>
 
-        {/* Payment Tabs (Disabled) */}
-        <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl border border-border opacity-50">
+        {/* Payment method: cash only in Slice 4 */}
+        <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl border border-border">
           <div className="min-h-[40px] h-10 px-3 rounded-lg font-bold text-xs bg-card text-foreground flex items-center justify-center gap-1.5 shadow-2xs">
             <Banknote className="h-3.5 w-3.5" />
             <span>Tiền mặt</span>
           </div>
-          <div className="min-h-[40px] h-10 px-3 rounded-lg font-medium text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+          <button
+            type="button"
+            disabled
+            title="Thanh toán VietQR sẽ hoạt động ở phiên bản sau"
+            className="min-h-[40px] h-10 px-3 rounded-lg font-medium text-xs text-muted-foreground opacity-50 cursor-not-allowed flex items-center justify-center gap-1.5"
+          >
             <QrCode className="h-3.5 w-3.5" />
             <span>VietQR</span>
-          </div>
+            <span className="text-2xs">Sắp có</span>
+          </button>
         </div>
 
-        {/* Checkout Commitment CTA (Disabled in Slice 3) */}
+        {/* Checkout */}
         <button
           type="button"
-          disabled
-          className="min-h-[48px] h-12 w-full rounded-xl bg-muted text-muted-foreground font-bold text-sm cursor-not-allowed border border-border flex flex-col items-center justify-center opacity-60"
+          onClick={onCheckout}
+          disabled={!canCheckout}
+          className="min-h-[48px] h-12 w-full rounded-xl bg-primary text-sm font-bold text-primary-foreground disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed flex items-center justify-center select-none active:scale-[0.98] transition"
         >
           <span>Thanh toán (F9)</span>
-          <span className="text-2xs font-normal text-muted-foreground">Mở ở Slice 4</span>
         </button>
       </div>
     </aside>
