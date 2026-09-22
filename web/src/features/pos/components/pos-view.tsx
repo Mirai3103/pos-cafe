@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { useCurrentShift } from "@/features/shift/api/use-shift";
 import {
   useSellableMenu,
-  useServiceSession,
-  useStartTakeawaySession,
   useAddDraftItem,
   useUpdateDraftItemQuantity,
   useUpdateDraftItemSize,
@@ -13,6 +11,7 @@ import {
   useUpdateDraftItemPreparationNote,
   useRemoveDraftItem,
 } from "../api/use-pos";
+import { usePosSession } from "../api/use-pos-session";
 import { MenuGrid } from "./menu-grid";
 import { DraftPanel } from "./draft-panel";
 import { ItemPickerDialog, type ItemPickerConfig } from "./item-picker-dialog";
@@ -28,8 +27,6 @@ import type {
 } from "@/api/generated/models";
 import { messageForError } from "@/lib/error-messages";
 
-const STORAGE_SESSION_KEY = "pos_active_session_id";
-
 export function PosView() {
   const { data: shift, isLoading: isShiftLoading } = useCurrentShift();
   const {
@@ -42,52 +39,9 @@ export function PosView() {
 
   const isShiftOpen = shift?.state === "OPEN";
 
-  // Single active session pointer in sessionStorage
-  const [activeSessionId, setActiveSessionId] = React.useState<string | null>(() => {
-    try {
-      return sessionStorage.getItem(STORAGE_SESSION_KEY);
-    } catch {
-      return null;
-    }
-  });
-
-  const activeSessionIdRef = React.useRef<string | null>(activeSessionId);
-  React.useEffect(() => {
-    activeSessionIdRef.current = activeSessionId;
-  }, [activeSessionId]);
-
-  const creatingSessionPromiseRef = React.useRef<Promise<string> | null>(null);
-
-  const {
-    data: session,
-    isError: isSessionError,
-  } = useServiceSession(activeSessionId);
-
-  // Clear session ID if session was closed or invalid
-  React.useEffect(() => {
-    if (session && session.state && session.state !== "ACTIVE") {
-      try {
-        sessionStorage.removeItem(STORAGE_SESSION_KEY);
-      } catch {
-        // ignore storage errors
-      }
-      activeSessionIdRef.current = null;
-      // oxlint-disable-next-line react/set-state-in-effect
-      setActiveSessionId(null);
-    } else if (isSessionError) {
-      try {
-        sessionStorage.removeItem(STORAGE_SESSION_KEY);
-      } catch {
-        // ignore storage errors
-      }
-      activeSessionIdRef.current = null;
-      // oxlint-disable-next-line react/set-state-in-effect
-      setActiveSessionId(null);
-    }
-  }, [session, isSessionError]);
+  const { activeSessionId, session, ensureSessionId } = usePosSession();
 
   // Mutations
-  const { startTakeaway } = useStartTakeawaySession();
   const { addDraftItem, isPending: isAddingItem } = useAddDraftItem(activeSessionId ?? "");
   const { updateQuantity } = useUpdateDraftItemQuantity(activeSessionId ?? "");
   const { updateSize } = useUpdateDraftItemSize(activeSessionId ?? "");
@@ -102,37 +56,6 @@ export function PosView() {
   const [isPickerOpen, setIsPickerOpen] = React.useState(false);
   const [isSubmittingPicker, setIsSubmittingPicker] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-
-  // Ensure active session exists, lazily opening one if needed
-  const ensureSessionId = async (): Promise<string> => {
-    if (activeSessionIdRef.current) return activeSessionIdRef.current;
-    if (creatingSessionPromiseRef.current) {
-      return await creatingSessionPromiseRef.current;
-    }
-
-    const promise = (async () => {
-      try {
-        const newSession = await startTakeaway();
-        if (!newSession.id) {
-          throw new Error("Không thể khởi tạo phiên phục vụ: thiếu mã phiên");
-        }
-        const id = newSession.id;
-        try {
-          sessionStorage.setItem(STORAGE_SESSION_KEY, id);
-        } catch {
-          // ignore storage errors
-        }
-        activeSessionIdRef.current = id;
-        setActiveSessionId(id);
-        return id;
-      } finally {
-        creatingSessionPromiseRef.current = null;
-      }
-    })();
-
-    creatingSessionPromiseRef.current = promise;
-    return await promise;
-  };
 
   // Add Item Handler
   const handleSelectItem = async (item: CatalogSellableItemResponse) => {
@@ -360,7 +283,7 @@ export function PosView() {
           className="flex flex-col overflow-hidden"
         >
           <DraftPanel
-            session={session ?? null}
+            session={session}
             isShiftOpen={isShiftOpen}
             onEditItem={handleEditDraftItem}
             onQuantityChange={handleQuantityChange}
