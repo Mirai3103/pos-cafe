@@ -29,6 +29,28 @@ export interface ItemPickerDialogProps {
   confirmLabel?: string;
 }
 
+function getInitialConfig(
+  item: CatalogSellableItemResponse | null,
+  initialValues?: Partial<ItemPickerConfig>,
+): ItemPickerConfig {
+  if (!item) {
+    return {
+      sizeId: initialValues?.sizeId,
+      selectedOptionIds: initialValues?.selectedOptionIds ?? [],
+      preparationNote: initialValues?.preparationNote ?? "",
+      quantity: initialValues?.quantity ?? 1,
+    };
+  }
+  const defaults = resolveInitialSelection(item);
+  return {
+    sizeId: initialValues?.sizeId ?? defaults.sizeId,
+    selectedOptionIds:
+      initialValues?.selectedOptionIds ?? defaults.selectedOptionIds,
+    preparationNote: initialValues?.preparationNote ?? defaults.note,
+    quantity: initialValues?.quantity ?? defaults.quantity,
+  };
+}
+
 export function ItemPickerDialog({
   item,
   initialValues,
@@ -38,26 +60,43 @@ export function ItemPickerDialog({
   isSubmitting = false,
   confirmLabel = "Thêm vào đơn",
 }: ItemPickerDialogProps) {
-  const [sizeId, setSizeId] = React.useState<string | undefined>(undefined);
-  const [selectedOptionIds, setSelectedOptionIds] = React.useState<string[]>([]);
-  const [note, setNote] = React.useState<string>("");
-  const [quantity, setQuantity] = React.useState<number>(1);
+  const [sizeId, setSizeId] = React.useState<string | undefined>(
+    () => getInitialConfig(item, initialValues).sizeId,
+  );
+  const [selectedOptionIds, setSelectedOptionIds] = React.useState<string[]>(
+    () => getInitialConfig(item, initialValues).selectedOptionIds,
+  );
+  const [note, setNote] = React.useState<string>(
+    () => getInitialConfig(item, initialValues).preparationNote,
+  );
+  const [quantity, setQuantity] = React.useState<number>(
+    () => getInitialConfig(item, initialValues).quantity,
+  );
 
-  // Sync state when dialog opens or item changes
+  const prevIsOpenRef = React.useRef(isOpen);
+  const prevItemIdRef = React.useRef(item?.id);
+
+  // Sync state only when dialog transitions from closed to open, or when item ID changes
   React.useEffect(() => {
-    if (isOpen && item) {
-      const defaults = resolveInitialSelection(item);
-      // oxlint-disable-next-line react/set-state-in-effect
-      setSizeId(initialValues?.sizeId ?? defaults.sizeId);
-      // oxlint-disable-next-line react/set-state-in-effect
-      setSelectedOptionIds(
-        initialValues?.selectedOptionIds ?? defaults.selectedOptionIds,
-      );
-      // oxlint-disable-next-line react/set-state-in-effect
-      setNote(initialValues?.preparationNote ?? defaults.note);
-      // oxlint-disable-next-line react/set-state-in-effect
-      setQuantity(initialValues?.quantity ?? defaults.quantity);
+    const justOpened = isOpen && !prevIsOpenRef.current;
+    const itemChanged = isOpen && item?.id !== prevItemIdRef.current;
+
+    if (justOpened || itemChanged) {
+      if (item) {
+        const fresh = getInitialConfig(item, initialValues);
+        // oxlint-disable-next-line react/set-state-in-effect
+        setSizeId(fresh.sizeId);
+        // oxlint-disable-next-line react/set-state-in-effect
+        setSelectedOptionIds(fresh.selectedOptionIds);
+        // oxlint-disable-next-line react/set-state-in-effect
+        setNote(fresh.preparationNote);
+        // oxlint-disable-next-line react/set-state-in-effect
+        setQuantity(fresh.quantity);
+      }
     }
+
+    prevIsOpenRef.current = isOpen;
+    prevItemIdRef.current = item?.id;
   }, [isOpen, item, initialValues]);
 
   if (!isOpen || !item) return null;
@@ -227,7 +266,7 @@ export function ItemPickerDialog({
                 Ghi chú pha chế
               </span>
               <span className="text-2xs font-mono text-muted-foreground">
-                {Array.from(note).length}/{MAX_PREPARATION_NOTE_LENGTH}
+                {`${Array.from(note).length}/${MAX_PREPARATION_NOTE_LENGTH}`}
               </span>
             </div>
             <input

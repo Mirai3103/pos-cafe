@@ -2,6 +2,7 @@ import { describe, it, expect, mock } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { ItemPickerDialog } from "./item-picker-dialog";
 import type { CatalogSellableItemResponse } from "@/api/generated/models";
+import { formatVND } from "@/lib/utils";
 
 const mockItemWithSizesAndModifiers: CatalogSellableItemResponse = {
   id: "item-1",
@@ -129,7 +130,25 @@ describe("ItemPickerDialog", () => {
     expect(html).toContain("Thêm vào đơn");
   });
 
-  it("respects custom confirmLabel and initial values", () => {
+  it("renders default selections when initialValues are omitted", () => {
+    const html = renderToString(
+      <ItemPickerDialog
+        item={mockItemWithSizesAndModifiers}
+        isOpen={true}
+        onClose={mock()}
+        onConfirm={mock()}
+      />,
+    );
+
+    // Default size is size-s (Nhỏ S)
+    expect(html).toContain("Nhỏ (S)");
+    expect(html).toContain("0/200");
+    expect(html).toContain('>1</span>');
+    // Unit price = 25000 + 0, qty = 1 => 25,000 VND
+    expect(html).toContain(formatVND(25000));
+  });
+
+  it("respects custom confirmLabel and initial values for size, modifier, note, quantity, and total", () => {
     const html = renderToString(
       <ItemPickerDialog
         item={mockItemWithSizesAndModifiers}
@@ -146,7 +165,28 @@ describe("ItemPickerDialog", () => {
       />,
     );
 
+    // Custom confirm label
     expect(html).toContain("Cập nhật món");
+
+    // Note value and counter
+    expect(html).toContain('value="Giao gấp"');
+    expect(html).toContain("8/200");
+
+    // Quantity display
+    expect(html).toContain('>3</span>');
+
+    // Unit price: 30,000 (size M) + 8,000 (flan) = 38,000; total for 3 = 114,000 VND
+    expect(html).toContain(formatVND(114000));
+
+    // Size M should be selected with primary highlight ring
+    expect(html).toMatch(
+      /class="[^"]*ring-2 ring-primary\/20[^"]*"[^>]*><span[^>]*>Vừa \(M\)/,
+    );
+
+    // Flan option should be selected with primary highlight ring
+    expect(html).toMatch(
+      /class="[^"]*ring-2 ring-primary\/20[^"]*"[^>]*><span[^>]*>Bánh Flan/,
+    );
   });
 
   it("enforces minimum touch targets >= 48px on all interactive elements", () => {
