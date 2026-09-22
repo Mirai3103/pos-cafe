@@ -8,11 +8,14 @@ import {
   DIMENSION_LABELS,
   REASON_LABELS,
   deriveNonZeroDimensions,
+  getReasonsForDimension,
+  getDefaultReasonForDimension,
 } from "@/features/shift/utils/discrepancy";
 import type { ShiftCloseDiscrepancyInputDimension } from "@/features/shift/utils/discrepancy";
 import { newRequestId } from "@/lib/command";
 import { formatVND } from "@/lib/utils";
 import { playClick, playSuccess, playError } from "@/lib/sound";
+import { messageForError } from "@/lib/error-messages";
 import type {
   ShiftCurrentShiftResponse,
   ShiftClosingShiftResponse,
@@ -38,12 +41,28 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
     : [];
   const hasDiscrepancy = nonZeroDims.length > 0;
 
+  // Final IDs from latest attempts
+  const cashCounts = recon?.cash_counts ?? [];
+  const qrObservations = recon?.qr_observations ?? [];
+  const latestCashCount = cashCounts[cashCounts.length - 1];
+  const latestQR = qrObservations[qrObservations.length - 1];
+
+  const hasCashDiscrepancy = nonZeroDims.some((d) => d.dimension === "CASH");
+  const hasQRDiscrepancy = nonZeroDims.some(
+    (d) => d.dimension === "MANUAL_QR_RECEIVED" || d.dimension === "MANUAL_QR_REFUNDED"
+  );
+  const needsCashRecount =
+    hasCashDiscrepancy && (cashCounts.length < 2 || (latestCashCount?.sequence ?? 0) < 2);
+  const needsQRRecheck =
+    hasQRDiscrepancy && (qrObservations.length < 2 || (latestQR?.sequence ?? 0) < 2);
+
   const [reasons, setReasons] = useState<Record<string, ShiftCloseDiscrepancyInputReason>>(() => {
     const initial: Record<string, ShiftCloseDiscrepancyInputReason> = {};
     for (const d of nonZeroDims) {
       if (d.dimension) {
-        initial[d.dimension] =
-          d.dimension === "CASH" ? "CASH_COUNT_DIFFERENCE" : "QR_OBSERVATION_DIFFERENCE";
+        initial[d.dimension] = getDefaultReasonForDimension(
+          d.dimension as ShiftCloseDiscrepancyInputDimension
+        );
       }
     }
     return initial;
@@ -53,12 +72,6 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !recon) return null;
-
-  // Final IDs from latest attempts
-  const cashCounts = recon.cash_counts ?? [];
-  const qrObservations = recon.qr_observations ?? [];
-  const latestCashCount = cashCounts[cashCounts.length - 1];
-  const latestQR = qrObservations[qrObservations.length - 1];
 
   const handleClose = async () => {
     playClick();
@@ -73,6 +86,33 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
       setError("Cần ít nhất một lần quan sát đối soát VietQR");
       return;
     }
+    if (needsCashRecount) {
+      playError();
+      setError(
+        "Ca có chênh lệch tiền mặt cần thực hiện 'Đếm lại tiền mặt' (tối thiểu 2 lần kiểm đếm) trước khi đóng ca."
+      );
+      return;
+    }
+    if (needsQRRecheck) {
+      playError();
+      setError(
+        "Ca có chênh lệch VietQR cần thực hiện 'Cập nhật QR' (tối thiểu 2 lần quan sát) trước khi đóng ca."
+      );
+      return;
+    }
+
+    // Validate reason 'OTHER' note
+    for (const d of nonZeroDims) {
+      const dim = d.dimension as ShiftCloseDiscrepancyInputDimension;
+      const reason = (dim && reasons[dim]) || getDefaultReasonForDimension(dim);
+      if (reason === "OTHER" && !notes[dim]?.trim()) {
+        playError();
+        setError(
+          `Vui lòng nhập ghi chú giải trình cho khoản lệch "${DIMENSION_LABELS[dim] || dim}" khi chọn "Lý do khác"`
+        );
+        return;
+      }
+    }
 
     try {
       let approverLoginCode: string | undefined;
@@ -80,11 +120,17 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
 
       const discrepancies: ShiftCloseDiscrepancyInput[] = nonZeroDims
         .filter((d) => Boolean(d.dimension))
-        .map((d) => ({
-          dimension: d.dimension as ShiftCloseDiscrepancyInputDimension,
-          reason: (d.dimension && reasons[d.dimension]) || "UNEXPLAINED",
-          note: d.dimension && notes[d.dimension]?.trim() ? notes[d.dimension].trim() : undefined,
-        }));
+        .map((d) => {
+          const dim = d.dimension as ShiftCloseDiscrepancyInputDimension;
+          const reason = (dim && reasons[dim]) || getDefaultReasonForDimension(dim);
+          // Backend rule: note is strictly forbidden unless reason is OTHER
+          const note = reason === "OTHER" ? notes[dim]?.trim() || undefined : undefined;
+          return {
+            dimension: dim,
+            reason,
+            note,
+          };
+        });
 
       if (hasDiscrepancy) {
         // Collect Manager approval
@@ -113,13 +159,13 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
       if (err instanceof Error && err.message === "MANAGER_APPROVAL_CANCELLED") {
         return;
       }
-      setError(err instanceof Error ? err.message : "Lỗi kết ca làm việc");
+      setError(messageForError(err));
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-card border border-border shadow-xl rounded-2xl w-full max-w-lg overflow-hidden flex flex-col p-6 gap-4">
+      <div className="bg-card border border-border shadow-xl rounded-2xl w-full max-w-lg overflow-hidden flex flex-col p-6 gap-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-base font-bold text-foreground">Xác nhận Kết thúc Ca làm việc</h3>
@@ -144,6 +190,24 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
               </div>
             </div>
 
+            {needsCashRecount && (
+              <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Yêu cầu đếm lại tiền mặt:</strong> Hệ thống bắt buộc kiểm đếm tối thiểu 2 lần khi có chênh lệch tiền mặt. Vui lòng đóng bảng này và bấm <strong>&ldquo;Đếm lại tiền mặt&rdquo;</strong> trước.
+                </span>
+              </div>
+            )}
+
+            {needsQRRecheck && (
+              <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Yêu cầu xác nhận VietQR lần 2:</strong> Hệ thống bắt buộc đối soát tối thiểu 2 lần khi có chênh lệch VietQR. Vui lòng đóng bảng này và bấm <strong>&ldquo;Cập nhật QR&rdquo;</strong> trước.
+                </span>
+              </div>
+            )}
+
             {/* List of discrepancies */}
             <div className="space-y-3">
               {nonZeroDims.map((dim) => {
@@ -154,6 +218,10 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
                     DIMENSION_LABELS[dim.dimension as ShiftCloseDiscrepancyInputDimension]) ||
                   dim.dimension ||
                   "—";
+                const allowedReasons = getReasonsForDimension(
+                  dim.dimension as ShiftCloseDiscrepancyInputDimension
+                );
+
                 return (
                   <div key={dimKey} className="p-3 rounded-xl border border-border bg-muted/20 space-y-2">
                     <div className="flex items-center justify-between text-xs font-semibold">
@@ -162,7 +230,10 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
                     </div>
 
                     <select
-                      value={reasons[dimKey] || "UNEXPLAINED"}
+                      value={
+                        reasons[dimKey] ||
+                        getDefaultReasonForDimension(dim.dimension as ShiftCloseDiscrepancyInputDimension)
+                      }
                       onChange={(e) =>
                         setReasons({
                           ...reasons,
@@ -171,19 +242,26 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
                       }
                       className="w-full h-9 px-2.5 rounded-lg border border-input bg-background text-xs font-medium"
                     >
-                      {Object.entries(REASON_LABELS).map(([k, v]) => (
+                      {allowedReasons.map((k) => (
                         <option key={k} value={k}>
-                          {v}
+                          {REASON_LABELS[k]}
                         </option>
                       ))}
                     </select>
 
-                    <Input
-                      value={notes[dimKey] || ""}
-                      onChange={(e) => setNotes({ ...notes, [dimKey]: e.target.value })}
-                      placeholder="Ghi chú thêm về chênh lệch..."
-                      className="h-8 text-xs"
-                    />
+                    {reasons[dimKey] === "OTHER" ? (
+                      <Input
+                        value={notes[dimKey] || ""}
+                        onChange={(e) => setNotes({ ...notes, [dimKey]: e.target.value })}
+                        placeholder="Mô tả nguyên nhân chênh lệch (bắt buộc)..."
+                        className="h-8 text-xs border-amber-300 focus-visible:ring-amber-500"
+                        autoFocus
+                      />
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground italic px-1">
+                        Không yêu cầu ghi chú cho lý do này
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -208,14 +286,19 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
           <Button
             type="button"
             onClick={handleClose}
-            disabled={isPending}
+            disabled={isPending || needsCashRecount || needsQRRecheck}
             className="w-1/2 h-12 rounded-xl font-bold shadow-sm"
           >
             <Lock className="w-4 h-4 mr-1.5" />
-            {isPending ? "Đang xử lý..." : hasDiscrepancy ? "Yêu cầu Quản lý duyệt đóng ca" : "Kết ca ngay"}
+            {isPending
+              ? "Đang xử lý..."
+              : hasDiscrepancy
+              ? "Yêu cầu Quản lý duyệt đóng ca"
+              : "Kết ca ngay"}
           </Button>
         </div>
       </div>
     </div>
   );
 }
+

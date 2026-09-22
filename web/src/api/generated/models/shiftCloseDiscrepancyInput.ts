@@ -14,7 +14,8 @@ export type ShiftCloseDiscrepancyInputDimension =
 export type ShiftCloseDiscrepancyInputReason =
   | "CASH_COUNT_DIFFERENCE"
   | "QR_OBSERVATION_DIFFERENCE"
-  | "UNEXPLAINED";
+  | "UNEXPLAINED"
+  | "OTHER";
 
 export interface ShiftCloseDiscrepancyInput {
   dimension?: ShiftCloseDiscrepancyInputDimension;

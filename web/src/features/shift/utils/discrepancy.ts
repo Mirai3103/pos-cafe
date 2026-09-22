@@ -19,7 +19,26 @@ export const REASON_LABELS: Record<ShiftCloseDiscrepancyInputReason, string> = {
   CASH_COUNT_DIFFERENCE: "Chênh lệch tiền mặt kiểm đếm",
   QR_OBSERVATION_DIFFERENCE: "Chênh lệch đối soát VietQR",
   UNEXPLAINED: "Chưa rõ nguyên nhân",
+  OTHER: "Lý do khác (cần ghi chú)",
 };
+
+export function getReasonsForDimension(
+  dimension: ShiftCloseDiscrepancyInputDimension
+): ShiftCloseDiscrepancyInputReason[] {
+  if (dimension === "CASH") {
+    return ["CASH_COUNT_DIFFERENCE", "UNEXPLAINED", "OTHER"];
+  }
+  return ["QR_OBSERVATION_DIFFERENCE", "UNEXPLAINED", "OTHER"];
+}
+
+export function getDefaultReasonForDimension(
+  dimension: ShiftCloseDiscrepancyInputDimension
+): ShiftCloseDiscrepancyInputReason {
+  if (dimension === "CASH") {
+    return "CASH_COUNT_DIFFERENCE";
+  }
+  return "QR_OBSERVATION_DIFFERENCE";
+}
 
 export function deriveNonZeroDimensions(
   dimensions: ShiftReconciliationPreviewEntry[]
