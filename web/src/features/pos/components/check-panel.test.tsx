@@ -74,7 +74,7 @@ describe("CheckPanel", () => {
     const html = renderToString(
       <CheckPanel
         session={session([settled])}
-        phase="SETTLED"
+        phase="AWAITING_SUBMIT"
         onCollect={() => {}}
         onNextCustomer={() => {}}
       />,

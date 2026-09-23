@@ -4,6 +4,7 @@ import {
   listLiveChecks,
   selectOpenCheck,
   hasMultipleOpenChecks,
+  isPostPaymentPhase,
   type PosPhase,
 } from "../utils/phase";
 import { latestPaymentChangeDue } from "../utils/payment";
@@ -35,7 +36,7 @@ export function CheckPanel({
   const asideLayout =
     className ?? "w-full md:w-[380px] lg:w-[420px] shrink-0 border-l border-border";
 
-  const isSettled = phase === "SETTLED";
+  const isSettled = isPostPaymentPhase(phase);
   const openCheck = selectOpenCheck(session);
   const checks = listLiveChecks(session);
   const check = openCheck ?? checks[0] ?? null;

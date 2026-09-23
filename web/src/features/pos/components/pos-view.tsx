@@ -25,7 +25,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { matchesDraftItemConfig, diffDraftItemEdits } from "../utils/selection";
-import { derivePosPhase, selectOpenCheck } from "../utils/phase";
+import { derivePosPhase, selectOpenCheck, isPostPaymentPhase } from "../utils/phase";
 import { calculateDraftSubtotal } from "../utils/pricing";
 import type {
   CatalogSellableItemResponse,
@@ -252,7 +252,7 @@ export function PosView() {
       // The item picker is a configuration-in-progress: opening payment over it
       // would commit the draft without the line the cashier is still building.
       if (checkout.isPaymentOpen || isPickerOpen) return;
-      if (phase === "SETTLED") checkout.nextCustomer();
+      if (isPostPaymentPhase(phase)) checkout.nextCustomer();
       else checkout.openPaymentDialog();
     },
     { enableOnFormTags: true },
@@ -307,7 +307,7 @@ export function PosView() {
           <MenuGrid
             categories={menu?.categories}
             onSelectItem={handleSelectItem}
-            disabled={!isShiftOpen || phase === "AWAITING_PAYMENT" || phase === "SETTLED"}
+            disabled={!isShiftOpen || (phase !== "NO_SESSION" && phase !== "DRAFTING")}
           />
         </ResizablePanel>
 
@@ -320,7 +320,7 @@ export function PosView() {
           maxSize="60%"
           className="flex flex-col overflow-hidden"
         >
-          {phase === "AWAITING_PAYMENT" || phase === "SETTLED" ? (
+          {phase === "AWAITING_PAYMENT" || isPostPaymentPhase(phase) ? (
             <CheckPanel
               session={session}
               phase={phase}
