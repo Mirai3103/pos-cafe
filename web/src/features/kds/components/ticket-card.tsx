@@ -25,6 +25,16 @@ export interface TicketCardProps {
   onRequestCorrectState: (unit: BoardUnit) => void;
 }
 
+// oxlint-disable-next-line react/only-export-components
+export function resolveUnitSelection(selected: ReadonlySet<string>, units: BoardUnit[]) {
+  const currentUnitIds = new Set(units.map((unit) => unit.id));
+  const selectedUnitIds = [...selected].filter((id) => currentUnitIds.has(id));
+  return {
+    selectedUnitIds,
+    targetUnitIds: selectedUnitIds.length > 0 ? selectedUnitIds : units.map((unit) => unit.id),
+  };
+}
+
 export function TicketCard({
   ticket,
   column,
@@ -39,8 +49,7 @@ export function TicketCard({
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect
     setSelected((previous) => {
-      const unitIds = new Set(ticket.units.map((unit) => unit.id));
-      const next = new Set([...previous].filter((id) => unitIds.has(id)));
+      const next = new Set(resolveUnitSelection(previous, ticket.units).selectedUnitIds);
       return next.size === previous.size ? previous : next;
     });
   }, [ticket]);
@@ -61,9 +70,11 @@ export function TicketCard({
     });
   }
 
-  const targetIds = selected.size > 0 ? Array.from(selected) : ticket.units.map((unit) => unit.id);
+  const { selectedUnitIds, targetUnitIds } = resolveUnitSelection(selected, ticket.units);
   const primaryLabel =
-    selected.size > 0 ? `${PRIMARY_ACTION_LABEL[column]} (${selected.size})` : PRIMARY_ACTION_LABEL[column];
+    selectedUnitIds.length > 0
+      ? `${PRIMARY_ACTION_LABEL[column]} (${selectedUnitIds.length})`
+      : PRIMARY_ACTION_LABEL[column];
 
   return (
     <Card size="sm" className="border-t-4 border-t-accent">
@@ -130,7 +141,7 @@ export function TicketCard({
         <Button
           type="button"
           disabled={busy}
-          onClick={() => onAdvance(targetIds, NEXT_STATE[column])}
+          onClick={() => onAdvance(targetUnitIds, NEXT_STATE[column])}
           className="h-12 flex-1 rounded-xl font-bold"
         >
           {primaryLabel}

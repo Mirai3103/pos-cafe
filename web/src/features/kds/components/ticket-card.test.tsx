@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
-import { TicketCard } from "./ticket-card";
+import { resolveUnitSelection, TicketCard } from "./ticket-card";
 import type { BoardTicket } from "../lib/board";
 
 function ticket(overrides: Partial<BoardTicket> = {}): BoardTicket {
@@ -77,5 +77,14 @@ describe("TicketCard", () => {
   it("shows the disabled shortage and reprint affordances", () => {
     const html = renderToString(<TicketCard {...base} ticket={ticket()} />);
     expect(html).toContain("Chưa hỗ trợ");
+  });
+
+  it("targets current units when every selected unit has left the ticket", () => {
+    const replacement = { ...ticket().units[0], id: "u2" };
+
+    expect(resolveUnitSelection(new Set(["u1"]), [replacement])).toEqual({
+      selectedUnitIds: [],
+      targetUnitIds: ["u2"],
+    });
   });
 });
