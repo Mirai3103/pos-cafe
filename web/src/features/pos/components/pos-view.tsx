@@ -1,10 +1,8 @@
 import * as React from "react";
-import { Clock, AlertCircle, RefreshCw } from "lucide-react";
-import { useHotkeys } from "react-hotkeys-hook";
-import { Button } from "@/components/ui/button";
 import { useCurrentShift } from "@/features/shift/api/use-shift";
 import {
   useSellableMenu,
+  useActiveSessions,
   useAddDraftItem,
   useUpdateDraftItemQuantity,
   useUpdateDraftItemSize,
@@ -14,10 +12,16 @@ import {
 } from "../api/use-pos";
 import { usePosSession } from "../api/use-pos-session";
 import { useCheckoutFlow } from "../api/use-checkout";
+import { useCloseFlow } from "../api/use-close-session";
+import { usePosHotkeys } from "../hooks/use-pos-hotkeys";
 import { MenuGrid } from "./menu-grid";
 import { DraftPanel } from "./draft-panel";
 import { CheckPanel } from "./check-panel";
 import { PaymentDialog } from "./payment-dialog";
+import { CompletedSaleDialog } from "./completed-sale-dialog";
+import { PendingOrdersDrawer, PendingOrdersButton } from "./pending-orders-drawer";
+import { PosMenuLoading, PosMenuError } from "./pos-menu-status";
+import { PosErrorToast } from "./pos-error-toast";
 import { ItemPickerDialog, type ItemPickerConfig } from "./item-picker-dialog";
 import {
   ResizablePanelGroup,
@@ -25,8 +29,9 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { matchesDraftItemConfig, diffDraftItemEdits } from "../utils/selection";
-import { derivePosPhase, selectOpenCheck } from "../utils/phase";
+import { derivePosPhase, selectOpenCheck, isPostPaymentPhase } from "../utils/phase";
 import { calculateDraftSubtotal } from "../utils/pricing";
+import { toPendingOrders, countReadyToClose } from "../utils/pending-orders";
 import type {
   CatalogSellableItemResponse,
   SalesDraftItemResponse,
@@ -45,7 +50,11 @@ export function PosView() {
 
   const isShiftOpen = shift?.state === "OPEN";
 
-  const { activeSessionId, session, ensureSessionId, clearSession } = usePosSession();
+  const { activeSessionId, session, ensureSessionId, clearSession, switchSession } = usePosSession();
+
+  const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
+  const activeSessions = useActiveSessions(isDrawerOpen);
+  const pendingOrders = toPendingOrders(activeSessions.data);
 
   // Mutations
   const { addDraftItem, isPending: isAddingItem } = useAddDraftItem(activeSessionId ?? "");
@@ -68,9 +77,7 @@ export function PosView() {
   const draftItems = session?.draft?.items ?? [];
   const openCheck = selectOpenCheck(session);
   const paymentTotal =
-    phase === "AWAITING_PAYMENT"
-      ? (openCheck?.balance_vnd ?? 0)
-      : calculateDraftSubtotal(draftItems);
+    phase === "AWAITING_PAYMENT" ? (openCheck?.balance_vnd ?? 0) : calculateDraftSubtotal(draftItems);
 
   const checkout = useCheckoutFlow({
     activeSessionId,
@@ -81,6 +88,14 @@ export function PosView() {
     clearSession,
     onDraftError: setErrorMessage,
   });
+
+  const closeFlow = useCloseFlow({ activeSessionId, session, clearSession, onError: setErrorMessage });
+
+  const handleSelectPendingOrder = (sessionId: string) => {
+    setIsDrawerOpen(false);
+    setErrorMessage(null);
+    switchSession(sessionId);
+  };
 
   // Add Item Handler
   const handleSelectItem = async (item: CatalogSellableItemResponse) => {
@@ -245,51 +260,21 @@ export function PosView() {
     }
   };
 
-  useHotkeys(
-    "f9",
-    (event) => {
-      event.preventDefault();
-      // The item picker is a configuration-in-progress: opening payment over it
-      // would commit the draft without the line the cashier is still building.
-      if (checkout.isPaymentOpen || isPickerOpen) return;
-      if (phase === "SETTLED") checkout.nextCustomer();
-      else checkout.openPaymentDialog();
-    },
-    { enableOnFormTags: true },
-  );
+  usePosHotkeys({
+    phase,
+    blocked: checkout.isPaymentOpen || isPickerOpen || closeFlow.completedSale !== null,
+    isDrawerOpen,
+    onCheckout: checkout.openPaymentDialog,
+    onSubmit: checkout.submitOrder,
+    onNextCustomer: checkout.nextCustomer,
+    onClose: closeFlow.closeSession,
+    onToggleDrawer: () => setIsDrawerOpen((open) => !open),
+  });
 
-  if (isShiftLoading || isMenuLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 min-h-[60vh] gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center animate-pulse">
-          <Clock className="w-6 h-6 animate-spin" />
-        </div>
-        <p className="text-sm text-muted-foreground font-medium">Đang tải thực đơn bán hàng...</p>
-      </div>
-    );
-  }
+  if (isShiftLoading || isMenuLoading) return <PosMenuLoading />;
 
   if (isMenuError) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8 max-w-md mx-auto min-h-[60vh] text-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center">
-          <AlertCircle className="w-6 h-6" />
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-base font-bold text-foreground">Không thể tải thực đơn</h3>
-          <p className="text-xs text-muted-foreground">{messageForError(menuError)}</p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => refetchMenu()}
-          className="rounded-xl h-10 min-h-[48px] px-6"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Thử lại
-        </Button>
-      </div>
-    );
+    return <PosMenuError message={messageForError(menuError)} onRetry={() => refetchMenu()} />;
   }
 
   return (
@@ -304,10 +289,17 @@ export function PosView() {
           minSize="40%"
           className="flex flex-col min-w-[320px] overflow-hidden"
         >
+          <div className="flex items-center justify-end border-b border-border px-3 py-2 shrink-0">
+            <PendingOrdersButton
+              count={pendingOrders.length}
+              readyCount={countReadyToClose(pendingOrders)}
+              onClick={() => setIsDrawerOpen(true)}
+            />
+          </div>
           <MenuGrid
             categories={menu?.categories}
             onSelectItem={handleSelectItem}
-            disabled={!isShiftOpen || phase === "AWAITING_PAYMENT" || phase === "SETTLED"}
+            disabled={!isShiftOpen || (phase !== "NO_SESSION" && phase !== "DRAFTING")}
           />
         </ResizablePanel>
 
@@ -320,12 +312,17 @@ export function PosView() {
           maxSize="60%"
           className="flex flex-col overflow-hidden"
         >
-          {phase === "AWAITING_PAYMENT" || phase === "SETTLED" ? (
+          {phase === "AWAITING_PAYMENT" || isPostPaymentPhase(phase) ? (
             <CheckPanel
               session={session}
               phase={phase}
               onCollect={checkout.openPaymentDialog}
+              onSubmit={() => void checkout.submitOrder()}
+              onClose={() => void closeFlow.closeSession()}
               onNextCustomer={checkout.nextCustomer}
+              isSubmitting={checkout.submitStatus === "submitting"}
+              isClosing={closeFlow.isClosing}
+              submitError={checkout.submitError}
               className="w-full h-full flex-1"
             />
           ) : (
@@ -363,28 +360,31 @@ export function PosView() {
         isSubmitting={checkout.isPaying}
         errorMessage={checkout.paymentError}
         changeDueVnd={checkout.changeDueVnd}
+        submitStatus={checkout.submitStatus}
+        submitError={checkout.submitError}
         onClose={checkout.closePaymentDialog}
         onConfirm={checkout.confirmPayment}
         onDone={checkout.finishPayment}
       />
 
-      {/* Global Error Toast Bar if mutation fails */}
-      {errorMessage && (
-        <div
-          role="alert"
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl bg-destructive text-destructive-foreground px-4 py-2.5 text-xs font-bold shadow-lg animate-in fade-in slide-in-from-bottom-2"
-        >
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{errorMessage}</span>
-          <button
-            type="button"
-            onClick={() => setErrorMessage(null)}
-            className="ml-2 text-destructive-foreground/80 hover:text-destructive-foreground underline min-h-[48px] px-2 flex items-center"
-          >
-            Đóng
-          </button>
-        </div>
-      )}
+      <CompletedSaleDialog
+        sale={closeFlow.completedSale}
+        onDone={closeFlow.dismissCompletedSale}
+      />
+
+      <PendingOrdersDrawer
+        isOpen={isDrawerOpen}
+        orders={pendingOrders}
+        isLoading={activeSessions.isLoading}
+        errorMessage={activeSessions.isError ? messageForError(activeSessions.error) : null}
+        activeSessionId={activeSessionId}
+        nowMs={activeSessions.dataUpdatedAt}
+        onSelect={handleSelectPendingOrder}
+        onClose={() => setIsDrawerOpen(false)}
+        onRetry={() => void activeSessions.refetch()}
+      />
+
+      <PosErrorToast message={errorMessage} onDismiss={() => setErrorMessage(null)} />
     </div>
   );
 }

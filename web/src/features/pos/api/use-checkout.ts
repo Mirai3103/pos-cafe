@@ -3,9 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   usePostSalesServiceSessionsIdDraftCommit,
   usePostSalesChecksCheckIdPaymentsCash,
+  usePostSalesServiceSessionsIdSubmit,
   getGetSalesServiceSessionsIdQueryKey,
+  getGetSalesServiceSessionsQueryKey,
 } from "@/api/generated/endpoints/sales/sales";
-import { unwrap, ApiError } from "@/lib/unwrap";
+import { unwrap, ApiError, isConflictError } from "@/lib/unwrap";
 import { newRequestId } from "@/lib/command";
 import { messageForError } from "@/lib/error-messages";
 import { playSuccessChirp, playErrorBuzz } from "@/lib/sound";
@@ -13,7 +15,9 @@ import {
   selectOpenCheck,
   findCheckById,
   hasMultipleOpenChecks,
+  hasUnsubmittedWork,
   type PosPhase,
+  type SubmitStatus,
 } from "../utils/phase";
 import { latestPaymentChangeDue } from "../utils/payment";
 import type {
@@ -75,6 +79,32 @@ export function usePayCash(sessionId: string) {
   };
 }
 
+/**
+ * Submits the committed round to the bar: an Order, its Order Items, and one
+ * Preparation Unit per unit of quantity. A takeaway Session must be settled
+ * first, so this always runs after the cash is taken.
+ */
+export function useSubmitOrder(sessionId: string) {
+  const queryClient = useQueryClient();
+  const mutation = usePostSalesServiceSessionsIdSubmit();
+
+  return {
+    ...mutation,
+    submitOrder: async (requestId?: string, targetSessionId?: string) => {
+      const sid = targetSessionId || sessionId;
+      const rid = requestId ?? newRequestId();
+      const res = await mutation.mutateAsync({ id: sid, data: { request_id: rid } });
+      const data = unwrap(res);
+      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sid), res);
+      void queryClient.invalidateQueries({ queryKey: getGetSalesServiceSessionsQueryKey() });
+      return data;
+    },
+  };
+}
+
+/** Submit refusals that mean the work already reached the bar. */
+export const SUBMIT_ALREADY_DONE_CODES = new Set(["NOTHING_TO_SUBMIT"]);
+
 /** Commit-time revalidation failures that send the cashier back to the draft. */
 export const COMMIT_FAILURE_CODES = new Set([
   "EMPTY_DRAFT",
@@ -117,6 +147,10 @@ export interface CheckoutFlow {
   confirmPayment: (tenderedVnd: number) => Promise<void>;
   finishPayment: () => void;
   nextCustomer: () => void;
+  submitStatus: SubmitStatus;
+  submitError: string | null;
+  /** Submits a paid session that has not reached the bar ("Gửi bếp", F9). */
+  submitOrder: () => Promise<void>;
 }
 
 /**
@@ -136,6 +170,8 @@ export function useCheckoutFlow(options: CheckoutFlowOptions): CheckoutFlow {
 
   const { commitDraft } = useCommitDraft(activeSessionId ?? "");
   const { payCash } = usePayCash(activeSessionId ?? "");
+  const { submitOrder: postSubmit } = useSubmitOrder(activeSessionId ?? "");
+  const queryClient = useQueryClient();
 
   const [isPaymentOpen, setIsPaymentOpen] = React.useState(false);
   const [isPaying, setIsPaying] = React.useState(false);
@@ -146,6 +182,54 @@ export function useCheckoutFlow(options: CheckoutFlowOptions): CheckoutFlow {
   // network failure reproduces the original outcome instead of charging twice.
   const commitRequestIdRef = React.useRef<string | null>(null);
   const payRequestIdRef = React.useRef<string | null>(null);
+  const submitRequestIdRef = React.useRef<string | null>(null);
+  const [submitStatus, setSubmitStatus] = React.useState<SubmitStatus>("idle");
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
+
+  // Another session carries other work: forget this one's submit attempt.
+  React.useEffect(() => {
+    submitRequestIdRef.current = null;
+    // oxlint-disable-next-line react/set-state-in-effect
+    setSubmitStatus("idle");
+    setSubmitError(null);
+  }, [activeSessionId]);
+
+  const refetchSession = (sid: string) =>
+    queryClient.invalidateQueries({ queryKey: getGetSalesServiceSessionsIdQueryKey(sid) });
+
+  /**
+   * Sends the committed round to the bar. Never throws: the money is already
+   * recorded, so a failure is reported on its own and never as a payment
+   * failure.
+   */
+  const runSubmit = async (sid: string): Promise<boolean> => {
+    submitRequestIdRef.current = submitRequestIdRef.current ?? newRequestId();
+    setSubmitStatus("submitting");
+    setSubmitError(null);
+
+    try {
+      await postSubmit(submitRequestIdRef.current, sid);
+    } catch (err) {
+      if (err instanceof ApiError && SUBMIT_ALREADY_DONE_CODES.has(err.code)) {
+        await refetchSession(sid);
+      } else {
+        if (isConflictError(err)) void refetchSession(sid);
+        playErrorBuzz();
+        setSubmitStatus("failed");
+        setSubmitError(messageForError(err));
+        return false;
+      }
+    }
+
+    submitRequestIdRef.current = null;
+    setSubmitStatus("submitted");
+    return true;
+  };
+
+  const submitOrder = async () => {
+    if (!activeSessionId || phase !== "AWAITING_SUBMIT" || submitStatus === "submitting") return;
+    if (await runSubmit(activeSessionId)) playSuccessChirp();
+  };
 
   const openPaymentDialog = () => {
     if (!isShiftOpen && phase === "DRAFTING") return;
@@ -204,6 +288,11 @@ export function useCheckoutFlow(options: CheckoutFlowOptions): CheckoutFlow {
 
       setChangeDueVnd(latestPaymentChangeDue(findCheckById(paid, check.id)));
       playSuccessChirp();
+
+      // Takeaway submits once every Check is settled.
+      if (!selectOpenCheck(paid) && hasUnsubmittedWork(paid)) {
+        await runSubmit(activeSessionId);
+      }
     } catch (err) {
       playErrorBuzz();
       const message = messageForError(err);
@@ -231,6 +320,9 @@ export function useCheckoutFlow(options: CheckoutFlowOptions): CheckoutFlow {
   const nextCustomer = () => {
     commitRequestIdRef.current = null;
     payRequestIdRef.current = null;
+    submitRequestIdRef.current = null;
+    setSubmitStatus("idle");
+    setSubmitError(null);
     clearSession();
   };
 
@@ -244,5 +336,8 @@ export function useCheckoutFlow(options: CheckoutFlowOptions): CheckoutFlow {
     confirmPayment,
     finishPayment,
     nextCustomer,
+    submitStatus,
+    submitError,
+    submitOrder,
   };
 }

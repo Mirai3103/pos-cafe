@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ApiError, unwrap, unwrapNullable } from "./unwrap";
+import { ApiError, isConflictError, unwrap, unwrapNullable } from "./unwrap";
 
 describe("unwrap", () => {
   it("returns the payload of a successful envelope", () => {
@@ -53,6 +53,18 @@ describe("unwrapNullable", () => {
 
   it("does not treat a false-y payload as null", () => {
     expect(unwrapNullable<number>({ success: true, data: 0 })).toBe(0);
+  });
+});
+
+describe("isConflictError", () => {
+  it("is true for an HTTP 409 ApiError", () => {
+    expect(isConflictError(new ApiError(409, "UNFULFILLED_PREPARATION_FOR_CLOSURE", "x"))).toBe(true);
+  });
+
+  it("is false for other statuses and for non-ApiErrors", () => {
+    expect(isConflictError(new ApiError(404, "SERVICE_SESSION_NOT_FOUND", "x"))).toBe(false);
+    expect(isConflictError(new ApiError(0, "NETWORK_ERROR", "x"))).toBe(false);
+    expect(isConflictError(new Error("boom"))).toBe(false);
   });
 });
 

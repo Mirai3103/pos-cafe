@@ -5,6 +5,10 @@ import {
   selectOpenCheck,
   hasMultipleOpenChecks,
   findCheckById,
+  isTerminalUnit,
+  preparationProgress,
+  hasUnsubmittedWork,
+  isPostPaymentPhase,
 } from "./phase";
 import type { SalesServiceSessionResponse } from "@/api/generated/models";
 
@@ -44,11 +48,59 @@ describe("derivePosPhase", () => {
     expect(derivePosPhase(committed)).toBe("AWAITING_PAYMENT");
   });
 
-  it("reports SETTLED once every Check is settled", () => {
+  it("reports READY_TO_CLOSE for a settled session with nothing unsubmitted and no units", () => {
     const settled = session({
       checks: [{ id: "check-1", state: "SETTLED", balance_vnd: 0, total_applied_vnd: 47_000 }],
     });
-    expect(derivePosPhase(settled)).toBe("SETTLED");
+    expect(derivePosPhase(settled)).toBe("READY_TO_CLOSE");
+  });
+
+  it("reports AWAITING_SUBMIT while a settled Check carries unsubmitted work", () => {
+    const paid = session({
+      checks: [
+        {
+          id: "check-1",
+          state: "SETTLED",
+          balance_vnd: 0,
+          allocations: [{ id: "a1", submitted: false }],
+        },
+      ],
+    });
+    expect(derivePosPhase(paid)).toBe("AWAITING_SUBMIT");
+  });
+
+  it("reports IN_PREPARATION once submitted while a unit is still in the kitchen", () => {
+    const submitted = session({
+      checks: [{ id: "check-1", state: "SETTLED", balance_vnd: 0, allocations: [{ id: "a1", submitted: true }] }],
+      preparation_units: [
+        { id: "u1", state: "FULFILLED" },
+        { id: "u2", state: "IN_PREPARATION" },
+      ],
+    });
+    expect(derivePosPhase(submitted)).toBe("IN_PREPARATION");
+  });
+
+  it("reports READY_TO_CLOSE when every unit is terminal", () => {
+    const done = session({
+      checks: [{ id: "check-1", state: "SETTLED", balance_vnd: 0, allocations: [{ id: "a1", submitted: true }] }],
+      preparation_units: [
+        { id: "u1", state: "FULFILLED" },
+        { id: "u2", state: "CANCELLED" },
+        { id: "u3", state: "WASTED" },
+      ],
+    });
+    expect(derivePosPhase(done)).toBe("READY_TO_CLOSE");
+  });
+
+  it("keeps IN_PREPARATION while the remake of a wasted unit is queued", () => {
+    const remaking = session({
+      checks: [{ id: "check-1", state: "SETTLED", balance_vnd: 0, allocations: [{ id: "a1", submitted: true }] }],
+      preparation_units: [
+        { id: "u1", state: "WASTED" },
+        { id: "u2", state: "QUEUED", remake_of_preparation_unit_id: "u1" },
+      ],
+    });
+    expect(derivePosPhase(remaking)).toBe("IN_PREPARATION");
   });
 
   it("reports AWAITING_PAYMENT when a settled Check sits beside an open one", () => {
@@ -72,7 +124,7 @@ describe("derivePosPhase", () => {
         { id: "check-2", state: "SETTLED", balance_vnd: 0 },
       ],
     });
-    expect(derivePosPhase(merged)).toBe("SETTLED");
+    expect(derivePosPhase(merged)).toBe("READY_TO_CLOSE");
   });
 });
 
@@ -113,5 +165,46 @@ describe("listLiveChecks and findCheckById", () => {
     expect(listLiveChecks(s).map((c) => c.id)).toEqual(["kept"]);
     expect(findCheckById(s, "kept")?.id).toBe("kept");
     expect(findCheckById(s, "gone")).toBeNull();
+  });
+});
+
+describe("preparation helpers", () => {
+  it("treats FULFILLED, CANCELLED and WASTED as terminal", () => {
+    expect(isTerminalUnit({ state: "FULFILLED" })).toBe(true);
+    expect(isTerminalUnit({ state: "CANCELLED" })).toBe(true);
+    expect(isTerminalUnit({ state: "WASTED" })).toBe(true);
+    expect(isTerminalUnit({ state: "QUEUED" })).toBe(false);
+    expect(isTerminalUnit({ state: "READY" })).toBe(false);
+    expect(isTerminalUnit({})).toBe(false);
+  });
+
+  it("counts terminal units over all units", () => {
+    const s = session({
+      preparation_units: [{ state: "FULFILLED" }, { state: "READY" }, { state: "WASTED" }],
+    });
+    expect(preparationProgress(s)).toEqual({ done: 2, total: 3 });
+    expect(preparationProgress(null)).toEqual({ done: 0, total: 0 });
+  });
+
+  it("finds unsubmitted work only on live Checks", () => {
+    const merged = session({
+      checks: [
+        { id: "c1", state: "MERGED", merged_into_check_id: "c2", allocations: [{ submitted: false }] },
+        { id: "c2", state: "SETTLED", allocations: [{ submitted: true }] },
+      ],
+    });
+    expect(hasUnsubmittedWork(merged)).toBe(false);
+    expect(
+      hasUnsubmittedWork(session({ checks: [{ id: "c1", state: "SETTLED", allocations: [{}] }] })),
+    ).toBe(true);
+  });
+
+  it("groups the three phases that follow payment", () => {
+    expect(isPostPaymentPhase("AWAITING_SUBMIT")).toBe(true);
+    expect(isPostPaymentPhase("IN_PREPARATION")).toBe(true);
+    expect(isPostPaymentPhase("READY_TO_CLOSE")).toBe(true);
+    expect(isPostPaymentPhase("AWAITING_PAYMENT")).toBe(false);
+    expect(isPostPaymentPhase("DRAFTING")).toBe(false);
+    expect(isPostPaymentPhase("NO_SESSION")).toBe(false);
   });
 });

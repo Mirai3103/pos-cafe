@@ -1,5 +1,6 @@
 import type {
   SalesCheckResponse,
+  SalesPreparationUnitResponse,
   SalesServiceSessionResponse,
 } from "@/api/generated/models";
 
@@ -12,7 +13,19 @@ import type {
  * committed. Reloading the page, opening a second tab, or recovering from a
  * half-finished checkout all resolve to the same phase for free.
  */
-export type PosPhase = "NO_SESSION" | "DRAFTING" | "AWAITING_PAYMENT" | "SETTLED";
+export type PosPhase =
+  | "NO_SESSION"
+  | "DRAFTING"
+  | "AWAITING_PAYMENT"
+  | "AWAITING_SUBMIT"
+  | "IN_PREPARATION"
+  | "READY_TO_CLOSE";
+
+/**
+ * Where the automatic submit after payment stands. The checkout flow holds it
+ * only to word the payment result screen; no phase decision reads it.
+ */
+export type SubmitStatus = "idle" | "submitting" | "submitted" | "failed";
 
 type MaybeSession = SalesServiceSessionResponse | null | undefined;
 
@@ -62,6 +75,41 @@ export function findCheckById(
   return listLiveChecks(session).find((check) => check.id === checkId) ?? null;
 }
 
+const TERMINAL_UNIT_STATES = new Set(["FULFILLED", "CANCELLED", "WASTED"]);
+
+/** A unit the kitchen will not touch again. A Remake is a separate, new unit. */
+export function isTerminalUnit(unit: SalesPreparationUnitResponse): boolean {
+  return TERMINAL_UNIT_STATES.has(unit.state ?? "");
+}
+
+export interface PreparationProgress {
+  done: number;
+  total: number;
+}
+
+export function preparationProgress(session: MaybeSession): PreparationProgress {
+  const units = session?.preparation_units ?? [];
+  return { done: units.filter(isTerminalUnit).length, total: units.length };
+}
+
+/** A committed item the bar has not been told about yet. */
+export function hasUnsubmittedWork(session: MaybeSession): boolean {
+  return listLiveChecks(session).some((check) =>
+    (check.allocations ?? []).some((allocation) => allocation.submitted !== true),
+  );
+}
+
+const POST_PAYMENT_PHASES: ReadonlySet<PosPhase> = new Set([
+  "AWAITING_SUBMIT",
+  "IN_PREPARATION",
+  "READY_TO_CLOSE",
+]);
+
+/** The money is taken; what remains is the kitchen and the closure. */
+export function isPostPaymentPhase(phase: PosPhase): boolean {
+  return POST_PAYMENT_PHASES.has(phase);
+}
+
 export function derivePosPhase(session: MaybeSession): PosPhase {
   if (!session) return "NO_SESSION";
 
@@ -75,5 +123,12 @@ export function derivePosPhase(session: MaybeSession): PosPhase {
 
   if (selectOpenCheck(session)) return "AWAITING_PAYMENT";
 
-  return "SETTLED";
+  if (hasUnsubmittedWork(session)) return "AWAITING_SUBMIT";
+
+  const progress = preparationProgress(session);
+  if (progress.done < progress.total) return "IN_PREPARATION";
+
+  // Submit always creates units, so "no units" is unreachable by the domain.
+  // Closure refuses with ORDER_REQUIRED_FOR_CLOSURE if it ever happens.
+  return "READY_TO_CLOSE";
 }

@@ -10,6 +10,8 @@ const base = {
   isSubmitting: false,
   errorMessage: null,
   changeDueVnd: null,
+  submitStatus: "idle" as const,
+  submitError: null,
   onClose: () => {},
   onConfirm: () => {},
   onDone: () => {},
@@ -50,5 +52,33 @@ describe("PaymentDialog", () => {
       <PaymentDialog {...base} errorMessage="Đơn chưa có món nào để thanh toán." />,
     );
     expect(html).toContain("Đơn chưa có món nào để thanh toán.");
+  });
+
+  it("reports the order sent to the bar on the result screen", () => {
+    const html = renderToString(
+      <PaymentDialog {...base} changeDueVnd={3_000} submitStatus="submitted" />,
+    );
+    expect(html).toContain("Đã gửi bếp");
+  });
+
+  it("reports a submit in flight", () => {
+    const html = renderToString(
+      <PaymentDialog {...base} changeDueVnd={3_000} submitStatus="submitting" />,
+    );
+    expect(html).toContain("Đang gửi bếp");
+  });
+
+  it("keeps a submit failure apart from the payment", () => {
+    const html = renderToString(
+      <PaymentDialog
+        {...base}
+        changeDueVnd={3_000}
+        submitStatus="failed"
+        submitError="Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại."
+      />,
+    );
+    expect(html).toContain("Tiền thối");
+    expect(html).toContain("Đã thu tiền nhưng chưa gửi được bếp");
+    expect(html).toContain("Không kết nối được máy chủ");
   });
 });

@@ -38,6 +38,22 @@ describe("messageForError", () => {
       "Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại.",
     );
   });
+
+  it("maps the submit and closure codes to Vietnamese messages", () => {
+    const cases: Array<[string, string]> = [
+      ["CHECK_NOT_SETTLED_FOR_SUBMISSION", "Đơn chưa thu đủ tiền, chưa thể gửi bếp."],
+      ["UNFULFILLED_PREPARATION_FOR_CLOSURE", "Bếp chưa hoàn tất tất cả món."],
+      ["UNSUBMITTED_WORK_FOR_CLOSURE", "Còn món chưa gửi bếp."],
+      ["CHECK_NOT_SETTLED_FOR_CLOSURE", "Đơn chưa thu đủ tiền."],
+      ["ORDER_REQUIRED_FOR_CLOSURE", "Đơn chưa có món nào được gửi bếp."],
+      ["PENDING_REFUND_FOR_CLOSURE", "Đơn còn khoản hoàn tiền chưa xử lý. Vui lòng báo quản lý."],
+      ["COMPLETED_SALE_NOT_FOUND", "Không tìm thấy hóa đơn hoàn tất."],
+      ["NOTHING_TO_SUBMIT", "Đơn này đã được gửi bếp."],
+    ];
+    for (const [code, message] of cases) {
+      expect(messageForError(new ApiError(409, code, code))).toBe(message);
+    }
+  });
 });
 
 describe("commit and payment error codes", () => {

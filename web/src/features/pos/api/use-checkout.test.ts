@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { COMMIT_FAILURE_CODES, useCommitDraft, usePayCash } from "./use-checkout";
+import {
+  COMMIT_FAILURE_CODES,
+  SUBMIT_ALREADY_DONE_CODES,
+  useCommitDraft,
+  usePayCash,
+  useSubmitOrder,
+} from "./use-checkout";
 
 describe("use-checkout API seam exports", () => {
   it("exports the commit and cash payment hooks", () => {
@@ -32,5 +38,20 @@ describe("COMMIT_FAILURE_CODES", () => {
   it("contains exactly the twelve commit revalidation codes", () => {
     expect(COMMIT_FAILURE_CODES.size).toBe(12);
     expect([...COMMIT_FAILURE_CODES].sort()).toEqual([...EXPECTED].sort());
+  });
+});
+
+describe("submit seam", () => {
+  it("exports the submit hook", () => {
+    expect(typeof useSubmitOrder).toBe("function");
+  });
+
+  /**
+   * NOTHING_TO_SUBMIT means another tab, or an attempt whose response was
+   * lost, already submitted. Treating it as failure would strand the cashier
+   * on a retry button that can never succeed.
+   */
+  it("treats exactly NOTHING_TO_SUBMIT as already done", () => {
+    expect([...SUBMIT_ALREADY_DONE_CODES]).toEqual(["NOTHING_TO_SUBMIT"]);
   });
 });
