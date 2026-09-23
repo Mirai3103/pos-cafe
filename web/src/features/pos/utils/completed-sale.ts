@@ -4,6 +4,7 @@ import type {
   SalesPaymentResponse,
   SalesPreparationUnitResponse,
 } from "@/api/generated/models";
+import { formatDateTime } from "@/lib/utils";
 
 /**
  * Readers over the immutable Completed Sale. Every figure is the server's
@@ -47,16 +48,8 @@ export function summarizePreparation(units: SalesPreparationUnitResponse[] | und
   return parts.length > 0 ? parts.join(" · ") : "Không có món pha chế";
 }
 
-const COMPLETED_AT_FORMAT = new Intl.DateTimeFormat("vi-VN", {
-  hour: "2-digit",
-  minute: "2-digit",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-
 export function formatCompletedAt(iso: string | undefined): string {
   if (!iso) return "";
   const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? "" : COMPLETED_AT_FORMAT.format(at);
+  return Number.isNaN(at.getTime()) ? "" : formatDateTime(at);
 }
