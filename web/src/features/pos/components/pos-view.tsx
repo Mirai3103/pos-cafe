@@ -363,6 +363,8 @@ export function PosView() {
         isSubmitting={checkout.isPaying}
         errorMessage={checkout.paymentError}
         changeDueVnd={checkout.changeDueVnd}
+        submitStatus={checkout.submitStatus}
+        submitError={checkout.submitError}
         onClose={checkout.closePaymentDialog}
         onConfirm={checkout.confirmPayment}
         onDone={checkout.finishPayment}

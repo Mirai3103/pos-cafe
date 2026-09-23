@@ -105,6 +105,9 @@ mock.module("../api/use-checkout", () => ({
     confirmPayment: async () => {},
     finishPayment: () => {},
     nextCustomer: () => {},
+    submitStatus: "idle",
+    submitError: null,
+    submitOrder: async () => {},
   }),
 }));
 
