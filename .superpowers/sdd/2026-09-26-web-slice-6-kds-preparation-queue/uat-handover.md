@@ -24,13 +24,27 @@
 ### Note on very large single tickets (more than 50 units)
 A ticket holding more than 50 units still advances with **one tap and one
 sound** — the tap is split into consecutive requests of at most 50 unit ids
-(the backend's cap), each carrying its own `request_id`, and the whole ticket
-moves in one visible step. Nothing on screen asks the operator to repeat the
-tap. The only difference is a short delay before the card moves, because the
-batches are sent in sequence. If one batch partially fails, the affected lines
-show "Không thể chuyển trạng thái" and the toast reads "n món không thể
-chuyển trạng thái do đã thay đổi. Danh sách đã được cập nhật."; the rest of
-the ticket still advances.
+(the backend's cap), each carrying its own `request_id`. Nothing on screen
+asks the operator to repeat the tap; the visible cost is the sequence's own
+delay before the card reaches its final column. Two things to expect while
+testing a ticket this large:
+
+- **A 5-second poll can catch the sequence mid-flight.** The poll keeps
+  running while the batches are sent, so a tick that lands between two
+  batches can briefly render the ticket split across two columns (the
+  already-advanced units in "Đang pha", the remainder still in "Chờ pha").
+  That split is transient: the card settles onto the post-loop invalidation
+  as soon as the sequence finishes and the queue is re-read.
+- **A rejected batch abandons the batches after it.** Per-unit `FAILED`
+  outcomes do not stop the sequence — the affected lines show "Không thể
+  chuyển trạng thái", the remaining units keep advancing, and the toast reads
+  "n món không thể
+  chuyển trạng thái do đã thay đổi. Danh sách đã được cập nhật.". A
+  whole-batch rejection (a transport failure, or the batch refused as a
+  whole) instead throws out of the loop and drops the batches that have not
+  been sent yet, leaving the ticket partly advanced until the operator taps
+  again; in that case the board re-reads the queue only on the next 5-second
+  poll, because the query is invalidated on success only.
 
 ## Waste and Remake
 1. On a unit in "Đang pha", press the trash icon. Choose a reason, confirm.
@@ -43,7 +57,10 @@ the ticket still advances.
 
 ## Correct-state (Manager Approval)
 1. Advance a unit from "Chờ pha" to "Đang pha" by mistake. Press the undo
-   icon next to it. Expect the Manager Approval dialog.
+   icon next to it. Expect the "Hoàn tác thao tác" dialog — the undo icon
+   opens that reason-and-note dialog first, it does not jump straight to
+   Manager Approval. Pick a reason (and a note when the reason is "Khác"),
+   then press "Yêu cầu Quản lý duyệt". Expect the Manager Approval dialog.
 2. Enter a Manager's login code and PIN, confirm. Expect the unit to return
    to "Chờ pha".
 3. Repeat with a wrong PIN. Expect a Vietnamese "not authorized" message —
@@ -55,7 +72,11 @@ the ticket still advances.
    toast, and the board unchanged once the network returns and the next
    poll lands.
 2. Open `/kds` in two tabs. Advance a unit in one tab. Expect the other tab
-   to reflect it within 5 seconds without a manual reload.
+   to reflect it within 5 seconds of bringing the other tab into focus,
+   without a manual reload — the 5-second poll skips ticks while the document
+   is unfocused (`refetchOnWindowFocus` is false), so the update lands on the
+   first tick after the tab is focused rather than while it sits in the
+   background.
 3. Connection loss with active tickets on the board: leave at least one ticket
    sitting in "Chờ pha" (or "Đang pha"), then stop the Go API for about 10–15
    seconds — long enough to cover more than one 5-second poll. Expect:
