@@ -45,7 +45,7 @@
 | `web/src/features/pos/hooks/use-pos-hotkeys.ts` | F9 by phase, F4 drawer toggle |
 | `web/src/features/pos/hooks/use-pos-hotkeys.test.ts` | `resolveF9Action` table |
 | `web/src/features/pos/components/check-panel-actions.tsx` | Action buttons per phase |
-| `web/src/features/pos/components/pending-orders-drawer.tsx` | Drawer and its entry button |
+| `web/src/features/pos/components/pending-orders-drawer.tsx` | Sheet drawer, its list body, and its entry button |
 | `web/src/features/pos/components/pending-orders-drawer.test.tsx` | Render assertions |
 | `web/src/features/pos/components/pending-order-row.tsx` | One drawer row |
 | `web/src/features/pos/components/completed-sale-dialog.tsx` | Read-only Completed Sale dialog |
@@ -68,6 +68,7 @@
 | `web/src/features/pos/components/payment-dialog.tsx` (+ test) | Submit outcome line |
 | `web/src/features/pos/components/check-panel.tsx` (+ test) | New phases, progress, submit error |
 | `web/src/features/pos/components/pos-view.tsx` (+ test) | Drawer, close flow, hotkeys hook, extractions |
+| `web/src/components/ui/sheet.tsx` | Overlay `bg-black/80` becomes `bg-slate-900/40` (no pure black) |
 
 `useSubmitOrder` lives in `use-checkout.ts` beside `useCommitDraft` and `usePayCash`, not in `use-pos.ts` as spec section 9 lists. All three write the same projection, and the checkout flow is their only caller.
 
@@ -1982,7 +1983,8 @@ git commit -m "feat(web): check panel for submit, preparation and closure"
   - `summarizeItems(names: string[]): string`
   - `minutesSince(iso: string, nowMs: number): number`, `formatAge(minutes: number): string`
   - `<PendingOrdersButton count readyCount onClick />`
-  - `<PendingOrdersDrawer isOpen orders isLoading errorMessage activeSessionId nowMs onSelect onClose onRetry />`
+  - `<PendingOrdersList orders isLoading errorMessage activeSessionId nowMs onSelect onRetry />`
+  - `<PendingOrdersDrawer isOpen onClose ...PendingOrdersListProps />` (shadcn `Sheet` shell)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2103,8 +2105,11 @@ Create `web/src/features/pos/components/pending-orders-drawer.test.tsx`:
 ```tsx
 import { describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
-import { PendingOrdersDrawer, PendingOrdersButton } from "./pending-orders-drawer";
+import { PendingOrdersList, PendingOrdersButton } from "./pending-orders-drawer";
 import type { PendingOrder } from "../utils/pending-orders";
+
+// The Sheet shell renders through a portal, which renderToString leaves empty,
+// so these tests cover the list body the Sheet wraps.
 
 const order = (overrides: Partial<PendingOrder>): PendingOrder => ({
   sessionId: "s1",
@@ -2118,31 +2123,31 @@ const order = (overrides: Partial<PendingOrder>): PendingOrder => ({
 });
 
 const base = {
-  isOpen: true,
   orders: [] as PendingOrder[],
   isLoading: false,
   errorMessage: null,
   activeSessionId: null,
   nowMs: Date.parse("2026-09-25T01:05:00Z"),
   onSelect: () => {},
-  onClose: () => {},
   onRetry: () => {},
 };
 
-describe("PendingOrdersDrawer", () => {
-  it("renders nothing while closed", () => {
-    expect(renderToString(<PendingOrdersDrawer {...base} isOpen={false} />)).toBe("");
+describe("PendingOrdersList", () => {
+  it("shows skeleton rows while loading", () => {
+    const html = renderToString(<PendingOrdersList {...base} isLoading />);
+    expect(html).toContain("animate-pulse");
+    expect(html).not.toContain("Không có đơn nào đang chờ");
   });
 
   it("says so when nothing is waiting", () => {
-    expect(renderToString(<PendingOrdersDrawer {...base} />)).toContain(
+    expect(renderToString(<PendingOrdersList {...base} />)).toContain(
       "Không có đơn nào đang chờ",
     );
   });
 
   it("renders each order with status, progress, total and age", () => {
     const html = renderToString(
-      <PendingOrdersDrawer
+      <PendingOrdersList
         {...base}
         orders={[order({}), order({ sessionId: "s2", serviceNumber: "013", phase: "AWAITING_SUBMIT" })]}
         activeSessionId="s2"
@@ -2160,7 +2165,7 @@ describe("PendingOrdersDrawer", () => {
 
   it("shows the error with a retry", () => {
     const html = renderToString(
-      <PendingOrdersDrawer {...base} errorMessage="Không kết nối được máy chủ." />,
+      <PendingOrdersList {...base} errorMessage="Không kết nối được máy chủ." />,
     );
     expect(html).toContain("Không kết nối được máy chủ.");
     expect(html).toContain("Thử lại");
@@ -2357,9 +2362,15 @@ export function PendingOrderRow({ order, isActive, nowMs, onSelect }: PendingOrd
 
 - [ ] **Step 5: Implement `components/pending-orders-drawer.tsx`**
 
+The drawer shell is the shadcn `Sheet` from `@/components/ui/sheet`. It already handles Escape, backdrop click, and focus. The list body is a separate `PendingOrdersList`, because the Sheet renders through a portal and `renderToString` cannot see inside one.
+
+First, fix the Sheet overlay colour, which breaks the design system's no-pure-black rule. In `web/src/components/ui/sheet.tsx`, inside `SheetOverlay`, replace `bg-black/80` with `bg-slate-900/40`.
+
+Then create the file:
+
 ```tsx
-import { X, ClipboardList, RefreshCw, AlertCircle } from "lucide-react";
-import { useHotkeys } from "react-hotkeys-hook";
+import { ClipboardList, RefreshCw, AlertCircle } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { PendingOrder } from "../utils/pending-orders";
 import { PendingOrderRow } from "./pending-order-row";
 
@@ -2391,8 +2402,7 @@ export function PendingOrdersButton({ count, readyCount, onClick }: PendingOrder
   );
 }
 
-export interface PendingOrdersDrawerProps {
-  isOpen: boolean;
+export interface PendingOrdersListProps {
   orders: PendingOrder[];
   isLoading: boolean;
   errorMessage: string | null;
@@ -2400,103 +2410,95 @@ export interface PendingOrdersDrawerProps {
   /** When the list was last fetched; ages are measured from it so render stays pure. */
   nowMs: number;
   onSelect: (sessionId: string) => void;
-  onClose: () => void;
   onRetry: () => void;
 }
 
-/**
- * Every active takeaway session. It has no action buttons of its own:
- * reopening a session hands it to the Check panel, so each action has one path.
- */
-export function PendingOrdersDrawer({
-  isOpen,
+/** The drawer body: loading, error, empty, or one row per order. */
+export function PendingOrdersList({
   orders,
   isLoading,
   errorMessage,
   activeSessionId,
   nowMs,
   onSelect,
-  onClose,
   onRetry,
-}: PendingOrdersDrawerProps) {
-  useHotkeys(
-    "escape",
-    (event) => {
-      event.preventDefault();
-      onClose();
-    },
-    { enabled: isOpen, enableOnFormTags: true },
-  );
+}: PendingOrdersListProps) {
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[0, 1, 2].map((key) => (
+          <div key={key} className="h-20 rounded-xl bg-muted animate-pulse" />
+        ))}
+      </div>
+    );
+  }
 
-  if (!isOpen) return null;
+  if (errorMessage) {
+    return (
+      <div className="space-y-3">
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-xl bg-destructive/10 text-destructive px-3 py-2.5 text-xs font-semibold"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{errorMessage}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="min-h-[48px] w-full rounded-xl border border-border bg-card text-sm font-bold text-foreground hover:bg-muted flex items-center justify-center gap-2 select-none active:scale-[0.98] transition"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Thử lại
+        </button>
+      </div>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <p className="py-12 text-center text-sm text-muted-foreground">Không có đơn nào đang chờ</p>
+    );
+  }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex justify-end bg-slate-900/30 animate-in fade-in duration-150"
-      onClick={onClose}
-    >
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pending-orders-title"
-        onClick={(event) => event.stopPropagation()}
-        className="flex h-full w-full max-w-sm flex-col border-l border-border bg-card shadow-2xl animate-in slide-in-from-right duration-200"
-      >
-        <div className="flex items-center justify-between border-b border-border p-4 bg-muted/20 shrink-0">
-          <h3 id="pending-orders-title" className="text-base font-bold text-foreground">
-            {`Đơn đang chờ (${orders.length})`}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Đóng"
-            className="h-12 w-12 min-h-[48px] min-w-[48px] rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center select-none active:scale-[0.98] transition"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {isLoading ? (
-            [0, 1, 2].map((key) => (
-              <div key={key} className="h-20 rounded-xl bg-muted animate-pulse" />
-            ))
-          ) : errorMessage ? (
-            <div className="space-y-3">
-              <div
-                role="alert"
-                className="flex items-start gap-2 rounded-xl bg-destructive/10 text-destructive px-3 py-2.5 text-xs font-semibold"
-              >
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{errorMessage}</span>
-              </div>
-              <button
-                type="button"
-                onClick={onRetry}
-                className="min-h-[48px] w-full rounded-xl border border-border bg-card text-sm font-bold text-foreground hover:bg-muted flex items-center justify-center gap-2 select-none active:scale-[0.98] transition"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Thử lại
-              </button>
-            </div>
-          ) : orders.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              Không có đơn nào đang chờ
-            </p>
-          ) : (
-            orders.map((order) => (
-              <PendingOrderRow
-                key={order.sessionId}
-                order={order}
-                isActive={order.sessionId === activeSessionId}
-                nowMs={nowMs}
-                onSelect={onSelect}
-              />
-            ))
-          )}
-        </div>
-      </aside>
+    <div className="space-y-2">
+      {orders.map((order) => (
+        <PendingOrderRow
+          key={order.sessionId}
+          order={order}
+          isActive={order.sessionId === activeSessionId}
+          nowMs={nowMs}
+          onSelect={onSelect}
+        />
+      ))}
     </div>
+  );
+}
+
+export interface PendingOrdersDrawerProps extends PendingOrdersListProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+/**
+ * Every active takeaway session. It has no action buttons of its own:
+ * reopening a session hands it to the Check panel, so each action has one path.
+ */
+export function PendingOrdersDrawer({ isOpen, onClose, ...listProps }: PendingOrdersDrawerProps) {
+  return (
+    <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-sm gap-0 p-0">
+        <SheetHeader className="border-b border-border p-4 bg-muted/20">
+          <SheetTitle className="text-base font-bold">
+            {`Đơn đang chờ (${listProps.orders.length})`}
+          </SheetTitle>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto p-3">
+          <PendingOrdersList {...listProps} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 ```
@@ -2509,7 +2511,7 @@ Expected: PASS, with no type errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add web/src/features/pos/utils/pending-orders.ts web/src/features/pos/utils/pending-orders.test.ts web/src/features/pos/components/pending-order-row.tsx web/src/features/pos/components/pending-orders-drawer.tsx web/src/features/pos/components/pending-orders-drawer.test.tsx
+git add web/src/components/ui/sheet.tsx web/src/features/pos/utils/pending-orders.ts web/src/features/pos/utils/pending-orders.test.ts web/src/features/pos/components/pending-order-row.tsx web/src/features/pos/components/pending-orders-drawer.tsx web/src/features/pos/components/pending-orders-drawer.test.tsx
 git commit -m "feat(web): pending orders drawer for active takeaway sessions"
 ```
 
