@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { ApiError } from "./unwrap";
-import { messageForError } from "./error-messages";
+import { ERROR_MESSAGES, messageForError } from "./error-messages";
 
 describe("messageForError", () => {
   it("maps a known code to its Vietnamese message", () => {
@@ -36,6 +36,49 @@ describe("messageForError", () => {
   it("returns a generic message for a non-ApiError", () => {
     expect(messageForError(new Error("socket hang up"))).toBe(
       "Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại.",
+    );
+  });
+});
+
+describe("commit and payment error codes", () => {
+  const codes = [
+    "EMPTY_DRAFT",
+    "COMMIT_MENU_ITEM_UNAVAILABLE",
+    "COMMIT_MENU_ITEM_RETIRED",
+    "COMMIT_SIZE_REQUIRED",
+    "COMMIT_SIZE_INVALID",
+    "COMMIT_SIZE_UNAVAILABLE",
+    "COMMIT_SIZE_RETIRED",
+    "COMMIT_MODIFIER_OPTION_INVALID",
+    "COMMIT_MODIFIER_OPTION_UNAVAILABLE",
+    "COMMIT_MODIFIER_OPTION_RETIRED",
+    "COMMIT_MODIFIER_GROUP_INVALID",
+    "COMMIT_MODIFIER_GROUP_RETIRED",
+    "NEW_ORDER_DRAFT_NOT_AVAILABLE",
+    "CHECK_NOT_FOUND",
+    "CHECK_NOT_OPEN",
+    "CHECK_HAS_PAYMENT",
+    "PAYMENT_EXCEEDS_CHECK_BALANCE",
+    "INSUFFICIENT_CASH_TENDERED",
+    "REQUEST_CONFLICT",
+  ];
+
+  it("translates every commit and payment code", () => {
+    for (const code of codes) {
+      expect(ERROR_MESSAGES[code]).toBeString();
+      expect(ERROR_MESSAGES[code].length).toBeGreaterThan(0);
+    }
+  });
+
+  it("reads the payment shortfall message through messageForError", () => {
+    const error = new ApiError(409, "INSUFFICIENT_CASH_TENDERED", "cash tendered is below");
+    expect(messageForError(error)).toBe("Tiền khách đưa ít hơn số tiền cần thu.");
+  });
+
+  it("reads the request-id replay conflict message through messageForError", () => {
+    const error = new ApiError(409, "REQUEST_CONFLICT", "request_id reused with a different fingerprint");
+    expect(messageForError(error)).toBe(
+      "Yêu cầu này đã được gửi với số tiền khác. Vui lòng đóng và thử lại.",
     );
   });
 });

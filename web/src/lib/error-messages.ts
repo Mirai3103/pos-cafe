@@ -31,6 +31,29 @@ export const ERROR_MESSAGES: Record<string, string> = {
   MODIFIER_OPTION_RETIRED: "Tùy chọn topping này đã ngừng phục vụ.",
   INVALID_PREPARATION_NOTE: "Ghi chú pha chế không hợp lệ (tối đa 200 ký tự).",
   INVALID_QUANTITY: "Số lượng món phải từ 1 đến 9999.",
+  EMPTY_DRAFT: "Đơn chưa có món nào để thanh toán.",
+  COMMIT_MENU_ITEM_UNAVAILABLE:
+    "Một món trong đơn vừa được tạm ngưng phục vụ. Vui lòng kiểm tra lại đơn.",
+  COMMIT_MENU_ITEM_RETIRED:
+    "Một món trong đơn đã ngừng kinh doanh. Vui lòng xóa món đó khỏi đơn.",
+  COMMIT_SIZE_REQUIRED: "Một món trong đơn chưa chọn kích cỡ.",
+  COMMIT_SIZE_INVALID: "Kích cỡ của một món trong đơn không còn hợp lệ.",
+  COMMIT_SIZE_UNAVAILABLE: "Kích cỡ của một món trong đơn vừa tạm hết.",
+  COMMIT_SIZE_RETIRED: "Kích cỡ của một món trong đơn đã ngừng phục vụ.",
+  COMMIT_MODIFIER_OPTION_INVALID: "Tùy chọn topping của một món không còn hợp lệ.",
+  COMMIT_MODIFIER_OPTION_UNAVAILABLE: "Tùy chọn topping của một món vừa tạm hết.",
+  COMMIT_MODIFIER_OPTION_RETIRED: "Tùy chọn topping của một món đã ngừng phục vụ.",
+  COMMIT_MODIFIER_GROUP_INVALID:
+    "Lựa chọn topping của một món không thỏa quy định của nhóm.",
+  COMMIT_MODIFIER_GROUP_RETIRED: "Một nhóm topping bắt buộc đã ngừng áp dụng.",
+  NEW_ORDER_DRAFT_NOT_AVAILABLE:
+    "Đơn trước chưa được gửi bếp nên chưa thể mở đơn mới.",
+  CHECK_NOT_FOUND: "Không tìm thấy hóa đơn.",
+  CHECK_NOT_OPEN: "Hóa đơn này không còn ở trạng thái chờ thu tiền.",
+  CHECK_HAS_PAYMENT: "Hóa đơn này đã được thanh toán.",
+  PAYMENT_EXCEEDS_CHECK_BALANCE: "Số tiền thu vượt quá số còn phải thu của hóa đơn.",
+  INSUFFICIENT_CASH_TENDERED: "Tiền khách đưa ít hơn số tiền cần thu.",
+  REQUEST_CONFLICT: "Yêu cầu này đã được gửi với số tiền khác. Vui lòng đóng và thử lại.",
 };
 
 const NETWORK_MESSAGE = "Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại.";
