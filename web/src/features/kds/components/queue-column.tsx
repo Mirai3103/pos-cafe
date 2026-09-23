@@ -5,6 +5,8 @@ export interface QueueColumnProps {
   column: ColumnKey;
   tickets: BoardTicket[];
   nowMs: number;
+  /** True while a category filter is active, so the empty state blames the filter, not the queue. */
+  filterActive?: boolean;
   busy: boolean;
   failedUnitIds: ReadonlySet<string>;
   onAdvance: (unitIds: string[], targetState: string) => void;
@@ -16,6 +18,7 @@ export function QueueColumn({
   column,
   tickets,
   nowMs,
+  filterActive,
   busy,
   failedUnitIds,
   onAdvance,
@@ -32,7 +35,9 @@ export function QueueColumn({
       </div>
       <div className="flex flex-col gap-3 overflow-y-auto min-h-0">
         {tickets.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">Không có đơn</p>
+          <p className="text-xs text-muted-foreground text-center py-6">
+            {filterActive ? "Không có món trong nhóm này" : "Không có đơn"}
+          </p>
         ) : (
           tickets.map((ticket) => (
             <TicketCard

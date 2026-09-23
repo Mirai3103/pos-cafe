@@ -39,4 +39,24 @@ describe("WasteDialog", () => {
     expect(html).toContain("Khách yêu cầu");
     expect(html).toContain("Khác");
   });
+
+  it("caps the note input at the backend's 500-rune limit", () => {
+    const html = renderDialog({
+      unit: {
+        id: "u1",
+        itemName: "Bạc xỉu đá",
+        sizeName: null,
+        modifierSummary: null,
+        preparationNote: null,
+        unitNumber: 2,
+        state: "IN_PREPARATION",
+        queuedAt: "2026-09-26T01:00:00Z",
+        inPreparationAt: "2026-09-26T01:02:00Z",
+        categoryName: "Đồ uống",
+        isRemake: false,
+      },
+      onClose: () => {},
+    });
+    expect(html).toContain(`maxLength="500"`);
+  });
 });

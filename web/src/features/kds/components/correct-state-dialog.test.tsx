@@ -45,4 +45,9 @@ describe("CorrectStateDialog", () => {
     expect(html).toContain("Khác");
     expect(html).toContain("Quản lý");
   });
+
+  it("caps the note input at the backend's 500-rune limit", () => {
+    const html = renderDialog({ unit, column: "IN_PREPARATION", onClose: () => {} });
+    expect(html).toContain(`maxLength="500"`);
+  });
 });

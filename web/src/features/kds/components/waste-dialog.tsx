@@ -122,6 +122,7 @@ function WasteDialogForm({ unit, onClose }: { unit: BoardUnit; onClose: () => vo
             id="waste-note"
             value={note}
             onChange={(event) => setNote(event.target.value)}
+            maxLength={500}
             placeholder="Mô tả lý do..."
           />
         </div>

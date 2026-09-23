@@ -33,14 +33,28 @@ const ticket: BoardTicket = {
   ],
 };
 
+const secondUnit = {
+  ...ticket.units[0],
+  id: "u2",
+  unitNumber: 2,
+};
+
 describe("QueueColumn", () => {
-  it("shows the column title and unit count", () => {
-    const html = renderToString(<QueueColumn {...base} tickets={[ticket]} />);
+  it("shows the column title and the aggregate unit count across tickets", () => {
+    const html = renderToString(
+      <QueueColumn {...base} tickets={[{ ...ticket, units: [ticket.units[0], secondUnit] }]} />,
+    );
     expect(html).toContain("Chờ pha");
-    expect(html).toContain("014");
+    expect(html).toContain('<span class="text-xs font-mono text-muted-foreground">2</span>');
   });
 
   it("says so when the column is empty", () => {
     expect(renderToString(<QueueColumn {...base} tickets={[]} />)).toContain("Không có đơn");
+  });
+
+  it("words the empty state differently while a category filter is active", () => {
+    const html = renderToString(<QueueColumn {...base} tickets={[]} filterActive />);
+    expect(html).toContain("Không có món trong nhóm này");
+    expect(html).not.toContain("Không có đơn");
   });
 });

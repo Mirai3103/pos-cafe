@@ -39,6 +39,9 @@ export interface PreparationActions {
   acknowledgeAlert: (alertId: string) => Promise<PreparationAlertResponse>;
 }
 
+/** The backend caps one bulk advance at 50 ids (internal/preparation/bulk_advance.go). */
+const BULK_ADVANCE_BATCH_SIZE = 50;
+
 /**
  * Every mutation the KDS screen makes, each stamped with its own request_id
  * and invalidating the queue query on success. Errors are rethrown for the
@@ -90,10 +93,20 @@ export function usePreparationActions(): PreparationActions {
 
     advanceMany: (unitIds, targetState) =>
       run(async () => {
-        const res = await advanceManyMutation.mutateAsync({
-          data: withRequestId({ preparation_unit_ids: unitIds, target_state: targetState }),
-        });
-        return unwrap(res).outcomes ?? [];
+        // One user intent can exceed the backend's 50-id cap, so it is sent as
+        // sequential batches whose per-unit outcomes are merged back together.
+        // Each batch carries its own request_id: the server keys idempotency by
+        // request_id and rejects reuse for a different payload
+        // (internal/preparation/executor.go), so batches cannot share one id.
+        const outcomes: PreparationBulkAdvanceOutcome[] = [];
+        for (let start = 0; start < unitIds.length; start += BULK_ADVANCE_BATCH_SIZE) {
+          const batch = unitIds.slice(start, start + BULK_ADVANCE_BATCH_SIZE);
+          const res = await advanceManyMutation.mutateAsync({
+            data: withRequestId({ preparation_unit_ids: batch, target_state: targetState }),
+          });
+          outcomes.push(...(unwrap(res).outcomes ?? []));
+        }
+        return outcomes;
       }),
 
     wasteUnit: (unitId, reason, note) =>

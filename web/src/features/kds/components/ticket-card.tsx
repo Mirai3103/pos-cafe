@@ -99,7 +99,7 @@ export function TicketCard({
                 checked={selected.has(unit.id)}
                 onCheckedChange={() => toggle(unit.id)}
                 className="mt-0.5"
-                aria-label={`Chọn ${unit.itemName}`}
+                aria-label={`Chọn ${unit.itemName} #${unit.unitNumber}`}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -126,6 +126,7 @@ export function TicketCard({
                   onClick={() => onRequestWaste(unit)}
                   disabled={busy}
                   title="Huỷ món (lỗi pha chế, không đạt, khách yêu cầu...)"
+                  aria-label="Huỷ món"
                   className="shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -137,6 +138,7 @@ export function TicketCard({
                   onClick={() => onRequestCorrectState(unit)}
                   disabled={busy}
                   title="Hoàn tác thao tác gần nhất (cần Quản lý duyệt)"
+                  aria-label="Hoàn tác thao tác"
                   className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                 >
                   <Undo2 className="h-3.5 w-3.5" />

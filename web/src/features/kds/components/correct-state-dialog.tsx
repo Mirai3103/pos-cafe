@@ -154,6 +154,7 @@ function CorrectStateDialogForm({
             id="correction-note"
             value={note}
             onChange={(event) => setNote(event.target.value)}
+            maxLength={500}
             placeholder="Mô tả lý do..."
             disabled={busy}
           />

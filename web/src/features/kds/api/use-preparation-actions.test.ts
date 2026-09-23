@@ -22,9 +22,20 @@ const responses: Record<MutationName, unknown> = {
 function mutation(name: MutationName) {
   return {
     isPending: false,
-    mutateAsync: async (variables: unknown) => {
+    mutateAsync: async (variables: any) => {
       mutationCalls[name].push(variables);
       if (rejectedMutation === name) throw rejection;
+      if (name === "advanceMany") {
+        return {
+          success: true,
+          data: {
+            outcomes: (variables.data.preparation_unit_ids as string[]).map((id) => ({
+              preparation_unit_id: id,
+              status: "ADVANCED",
+            })),
+          },
+        };
+      }
       return { success: true, data: responses[name] };
     },
   };
@@ -87,7 +98,8 @@ describe("usePreparationActions", () => {
 
     expect(await actions.advanceUnit("unit-1", "IN_PREPARATION")).toEqual({ id: "unit-1" });
     expect(await actions.advanceMany(["unit-1", "unit-2"], "READY")).toEqual([
-      { preparation_unit_id: "unit-1" },
+      { preparation_unit_id: "unit-1", status: "ADVANCED" },
+      { preparation_unit_id: "unit-2", status: "ADVANCED" },
     ]);
     expect(await actions.wasteUnit("unit-1", "SPILLED", "Đổ đồ uống")).toEqual({
       id: "waste-1",
@@ -139,6 +151,27 @@ describe("usePreparationActions", () => {
     expect(invalidations).toEqual(
       Array.from({ length: 6 }, () => ({ queryKey: ["/preparation/queue"] })),
     );
+  });
+
+  it("chunks a whole-ticket bulk advance into requests of at most 50 ids, each with its own request_id", async () => {
+    const actions = usePreparationActions();
+    const unitIds = Array.from({ length: 120 }, (_, i) => `unit-${i + 1}`);
+
+    const outcomes = await actions.advanceMany(unitIds, "READY");
+
+    expect(outcomes).toHaveLength(120);
+    expect(outcomes[119]).toEqual({ preparation_unit_id: "unit-120", status: "ADVANCED" });
+    expect(mutationCalls.advanceMany).toHaveLength(3);
+    expect(mutationCalls.advanceMany[0].data.preparation_unit_ids).toHaveLength(50);
+    expect(mutationCalls.advanceMany[1].data.preparation_unit_ids).toHaveLength(50);
+    expect(mutationCalls.advanceMany[2].data.preparation_unit_ids).toHaveLength(20);
+    expect(mutationCalls.advanceMany[2].data.preparation_unit_ids[0]).toBe("unit-101");
+    const requestIds = mutationCalls.advanceMany.map(
+      (call: any) => call.data.request_id,
+    ) as string[];
+    expect(new Set(requestIds).size).toBe(3);
+    expect(invalidations).toEqual([{ queryKey: ["/preparation/queue"] }]);
+    expect(successChirps).toBe(1);
   });
 
   it("buzzes and rethrows without invalidating when a mutation fails", async () => {

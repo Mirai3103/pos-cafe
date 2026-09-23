@@ -88,6 +88,21 @@ describe("TicketCard", () => {
     expect(html).toContain("Không thể chuyển trạng thái");
   });
 
+  it("gives duplicate units distinguishable accessible names and labels the waste and undo buttons", () => {
+    const duplicated = ticket({
+      units: [
+        { ...ticket().units[0], unitNumber: 1 },
+        { ...ticket().units[0], id: "u2", unitNumber: 2 },
+      ],
+    });
+    const html = renderToString(<TicketCard {...base} ticket={duplicated} column="IN_PREPARATION" />);
+
+    expect(html).toContain(`Chọn ${ticket().units[0].itemName} #1`);
+    expect(html).toContain(`Chọn ${ticket().units[0].itemName} #2`);
+    expect(html).toContain(`aria-label="Huỷ món"`);
+    expect(html).toContain(`aria-label="Hoàn tác thao tác"`);
+  });
+
   it("targets current units when every selected unit has left the ticket", () => {
     const replacement = { ...ticket().units[0], id: "u2" };
 

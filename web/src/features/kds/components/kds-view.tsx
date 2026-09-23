@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from "react";
-import { ChefHat } from "lucide-react";
+import { ChefHat, WifiOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { messageForError } from "@/lib/error-messages";
 import { usePreparationQueue } from "../api/use-preparation-queue";
 import { usePreparationActions } from "../api/use-preparation-actions";
@@ -32,7 +33,7 @@ export function remakeRequestFor(entry: { reason?: string; note?: string }): { r
 }
 
 export function KdsView(): ReactElement {
-  const { data, isLoading, isError } = usePreparationQueue();
+  const { data, isLoading, isError, refetch } = usePreparationQueue();
   const actions = usePreparationActions();
 
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -101,7 +102,10 @@ export function KdsView(): ReactElement {
     );
   }
 
-  if (isError) {
+  // A failed 5s poll must not blank the always-on bar screen: react-query
+  // keeps the last successful data alongside isError, so the full-screen
+  // failure is reserved for a genuine first-load error.
+  if (isError && !data) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-destructive p-8">
         Không tải được hàng chờ pha chế. Vui lòng tải lại trang.
@@ -124,6 +128,27 @@ export function KdsView(): ReactElement {
 
       <CategoryFilterBar categories={categories} active={categoryFilter} onSelect={setCategoryFilter} />
 
+      {isError && (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive"
+        >
+          <span className="flex items-center gap-2">
+            <WifiOff className="h-4 w-4 shrink-0" />
+            Mất kết nối tới máy chủ. Đang hiển thị dữ liệu mới nhất.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void refetch()}
+            className="rounded-lg"
+          >
+            Thử lại
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 min-h-0">
         {COLUMN_KEYS.map((column) => (
           <QueueColumn
@@ -131,6 +156,7 @@ export function KdsView(): ReactElement {
             column={column}
             tickets={board[column]}
             nowMs={nowMs}
+            filterActive={categoryFilter !== null}
             busy={actions.isPending}
             failedUnitIds={failedUnitIds}
             onAdvance={handleAdvance}
@@ -149,7 +175,13 @@ export function KdsView(): ReactElement {
         onClose={() => setCorrectTarget(null)}
       />
 
-      <KdsErrorToast message={errorMessage} onDismiss={() => setErrorMessage(null)} />
+      <KdsErrorToast
+        message={errorMessage}
+        onDismiss={() => {
+          setErrorMessage(null);
+          setFailedUnitIds(new Set());
+        }}
+      />
     </div>
   );
 }
