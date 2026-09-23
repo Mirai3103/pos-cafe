@@ -84,6 +84,15 @@ mock.module("../api/use-pos", () => ({
   useRemoveDraftItem: () => ({
     removeDraftItem: async () => ({}),
   }),
+  useActiveSessions: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+    dataUpdatedAt: 0,
+    refetch: async () => ({}),
+  }),
+  useCompletedSale: () => ({ data: undefined, isError: false }),
 }));
 
 mock.module("../api/use-checkout", () => ({
@@ -108,6 +117,15 @@ mock.module("../api/use-checkout", () => ({
     submitStatus: "idle",
     submitError: null,
     submitOrder: async () => {},
+  }),
+}));
+
+mock.module("../api/use-close-session", () => ({
+  useCloseFlow: () => ({
+    isClosing: false,
+    completedSale: null,
+    closeSession: async () => {},
+    dismissCompletedSale: () => {},
   }),
 }));
 
