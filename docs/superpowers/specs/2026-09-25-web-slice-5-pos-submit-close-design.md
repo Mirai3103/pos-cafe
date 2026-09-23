@@ -266,10 +266,9 @@ backend, so the drawer polls:
 
 A button at the top of the menu zone reads `Đơn đang chờ (N)`. A green count dot
 shows how many sessions are in `READY_TO_CLOSE`. The hotkey is **F4**. The
-drawer slides in from the right. It is a hand-rolled `fixed` overlay, like
-`payment-dialog.tsx`, rather than a shadcn `Sheet`: `web/src/components/ui` has
-no Sheet, and a portal-based one would render nothing under the
-`renderToString` tests this feature relies on.
+drawer is the shadcn `Sheet` (`web/src/components/ui/sheet.tsx`), sliding in from
+the right. Its list body is a separate `PendingOrdersList`, because the Sheet
+renders through a portal that `renderToString` tests cannot see into.
 
 ### 6.3 Rows (`pending-order-row.tsx`)
 

@@ -10,6 +10,7 @@ export interface PosSessionHandle {
   isSessionError: boolean;
   ensureSessionId: () => Promise<string>;
   clearSession: () => void;
+  switchSession: (id: string) => void;
 }
 
 function readStoredSessionId(): string | null {
@@ -27,6 +28,20 @@ function writeStoredSessionId(id: string | null): void {
   } catch {
     // ignore storage errors
   }
+}
+
+/**
+ * Whether the stored pointer no longer names a session this terminal can show.
+ * A CLOSED session is kept: the close flow reads back its Completed Sale and
+ * clears the pointer when the cashier dismisses it.
+ */
+export function shouldDropSessionPointer(
+  session: SalesServiceSessionResponse | null | undefined,
+  isError: boolean,
+): boolean {
+  if (isError) return true;
+  const state = session?.state;
+  return Boolean(state) && state !== "ACTIVE" && state !== "CLOSED";
 }
 
 /**
@@ -56,9 +71,16 @@ export function usePosSession(): PosSessionHandle {
     setActiveSessionId(null);
   }, []);
 
-  // Drop the pointer when the Session is gone or no longer active.
+  /** Reopens a session picked from the pending orders drawer. */
+  const switchSession = React.useCallback((id: string) => {
+    writeStoredSessionId(id);
+    activeSessionIdRef.current = id;
+    setActiveSessionId(id);
+  }, []);
+
+  // Drop the pointer when the Session is gone or in a state this terminal cannot show.
   React.useEffect(() => {
-    if ((session && session.state && session.state !== "ACTIVE") || isSessionError) {
+    if (shouldDropSessionPointer(session, isSessionError)) {
       writeStoredSessionId(null);
       activeSessionIdRef.current = null;
       // oxlint-disable-next-line react/set-state-in-effect
@@ -96,5 +118,6 @@ export function usePosSession(): PosSessionHandle {
     isSessionError,
     ensureSessionId,
     clearSession,
+    switchSession,
   };
 }

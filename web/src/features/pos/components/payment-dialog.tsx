@@ -1,9 +1,10 @@
 import * as React from "react";
-import { X, Banknote, AlertCircle, CheckCircle2 } from "lucide-react";
+import { X, Banknote, AlertCircle, CheckCircle2, ChefHat, Loader2 } from "lucide-react";
 import { changeDue, isTenderSufficient, suggestTenders } from "../utils/payment";
 import { formatVND } from "@/lib/utils";
 import { useKeypadHotkeys } from "@/hooks/use-keypad-hotkeys";
 import { playTapChirp, playSuccessChirp } from "@/lib/sound";
+import type { SubmitStatus } from "../utils/phase";
 
 export interface PaymentDialogProps {
   isOpen: boolean;
@@ -16,6 +17,9 @@ export interface PaymentDialogProps {
   errorMessage: string | null;
   /** Server-reported change. Non-null switches the dialog to its result screen. */
   changeDueVnd: number | null;
+  /** The automatic submit that follows payment; shown on the result screen only. */
+  submitStatus: SubmitStatus;
+  submitError: string | null;
   onClose: () => void;
   onConfirm: (tenderedVnd: number) => void;
   onDone: () => void;
@@ -35,6 +39,8 @@ export function PaymentDialog({
   isSubmitting,
   errorMessage,
   changeDueVnd,
+  submitStatus,
+  submitError,
   onClose,
   onConfirm,
   onDone,
@@ -138,6 +144,7 @@ export function PaymentDialog({
                 {formatVND(changeDueVnd)}
               </p>
             </div>
+            <SubmitOutcome status={submitStatus} error={submitError} />
           </div>
         ) : (
           <div className="p-5 space-y-5">
@@ -246,4 +253,37 @@ export function PaymentDialog({
       </div>
     </div>
   );
+}
+
+function SubmitOutcome({ status, error }: { status: SubmitStatus; error: string | null }) {
+  if (status === "submitting") {
+    return (
+      <p className="flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Đang gửi bếp...
+      </p>
+    );
+  }
+  if (status === "submitted") {
+    return (
+      <p className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+        <ChefHat className="h-4 w-4" />
+        Đã gửi bếp
+      </p>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <div
+        role="alert"
+        className="flex items-start gap-2 rounded-xl bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 px-3 py-2.5 text-left text-xs font-semibold"
+      >
+        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+        <span>
+          Đã thu tiền nhưng chưa gửi được bếp. {error} Bấm "Gửi bếp" ở hóa đơn để thử lại.
+        </span>
+      </div>
+    );
+  }
+  return null;
 }

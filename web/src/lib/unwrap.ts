@@ -43,3 +43,11 @@ export function unwrapNullable<T>(res: ApiEnvelope<T>): T | null {
   return res.data ?? null;
 }
 
+/**
+ * A 409: the command raced the server's state. Callers refetch rather than
+ * trust their cached projection, because the POS phase follows the server.
+ */
+export function isConflictError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.status === 409;
+}
+
