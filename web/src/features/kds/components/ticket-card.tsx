@@ -20,6 +20,7 @@ export interface TicketCardProps {
   column: ColumnKey;
   nowMs: number;
   busy: boolean;
+  failedUnitIds: ReadonlySet<string>;
   onAdvance: (unitIds: string[], targetState: string) => void;
   onRequestWaste: (unit: BoardUnit) => void;
   onRequestCorrectState: (unit: BoardUnit) => void;
@@ -40,6 +41,7 @@ export function TicketCard({
   column,
   nowMs,
   busy,
+  failedUnitIds,
   onAdvance,
   onRequestWaste,
   onRequestCorrectState,
@@ -86,56 +88,63 @@ export function TicketCard({
         <Badge variant="accent">{formatElapsed(oldestMinutes)}</Badge>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-sm">
-        {ticket.units.map((unit) => (
-          <div key={unit.id} className="flex items-start gap-2 border-b border-border pb-1.5 last:border-0 last:pb-0">
-            <Checkbox
-              checked={selected.has(unit.id)}
-              onCheckedChange={() => toggle(unit.id)}
-              className="mt-0.5"
-              aria-label={`Chọn ${unit.itemName}`}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="truncate font-medium">{unit.itemName}</span>
-                {unit.sizeName && <span className="text-2xs text-muted-foreground">({unit.sizeName})</span>}
-                {unit.isRemake && (
-                  <Badge variant="destructive" className="text-[10px]">
-                    PHA LẠI
-                  </Badge>
+        {ticket.units.map((unit) => {
+          const failed = failedUnitIds.has(unit.id);
+          return (
+            <div
+              key={unit.id}
+              className={`flex items-start gap-2 border-b pb-1.5 last:border-0 last:pb-0 ${failed ? "border-destructive/40" : "border-border"}`}
+            >
+              <Checkbox
+                checked={selected.has(unit.id)}
+                onCheckedChange={() => toggle(unit.id)}
+                className="mt-0.5"
+                aria-label={`Chọn ${unit.itemName}`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="truncate font-medium">{unit.itemName}</span>
+                  {unit.sizeName && <span className="text-2xs text-muted-foreground">({unit.sizeName})</span>}
+                  {unit.isRemake && (
+                    <Badge variant="destructive" className="text-[10px]">
+                      PHA LẠI
+                    </Badge>
+                  )}
+                </div>
+                {unit.modifierSummary && (
+                  <p className="truncate text-2xs text-muted-foreground">{unit.modifierSummary}</p>
                 )}
+                {unit.preparationNote && (
+                  <p className="truncate text-2xs text-amber-700">Ghi chú: {unit.preparationNote}</p>
+                )}
+                {failed && <p className="text-2xs font-semibold text-destructive">Không thể chuyển trạng thái</p>}
               </div>
-              {unit.modifierSummary && (
-                <p className="truncate text-2xs text-muted-foreground">{unit.modifierSummary}</p>
+              <span className="shrink-0 font-mono text-2xs text-muted-foreground">#{unit.unitNumber}</span>
+              {column !== "QUEUED" && (
+                <button
+                  type="button"
+                  onClick={() => onRequestWaste(unit)}
+                  disabled={busy}
+                  title="Huỷ món (lỗi pha chế, không đạt, khách yêu cầu...)"
+                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               )}
-              {unit.preparationNote && (
-                <p className="truncate text-2xs text-amber-700">Ghi chú: {unit.preparationNote}</p>
+              {correctTarget && (
+                <button
+                  type="button"
+                  onClick={() => onRequestCorrectState(unit)}
+                  disabled={busy}
+                  title="Hoàn tác thao tác gần nhất (cần Quản lý duyệt)"
+                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                </button>
               )}
             </div>
-            <span className="shrink-0 font-mono text-2xs text-muted-foreground">#{unit.unitNumber}</span>
-            {column !== "QUEUED" && (
-              <button
-                type="button"
-                onClick={() => onRequestWaste(unit)}
-                disabled={busy}
-                title="Huỷ món (lỗi pha chế, không đạt, khách yêu cầu...)"
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {correctTarget && (
-              <button
-                type="button"
-                onClick={() => onRequestCorrectState(unit)}
-                disabled={busy}
-                title="Hoàn tác thao tác gần nhất (cần Quản lý duyệt)"
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-              >
-                <Undo2 className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
       <CardFooter className="flex items-center gap-2">
         <Button

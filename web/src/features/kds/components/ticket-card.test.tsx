@@ -30,6 +30,7 @@ const base = {
   column: "QUEUED" as const,
   nowMs: Date.parse("2026-09-26T01:03:00Z"),
   busy: false,
+  failedUnitIds: new Set<string>(),
   onAdvance: () => {},
   onRequestWaste: () => {},
   onRequestCorrectState: () => {},
@@ -77,6 +78,14 @@ describe("TicketCard", () => {
   it("shows the disabled shortage and reprint affordances", () => {
     const html = renderToString(<TicketCard {...base} ticket={ticket()} />);
     expect(html).toContain("Chưa hỗ trợ");
+  });
+
+  it("shows a bulk-advance failure on the affected unit line", () => {
+    const html = renderToString(
+      <TicketCard {...base} ticket={ticket()} failedUnitIds={new Set(["u1"])} />,
+    );
+
+    expect(html).toContain("Không thể chuyển trạng thái");
   });
 
   it("targets current units when every selected unit has left the ticket", () => {

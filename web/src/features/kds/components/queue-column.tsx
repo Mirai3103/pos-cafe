@@ -6,12 +6,22 @@ export interface QueueColumnProps {
   tickets: BoardTicket[];
   nowMs: number;
   busy: boolean;
+  failedUnitIds: ReadonlySet<string>;
   onAdvance: (unitIds: string[], targetState: string) => void;
   onRequestWaste: (unit: BoardUnit) => void;
   onRequestCorrectState: (unit: BoardUnit) => void;
 }
 
-export function QueueColumn({ column, tickets, nowMs, busy, onAdvance, onRequestWaste, onRequestCorrectState }: QueueColumnProps) {
+export function QueueColumn({
+  column,
+  tickets,
+  nowMs,
+  busy,
+  failedUnitIds,
+  onAdvance,
+  onRequestWaste,
+  onRequestCorrectState,
+}: QueueColumnProps) {
   const unitCount = tickets.reduce((sum, t) => sum + t.units.length, 0);
 
   return (
@@ -31,6 +41,7 @@ export function QueueColumn({ column, tickets, nowMs, busy, onAdvance, onRequest
               column={column}
               nowMs={nowMs}
               busy={busy}
+              failedUnitIds={failedUnitIds}
               onAdvance={onAdvance}
               onRequestWaste={onRequestWaste}
               onRequestCorrectState={onRequestCorrectState}

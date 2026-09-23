@@ -7,6 +7,7 @@ import type { ApiError } from "@/lib/unwrap";
 
 type ExpectedPreparationQueueResult = UseQueryResult<PreparationQueueResponse, ApiError>;
 type AssertPreparationQueueResult<T extends ExpectedPreparationQueueResult> = T;
+// oxlint-disable-next-line no-unused-vars -- compile-time API return contract
 type PreparationQueueResultContract = AssertPreparationQueueResult<
   ReturnType<typeof usePreparationQueue>
 >;

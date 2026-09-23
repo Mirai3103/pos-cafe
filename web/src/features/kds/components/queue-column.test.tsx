@@ -7,6 +7,7 @@ const base = {
   column: "QUEUED" as const,
   nowMs: Date.parse("2026-09-26T01:03:00Z"),
   busy: false,
+  failedUnitIds: new Set<string>(),
   onAdvance: () => {},
   onRequestWaste: () => {},
   onRequestCorrectState: () => {},
