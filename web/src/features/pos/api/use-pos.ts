@@ -2,6 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useGetCatalogMenuSellable } from "@/api/generated/endpoints/catalog/catalog";
 import {
   useGetSalesServiceSessionsId,
+  useGetSalesServiceSessions,
+  useGetSalesServiceSessionsIdCompletedSale,
   getGetSalesServiceSessionsIdQueryKey,
   usePostSalesServiceSessionsTakeaway,
   usePostSalesServiceSessionsIdDraftItems,
@@ -12,6 +14,7 @@ import {
   useDeleteSalesServiceSessionsIdDraftItemsItemId,
 } from "@/api/generated/endpoints/sales/sales";
 import { unwrap, unwrapNullable } from "@/lib/unwrap";
+import { derivePosPhase } from "../utils/phase";
 import { newRequestId } from "@/lib/command";
 import type {
   SalesAddDraftItemCommand,
@@ -33,6 +36,9 @@ export function useSellableMenu() {
   });
 }
 
+/** The kitchen moves units; there is no push channel, so an in-progress order polls. */
+export const IN_PREPARATION_POLL_MS = 5_000;
+
 /**
  * Reads single Service Session with its active Order Draft projection.
  */
@@ -42,6 +48,43 @@ export function useServiceSession(sessionId: string | null) {
       enabled: Boolean(sessionId),
       select: unwrap,
       staleTime: 5_000,
+      refetchInterval: (query) =>
+        derivePosPhase(query.state.data?.data) === "IN_PREPARATION"
+          ? IN_PREPARATION_POLL_MS
+          : false,
+    },
+  });
+}
+
+/** Fast while the cashier is looking at the list, slow while only the badge is. */
+export const ACTIVE_SESSIONS_POLL_MS = { open: 5_000, closed: 15_000 } as const;
+
+/**
+ * Every ACTIVE Service Session with its full projection: the cashier's
+ * open-tabs view behind the "Đơn đang chờ" drawer.
+ */
+export function useActiveSessions(isDrawerOpen: boolean) {
+  return useGetSalesServiceSessions({
+    query: {
+      select: unwrap,
+      refetchInterval: isDrawerOpen
+        ? ACTIVE_SESSIONS_POLL_MS.open
+        : ACTIVE_SESSIONS_POLL_MS.closed,
+    },
+  });
+}
+
+/**
+ * The immutable Completed Sale of one closed Session. A Session that has not
+ * closed answers 404, so this never retries.
+ */
+export function useCompletedSale(sessionId: string | null) {
+  return useGetSalesServiceSessionsIdCompletedSale(sessionId ?? "", {
+    query: {
+      enabled: Boolean(sessionId),
+      select: unwrap,
+      retry: false,
+      staleTime: Infinity,
     },
   });
 }
