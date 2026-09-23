@@ -187,6 +187,8 @@ describe("DraftPanel", () => {
         onEditItem={mock()}
         onQuantityChange={mock()}
         onRemoveItem={mock()}
+        onCheckout={() => {}}
+        canCheckout={false}
       />,
     );
 
@@ -203,6 +205,8 @@ describe("DraftPanel", () => {
         onEditItem={mock()}
         onQuantityChange={mock()}
         onRemoveItem={mock()}
+        onCheckout={() => {}}
+        canCheckout={false}
       />,
     );
 
@@ -218,6 +222,8 @@ describe("DraftPanel", () => {
         onEditItem={mock()}
         onQuantityChange={mock()}
         onRemoveItem={mock()}
+        onCheckout={() => {}}
+        canCheckout={false}
       />,
     );
 
@@ -232,6 +238,8 @@ describe("DraftPanel", () => {
         onEditItem={mock()}
         onQuantityChange={mock()}
         onRemoveItem={mock()}
+        onCheckout={() => {}}
+        canCheckout={false}
       />,
     );
 
@@ -261,7 +269,6 @@ describe("DraftPanel", () => {
     expect(html).toContain("Tiền mặt");
     expect(html).toContain("VietQR");
     expect(html).toContain("Thanh toán (F9)");
-    expect(html).toContain("Mở ở Slice 4");
   });
 
   it("renders fallback header when service_number is omitted", () => {
@@ -276,10 +283,46 @@ describe("DraftPanel", () => {
         onEditItem={mock()}
         onQuantityChange={mock()}
         onRemoveItem={mock()}
+        onCheckout={() => {}}
+        canCheckout={false}
       />,
     );
 
     expect(html).toContain("Đơn mang đi");
     expect(html).not.toContain("Đơn mang đi #");
+  });
+});
+
+describe("DraftPanel checkout action", () => {
+  it("enables the checkout button when the draft has items", () => {
+    const html = renderToString(
+      <DraftPanel
+        session={mockSessionWithItems}
+        isShiftOpen
+        onEditItem={() => {}}
+        onQuantityChange={() => {}}
+        onRemoveItem={() => {}}
+        onCheckout={() => {}}
+        canCheckout
+      />,
+    );
+    expect(html).toContain("Thanh toán (F9)");
+    expect(html).not.toContain("Mở ở Slice 4");
+  });
+
+  it("keeps the VietQR tab disabled", () => {
+    const html = renderToString(
+      <DraftPanel
+        session={mockSessionWithItems}
+        isShiftOpen
+        onEditItem={() => {}}
+        onQuantityChange={() => {}}
+        onRemoveItem={() => {}}
+        onCheckout={() => {}}
+        canCheckout
+      />,
+    );
+    expect(html).toContain("VietQR");
+    expect(html).toContain("Sắp có");
   });
 });

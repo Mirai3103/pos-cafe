@@ -1,6 +1,6 @@
-export const VND_DENOMINATIONS = [
-  500_000, 200_000, 100_000, 50_000, 20_000, 10_000, 5_000, 2_000, 1_000,
-] as const;
+import { VND_DENOMINATIONS } from "@/lib/utils";
+
+export { VND_DENOMINATIONS };
 
 export type DenominationCounts = Record<number, number>;
 

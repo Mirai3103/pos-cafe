@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { formatVND } from "./utils";
+import { VND_DENOMINATIONS, formatVND } from "./utils";
 
 // The separator between the digits and the "₫" symbol is a non-breaking
 // space (U+00A0), and vi-VN groups thousands with "."; these tests pin the
@@ -23,5 +23,13 @@ describe("formatVND", () => {
 
   it("formats a large nine-digit amount without scientific notation", () => {
     expect(formatVND(999999999)).toBe("999.999.999\u00A0₫");
+  });
+});
+
+describe("VND_DENOMINATIONS", () => {
+  it("lists every Vietnamese note in descending order", () => {
+    expect([...VND_DENOMINATIONS]).toEqual([
+      500_000, 200_000, 100_000, 50_000, 20_000, 10_000, 5_000, 2_000, 1_000,
+    ]);
   });
 });

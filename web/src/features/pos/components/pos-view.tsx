@@ -1,11 +1,10 @@
 import * as React from "react";
 import { Clock, AlertCircle, RefreshCw } from "lucide-react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { Button } from "@/components/ui/button";
 import { useCurrentShift } from "@/features/shift/api/use-shift";
 import {
   useSellableMenu,
-  useServiceSession,
-  useStartTakeawaySession,
   useAddDraftItem,
   useUpdateDraftItemQuantity,
   useUpdateDraftItemSize,
@@ -13,8 +12,12 @@ import {
   useUpdateDraftItemPreparationNote,
   useRemoveDraftItem,
 } from "../api/use-pos";
+import { usePosSession } from "../api/use-pos-session";
+import { useCheckoutFlow } from "../api/use-checkout";
 import { MenuGrid } from "./menu-grid";
 import { DraftPanel } from "./draft-panel";
+import { CheckPanel } from "./check-panel";
+import { PaymentDialog } from "./payment-dialog";
 import { ItemPickerDialog, type ItemPickerConfig } from "./item-picker-dialog";
 import {
   ResizablePanelGroup,
@@ -22,13 +25,13 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { matchesDraftItemConfig, diffDraftItemEdits } from "../utils/selection";
+import { derivePosPhase, selectOpenCheck } from "../utils/phase";
+import { calculateDraftSubtotal } from "../utils/pricing";
 import type {
   CatalogSellableItemResponse,
   SalesDraftItemResponse,
 } from "@/api/generated/models";
 import { messageForError } from "@/lib/error-messages";
-
-const STORAGE_SESSION_KEY = "pos_active_session_id";
 
 export function PosView() {
   const { data: shift, isLoading: isShiftLoading } = useCurrentShift();
@@ -42,52 +45,9 @@ export function PosView() {
 
   const isShiftOpen = shift?.state === "OPEN";
 
-  // Single active session pointer in sessionStorage
-  const [activeSessionId, setActiveSessionId] = React.useState<string | null>(() => {
-    try {
-      return sessionStorage.getItem(STORAGE_SESSION_KEY);
-    } catch {
-      return null;
-    }
-  });
-
-  const activeSessionIdRef = React.useRef<string | null>(activeSessionId);
-  React.useEffect(() => {
-    activeSessionIdRef.current = activeSessionId;
-  }, [activeSessionId]);
-
-  const creatingSessionPromiseRef = React.useRef<Promise<string> | null>(null);
-
-  const {
-    data: session,
-    isError: isSessionError,
-  } = useServiceSession(activeSessionId);
-
-  // Clear session ID if session was closed or invalid
-  React.useEffect(() => {
-    if (session && session.state && session.state !== "ACTIVE") {
-      try {
-        sessionStorage.removeItem(STORAGE_SESSION_KEY);
-      } catch {
-        // ignore storage errors
-      }
-      activeSessionIdRef.current = null;
-      // oxlint-disable-next-line react/set-state-in-effect
-      setActiveSessionId(null);
-    } else if (isSessionError) {
-      try {
-        sessionStorage.removeItem(STORAGE_SESSION_KEY);
-      } catch {
-        // ignore storage errors
-      }
-      activeSessionIdRef.current = null;
-      // oxlint-disable-next-line react/set-state-in-effect
-      setActiveSessionId(null);
-    }
-  }, [session, isSessionError]);
+  const { activeSessionId, session, ensureSessionId, clearSession } = usePosSession();
 
   // Mutations
-  const { startTakeaway } = useStartTakeawaySession();
   const { addDraftItem, isPending: isAddingItem } = useAddDraftItem(activeSessionId ?? "");
   const { updateQuantity } = useUpdateDraftItemQuantity(activeSessionId ?? "");
   const { updateSize } = useUpdateDraftItemSize(activeSessionId ?? "");
@@ -103,36 +63,24 @@ export function PosView() {
   const [isSubmittingPicker, setIsSubmittingPicker] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
-  // Ensure active session exists, lazily opening one if needed
-  const ensureSessionId = async (): Promise<string> => {
-    if (activeSessionIdRef.current) return activeSessionIdRef.current;
-    if (creatingSessionPromiseRef.current) {
-      return await creatingSessionPromiseRef.current;
-    }
+  // Where the sale stands is the server projection, never local state.
+  const phase = derivePosPhase(session);
+  const draftItems = session?.draft?.items ?? [];
+  const openCheck = selectOpenCheck(session);
+  const paymentTotal =
+    phase === "AWAITING_PAYMENT"
+      ? (openCheck?.balance_vnd ?? 0)
+      : calculateDraftSubtotal(draftItems);
 
-    const promise = (async () => {
-      try {
-        const newSession = await startTakeaway();
-        if (!newSession.id) {
-          throw new Error("Không thể khởi tạo phiên phục vụ: thiếu mã phiên");
-        }
-        const id = newSession.id;
-        try {
-          sessionStorage.setItem(STORAGE_SESSION_KEY, id);
-        } catch {
-          // ignore storage errors
-        }
-        activeSessionIdRef.current = id;
-        setActiveSessionId(id);
-        return id;
-      } finally {
-        creatingSessionPromiseRef.current = null;
-      }
-    })();
-
-    creatingSessionPromiseRef.current = promise;
-    return await promise;
-  };
+  const checkout = useCheckoutFlow({
+    activeSessionId,
+    session,
+    phase,
+    isShiftOpen,
+    draftItemCount: draftItems.length,
+    clearSession,
+    onDraftError: setErrorMessage,
+  });
 
   // Add Item Handler
   const handleSelectItem = async (item: CatalogSellableItemResponse) => {
@@ -297,6 +245,19 @@ export function PosView() {
     }
   };
 
+  useHotkeys(
+    "f9",
+    (event) => {
+      event.preventDefault();
+      // The item picker is a configuration-in-progress: opening payment over it
+      // would commit the draft without the line the cashier is still building.
+      if (checkout.isPaymentOpen || isPickerOpen) return;
+      if (phase === "SETTLED") checkout.nextCustomer();
+      else checkout.openPaymentDialog();
+    },
+    { enableOnFormTags: true },
+  );
+
   if (isShiftLoading || isMenuLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-12 min-h-[60vh] gap-4">
@@ -346,7 +307,7 @@ export function PosView() {
           <MenuGrid
             categories={menu?.categories}
             onSelectItem={handleSelectItem}
-            disabled={!isShiftOpen}
+            disabled={!isShiftOpen || phase === "AWAITING_PAYMENT" || phase === "SETTLED"}
           />
         </ResizablePanel>
 
@@ -359,14 +320,26 @@ export function PosView() {
           maxSize="60%"
           className="flex flex-col overflow-hidden"
         >
-          <DraftPanel
-            session={session ?? null}
-            isShiftOpen={isShiftOpen}
-            onEditItem={handleEditDraftItem}
-            onQuantityChange={handleQuantityChange}
-            onRemoveItem={handleRemoveItem}
-            className="w-full h-full flex-1"
-          />
+          {phase === "AWAITING_PAYMENT" || phase === "SETTLED" ? (
+            <CheckPanel
+              session={session}
+              phase={phase}
+              onCollect={checkout.openPaymentDialog}
+              onNextCustomer={checkout.nextCustomer}
+              className="w-full h-full flex-1"
+            />
+          ) : (
+            <DraftPanel
+              session={session}
+              isShiftOpen={isShiftOpen}
+              onEditItem={handleEditDraftItem}
+              onQuantityChange={handleQuantityChange}
+              onRemoveItem={handleRemoveItem}
+              onCheckout={checkout.openPaymentDialog}
+              canCheckout={isShiftOpen && draftItems.length > 0}
+              className="w-full h-full flex-1"
+            />
+          )}
         </ResizablePanel>
       </ResizablePanelGroup>
 
@@ -379,6 +352,20 @@ export function PosView() {
         onConfirm={handleConfirmPicker}
         isSubmitting={isAddingItem || isSubmittingPicker}
         confirmLabel={editingDraftItemId ? "Cập nhật món" : "Thêm vào đơn"}
+      />
+
+      {/* Cash Payment Modal */}
+      <PaymentDialog
+        isOpen={checkout.isPaymentOpen}
+        serviceNumber={session?.service_number}
+        totalVnd={paymentTotal}
+        isCommitted={phase === "AWAITING_PAYMENT"}
+        isSubmitting={checkout.isPaying}
+        errorMessage={checkout.paymentError}
+        changeDueVnd={checkout.changeDueVnd}
+        onClose={checkout.closePaymentDialog}
+        onConfirm={checkout.confirmPayment}
+        onDone={checkout.finishPayment}
       />
 
       {/* Global Error Toast Bar if mutation fails */}
