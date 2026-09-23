@@ -325,6 +325,11 @@ export function PosView() {
               session={session}
               phase={phase}
               onCollect={checkout.openPaymentDialog}
+              onSubmit={checkout.submitOrder}
+              onClose={() => {}}
+              isSubmitting={checkout.submitStatus === "submitting"}
+              isClosing={false}
+              submitError={checkout.submitError}
               onNextCustomer={checkout.nextCustomer}
               className="w-full h-full flex-1"
             />
