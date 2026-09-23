@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,28 +19,52 @@ export interface WasteDialogProps {
 }
 
 export function WasteDialog({ unit, onClose }: WasteDialogProps): ReactElement | null {
+  if (!unit) return null;
+  return <WasteDialogForm key={unit.id} unit={unit} onClose={onClose} />;
+}
+
+function WasteDialogForm({ unit, onClose }: { unit: BoardUnit; onClose: () => void }) {
   const { wasteUnit, isPending } = usePreparationActions();
   const [reason, setReason] = useState<string>(WASTE_REASONS[0].value);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const activeRef = useRef(true);
+  const busy = isPending || isSubmitting;
 
-  if (!unit) return null;
-  const unitId = unit.id;
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
+
+  function handleClose() {
+    if (!isPending && !submittingRef.current) onClose();
+  }
 
   async function handleSubmit() {
+    if (isPending || submittingRef.current) return;
     if (reason === "OTHER" && !note.trim()) {
       setError("Vui lòng nhập ghi chú khi chọn lý do khác");
       return;
     }
 
+    submittingRef.current = true;
+    setIsSubmitting(true);
     try {
-      await wasteUnit(unitId, reason, note.trim() || undefined);
+      await wasteUnit(unit.id, reason, note.trim() || undefined);
+      if (!activeRef.current) return;
       setNote("");
       setReason(WASTE_REASONS[0].value);
       setError(null);
       onClose();
     } catch (err) {
-      setError(messageForError(err));
+      if (activeRef.current) setError(messageForError(err));
+    } finally {
+      submittingRef.current = false;
+      if (activeRef.current) setIsSubmitting(false);
     }
   }
 
@@ -63,9 +87,10 @@ export function WasteDialog({ unit, onClose }: WasteDialogProps): ReactElement |
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
+            disabled={busy}
             aria-label="Đóng"
-            className="rounded-lg p-1 text-muted-foreground transition hover:bg-muted"
+            className="rounded-lg p-1 text-muted-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
@@ -107,7 +132,8 @@ export function WasteDialog({ unit, onClose }: WasteDialogProps): ReactElement |
           <Button
             type="button"
             variant="outline"
-            onClick={onClose}
+            onClick={handleClose}
+            disabled={busy}
             className="h-12 w-1/2 rounded-xl"
           >
             Huỷ bỏ
@@ -116,10 +142,10 @@ export function WasteDialog({ unit, onClose }: WasteDialogProps): ReactElement |
             type="button"
             variant="destructive"
             onClick={handleSubmit}
-            disabled={isPending}
+            disabled={busy}
             className="h-12 w-1/2 rounded-xl font-bold"
           >
-            {isPending ? "Đang xử lý..." : "Xác nhận huỷ món"}
+            {busy ? "Đang xử lý..." : "Xác nhận huỷ món"}
           </Button>
         </div>
       </div>

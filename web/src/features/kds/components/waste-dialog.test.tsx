@@ -12,8 +12,8 @@ function renderDialog(props: WasteDialogProps) {
 }
 
 describe("WasteDialog", () => {
-  it("renders nothing without a target unit", () => {
-    expect(renderDialog({ unit: null, onClose: () => {} })).toBe("");
+  it("unmounts the stateful form without a target unit", () => {
+    expect(renderToString(<WasteDialog unit={null} onClose={() => {}} />)).toBe("");
   });
 
   it("shows the unit and every reason option", () => {
