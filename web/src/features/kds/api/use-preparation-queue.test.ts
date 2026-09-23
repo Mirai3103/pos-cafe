@@ -1,6 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { usePreparationQueue, PREPARATION_QUEUE_POLL_MS } from "./use-preparation-queue";
+import type { PreparationQueueResponse } from "@/api/generated/models";
 import { ERROR_MESSAGES } from "@/lib/error-messages";
+import type { UseQueryResult } from "@tanstack/react-query";
+import type { ApiError } from "@/lib/unwrap";
+
+type ExpectedPreparationQueueResult = UseQueryResult<PreparationQueueResponse, ApiError>;
+type AssertPreparationQueueResult<T extends ExpectedPreparationQueueResult> = T;
+type PreparationQueueResultContract = AssertPreparationQueueResult<
+  ReturnType<typeof usePreparationQueue>
+>;
 
 describe("usePreparationQueue", () => {
   it("is exported", () => {
