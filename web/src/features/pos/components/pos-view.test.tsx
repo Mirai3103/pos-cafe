@@ -408,5 +408,132 @@ describe("pos-view coordinator", () => {
       expect(html).not.toContain("Thanh toán (F9)");
       expect(html).not.toContain("Tạm tính");
     });
+
+    it("renders the DineInPanel (not CheckPanel/DraftPanel) and enables ordering when a DINE_IN session can order", () => {
+      mockShiftState.data = { state: "OPEN" };
+      mockMenuState.data = {
+        categories: [
+          {
+            id: "cat-tra",
+            name: "Trà",
+            items: [
+              {
+                id: "item-tra-1",
+                name: "Trà đào cam sả",
+                price_vnd: 39000,
+              },
+            ],
+          },
+        ],
+      };
+      mockSessionState.data = {
+        id: "session-dinein-1",
+        service_number: "201",
+        service_mode: "DINE_IN",
+        state: "ACTIVE",
+        tables: [{ id: "t1", name: "Bàn 5" }],
+        checks: [
+          {
+            id: "check-dinein-1",
+            state: "OPEN",
+            charge_vnd: 55000,
+            balance_vnd: 55000,
+            payments: [],
+            allocations: [
+              {
+                id: "alloc-dinein-1",
+                name: "Trà đào cam sả",
+                allocated_quantity: 1,
+                amount_vnd: 55000,
+                submitted: true,
+              },
+            ],
+          },
+        ],
+        orders: [{ id: "order-dinein-1" }],
+        preparation_units: [{ id: "unit-dinein-1", state: "FULFILLED" }],
+      };
+
+      const html = renderPosView();
+
+      // DineInPanel-only chrome: DineInHeader's change-tables button and
+      // DineInActions' leave-to-floor button. Neither CheckPanel nor
+      // DraftPanel ever renders these strings.
+      expect(html).toContain("Đổi bàn");
+      expect(html).toContain("Về sơ đồ bàn");
+      expect(html).toContain("Khách dùng tại bàn");
+      // The open Check has no draft in progress, so DineInActions offers
+      // collecting, with F9 bound to it (no unsubmitted round to send first).
+      expect(html).toContain("Thu tiền (F9)");
+
+      // The takeaway-only chrome from CheckPanel/DraftPanel must not appear.
+      expect(html).not.toContain("Đơn mang đi");
+      expect(html).not.toContain("Thanh toán (F9)");
+
+      // MenuGrid: canOrder is true and the shift is open, so the item card
+      // renders enabled (no disabled styling on the card).
+      expect(html).toContain("Trà đào cam sả");
+      expect(html).not.toContain("opacity-50 cursor-not-allowed");
+    });
+
+    it("disables MenuGrid ordering and offers Gửi bếp when a DINE_IN round is committed but unsubmitted", () => {
+      mockShiftState.data = { state: "OPEN" };
+      mockMenuState.data = {
+        categories: [
+          {
+            id: "cat-tra",
+            name: "Trà",
+            items: [
+              {
+                id: "item-tra-1",
+                name: "Trà đào cam sả",
+                price_vnd: 39000,
+              },
+            ],
+          },
+        ],
+      };
+      mockSessionState.data = {
+        id: "session-dinein-2",
+        service_number: "202",
+        service_mode: "DINE_IN",
+        state: "ACTIVE",
+        tables: [{ id: "t2", name: "Bàn 7" }],
+        checks: [
+          {
+            id: "check-dinein-2",
+            state: "OPEN",
+            charge_vnd: 40000,
+            balance_vnd: 40000,
+            payments: [],
+            allocations: [
+              {
+                id: "alloc-dinein-2",
+                name: "Cà phê đen",
+                allocated_quantity: 1,
+                amount_vnd: 40000,
+                // Committed to the Check but not yet sent to the bar: this is
+                // what makes deriveDineInStatus().canOrder false.
+                submitted: false,
+              },
+            ],
+          },
+        ],
+        orders: [{ id: "order-dinein-2" }],
+        preparation_units: [],
+      };
+
+      const html = renderPosView();
+
+      // DineInPanel warns that ordering is blocked until the round is sent...
+      expect(html).toContain("Gửi bếp lượt trước để gọi thêm");
+      // ...and DineInActions' F9 binding goes to sending, not collecting.
+      expect(html).toContain("Gửi bếp (F9)");
+
+      // MenuGrid: canOrder is false (dineInStatus gates disabled here, not
+      // phase), so the item card renders with its disabled styling.
+      expect(html).toContain("Trà đào cam sả");
+      expect(html).toContain("opacity-50 cursor-not-allowed");
+    });
   });
 });
