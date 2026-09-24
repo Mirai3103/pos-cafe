@@ -14,6 +14,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   CORRECT_TARGET,
@@ -156,20 +157,13 @@ export function TicketCard({
           const failed = failedUnitIds.has(unit.id);
           const isSelected = selected.has(unit.id);
           return (
-            <div key={unit.id} className="min-h-[44px] py-1 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => toggle(unit.id)}
-                className={cn(
-                  "h-9 w-9 rounded-xl border flex items-center justify-center transition shrink-0 cursor-pointer",
-                  isSelected
-                    ? "bg-emerald-600 border-emerald-600 text-white shadow-2xs"
-                    : "border-slate-300 bg-white hover:border-emerald-500 text-transparent",
-                )}
+            <div key={unit.id} className="py-1.5 flex items-start gap-2.5">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => toggle(unit.id)}
+                className="mt-0.5"
                 aria-label={`Chọn ${unit.itemName} #${unit.unitNumber}`}
-              >
-                <Check className="h-4 w-4 stroke-[2.5]" />
-              </button>
+              />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">
