@@ -14,6 +14,7 @@ const order = (overrides: Partial<PendingOrder>): PendingOrder => ({
   progress: { done: 1, total: 3 },
   totalVnd: 47_000,
   itemSummary: "Cà phê sữa đá",
+  tableLabel: null,
   ...overrides,
 });
 

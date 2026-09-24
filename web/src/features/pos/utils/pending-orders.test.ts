@@ -30,12 +30,12 @@ const paid = (submitted: boolean) => [
 ];
 
 describe("toPendingOrders", () => {
-  it("keeps takeaway sessions only", () => {
+  it("keeps both takeaway and dine-in sessions", () => {
     const orders = toPendingOrders([
       s({ id: "t", service_mode: "TAKEAWAY" }),
       s({ id: "d", service_mode: "DINE_IN" }),
     ]);
-    expect(orders.map((o) => o.sessionId)).toEqual(["t"]);
+    expect(orders.map((o) => o.sessionId).sort()).toEqual(["d", "t"]);
   });
 
   it("puts ready-to-close first, then awaiting-submit, then the rest oldest first", () => {
@@ -80,6 +80,42 @@ describe("toPendingOrders", () => {
       s({ id: "b", checks: paid(false) }),
     ]);
     expect(countReadyToClose(orders)).toBe(1);
+  });
+});
+
+describe("dine-in rows", () => {
+  const dineIn = {
+    id: "d1",
+    service_number: "020",
+    service_mode: "DINE_IN",
+    state: "ACTIVE",
+    created_at: "2026-09-27T01:00:00Z",
+    tables: [{ id: "t1", name: "Bàn 5" }],
+    draft: null,
+    checks: [
+      {
+        id: "c1",
+        state: "OPEN",
+        charge_vnd: 30_000,
+        balance_vnd: 30_000,
+        allocations: [{ id: "a1", name: "Bạc xỉu", amount_vnd: 30_000, submitted: true }],
+        payments: [],
+      },
+    ],
+    orders: [{ id: "o1" }],
+    preparation_units: [{ id: "u1", state: "FULFILLED" }],
+  };
+
+  it("lists dine-in Sessions with their Tables and dine-in label", () => {
+    const [row] = toPendingOrders([dineIn] as never);
+    expect(row.sessionId).toBe("d1");
+    expect(row.tableLabel).toBe("Bàn 5");
+    expect(row.phase).toBe("AWAITING_PAYMENT");
+  });
+
+  it("keeps takeaway rows without a Table label", () => {
+    const [row] = toPendingOrders([{ ...dineIn, id: "t", service_mode: "TAKEAWAY", tables: [] }] as never);
+    expect(row.tableLabel).toBeNull();
   });
 });
 

@@ -23,6 +23,9 @@ mock.module("@tanstack/react-router", () => ({
       {children}
     </a>
   ),
+  // PosView calls useNavigate unconditionally (leaving the floor / dismissing
+  // a dine-in sale); a no-op stub keeps the render tests off the real router.
+  useNavigate: () => () => {},
 }));
 
 // Mock hooks
@@ -106,6 +109,14 @@ mock.module("../api/use-checkout", () => ({
   usePayCash: () => ({
     payCash: async () => ({}),
   }),
+  // useDineInFlow (Task 7) imports these alongside the checkout hooks above,
+  // and runs unmocked inside PosView, so this module's mock must cover its
+  // full shape too, not just what useCheckoutFlow needs.
+  useSubmitOrder: () => ({
+    submitOrder: async () => ({}),
+  }),
+  SUBMIT_ALREADY_DONE_CODES: new Set(["NOTHING_TO_SUBMIT"]),
+  COMMIT_FAILURE_CODES: new Set(["EMPTY_DRAFT"]),
   // PosView drives checkout through this hook, so stubbing it is what keeps
   // the render tests off the real mutation hooks.
   useCheckoutFlow: () => ({

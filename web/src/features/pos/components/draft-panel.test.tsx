@@ -265,7 +265,7 @@ describe("DraftPanel", () => {
 
     // Disabled CTAs per scope boundaries
     expect(html).toContain("Hủy đơn");
-    expect(html).toContain("Tại bàn (F2)");
+    expect(html).toContain("Tại bàn");
     expect(html).toContain("Tiền mặt");
     expect(html).toContain("VietQR");
     expect(html).toContain("Thanh toán (F9)");
