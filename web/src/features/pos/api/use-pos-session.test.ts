@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { shouldDropSessionPointer, usePosSession } from "./use-pos-session";
+import { selectPosSession, shouldDropSessionPointer, usePosSession } from "./use-pos-session";
 
 describe("shouldDropSessionPointer", () => {
   it("keeps an active session", () => {
@@ -24,5 +24,13 @@ describe("shouldDropSessionPointer", () => {
 describe("usePosSession", () => {
   it("is exported", () => {
     expect(typeof usePosSession).toBe("function");
+  });
+});
+
+describe("selectPosSession", () => {
+  it("stores the pointer the POS reads on mount", () => {
+    if (typeof sessionStorage === "undefined") return;
+    selectPosSession("s-42");
+    expect(sessionStorage.getItem("pos_active_session_id")).toBe("s-42");
   });
 });

@@ -31,6 +31,14 @@ function writeStoredSessionId(id: string | null): void {
 }
 
 /**
+ * Points this tab's POS at a Session before navigating to it. The floor view
+ * uses it to hand a seated party to the cashier terminal.
+ */
+export function selectPosSession(id: string): void {
+  writeStoredSessionId(id);
+}
+
+/**
  * Whether the stored pointer no longer names a session this terminal can show.
  * A CLOSED session is kept: the close flow reads back its Completed Sale and
  * clears the pointer when the cashier dismisses it.
