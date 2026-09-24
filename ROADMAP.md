@@ -54,6 +54,8 @@ Frontend, all under Phase 11's UI half:
 [multi-screen suite prototype](docs/superpowers/specs/2026-09-20-pos-screens-suite-design.md),
 [admin menu and topping forms](docs/superpowers/specs/2026-09-20-admin-menu-topping-forms-design.md),
 [slice sequence](docs/superpowers/specs/2026-09-21-web-frontend-slice-sequence-design.md) (in review).
+[Slice 7, tables and dine-in](docs/superpowers/specs/2026-09-27-web-slice-7-tables-dine-in-design.md)
+adds table sessions and dine-in ordering to the POS terminal.
 The first four produced the static prototype in `design-system/pos-cafe/` and the
 placeholder React shell. The fifth orders their replacement by API-backed screens.
 
@@ -78,8 +80,8 @@ criteria live in the ticket, not here.
 
 Phase 11 is the one exception to "no approved Go design exists": its UI half has a
 design, and slices 1 through 6 of the sequence satisfy its Sign-in, Cashier, and
-Preparation Queue criteria. Its packaging, LAN-binding, and Local Access QR half is
-still `ready-for-design`.
+Preparation Queue criteria; slice 7 adds Tables and dine-in. Its packaging,
+LAN-binding, and Local Access QR half is still `ready-for-design`.
 
 ```
 07 ─┐
