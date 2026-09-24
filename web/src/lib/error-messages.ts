@@ -62,6 +62,16 @@ export const ERROR_MESSAGES: Record<string, string> = {
   ORDER_REQUIRED_FOR_CLOSURE: "Đơn chưa có món nào được gửi bếp.",
   PENDING_REFUND_FOR_CLOSURE: "Đơn còn khoản hoàn tiền chưa xử lý. Vui lòng báo quản lý.",
   COMPLETED_SALE_NOT_FOUND: "Không tìm thấy hóa đơn hoàn tất.",
+  PREPARATION_UNIT_NOT_FOUND: "Không tìm thấy món cần pha chế.",
+  INVALID_TRANSITION: "Món đã chuyển sang trạng thái khác. Vui lòng tải lại màn hình.",
+  INVALID_STORED_RESULT: "Yêu cầu trước đó gặp lỗi. Vui lòng thử lại.",
+  PREPARATION_ALERT_NOT_FOUND: "Không tìm thấy cảnh báo này.",
+  PREPARATION_WASTE_NOT_FOUND: "Không tìm thấy bản ghi huỷ món này.",
+  INVALID_PREPARATION_REASON: "Lý do không hợp lệ.",
+  PREPARATION_ALERT_ALREADY_ACKNOWLEDGED: "Cảnh báo này đã được xác nhận.",
+  PREPARATION_WASTE_ALREADY_REMADE: "Món này đã được pha lại trước đó.",
+  NOT_AUTHORIZED: "Mã PIN Quản lý không đúng hoặc không có quyền thực hiện thao tác này.",
+  INVALID_INPUT: "Dữ liệu gửi lên không hợp lệ.",
 };
 
 const NETWORK_MESSAGE = "Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại.";
