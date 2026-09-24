@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactElement } from "react";
-import { X } from "lucide-react";
+import { Pencil, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { newRequestId } from "@/lib/command";
@@ -42,23 +42,72 @@ function TableNameForm({ target, onClose }: { target: TableNameTarget; onClose: 
     }
   }
 
-  const title = target.mode === "create" ? "Thêm bàn" : "Đổi tên bàn";
+  const isCreate = target.mode === "create";
+  const title = isCreate ? "Thêm bàn mới" : "Đổi tên bàn";
+  const subtitle = isCreate ? "Thiết lập tên bàn hiển thị trên sơ đồ" : "Cập nhật tên bàn hiển thị";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div role="dialog" aria-modal="true" aria-labelledby="table-name-title" className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-xl">
-        <div className="flex items-start justify-between">
-          <h2 id="table-name-title" className="text-base font-bold">{title}</h2>
-          <button type="button" aria-label="Đóng" onClick={onClose} disabled={isPending} className="h-12 w-12 rounded-xl flex items-center justify-center hover:bg-muted">
-            <X className="h-4 w-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="table-name-title"
+        className="flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-border bg-card p-6 shadow-2xl"
+      >
+        <div className="flex items-center justify-between pb-3 border-b border-border">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-muted text-foreground flex items-center justify-center border border-border">
+              {isCreate ? <Plus className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
+            </div>
+            <div>
+              <h2 id="table-name-title" className="text-base font-bold text-foreground">
+                {title}
+              </h2>
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Đóng"
+            onClick={onClose}
+            disabled={isPending}
+            className="h-12 w-12 min-h-[48px] min-w-[48px] rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="space-y-1">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ví dụ: Bàn 9" className="h-12" autoFocus />
+
+        <div className="space-y-1.5">
+          <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            Tên bàn:
+          </label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ví dụ: Bàn 09"
+            className="h-12 rounded-xl text-sm font-semibold"
+            autoFocus
+          />
           {error && <p role="alert" className="text-xs font-semibold text-destructive">{error}</p>}
         </div>
-        <Button onClick={handleSave} disabled={isPending || !name.trim()} className="h-12 min-h-[48px] rounded-xl font-bold">
-          {isPending ? "Đang lưu..." : "Lưu"}
-        </Button>
+
+        <div className="pt-2 border-t border-border flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isPending}
+            className="min-h-[48px] h-12 px-4 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold text-foreground transition"
+          >
+            Hủy bỏ
+          </button>
+          <Button
+            onClick={handleSave}
+            disabled={isPending || !name.trim()}
+            className="min-h-[48px] h-12 px-6 rounded-xl font-bold"
+          >
+            {isPending ? "Đang lưu..." : "Lưu"}
+          </Button>
+        </div>
       </div>
     </div>
   );
