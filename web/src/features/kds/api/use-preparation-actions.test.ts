@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { QueryClient } from "@tanstack/react-query";
 
 type MutationName = "advance" | "advanceMany" | "waste" | "remake" | "correct" | "acknowledge";
 
@@ -41,14 +42,34 @@ function mutation(name: MutationName) {
   };
 }
 
+// Bun's `mock.module` permanently binds the *function identity* of each named export
+// it defines to the "@tanstack/react-query" specifier for the rest of the test process
+// (confirmed empirically: neither `mock.restore()` nor re-registering `mock.module`
+// with the real module afterwards can un-stub a previously-stubbed export — later
+// re-registrations only add exports that were never stubbed in the first place). Any
+// later test file's real `useMutation` internally re-resolves `useQueryClient` off this
+// same stubbed binding, so once `useQueryClient` is stubbed here it stays stubbed.
+//
+// To avoid leaking a broken stub into later files (e.g. open-table-dialog.test.tsx's
+// real `useStartDineInSession` → `useMutation` chain), the stubbed function itself
+// never changes, but what it *returns* is a mutable indirection cell. Once this file's
+// tests are done, `afterAll` swaps that cell to a real `QueryClient` instance, so any
+// later file that calls the (still-stubbed) `useQueryClient()` gets a fully working
+// client instead of the plain object this file needs for its own assertions.
+let currentQueryClient: { invalidateQueries: (filters: unknown) => Promise<unknown> } = {
+  invalidateQueries: (filters: unknown) => {
+    invalidations.push(filters);
+    return Promise.resolve();
+  },
+};
+
 mock.module("@tanstack/react-query", () => ({
-  useQueryClient: () => ({
-    invalidateQueries: (filters: unknown) => {
-      invalidations.push(filters);
-      return Promise.resolve();
-    },
-  }),
+  useQueryClient: () => currentQueryClient,
 }));
+
+afterAll(() => {
+  currentQueryClient = new QueryClient() as unknown as typeof currentQueryClient;
+});
 
 mock.module("@/api/generated/endpoints/preparation/preparation", () => ({
   usePostPreparationUnitsUnitIdAdvance: () => mutation("advance"),
