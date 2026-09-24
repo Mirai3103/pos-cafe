@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
-import { ChefHat, WifiOff } from "lucide-react";
+import { Coffee, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { messageForError } from "@/lib/error-messages";
 import { usePreparationQueue } from "../api/use-preparation-queue";
@@ -118,10 +118,28 @@ export function KdsView(): ReactElement {
   const board = buildBoard(units, categoryFilter);
 
   return (
-    <div className="flex flex-col gap-4 p-4 h-full min-h-0">
-      <div className="flex items-center gap-2">
-        <ChefHat className="w-5 h-5 text-primary" />
-        <h1 className="text-base font-bold text-foreground">Màn hình bếp</h1>
+    <div className="flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 md:p-6 h-full min-h-0 bg-slate-50 text-slate-900 overflow-hidden select-none">
+      {/* Top Header Bar */}
+      <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-200 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/60 font-bold shadow-2xs shrink-0">
+            <Coffee className="w-5 h-5" />
+          </div>
+          <div className="flex flex-col text-left">
+            <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">Màn hình Điều phối Pha chế (KDS)</h1>
+            <span className="text-[11px] font-medium text-emerald-600 leading-tight flex items-center gap-1.5 mt-0.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Pha chế & Bếp · Tự động làm mới 5s
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2 px-3.5 h-10 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Đang chờ chế biến: <strong className="font-mono text-slate-900 font-bold">{units.length}</strong> món</span>
+          </div>
+        </div>
       </div>
 
       <AlertsPanel alerts={data?.alerts ?? []} busy={actions.isPending} onAcknowledge={handleAcknowledge} />
@@ -149,7 +167,7 @@ export function KdsView(): ReactElement {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 flex-1 min-h-0">
         {COLUMN_KEYS.map((column) => (
           <QueueColumn
             key={column}

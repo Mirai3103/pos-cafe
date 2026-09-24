@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Coffee, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface CategoryFilterBarProps {
@@ -10,18 +11,21 @@ export interface CategoryFilterBarProps {
 export function CategoryFilterBar({ categories, active, onSelect }: CategoryFilterBarProps): ReactElement | null {
   if (categories.length === 0) return null;
 
-  const chipClass = (isActive: boolean) =>
-    cn(
-      "h-9 shrink-0 rounded-full border px-3.5 text-xs font-semibold transition",
-      isActive
-        ? "border-primary bg-primary text-primary-foreground"
-        : "border-border bg-background text-muted-foreground hover:bg-muted",
-    );
-
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-1">
-      <button type="button" aria-pressed={active === null} onClick={() => onSelect(null)} className={chipClass(active === null)}>
-        Tất cả
+    <div className="flex items-center gap-2 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80 overflow-x-auto shrink-0">
+      <button
+        type="button"
+        aria-pressed={active === null}
+        onClick={() => onSelect(null)}
+        className={cn(
+          "min-h-[40px] h-10 px-4 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer shrink-0",
+          active === null
+            ? "bg-white text-slate-900 border border-slate-200 shadow-xs font-bold"
+            : "text-slate-600 hover:text-slate-900 hover:bg-white/60",
+        )}
+      >
+        <Layers className="w-4 h-4 text-emerald-600" />
+        <span>Tất cả</span>
       </button>
       {categories.map((category) => (
         <button
@@ -29,9 +33,15 @@ export function CategoryFilterBar({ categories, active, onSelect }: CategoryFilt
           type="button"
           aria-pressed={active === category}
           onClick={() => onSelect(category)}
-          className={chipClass(active === category)}
+          className={cn(
+            "min-h-[40px] h-10 px-4 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer shrink-0",
+            active === category
+              ? "bg-white text-slate-900 border border-slate-200 shadow-xs font-bold"
+              : "text-slate-600 hover:text-slate-900 hover:bg-white/60",
+          )}
         >
-          {category}
+          <Coffee className="w-4 h-4 text-slate-500" />
+          <span>{category}</span>
         </button>
       ))}
     </div>

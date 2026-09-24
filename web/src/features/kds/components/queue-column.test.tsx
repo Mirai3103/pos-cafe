@@ -45,7 +45,8 @@ describe("QueueColumn", () => {
       <QueueColumn {...base} tickets={[{ ...ticket, units: [ticket.units[0], secondUnit] }]} />,
     );
     expect(html).toContain("Chờ pha");
-    expect(html).toContain('<span class="text-xs font-mono text-muted-foreground">2</span>');
+    expect(html).toContain("bg-amber-50 text-amber-800");
+    expect(html).toContain(">2</span>");
   });
 
   it("says so when the column is empty", () => {
