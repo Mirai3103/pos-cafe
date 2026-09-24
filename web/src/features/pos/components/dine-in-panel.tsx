@@ -35,7 +35,9 @@ export function DineInPanel(props: DineInPanelProps) {
   const { session, status, className } = props;
   const draftItems = status.hasEditableDraft ? (session.draft?.items ?? []) : [];
   const checks = listLiveChecks(session);
-  const allocations = checks.flatMap((c) => c.allocations ?? []);
+  // Only what the kitchen actually has; a committed-but-unsubmitted round
+  // (submit failed, or hasn't run yet) is not "Đã gửi bếp" yet.
+  const allocations = checks.flatMap((c) => c.allocations ?? []).filter((a) => a.submitted);
   const owed = checks.reduce((sum, c) => sum + (c.balance_vnd ?? 0), 0);
   const { done, total } = status.progress;
 

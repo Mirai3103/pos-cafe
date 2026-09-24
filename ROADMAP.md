@@ -54,10 +54,10 @@ Frontend, all under Phase 11's UI half:
 [multi-screen suite prototype](docs/superpowers/specs/2026-09-20-pos-screens-suite-design.md),
 [admin menu and topping forms](docs/superpowers/specs/2026-09-20-admin-menu-topping-forms-design.md),
 [slice sequence](docs/superpowers/specs/2026-09-21-web-frontend-slice-sequence-design.md) (in review).
-[Slice 7, tables and dine-in](docs/superpowers/specs/2026-09-27-web-slice-7-tables-dine-in-design.md)
-adds table sessions and dine-in ordering to the POS terminal.
 The first four produced the static prototype in `design-system/pos-cafe/` and the
 placeholder React shell. The fifth orders their replacement by API-backed screens.
+[Slice 7, tables and dine-in](docs/superpowers/specs/2026-09-27-web-slice-7-tables-dine-in-design.md)
+adds table sessions and dine-in ordering to the POS terminal.
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
 `preparation`. Fifty-two architecture decisions are recorded.

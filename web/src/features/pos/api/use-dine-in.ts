@@ -22,6 +22,52 @@ export function classifySendFailure(err: unknown): "draft" | "done" | "retry" {
   return "retry";
 }
 
+export interface PaymentSnapshot {
+  checkId: string;
+  balanceVnd: number;
+}
+
+/**
+ * True when the Check being paid moved since the dialog captured it: a
+ * different Check opened, or its balance changed because another terminal
+ * sent a new round into the same one (the default CURRENT_UNPAID target).
+ * confirmPayment must refuse rather than charge a total the cashier never
+ * saw on screen.
+ */
+export function isPaymentSnapshotStale(
+  captured: PaymentSnapshot | null,
+  current: { id?: string | null; balance_vnd?: number | null } | null | undefined,
+): boolean {
+  if (!captured) return false;
+  if (!current?.id) return true;
+  return current.id !== captured.checkId || (current.balance_vnd ?? 0) !== captured.balanceVnd;
+}
+
+/** Shown when confirmPayment catches the Check drifting under the dialog. */
+export const STALE_PAYMENT_TOTAL_MESSAGE = "Số tiền cần thu đã thay đổi, vui lòng thử lại.";
+
+/**
+ * The payment-dialog fields' values right after a Session switch. Another
+ * Session's payment dialog must never carry over: a stale `isPaymentOpen`
+ * keeps takeaway hotkeys blocked with nothing on screen to explain why, and a
+ * stale `dialogTotalVnd` would show the previous party's total if the dialog
+ * reopened before the cashier noticed. The `[activeSessionId]` effect applies
+ * this same shape, so a change to one is a change to the other.
+ */
+export const PAYMENT_DIALOG_RESET_STATE: {
+  isPaymentOpen: boolean;
+  isPaying: boolean;
+  paymentError: string | null;
+  changeDueVnd: number | null;
+  dialogTotalVnd: number;
+} = {
+  isPaymentOpen: false,
+  isPaying: false,
+  paymentError: null,
+  changeDueVnd: null,
+  dialogTotalVnd: 0,
+};
+
 export interface DineInFlowOptions {
   activeSessionId: string | null;
   status: DineInStatus;
@@ -61,6 +107,13 @@ export function useDineInFlow({ activeSessionId, status, onDraftError }: DineInF
   const commitRequestIdRef = React.useRef<string | null>(null);
   const submitRequestIdRef = React.useRef<string | null>(null);
   const payRequestIdRef = React.useRef<string | null>(null);
+  // Which Check payRequestIdRef was minted for; a different Check (a new one,
+  // or the same id settled and reopened) needs a fresh id so a stale one
+  // can never collide with an unrelated payment.
+  const payRequestCheckIdRef = React.useRef<string | null>(null);
+  // Captured when the dialog opens, so confirmPayment can catch the Check
+  // drifting underneath it instead of silently charging a new total.
+  const paymentSnapshotRef = React.useRef<PaymentSnapshot | null>(null);
 
   const [isSending, setIsSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
@@ -72,13 +125,28 @@ export function useDineInFlow({ activeSessionId, status, onDraftError }: DineInF
   // but the change screen must still show what was collected.
   const [dialogTotalVnd, setDialogTotalVnd] = React.useState(0);
 
-  // Another Session carries other intents.
+  // Another Session carries other intents. The payment dialog belongs to the
+  // party that just left: a stale isPaymentOpen would keep hotkeys blocked on
+  // the next Session, and a stale dialogTotalVnd would show the previous
+  // party's total if the dialog reopened before this ran.
   React.useEffect(() => {
     commitRequestIdRef.current = null;
     submitRequestIdRef.current = null;
     payRequestIdRef.current = null;
+    payRequestCheckIdRef.current = null;
+    paymentSnapshotRef.current = null;
     // oxlint-disable-next-line react/set-state-in-effect
     setSendError(null);
+    // oxlint-disable-next-line react/set-state-in-effect
+    setIsPaymentOpen(PAYMENT_DIALOG_RESET_STATE.isPaymentOpen);
+    // oxlint-disable-next-line react/set-state-in-effect
+    setIsPaying(PAYMENT_DIALOG_RESET_STATE.isPaying);
+    // oxlint-disable-next-line react/set-state-in-effect
+    setPaymentError(PAYMENT_DIALOG_RESET_STATE.paymentError);
+    // oxlint-disable-next-line react/set-state-in-effect
+    setChangeDueVnd(PAYMENT_DIALOG_RESET_STATE.changeDueVnd);
+    // oxlint-disable-next-line react/set-state-in-effect
+    setDialogTotalVnd(PAYMENT_DIALOG_RESET_STATE.dialogTotalVnd);
   }, [activeSessionId]);
 
   const refetchSession = () =>
@@ -126,8 +194,19 @@ export function useDineInFlow({ activeSessionId, status, onDraftError }: DineInF
 
   const openPaymentDialog = () => {
     if (!canCollect(status)) return;
-    payRequestIdRef.current = payRequestIdRef.current ?? newRequestId();
-    setDialogTotalVnd(status.openCheck?.balance_vnd ?? 0);
+    const check = status.openCheck;
+    const checkId = check?.id ?? null;
+    // A different Check than the one the current request id was minted for
+    // needs its own id; reusing it could collide with an unrelated payment.
+    if (payRequestCheckIdRef.current !== checkId) {
+      payRequestIdRef.current = newRequestId();
+      payRequestCheckIdRef.current = checkId;
+    } else {
+      payRequestIdRef.current = payRequestIdRef.current ?? newRequestId();
+    }
+    const balanceVnd = check?.balance_vnd ?? 0;
+    paymentSnapshotRef.current = checkId ? { checkId, balanceVnd } : null;
+    setDialogTotalVnd(balanceVnd);
     setPaymentError(null);
     setChangeDueVnd(null);
     setIsPaymentOpen(true);
@@ -142,7 +221,21 @@ export function useDineInFlow({ activeSessionId, status, onDraftError }: DineInF
   /** Pays the open Check in full. Never commits: rounds are sent separately. */
   const confirmPayment = async (tenderedVnd: number) => {
     const check = status.openCheck;
-    if (!activeSessionId || !check?.id) return;
+    if (!activeSessionId || !check?.id || !canCollect(status)) return;
+    if (isPaymentSnapshotStale(paymentSnapshotRef.current, check)) {
+      // The Check moved under the dialog: a new one opened, or another
+      // terminal sent a round into this one and changed the balance. Refresh
+      // what is shown and make the cashier confirm the new total instead of
+      // silently charging the one captured when the dialog opened.
+      if (payRequestCheckIdRef.current !== check.id) {
+        payRequestIdRef.current = newRequestId();
+        payRequestCheckIdRef.current = check.id;
+      }
+      paymentSnapshotRef.current = { checkId: check.id, balanceVnd: check.balance_vnd ?? 0 };
+      setDialogTotalVnd(check.balance_vnd ?? 0);
+      setPaymentError(STALE_PAYMENT_TOTAL_MESSAGE);
+      return;
+    }
     setPaymentError(null);
     setIsPaying(true);
     try {
@@ -168,6 +261,8 @@ export function useDineInFlow({ activeSessionId, status, onDraftError }: DineInF
     setChangeDueVnd(null);
     setPaymentError(null);
     payRequestIdRef.current = null;
+    payRequestCheckIdRef.current = null;
+    paymentSnapshotRef.current = null;
   };
 
   return {

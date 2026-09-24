@@ -68,6 +68,20 @@ export function recoverAfterRoundConflict(
 }
 
 /**
+ * Whether ensureDraft should actually open a round: only for the Session
+ * still current when it runs (a switch mid-flight must not open a round on
+ * the Session the cashier already left), and only when that Session needs
+ * one at all. A dine-in Session with an editable draft, or unsubmitted work
+ * still waiting on a commit, must never have a second round opened under it.
+ */
+export function shouldOpenNextRound(
+  current: SalesServiceSessionResponse | null | undefined,
+  sessionId: string,
+): boolean {
+  return Boolean(current) && current?.id === sessionId && needsNewRound(current);
+}
+
+/**
  * Owns the single active Service Session pointer for this browser tab.
  *
  * The Session is opened lazily, on the first item added, so browsing the menu
@@ -104,8 +118,7 @@ export function usePosSession(): PosSessionHandle {
    */
   const ensureDraft = React.useCallback(
     async (sessionId: string): Promise<void> => {
-      const current = sessionRef.current;
-      if (!current || current.id !== sessionId || !needsNewRound(current)) return;
+      if (!shouldOpenNextRound(sessionRef.current, sessionId)) return;
       if (openingRoundRef.current) return await openingRoundRef.current;
 
       const promise = (async () => {

@@ -3,6 +3,7 @@ import {
   recoverAfterRoundConflict,
   selectPosSession,
   shouldDropSessionPointer,
+  shouldOpenNextRound,
   usePosSession,
 } from "./use-pos-session";
 
@@ -37,6 +38,60 @@ describe("selectPosSession", () => {
     if (typeof sessionStorage === "undefined") return;
     selectPosSession("s-42");
     expect(sessionStorage.getItem("pos_active_session_id")).toBe("s-42");
+  });
+});
+
+/**
+ * ensureDraft calls startNextDraft only when this predicate holds; the
+ * dedup-in-flight behaviour lives in a ref inside the hook and needs no
+ * separate test here, since it only ever guards a second call once this
+ * predicate has already said yes.
+ */
+describe("shouldOpenNextRound", () => {
+  it("opens a round for a dine-in Session between rounds", () => {
+    expect(
+      shouldOpenNextRound({ id: "s1", service_mode: "DINE_IN", draft: null, checks: [] }, "s1"),
+    ).toBe(true);
+  });
+
+  it("is a no-op when the Session still has an editable draft", () => {
+    expect(
+      shouldOpenNextRound(
+        { id: "s1", service_mode: "DINE_IN", draft: { state: "EDITABLE", items: [] } },
+        "s1",
+      ),
+    ).toBe(false);
+  });
+
+  it("is a no-op for a takeaway Session", () => {
+    expect(
+      shouldOpenNextRound({ id: "s1", service_mode: "TAKEAWAY", draft: null }, "s1"),
+    ).toBe(false);
+  });
+
+  it("is a no-op once another Session became current before this one ran", () => {
+    expect(
+      shouldOpenNextRound({ id: "s2", service_mode: "DINE_IN", draft: null }, "s1"),
+    ).toBe(false);
+  });
+
+  it("is a no-op while the previous round is still unsubmitted", () => {
+    expect(
+      shouldOpenNextRound(
+        {
+          id: "s1",
+          service_mode: "DINE_IN",
+          draft: null,
+          checks: [{ id: "c1", state: "OPEN", allocations: [{ id: "a1", submitted: false }] }],
+        },
+        "s1",
+      ),
+    ).toBe(false);
+  });
+
+  it("is a no-op with no current Session at all", () => {
+    expect(shouldOpenNextRound(null, "s1")).toBe(false);
+    expect(shouldOpenNextRound(undefined, "s1")).toBe(false);
   });
 });
 

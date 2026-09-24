@@ -86,6 +86,14 @@ export function PosView() {
   const dineIn = useDineInFlow({ activeSessionId, status: dineInStatus, onDraftError: setErrorMessage });
   const [isChangingTables, setIsChangingTables] = React.useState(false);
 
+  // Another Session took over this terminal: a dialog left open for the
+  // previous party would otherwise keep blocking hotkeys with nothing on
+  // screen to explain why.
+  React.useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
+    setIsChangingTables(false);
+  }, [activeSessionId]);
+
   const leaveToFloor = () => {
     clearSession();
     void navigate({ to: "/tables" });
@@ -405,6 +413,7 @@ export function PosView() {
       <PaymentDialog
         isOpen={isDineIn ? dineIn.isPaymentOpen : checkout.isPaymentOpen}
         serviceNumber={session?.service_number}
+        modeLabel={isDineIn ? "Tại bàn" : "Đơn mang đi"}
         totalVnd={isDineIn ? dineIn.paymentTotalVnd : paymentTotal}
         isCommitted={isDineIn || phase === "AWAITING_PAYMENT"}
         isSubmitting={isDineIn ? dineIn.isPaying : checkout.isPaying}

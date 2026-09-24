@@ -53,4 +53,45 @@ describe("DineInPanel", () => {
     expect(html).toContain("Đã gửi bếp");
     expect(html).toContain("0/1");
   });
+
+  it("never lists a committed-but-unsubmitted allocation as already sent to the kitchen", () => {
+    const withUnsubmittedRound = {
+      ...session,
+      checks: [
+        {
+          id: "c1",
+          state: "OPEN",
+          charge_vnd: 60_000,
+          balance_vnd: 60_000,
+          allocations: [
+            { id: "a1", name: "Bạc xỉu", allocated_quantity: 1, amount_vnd: 30_000, submitted: true },
+            { id: "a2", name: "Trà đào", allocated_quantity: 1, amount_vnd: 30_000, submitted: false },
+          ],
+          payments: [],
+        },
+      ],
+    } as SalesServiceSessionResponse;
+
+    const html = renderToString(
+      <DineInPanel
+        session={withUnsubmittedRound}
+        status={deriveDineInStatus(withUnsubmittedRound)}
+        isShiftOpen
+        sendError={null}
+        isSending={false}
+        isClosing={false}
+        onEditItem={noop}
+        onQuantityChange={noop}
+        onRemoveItem={noop}
+        onSend={noop}
+        onCollect={noop}
+        onClose={noop}
+        onLeave={noop}
+        onChangeTables={noop}
+      />,
+    );
+    expect(html).toContain("Đã gửi bếp");
+    expect(html).toContain("Bạc xỉu");
+    expect(html).not.toContain("Trà đào");
+  });
 });
