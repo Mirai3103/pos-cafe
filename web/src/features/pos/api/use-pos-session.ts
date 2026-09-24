@@ -1,5 +1,9 @@
 import * as React from "react";
-import { useServiceSession, useStartTakeawaySession } from "./use-pos";
+import { useQueryClient } from "@tanstack/react-query";
+import { getGetSalesServiceSessionsIdQueryKey } from "@/api/generated/endpoints/sales/sales";
+import { ApiError } from "@/lib/unwrap";
+import { needsNewRound } from "../utils/dine-in";
+import { useServiceSession, useStartNextDraft, useStartTakeawaySession } from "./use-pos";
 import type { SalesServiceSessionResponse } from "@/api/generated/models";
 
 const STORAGE_SESSION_KEY = "pos_active_session_id";
@@ -11,6 +15,7 @@ export interface PosSessionHandle {
   ensureSessionId: () => Promise<string>;
   clearSession: () => void;
   switchSession: (id: string) => void;
+  ensureDraft: (sessionId: string) => Promise<void>;
 }
 
 function readStoredSessionId(): string | null {
@@ -53,6 +58,16 @@ export function shouldDropSessionPointer(
 }
 
 /**
+ * NEW_ORDER_DRAFT_NOT_AVAILABLE after a refetch: another terminal may already
+ * have opened the round, in which case the add can go ahead.
+ */
+export function recoverAfterRoundConflict(
+  projection: SalesServiceSessionResponse | null | undefined,
+): boolean {
+  return projection?.draft?.state === "EDITABLE";
+}
+
+/**
  * Owns the single active Service Session pointer for this browser tab.
  *
  * The Session is opened lazily, on the first item added, so browsing the menu
@@ -72,6 +87,46 @@ export function usePosSession(): PosSessionHandle {
 
   const { data: session, isError: isSessionError } = useServiceSession(activeSessionId);
   const { startTakeaway } = useStartTakeawaySession();
+
+  const queryClient = useQueryClient();
+  const { startNextDraft } = useStartNextDraft();
+  const sessionRef = React.useRef(session);
+  React.useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+  const openingRoundRef = React.useRef<Promise<void> | null>(null);
+
+  /**
+   * A dine-in Session between rounds has no editable draft; the first item of
+   * the next round opens one. Deduplicated like the lazy takeaway Session, so
+   * a burst of taps opens one round, and never run otherwise, so sending a
+   * round never leaves an empty draft behind.
+   */
+  const ensureDraft = React.useCallback(
+    async (sessionId: string): Promise<void> => {
+      const current = sessionRef.current;
+      if (!current || current.id !== sessionId || !needsNewRound(current)) return;
+      if (openingRoundRef.current) return await openingRoundRef.current;
+
+      const promise = (async () => {
+        try {
+          await startNextDraft(sessionId);
+        } catch (err) {
+          if (!(err instanceof ApiError && err.code === "NEW_ORDER_DRAFT_NOT_AVAILABLE")) throw err;
+          const key = getGetSalesServiceSessionsIdQueryKey(sessionId);
+          await queryClient.refetchQueries({ queryKey: key });
+          const cached = queryClient.getQueryData<{ data?: SalesServiceSessionResponse }>(key);
+          if (!recoverAfterRoundConflict(cached?.data)) throw err;
+        } finally {
+          openingRoundRef.current = null;
+        }
+      })();
+
+      openingRoundRef.current = promise;
+      return await promise;
+    },
+    [startNextDraft, queryClient],
+  );
 
   const clearSession = React.useCallback(() => {
     writeStoredSessionId(null);
@@ -127,5 +182,6 @@ export function usePosSession(): PosSessionHandle {
     ensureSessionId,
     clearSession,
     switchSession,
+    ensureDraft,
   };
 }

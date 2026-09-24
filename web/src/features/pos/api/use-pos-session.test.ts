@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { selectPosSession, shouldDropSessionPointer, usePosSession } from "./use-pos-session";
+import {
+  recoverAfterRoundConflict,
+  selectPosSession,
+  shouldDropSessionPointer,
+  usePosSession,
+} from "./use-pos-session";
 
 describe("shouldDropSessionPointer", () => {
   it("keeps an active session", () => {
@@ -32,5 +37,16 @@ describe("selectPosSession", () => {
     if (typeof sessionStorage === "undefined") return;
     selectPosSession("s-42");
     expect(sessionStorage.getItem("pos_active_session_id")).toBe("s-42");
+  });
+});
+
+describe("recoverAfterRoundConflict", () => {
+  it("proceeds when another terminal already opened the round", () => {
+    expect(recoverAfterRoundConflict({ id: "s1", draft: { state: "EDITABLE", items: [] } })).toBe(true);
+  });
+
+  it("gives up when the round is still blocked", () => {
+    expect(recoverAfterRoundConflict({ id: "s1", draft: null })).toBe(false);
+    expect(recoverAfterRoundConflict(undefined)).toBe(false);
   });
 });

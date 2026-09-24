@@ -1,4 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server";
 import type {
   CatalogSellableCategoryResponse,
@@ -93,6 +94,9 @@ mock.module("../api/use-pos", () => ({
     refetch: async () => ({}),
   }),
   useCompletedSale: () => ({ data: undefined, isError: false }),
+  useStartNextDraft: () => ({
+    startNextDraft: async () => ({}),
+  }),
 }));
 
 mock.module("../api/use-checkout", () => ({
@@ -131,6 +135,14 @@ mock.module("../api/use-close-session", () => ({
 
 import { PosView } from "./pos-view";
 import { matchesDraftItemConfig } from "../utils/selection";
+
+function renderPosView() {
+  return renderToString(
+    <QueryClientProvider client={new QueryClient()}>
+      <PosView />
+    </QueryClientProvider>,
+  );
+}
 
 describe("pos-view coordinator", () => {
   beforeEach(() => {
@@ -257,27 +269,27 @@ describe("pos-view coordinator", () => {
   describe("rendering states", () => {
     it("renders loading state when shift query is loading", () => {
       mockShiftState.isLoading = true;
-      const html = renderToString(<PosView />);
+      const html = renderPosView();
       expect(html).toContain("Đang tải thực đơn bán hàng...");
     });
 
     it("renders loading state when menu query is loading", () => {
       mockMenuState.isLoading = true;
-      const html = renderToString(<PosView />);
+      const html = renderPosView();
       expect(html).toContain("Đang tải thực đơn bán hàng...");
     });
 
     it("renders error state with retry button when menu query fails", () => {
       mockMenuState.isError = true;
       mockMenuState.error = new Error("Network timeout");
-      const html = renderToString(<PosView />);
+      const html = renderPosView();
       expect(html).toContain("Không thể tải thực đơn");
       expect(html).toContain("Thử lại");
     });
 
     it("renders closed shift state with NoShiftNotice in draft panel when shift is not open", () => {
       mockShiftState.data = { state: "CLOSED" };
-      const html = renderToString(<PosView />);
+      const html = renderPosView();
       expect(html).toContain("Chưa có ca bán hàng mở");
       expect(html).toContain("Mở ca làm việc");
     });
@@ -300,7 +312,7 @@ describe("pos-view coordinator", () => {
         ],
       };
 
-      const html = renderToString(<PosView />);
+      const html = renderPosView();
       expect(html).toContain("Cà phê");
       expect(html).toContain("Cà phê sữa đá");
       expect(html).toContain("29.000");
@@ -343,7 +355,7 @@ describe("pos-view coordinator", () => {
         },
       };
 
-      const html = renderToString(<PosView />);
+      const html = renderPosView();
       expect(html).toContain("#088");
       expect(html).toContain("60.000"); // 30000 * 2 line total and subtotal
       expect(html).toContain("Cà phê sữa đá");
@@ -377,7 +389,7 @@ describe("pos-view coordinator", () => {
         ],
       };
 
-      const html = renderToString(<PosView />);
+      const html = renderPosView();
       expect(html).toContain("Còn phải thu");
       expect(html).toContain("Thu tiền (F9)");
       expect(html).toContain("47.000");

@@ -9,6 +9,7 @@ import {
   useUpdateDraftItemModifiers,
   useUpdateDraftItemPreparationNote,
   useRemoveDraftItem,
+  useStartNextDraft,
 } from "./use-pos";
 
 describe("use-pos API Seam exports", () => {
@@ -22,5 +23,11 @@ describe("use-pos API Seam exports", () => {
     expect(typeof useUpdateDraftItemModifiers).toBe("function");
     expect(typeof useUpdateDraftItemPreparationNote).toBe("function");
     expect(typeof useRemoveDraftItem).toBe("function");
+  });
+});
+
+describe("useStartNextDraft", () => {
+  it("is exported", () => {
+    expect(typeof useStartNextDraft).toBe("function");
   });
 });
