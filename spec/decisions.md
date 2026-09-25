@@ -780,3 +780,14 @@ CREATE TABLE idempotency_keys (
 * The fingerprint is the list sorted by `(kind, id)`. Rows are locked in one global order (Menu Items then their Sizes, then Modifier Groups then their Options) so that crossed concurrent batches cannot deadlock.
 * **Rejected:** a server-scoped "restore all", which would turn back on an entity another terminal marked unavailable after the operator last saw the list; and one audit event per entity, which would require `ExecuteMutation` to accept several `AuditRecord`s for one caller.
 * **Consequences:** The client must send the list it displayed. One user intent produces one audit event, consistent with ADR-048.
+
+## ADR-056: /settings is guarded per tab, not by staff.administer
+
+* **Decision Date:** 2026-09-28
+* **Status:** Accepted
+* **Context:** ADR-054 recorded `/settings` as requiring `staff.administer`, a Manager-only capability. Web slice 9a puts availability — operational work Cashier and Barista hold `catalog.manage_availability` for — under `/settings`, as the prototype does.
+* **Decision:**
+* `/settings` is a layout route guarded by `requireAnyCapability` over every tab's capability. Each tab is a child route guarded by its own capability; `/settings` itself redirects to the first tab the session may open. `web/src/features/settings/lib/tabs.ts` is the single source for all three.
+* The header hides every navigation entry whose capabilities the session lacks. `/history` stays visible until slice 8 guards it.
+* This supersedes ADR-054's line "`/settings` requires `staff.administer`"; ADR-054's `/no-access` rule is unchanged.
+* **Consequences:** A Barista reaches "Món tạm hết" from the header. Slices 9b and 9c add tabs by appending to `SETTINGS_TABS`, without touching the layout guard.
