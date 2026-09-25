@@ -76,6 +76,8 @@ type Querier interface {
 	// never matches itself. A separate query rather than a nullable exclusion
 	// parameter keeps the add path's query untouched.
 	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
+	// -- Display Details (BA-1) --
+	GetActiveMenuItemIDByCode(ctx context.Context, arg GetActiveMenuItemIDByCodeParams) (uuid.UUID, error)
 	// The one active Shift (OPEN or CLOSING) for the current-Shift read. The
 	// active-Shift unique index permits at most one row in either state; the
 	// ordering and limit keep the query one-row by construction, matching
@@ -804,6 +806,8 @@ type Querier interface {
 	UpdateAdjustedCheckCharge(ctx context.Context, arg UpdateAdjustedCheckChargeParams) error
 	// size_key and note_key are generated columns, so they follow the write.
 	UpdateDraftItemComposition(ctx context.Context, arg UpdateDraftItemCompositionParams) error
+	UpdateMenuCategoryDetails(ctx context.Context, arg UpdateMenuCategoryDetailsParams) (MenuCategory, error)
+	UpdateMenuItemDetails(ctx context.Context, arg UpdateMenuItemDetailsParams) (MenuItem, error)
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
 	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error

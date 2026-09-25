@@ -482,6 +482,28 @@ func (q *Queries) DeleteModifierGroupDefaultOptions(ctx context.Context, modifie
 	return err
 }
 
+const getActiveMenuItemIDByCode = `-- name: GetActiveMenuItemIDByCode :one
+
+SELECT id
+FROM menu_items
+WHERE normalized_code = $1
+  AND retired_at IS NULL
+  AND id <> $2
+`
+
+type GetActiveMenuItemIDByCodeParams struct {
+	NormalizedCode sql.NullString `json:"normalized_code"`
+	ExcludeID      uuid.UUID      `json:"exclude_id"`
+}
+
+// -- Display Details (BA-1) --
+func (q *Queries) GetActiveMenuItemIDByCode(ctx context.Context, arg GetActiveMenuItemIDByCodeParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, getActiveMenuItemIDByCode, arg.NormalizedCode, arg.ExcludeID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getCatalogMutationRequest = `-- name: GetCatalogMutationRequest :one
 SELECT actor_id, request_id, operation, request_hash,
        response_code, response_body, created_at
@@ -2559,4 +2581,85 @@ func (q *Queries) StoreCatalogRequestResult(ctx context.Context, arg StoreCatalo
 		arg.ResponseBody,
 	)
 	return err
+}
+
+const updateMenuCategoryDetails = `-- name: UpdateMenuCategoryDetails :one
+UPDATE menu_categories
+SET icon = $2, display_order = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at,
+          icon, display_order
+`
+
+type UpdateMenuCategoryDetailsParams struct {
+	ID           uuid.UUID      `json:"id"`
+	Icon         sql.NullString `json:"icon"`
+	DisplayOrder int32          `json:"display_order"`
+}
+
+func (q *Queries) UpdateMenuCategoryDetails(ctx context.Context, arg UpdateMenuCategoryDetailsParams) (MenuCategory, error) {
+	row := q.db.QueryRowContext(ctx, updateMenuCategoryDetails, arg.ID, arg.Icon, arg.DisplayOrder)
+	var i MenuCategory
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.CreatedAt,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
+	)
+	return i, err
+}
+
+const updateMenuItemDetails = `-- name: UpdateMenuItemDetails :one
+UPDATE menu_items
+SET code = $2, normalized_code = $3, badge = $4, description = $5, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key
+`
+
+type UpdateMenuItemDetailsParams struct {
+	ID             uuid.UUID      `json:"id"`
+	Code           sql.NullString `json:"code"`
+	NormalizedCode sql.NullString `json:"normalized_code"`
+	Badge          sql.NullString `json:"badge"`
+	Description    sql.NullString `json:"description"`
+}
+
+func (q *Queries) UpdateMenuItemDetails(ctx context.Context, arg UpdateMenuItemDetailsParams) (MenuItem, error) {
+	row := q.db.QueryRowContext(ctx, updateMenuItemDetails,
+		arg.ID,
+		arg.Code,
+		arg.NormalizedCode,
+		arg.Badge,
+		arg.Description,
+	)
+	var i MenuItem
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
+	)
+	return i, err
 }

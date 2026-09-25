@@ -523,3 +523,75 @@ type SetModifierGroupDefaultsRequest struct {
 type MutationRequest struct {
 	RequestID uuid.UUID `json:"request_id"`
 }
+
+// === Display Details (BA-1) ===
+
+// PresentString records whether a JSON key was present, so a missing key and
+// an explicit null are told apart.
+type PresentString struct {
+	Present bool
+	Value   *string
+}
+
+// UnmarshalJSON marks the key present; null leaves Value nil.
+func (p *PresentString) UnmarshalJSON(b []byte) error {
+	p.Present = true
+	if string(b) == "null" {
+		p.Value = nil
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	p.Value = &s
+	return nil
+}
+
+// SetItemDetailsRequest replaces all three display fields. Every key must be
+// present; null clears.
+type SetItemDetailsRequest struct {
+	RequestID   uuid.UUID     `json:"request_id"`
+	Code        PresentString `json:"code" swaggertype:"string" extensions:"x-nullable"`
+	Badge       PresentString `json:"badge" swaggertype:"string" enums:"BEST_SELLER,HOT,NEW,SIGNATURE,CHEF_PICK" extensions:"x-nullable"`
+	Description PresentString `json:"description" swaggertype:"string" extensions:"x-nullable"`
+}
+
+// SetItemDetailsCommand carries the parameters for setting item display fields.
+type SetItemDetailsCommand struct {
+	RequestID   uuid.UUID
+	ItemID      uuid.UUID
+	Code        *string
+	Badge       *string
+	Description *string
+}
+
+// ItemDetailsResponse is an item's display fields.
+type ItemDetailsResponse struct {
+	ItemID      uuid.UUID `json:"item_id"`
+	Code        *string   `json:"code"`
+	Badge       *string   `json:"badge"`
+	Description *string   `json:"description"`
+}
+
+// SetCategoryDetailsRequest sets a category's icon and display order.
+type SetCategoryDetailsRequest struct {
+	RequestID    uuid.UUID `json:"request_id"`
+	Icon         *string   `json:"icon"`
+	DisplayOrder int32     `json:"display_order"`
+}
+
+// SetCategoryDetailsCommand carries the parameters for setting category display fields.
+type SetCategoryDetailsCommand struct {
+	RequestID    uuid.UUID
+	CategoryID   uuid.UUID
+	Icon         *string
+	DisplayOrder int32
+}
+
+// CategoryDetailsResponse is a category's display fields.
+type CategoryDetailsResponse struct {
+	CategoryID   uuid.UUID `json:"category_id"`
+	Icon         *string   `json:"icon"`
+	DisplayOrder int32     `json:"display_order"`
+}

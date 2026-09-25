@@ -79,6 +79,11 @@ func TestMapDBError(t *testing.T) {
 	err = catalog.MapDBError(&pgconn.PgError{Code: "23505", Detail: "key already exists"})
 	assert.True(t, errors.Is(err, catalog.ErrNameConflict))
 
+	// The active-code unique index maps to ErrCodeConflict, not ErrNameConflict
+	err = catalog.MapDBError(&pgconn.PgError{Code: "23505", ConstraintName: "menu_items_active_code_key"})
+	assert.True(t, errors.Is(err, catalog.ErrCodeConflict))
+	assert.False(t, errors.Is(err, catalog.ErrNameConflict))
+
 	// Code 23503 -> ErrNotFound
 	err = catalog.MapDBError(&pgconn.PgError{Code: "23503", Detail: "foreign key missing"})
 	assert.True(t, errors.Is(err, catalog.ErrNotFound))
@@ -113,6 +118,12 @@ func TestMapHTTPError(t *testing.T) {
 			err:        catalog.ErrNameConflict,
 			wantStatus: http.StatusConflict,
 			wantCode:   "CATALOG_NAME_CONFLICT",
+		},
+		{
+			name:       "ErrCodeConflict",
+			err:        catalog.ErrCodeConflict,
+			wantStatus: http.StatusConflict,
+			wantCode:   "CATALOG_CODE_CONFLICT",
 		},
 		{
 			name:       "ErrRequestConflict",

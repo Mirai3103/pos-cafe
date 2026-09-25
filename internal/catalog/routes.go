@@ -21,6 +21,8 @@ type Slices struct {
 	RepriceItem                       *RepriceItemHandler
 	SetItemAvailability               *SetItemAvailabilityHandler
 	RetireItem                        *RetireItemHandler
+	SetItemDetails                    *SetItemDetailsHandler
+	SetCategoryDetails                *SetCategoryDetailsHandler
 	RenameSize                        *RenameSizeHandler
 	RepriceSize                       *RepriceSizeHandler
 	SetSizeAvailability               *SetSizeAvailabilityHandler
@@ -58,6 +60,8 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		RepriceItem:                       NewRepriceItemHandler(runner),
 		SetItemAvailability:               NewSetItemAvailabilityHandler(runner),
 		RetireItem:                        NewRetireItemHandler(runner),
+		SetItemDetails:                    NewSetItemDetailsHandler(runner),
+		SetCategoryDetails:                NewSetCategoryDetailsHandler(runner),
 		RenameSize:                        NewRenameSizeHandler(runner),
 		RepriceSize:                       NewRepriceSizeHandler(runner),
 		SetSizeAvailability:               NewSetSizeAvailabilityHandler(runner),
@@ -105,6 +109,10 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	catalog.PATCH("/items/:item_id/price", s.handleRepriceItem, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))
 	catalog.PATCH("/items/:item_id/availability", s.handleSetItemAvailability, authn.RequireCapability(CapManageAvailability))
 	catalog.POST("/items/:item_id/retirement", s.handleRetireItem, authn.RequireCapability(CapAdministerStructure))
+
+	// Display details (BA-1)
+	catalog.PATCH("/items/:item_id/details", s.handleSetItemDetails, authn.RequireCapability(CapAdministerStructure))
+	catalog.PATCH("/categories/:category_id/details", s.handleSetCategoryDetails, authn.RequireCapability(CapAdministerStructure))
 
 	// Sizes
 	catalog.PATCH("/sizes/:size_id/name", s.handleRenameSize, authn.RequireCapability(CapAdministerStructure))
