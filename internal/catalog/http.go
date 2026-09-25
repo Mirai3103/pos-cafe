@@ -966,10 +966,7 @@ func (s *Slices) handleSetAvailabilityBatch(c echo.Context) error {
 	if err := checkRequestID(req.RequestID); err != nil {
 		return sendError(c, err)
 	}
-	status, res, err := s.SetAvailabilityBatch.Handle(c.Request().Context(), actor, SetAvailabilityBatchCommand{
-		RequestID: req.RequestID,
-		Changes:   req.Changes,
-	})
+	status, res, err := s.SetAvailabilityBatch.Handle(c.Request().Context(), actor, SetAvailabilityBatchCommand(req))
 	if err != nil {
 		return sendError(c, err)
 	}
