@@ -481,6 +481,31 @@ type SetAvailabilityRequest struct {
 	Available bool      `json:"available"`
 }
 
+// SetAvailabilityBatchRequest carries the request ID and a batch of availability changes.
+type SetAvailabilityBatchRequest struct {
+	RequestID uuid.UUID            `json:"request_id"`
+	Changes   []AvailabilityChange `json:"changes"`
+}
+
+// SetAvailabilityBatchCommand carries the parameters for one batch availability change.
+type SetAvailabilityBatchCommand struct {
+	RequestID uuid.UUID            `json:"request_id"`
+	Changes   []AvailabilityChange `json:"changes"`
+}
+
+// AvailabilityBatchResult reports the outcome for one requested entry.
+type AvailabilityBatchResult struct {
+	Kind      string    `json:"kind"`
+	ID        uuid.UUID `json:"id"`
+	Available bool      `json:"available"`
+	Changed   bool      `json:"changed"`
+}
+
+// AvailabilityBatchResponse lists every requested entry in (kind, id) order.
+type AvailabilityBatchResponse struct {
+	Results []AvailabilityBatchResult `json:"results"`
+}
+
 // RetireRequest carries the request ID, reason, and optional note for permanent retirement.
 type RetireRequest struct {
 	RequestID uuid.UUID `json:"request_id"`
