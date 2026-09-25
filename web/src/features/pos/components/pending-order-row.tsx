@@ -39,7 +39,9 @@ export function PendingOrderRow({ order, isActive, nowMs, onSelect }: PendingOrd
       }`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-bold text-foreground">{`#${order.serviceNumber}`}</span>
+        <span className="text-sm font-bold text-foreground truncate">
+          {order.tableLabel ? `${order.tableLabel} · #${order.serviceNumber}` : `#${order.serviceNumber}`}
+        </span>
         <span className={`rounded-md px-2 py-0.5 text-2xs font-bold ${CHIP_TONES[order.phase]}`}>
           {PENDING_PHASE_LABELS[order.phase]}
         </span>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { recoverySessionId, useCloseFlow } from "./use-close-session";
+import { isCloseReady, recoverySessionId, useCloseFlow } from "./use-close-session";
 
 describe("recoverySessionId", () => {
   it("reads back a session that closed somewhere else", () => {
@@ -19,5 +19,16 @@ describe("recoverySessionId", () => {
 describe("useCloseFlow", () => {
   it("is exported", () => {
     expect(typeof useCloseFlow).toBe("function");
+  });
+});
+
+describe("isCloseReady", () => {
+  it("defers to an explicit readiness when the caller supplies one", () => {
+    expect(isCloseReady({ id: "s1", draft: { state: "EDITABLE", items: [] } }, true)).toBe(true);
+    expect(isCloseReady(null, false)).toBe(false);
+  });
+
+  it("falls back to the takeaway phase", () => {
+    expect(isCloseReady(null, undefined)).toBe(false);
   });
 });

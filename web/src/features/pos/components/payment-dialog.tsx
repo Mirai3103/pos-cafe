@@ -9,6 +9,8 @@ import type { SubmitStatus } from "../utils/phase";
 export interface PaymentDialogProps {
   isOpen: boolean;
   serviceNumber?: string;
+  /** "Đơn mang đi" (default) or "Tại bàn" for a seated party's bill. */
+  modeLabel?: string;
   /** The amount owed: the draft subtotal before commit, the Check balance after. */
   totalVnd: number;
   /** True when the draft is already committed, so confirming only takes money. */
@@ -34,6 +36,7 @@ function parseTendered(raw: string): number {
 export function PaymentDialog({
   isOpen,
   serviceNumber,
+  modeLabel = "Đơn mang đi",
   totalVnd,
   isCommitted,
   isSubmitting,
@@ -114,7 +117,7 @@ export function PaymentDialog({
                 Thanh toán
               </h3>
               <p className="text-2xs text-muted-foreground">
-                {serviceNumber ? `Đơn mang đi #${serviceNumber}` : "Đơn mang đi"}
+                {serviceNumber ? `${modeLabel} #${serviceNumber}` : modeLabel}
                 {isCommitted ? " · Đã chốt đơn" : ""}
               </p>
             </div>

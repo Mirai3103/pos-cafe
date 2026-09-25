@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useCurrentShift } from "@/features/shift/api/use-shift";
 import {
   useSellableMenu,
@@ -13,10 +14,14 @@ import {
 import { usePosSession } from "../api/use-pos-session";
 import { useCheckoutFlow } from "../api/use-checkout";
 import { useCloseFlow } from "../api/use-close-session";
+import { useDineInFlow } from "../api/use-dine-in";
 import { usePosHotkeys } from "../hooks/use-pos-hotkeys";
+import { deriveDineInStatus, isDineIn as isDineInSession } from "../utils/dine-in";
 import { MenuGrid } from "./menu-grid";
 import { DraftPanel } from "./draft-panel";
 import { CheckPanel } from "./check-panel";
+import { DineInPanel } from "./dine-in-panel";
+import { ChangeTablesDialog } from "./change-tables-dialog";
 import { PaymentDialog } from "./payment-dialog";
 import { CompletedSaleDialog } from "./completed-sale-dialog";
 import { PendingOrdersDrawer, PendingOrdersButton } from "./pending-orders-drawer";
@@ -50,7 +55,8 @@ export function PosView() {
 
   const isShiftOpen = shift?.state === "OPEN";
 
-  const { activeSessionId, session, ensureSessionId, clearSession, switchSession } = usePosSession();
+  const { activeSessionId, session, ensureSessionId, clearSession, switchSession, ensureDraft } =
+    usePosSession();
 
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
   const activeSessions = useActiveSessions(isDrawerOpen);
@@ -74,6 +80,25 @@ export function PosView() {
 
   // Where the sale stands is the server projection, never local state.
   const phase = derivePosPhase(session);
+  const navigate = useNavigate();
+  const isDineIn = isDineInSession(session);
+  const dineInStatus = deriveDineInStatus(session);
+  const dineIn = useDineInFlow({ activeSessionId, status: dineInStatus, onDraftError: setErrorMessage });
+  const [isChangingTables, setIsChangingTables] = React.useState(false);
+
+  // Another Session took over this terminal: a dialog left open for the
+  // previous party would otherwise keep blocking hotkeys with nothing on
+  // screen to explain why.
+  React.useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
+    setIsChangingTables(false);
+  }, [activeSessionId]);
+
+  const leaveToFloor = () => {
+    clearSession();
+    void navigate({ to: "/tables" });
+  };
+
   const draftItems = session?.draft?.items ?? [];
   const openCheck = selectOpenCheck(session);
   const paymentTotal =
@@ -89,7 +114,13 @@ export function PosView() {
     onDraftError: setErrorMessage,
   });
 
-  const closeFlow = useCloseFlow({ activeSessionId, session, clearSession, onError: setErrorMessage });
+  const closeFlow = useCloseFlow({
+    activeSessionId,
+    session,
+    clearSession,
+    onError: setErrorMessage,
+    isReady: isDineIn ? dineInStatus.canClose : undefined,
+  });
 
   const handleSelectPendingOrder = (sessionId: string) => {
     setIsDrawerOpen(false);
@@ -109,6 +140,7 @@ export function PosView() {
     if (!hasSizes && !hasModifiers) {
       try {
         const sid = await ensureSessionId();
+        await ensureDraft(sid);
         await addDraftItem(
           {
             menu_item_id: item.id,
@@ -201,6 +233,7 @@ export function PosView() {
           matchesDraftItemConfig(it, pickerItem.id!, config),
         );
         const sid = await ensureSessionId();
+        await ensureDraft(sid);
         const updatedSession = await addDraftItem(
           {
             menu_item_id: pickerItem.id,
@@ -262,13 +295,17 @@ export function PosView() {
 
   usePosHotkeys({
     phase,
-    blocked: checkout.isPaymentOpen || isPickerOpen || closeFlow.completedSale !== null,
+    blocked:
+      checkout.isPaymentOpen || dineIn.isPaymentOpen || isChangingTables || isPickerOpen || closeFlow.completedSale !== null,
     isDrawerOpen,
     onCheckout: checkout.openPaymentDialog,
     onSubmit: checkout.submitOrder,
     onNextCustomer: checkout.nextCustomer,
     onClose: closeFlow.closeSession,
     onToggleDrawer: () => setIsDrawerOpen((open) => !open),
+    dineIn: isDineIn
+      ? { status: dineInStatus, onSend: dineIn.sendToBar, onCollect: dineIn.openPaymentDialog, onClose: closeFlow.closeSession }
+      : undefined,
   });
 
   if (isShiftLoading || isMenuLoading) return <PosMenuLoading />;
@@ -299,7 +336,10 @@ export function PosView() {
           <MenuGrid
             categories={menu?.categories}
             onSelectItem={handleSelectItem}
-            disabled={!isShiftOpen || (phase !== "NO_SESSION" && phase !== "DRAFTING")}
+            disabled={
+              !isShiftOpen ||
+              (isDineIn ? !dineInStatus.canOrder : phase !== "NO_SESSION" && phase !== "DRAFTING")
+            }
           />
         </ResizablePanel>
 
@@ -312,7 +352,25 @@ export function PosView() {
           maxSize="60%"
           className="flex flex-col overflow-hidden"
         >
-          {phase === "AWAITING_PAYMENT" || isPostPaymentPhase(phase) ? (
+          {isDineIn && session ? (
+            <DineInPanel
+              session={session}
+              status={dineInStatus}
+              isShiftOpen={isShiftOpen}
+              sendError={dineIn.sendError}
+              isSending={dineIn.isSending}
+              isClosing={closeFlow.isClosing}
+              onEditItem={handleEditDraftItem}
+              onQuantityChange={handleQuantityChange}
+              onRemoveItem={handleRemoveItem}
+              onSend={() => void dineIn.sendToBar()}
+              onCollect={dineIn.openPaymentDialog}
+              onClose={() => void closeFlow.closeSession()}
+              onLeave={leaveToFloor}
+              onChangeTables={() => setIsChangingTables(true)}
+              className="w-full h-full flex-1"
+            />
+          ) : phase === "AWAITING_PAYMENT" || isPostPaymentPhase(phase) ? (
             <CheckPanel
               session={session}
               phase={phase}
@@ -353,23 +411,33 @@ export function PosView() {
 
       {/* Cash Payment Modal */}
       <PaymentDialog
-        isOpen={checkout.isPaymentOpen}
+        isOpen={isDineIn ? dineIn.isPaymentOpen : checkout.isPaymentOpen}
         serviceNumber={session?.service_number}
-        totalVnd={paymentTotal}
-        isCommitted={phase === "AWAITING_PAYMENT"}
-        isSubmitting={checkout.isPaying}
-        errorMessage={checkout.paymentError}
-        changeDueVnd={checkout.changeDueVnd}
-        submitStatus={checkout.submitStatus}
-        submitError={checkout.submitError}
-        onClose={checkout.closePaymentDialog}
-        onConfirm={checkout.confirmPayment}
-        onDone={checkout.finishPayment}
+        modeLabel={isDineIn ? "Tại bàn" : "Đơn mang đi"}
+        totalVnd={isDineIn ? dineIn.paymentTotalVnd : paymentTotal}
+        isCommitted={isDineIn || phase === "AWAITING_PAYMENT"}
+        isSubmitting={isDineIn ? dineIn.isPaying : checkout.isPaying}
+        errorMessage={isDineIn ? dineIn.paymentError : checkout.paymentError}
+        changeDueVnd={isDineIn ? dineIn.changeDueVnd : checkout.changeDueVnd}
+        submitStatus={isDineIn ? "idle" : checkout.submitStatus}
+        submitError={isDineIn ? null : checkout.submitError}
+        onClose={isDineIn ? dineIn.closePaymentDialog : checkout.closePaymentDialog}
+        onConfirm={isDineIn ? dineIn.confirmPayment : checkout.confirmPayment}
+        onDone={isDineIn ? dineIn.finishPayment : checkout.finishPayment}
       />
 
       <CompletedSaleDialog
         sale={closeFlow.completedSale}
-        onDone={closeFlow.dismissCompletedSale}
+        onDone={() => {
+          const wasDineIn = isDineIn;
+          closeFlow.dismissCompletedSale();
+          if (wasDineIn) void navigate({ to: "/tables" });
+        }}
+      />
+
+      <ChangeTablesDialog
+        session={isChangingTables && isDineIn ? session : null}
+        onClose={() => setIsChangingTables(false)}
       />
 
       <PendingOrdersDrawer

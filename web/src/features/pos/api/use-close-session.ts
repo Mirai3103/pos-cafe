@@ -22,6 +22,8 @@ export interface CloseFlowOptions {
   clearSession: () => void;
   /** Routes closure refusals to the page-level toast. */
   onError: (message: string) => void;
+  /** Overrides the takeaway readiness check; dine-in passes its canClose. */
+  isReady?: boolean;
 }
 
 export interface CloseFlow {
@@ -46,6 +48,18 @@ export function recoverySessionId(
 }
 
 /**
+ * Whether closure may be attempted. Dine-in supplies its own readiness: an
+ * open empty draft reads as DRAFTING to the takeaway phase, but does not
+ * block closure on the server.
+ */
+export function isCloseReady(
+  session: SalesServiceSessionResponse | null | undefined,
+  isReady: boolean | undefined,
+): boolean {
+  return isReady ?? derivePosPhase(session) === "READY_TO_CLOSE";
+}
+
+/**
  * Freezes a finished Service Session into its Completed Sale and shows it.
  * Closure is idempotent on the server, so a retry after a lost response
  * returns the same sale.
@@ -55,6 +69,7 @@ export function useCloseFlow({
   session,
   clearSession,
   onError,
+  isReady,
 }: CloseFlowOptions): CloseFlow {
   const queryClient = useQueryClient();
   const mutation = usePostSalesServiceSessionsIdClose();
@@ -73,7 +88,7 @@ export function useCloseFlow({
 
   const closeSession = async () => {
     if (!activeSessionId || isClosing) return;
-    if (derivePosPhase(session) !== "READY_TO_CLOSE") return;
+    if (!isCloseReady(session, isReady)) return;
 
     requestIdRef.current = requestIdRef.current ?? newRequestId();
     setIsClosing(true);

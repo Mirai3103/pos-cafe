@@ -7,6 +7,7 @@ import {
   type PreparationProgress,
 } from "./phase";
 import { calculateDraftSubtotal } from "./pricing";
+import { deriveDineInStatus, dineInPhase, isDineIn, sessionTableLabel } from "./dine-in";
 
 /** One row of the "Đơn đang chờ" drawer. */
 export interface PendingOrder {
@@ -17,6 +18,7 @@ export interface PendingOrder {
   progress: PreparationProgress;
   totalVnd: number;
   itemSummary: string;
+  tableLabel: string | null;
 }
 
 export const PENDING_PHASE_LABELS: Record<PosPhase, string> = {
@@ -32,21 +34,21 @@ export const PENDING_PHASE_LABELS: Record<PosPhase, string> = {
 const PRIORITY: Partial<Record<PosPhase, number>> = { READY_TO_CLOSE: 0, AWAITING_SUBMIT: 1 };
 const DEFAULT_PRIORITY = 2;
 
-function isDrafting(session: SalesServiceSessionResponse): boolean {
-  return session.draft?.state === "EDITABLE";
+function draftItems(session: SalesServiceSessionResponse) {
+  return session.draft?.state === "EDITABLE" ? (session.draft.items ?? []) : [];
 }
 
 function itemNames(session: SalesServiceSessionResponse): string[] {
-  if (isDrafting(session)) return (session.draft?.items ?? []).map((item) => item.name ?? "");
-  return listLiveChecks(session).flatMap((check) =>
+  const committed = listLiveChecks(session).flatMap((check) =>
     (check.allocations ?? []).map((allocation) => allocation.name ?? ""),
   );
+  return [...committed, ...draftItems(session).map((item) => item.name ?? "")];
 }
 
-/** A draft is priced for display only; a committed session shows what its Checks charge. */
+/** Committed rounds show what their Checks charge; a draft is priced for display only. */
 function totalVnd(session: SalesServiceSessionResponse): number {
-  if (isDrafting(session)) return calculateDraftSubtotal(session.draft?.items);
-  return listLiveChecks(session).reduce((sum, check) => sum + (check.charge_vnd ?? 0), 0);
+  const charged = listLiveChecks(session).reduce((sum, check) => sum + (check.charge_vnd ?? 0), 0);
+  return charged + calculateDraftSubtotal(draftItems(session));
 }
 
 export function summarizeItems(names: string[]): string {
@@ -60,15 +62,16 @@ export function toPendingOrders(
   sessions: SalesServiceSessionResponse[] | null | undefined,
 ): PendingOrder[] {
   return (sessions ?? [])
-    .filter((session) => session.service_mode === "TAKEAWAY" && Boolean(session.id))
+    .filter((session) => Boolean(session.id))
     .map((session) => ({
       sessionId: session.id!,
       serviceNumber: session.service_number ?? "",
       createdAt: session.created_at ?? "",
-      phase: derivePosPhase(session),
+      phase: isDineIn(session) ? dineInPhase(deriveDineInStatus(session)) : derivePosPhase(session),
       progress: preparationProgress(session),
       totalVnd: totalVnd(session),
       itemSummary: summarizeItems(itemNames(session)),
+      tableLabel: isDineIn(session) ? sessionTableLabel(session) : null,
     }))
     .sort((a, b) => {
       const byPriority =

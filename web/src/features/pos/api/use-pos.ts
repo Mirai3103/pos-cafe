@@ -6,6 +6,7 @@ import {
   useGetSalesServiceSessionsIdCompletedSale,
   getGetSalesServiceSessionsIdQueryKey,
   usePostSalesServiceSessionsTakeaway,
+  usePostSalesServiceSessionsIdDraft,
   usePostSalesServiceSessionsIdDraftItems,
   usePatchSalesServiceSessionsIdDraftItemsItemIdQuantity,
   usePatchSalesServiceSessionsIdDraftItemsItemIdSize,
@@ -14,7 +15,7 @@ import {
   useDeleteSalesServiceSessionsIdDraftItemsItemId,
 } from "@/api/generated/endpoints/sales/sales";
 import { unwrap, unwrapNullable } from "@/lib/unwrap";
-import { derivePosPhase } from "../utils/phase";
+import { shouldPollSession } from "../utils/dine-in";
 import { newRequestId } from "@/lib/command";
 import type {
   SalesAddDraftItemCommand,
@@ -49,9 +50,7 @@ export function useServiceSession(sessionId: string | null) {
       select: unwrap,
       staleTime: 5_000,
       refetchInterval: (query) =>
-        derivePosPhase(query.state.data?.data) === "IN_PREPARATION"
-          ? IN_PREPARATION_POLL_MS
-          : false,
+        shouldPollSession(query.state.data?.data) ? IN_PREPARATION_POLL_MS : false,
     },
   });
 }
@@ -279,6 +278,28 @@ export function useRemoveDraftItem(sessionId: string) {
       });
       const data = unwrap(res);
       queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sid), res);
+      return data;
+    },
+  };
+}
+
+/**
+ * Opens a dine-in Session's next round. The server refuses while a draft is
+ * editable or a committed round is unsent.
+ */
+export function useStartNextDraft() {
+  const queryClient = useQueryClient();
+  const mutation = usePostSalesServiceSessionsIdDraft();
+
+  return {
+    ...mutation,
+    startNextDraft: async (sessionId: string, requestId?: string) => {
+      const res = await mutation.mutateAsync({
+        id: sessionId,
+        data: { request_id: requestId ?? newRequestId() },
+      });
+      const data = unwrap(res);
+      queryClient.setQueryData(getGetSalesServiceSessionsIdQueryKey(sessionId), res);
       return data;
     },
   };
