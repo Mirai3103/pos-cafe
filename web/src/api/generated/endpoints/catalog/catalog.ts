@@ -33,6 +33,7 @@ import type {
   CatalogRepriceModifierOptionRequest,
   CatalogRepriceRequest,
   CatalogRetireRequest,
+  CatalogSetAvailabilityBatchRequest,
   CatalogSetAvailabilityRequest,
   CatalogSetModifierGroupDefaultsRequest,
   GetCatalogAuditEvents200,
@@ -52,6 +53,7 @@ import type {
   PatchCatalogSizesSizeIdAvailability200,
   PatchCatalogSizesSizeIdName200,
   PatchCatalogSizesSizeIdPrice200,
+  PostCatalogAvailabilityBatch200,
   PostCatalogCategories201,
   PostCatalogCategoriesCategoryIdModifierGroupsGroupId200,
   PostCatalogCategoriesCategoryIdRetirement200,
@@ -184,6 +186,74 @@ export function useGetCatalogAuditEvents<TData = Awaited<ReturnType<typeof getCa
 
 
 /**
+ * Bật hoặc tắt nhiều món, kích cỡ và tùy chọn trong một giao dịch. Thành công toàn bộ hoặc không thay đổi gì. Yêu cầu quyền catalog.manage_availability.
+ * @summary Cập nhật trạng thái khả dụng hàng loạt
+ */
+export const postCatalogAvailabilityBatch = (
+    catalogSetAvailabilityBatchRequest: CatalogSetAvailabilityBatchRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PostCatalogAvailabilityBatch200>(
+      {url: `/catalog/availability/batch`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogSetAvailabilityBatchRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPostCatalogAvailabilityBatchMutationKey = () => ['postCatalogAvailabilityBatch'] as const;
+
+export const getPostCatalogAvailabilityBatchMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogAvailabilityBatch>>, TError,PostCatalogAvailabilityBatchMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogAvailabilityBatch>>, TError,PostCatalogAvailabilityBatchMutationVariables, TContext> => {
+
+const mutationKey = getPostCatalogAvailabilityBatchMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogAvailabilityBatch>>, PostCatalogAvailabilityBatchMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  postCatalogAvailabilityBatch(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogAvailabilityBatchMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogAvailabilityBatch>>>
+    export type PostCatalogAvailabilityBatchMutationBody = CatalogSetAvailabilityBatchRequest
+    export type PostCatalogAvailabilityBatchMutationError = ResponseAPIResponse
+    export type PostCatalogAvailabilityBatchMutationVariables = {data: CatalogSetAvailabilityBatchRequest}
+
+    /**
+ * @summary Cập nhật trạng thái khả dụng hàng loạt
+ */
+export const usePostCatalogAvailabilityBatch = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogAvailabilityBatch>>, TError,PostCatalogAvailabilityBatchMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogAvailabilityBatch>>,
+        TError,
+        PostCatalogAvailabilityBatchMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogAvailabilityBatchMutationOptions(options), queryClient);
+    }
+    /**
  * Tạo một danh mục mới trong catalog. Yêu cầu quyền catalog.administer_structure.
  * @summary Tạo danh mục thực đơn
  */

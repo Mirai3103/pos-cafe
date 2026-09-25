@@ -937,6 +937,45 @@ func (s *Slices) handleSetModifierOptionAvailability(c echo.Context) error {
 	return sendResult(c, status, res)
 }
 
+// handleSetAvailabilityBatch godoc
+//
+//	@Summary		Cập nhật trạng thái khả dụng hàng loạt
+//	@Description	Bật hoặc tắt nhiều món, kích cỡ và tùy chọn trong một giao dịch. Thành công toàn bộ hoặc không thay đổi gì. Yêu cầu quyền catalog.manage_availability.
+//	@Tags			Catalog
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			request	body		SetAvailabilityBatchRequest	true	"Danh sách thay đổi (1 đến 200 mục)"
+//	@Success		200		{object}	response.APIResponse{data=AvailabilityBatchResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/catalog/availability/batch [post]
+func (s *Slices) handleSetAvailabilityBatch(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	req, err := bindBody[SetAvailabilityBatchRequest](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(req.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	status, res, err := s.SetAvailabilityBatch.Handle(c.Request().Context(), actor, SetAvailabilityBatchCommand{
+		RequestID: req.RequestID,
+		Changes:   req.Changes,
+	})
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}
+
 // handleRetireModifierOption godoc
 //
 //	@Summary		Ngừng kinh doanh tùy chọn modifier

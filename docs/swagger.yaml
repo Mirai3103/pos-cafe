@@ -226,6 +226,24 @@ definitions:
       session_id:
         type: string
     type: object
+  catalog.AvailabilityBatchResponse:
+    properties:
+      results:
+        items:
+          $ref: '#/definitions/catalog.AvailabilityBatchResult'
+        type: array
+    type: object
+  catalog.AvailabilityBatchResult:
+    properties:
+      available:
+        type: boolean
+      changed:
+        type: boolean
+      id:
+        type: string
+      kind:
+        type: string
+    type: object
   catalog.AvailabilityCategoryResponse:
     properties:
       id:
@@ -235,6 +253,15 @@ definitions:
           $ref: '#/definitions/catalog.AvailabilityItemResponse'
         type: array
       name:
+        type: string
+    type: object
+  catalog.AvailabilityChange:
+    properties:
+      available:
+        type: boolean
+      id:
+        type: string
+      kind:
         type: string
     type: object
   catalog.AvailabilityItemResponse:
@@ -697,6 +724,15 @@ definitions:
         type: string
       price_vnd:
         type: integer
+    type: object
+  catalog.SetAvailabilityBatchRequest:
+    properties:
+      changes:
+        items:
+          $ref: '#/definitions/catalog.AvailabilityChange'
+        type: array
+      request_id:
+        type: string
     type: object
   catalog.SetAvailabilityRequest:
     properties:
@@ -2673,6 +2709,60 @@ paths:
       security:
       - BearerAuth: []
       summary: Danh sách nhật ký kiểm toán catalog
+      tags:
+      - Catalog
+  /catalog/availability/batch:
+    post:
+      consumes:
+      - application/json
+      description: Bật hoặc tắt nhiều món, kích cỡ và tùy chọn trong một giao dịch.
+        Thành công toàn bộ hoặc không thay đổi gì. Yêu cầu quyền catalog.manage_availability.
+      parameters:
+      - description: Danh sách thay đổi (1 đến 200 mục)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.SetAvailabilityBatchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.AvailabilityBatchResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật trạng thái khả dụng hàng loạt
       tags:
       - Catalog
   /catalog/categories:
