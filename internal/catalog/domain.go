@@ -93,7 +93,7 @@ const (
 	EventModifierGroupSelectionRuleChanged  = "catalog.modifier_group.selection_rule_changed"
 	EventItemModifierGroupsReplaced         = "catalog.item.modifier_groups_replaced"
 	EventCategoryModifierGroupsReplaced     = "catalog.category.modifier_groups_replaced"
-	EventModifierGroupAssignmentsReplaced   = "catalog.modifier_group.assignments_replaced"
+	EventModifierGroupAssignmentsReplaced   = "catalog.modifier_group.assignments_replaced" //nolint:gosec // G101: audit event type name, not a credential
 	EventAuthorizationDenied                = "catalog.authorization_denied"
 	EventPrefixCatalog                      = "catalog."
 )
