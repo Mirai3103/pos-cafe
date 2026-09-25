@@ -70,17 +70,20 @@ LIMIT $1;
 INSERT INTO menu_categories (name, normalized_name)
 VALUES ($1, $2)
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at;
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order;
 
 -- name: GetMenuCategoryByID :one
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
 WHERE id = $1;
 
 -- name: GetMenuCategoryForUpdate :one
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
 WHERE id = $1
 FOR UPDATE;
@@ -90,20 +93,23 @@ UPDATE menu_categories
 SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at;
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order;
 
 -- name: RetireMenuCategory :one
 UPDATE menu_categories
 SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at;
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order;
 
 -- name: ListMenuCategories :many
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
-ORDER BY normalized_name ASC, id ASC;
+ORDER BY display_order ASC, normalized_name ASC, id ASC;
 
 -- -- Menu Items --
 
@@ -113,19 +119,22 @@ INSERT INTO menu_items
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: GetMenuItemByID :one
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE id = $1;
 
 -- name: GetMenuItemForUpdate :one
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE id = $1
 FOR UPDATE;
@@ -136,7 +145,8 @@ SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: RepriceMenuItem :one
 UPDATE menu_items
@@ -144,7 +154,8 @@ SET price_vnd = $2, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: SetMenuItemAvailability :one
 UPDATE menu_items
@@ -152,7 +163,8 @@ SET available = $2, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: RetireMenuItem :one
 UPDATE menu_items
@@ -160,12 +172,14 @@ SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = 
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: ListMenuItemsByCategory :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE category_id = $1
 ORDER BY normalized_name ASC, id ASC;
@@ -442,7 +456,8 @@ SELECT pg_advisory_xact_lock($1);
 -- name: ListMenuItemsByCategoryPaginated :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE category_id = $1
 ORDER BY normalized_name ASC, id ASC
@@ -451,7 +466,8 @@ LIMIT $2 OFFSET $3;
 -- name: ListAllMenuItemsPaginated :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 ORDER BY normalized_name ASC, id ASC
 LIMIT $1 OFFSET $2;
@@ -485,7 +501,8 @@ LIMIT $1 OFFSET $2;
 -- name: ListAllMenuItems :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 ORDER BY normalized_name ASC, id ASC;
 

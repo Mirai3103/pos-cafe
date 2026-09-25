@@ -120,7 +120,8 @@ const createMenuCategory = `-- name: CreateMenuCategory :one
 INSERT INTO menu_categories (name, normalized_name)
 VALUES ($1, $2)
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 `
 
 type CreateMenuCategoryParams struct {
@@ -141,6 +142,8 @@ func (q *Queries) CreateMenuCategory(ctx context.Context, arg CreateMenuCategory
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -152,7 +155,8 @@ INSERT INTO menu_items
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type CreateMenuItemParams struct {
@@ -185,6 +189,11 @@ func (q *Queries) CreateMenuItem(ctx context.Context, arg CreateMenuItemParams) 
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -596,7 +605,8 @@ func (q *Queries) GetCategoryModifierGroup(ctx context.Context, arg GetCategoryM
 
 const getMenuCategoryByID = `-- name: GetMenuCategoryByID :one
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
 WHERE id = $1
 `
@@ -613,13 +623,16 @@ func (q *Queries) GetMenuCategoryByID(ctx context.Context, id uuid.UUID) (MenuCa
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
 
 const getMenuCategoryForUpdate = `-- name: GetMenuCategoryForUpdate :one
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
 WHERE id = $1
 FOR UPDATE
@@ -637,6 +650,8 @@ func (q *Queries) GetMenuCategoryForUpdate(ctx context.Context, id uuid.UUID) (M
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -644,7 +659,8 @@ func (q *Queries) GetMenuCategoryForUpdate(ctx context.Context, id uuid.UUID) (M
 const getMenuItemByID = `-- name: GetMenuItemByID :one
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE id = $1
 `
@@ -664,6 +680,11 @@ func (q *Queries) GetMenuItemByID(ctx context.Context, id uuid.UUID) (MenuItem, 
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -671,7 +692,8 @@ func (q *Queries) GetMenuItemByID(ctx context.Context, id uuid.UUID) (MenuItem, 
 const getMenuItemForUpdate = `-- name: GetMenuItemForUpdate :one
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE id = $1
 FOR UPDATE
@@ -692,6 +714,11 @@ func (q *Queries) GetMenuItemForUpdate(ctx context.Context, id uuid.UUID) (MenuI
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -1127,7 +1154,8 @@ const listAllMenuItems = `-- name: ListAllMenuItems :many
 
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 ORDER BY normalized_name ASC, id ASC
 `
@@ -1154,6 +1182,11 @@ func (q *Queries) ListAllMenuItems(ctx context.Context) ([]MenuItem, error) {
 			&i.RetirementNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Code,
+			&i.NormalizedCode,
+			&i.Badge,
+			&i.Description,
+			&i.ImageKey,
 		); err != nil {
 			return nil, err
 		}
@@ -1171,7 +1204,8 @@ func (q *Queries) ListAllMenuItems(ctx context.Context) ([]MenuItem, error) {
 const listAllMenuItemsPaginated = `-- name: ListAllMenuItemsPaginated :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 ORDER BY normalized_name ASC, id ASC
 LIMIT $1 OFFSET $2
@@ -1203,6 +1237,11 @@ func (q *Queries) ListAllMenuItemsPaginated(ctx context.Context, arg ListAllMenu
 			&i.RetirementNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Code,
+			&i.NormalizedCode,
+			&i.Badge,
+			&i.Description,
+			&i.ImageKey,
 		); err != nil {
 			return nil, err
 		}
@@ -1579,9 +1618,10 @@ func (q *Queries) ListItemModifierGroupsByItem(ctx context.Context, menuItemID u
 
 const listMenuCategories = `-- name: ListMenuCategories :many
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
-ORDER BY normalized_name ASC, id ASC
+ORDER BY display_order ASC, normalized_name ASC, id ASC
 `
 
 func (q *Queries) ListMenuCategories(ctx context.Context) ([]MenuCategory, error) {
@@ -1602,6 +1642,8 @@ func (q *Queries) ListMenuCategories(ctx context.Context) ([]MenuCategory, error
 			&i.RetirementReason,
 			&i.RetirementNote,
 			&i.UpdatedAt,
+			&i.Icon,
+			&i.DisplayOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -1663,7 +1705,8 @@ func (q *Queries) ListMenuItemSizesByItem(ctx context.Context, menuItemID uuid.U
 const listMenuItemsByCategory = `-- name: ListMenuItemsByCategory :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE category_id = $1
 ORDER BY normalized_name ASC, id ASC
@@ -1690,6 +1733,11 @@ func (q *Queries) ListMenuItemsByCategory(ctx context.Context, categoryID uuid.U
 			&i.RetirementNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Code,
+			&i.NormalizedCode,
+			&i.Badge,
+			&i.Description,
+			&i.ImageKey,
 		); err != nil {
 			return nil, err
 		}
@@ -1708,7 +1756,8 @@ const listMenuItemsByCategoryPaginated = `-- name: ListMenuItemsByCategoryPagina
 
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE category_id = $1
 ORDER BY normalized_name ASC, id ASC
@@ -1743,6 +1792,11 @@ func (q *Queries) ListMenuItemsByCategoryPaginated(ctx context.Context, arg List
 			&i.RetirementNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Code,
+			&i.NormalizedCode,
+			&i.Badge,
+			&i.Description,
+			&i.ImageKey,
 		); err != nil {
 			return nil, err
 		}
@@ -1901,7 +1955,8 @@ UPDATE menu_categories
 SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 `
 
 type RenameMenuCategoryParams struct {
@@ -1922,6 +1977,8 @@ func (q *Queries) RenameMenuCategory(ctx context.Context, arg RenameMenuCategory
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -1932,7 +1989,8 @@ SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type RenameMenuItemParams struct {
@@ -1956,6 +2014,11 @@ func (q *Queries) RenameMenuItem(ctx context.Context, arg RenameMenuItemParams) 
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -2067,7 +2130,8 @@ SET price_vnd = $2, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type RepriceMenuItemParams struct {
@@ -2090,6 +2154,11 @@ func (q *Queries) RepriceMenuItem(ctx context.Context, arg RepriceMenuItemParams
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -2165,7 +2234,8 @@ UPDATE menu_categories
 SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 `
 
 type RetireMenuCategoryParams struct {
@@ -2192,6 +2262,8 @@ func (q *Queries) RetireMenuCategory(ctx context.Context, arg RetireMenuCategory
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -2202,7 +2274,8 @@ SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = 
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type RetireMenuItemParams struct {
@@ -2232,6 +2305,11 @@ func (q *Queries) RetireMenuItem(ctx context.Context, arg RetireMenuItemParams) 
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -2361,7 +2439,8 @@ SET available = $2, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type SetMenuItemAvailabilityParams struct {
@@ -2384,6 +2463,11 @@ func (q *Queries) SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAv
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
