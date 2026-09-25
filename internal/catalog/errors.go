@@ -90,6 +90,10 @@ func MapHTTPError(err error) error {
 		return response.NewCodedError(http.StatusUnauthorized, "UNAUTHORIZED", err.Error(), err)
 	case errors.Is(err, ErrInvalidStoredResult):
 		return response.NewCodedError(http.StatusInternalServerError, "INVALID_STORED_RESULT", "an unexpected error occurred", err)
+	case errors.Is(err, ErrInvalidImage):
+		return response.NewCodedError(http.StatusBadRequest, "INVALID_IMAGE", err.Error(), err)
+	case errors.Is(err, ErrImageTooLarge):
+		return response.NewCodedError(http.StatusRequestEntityTooLarge, "IMAGE_TOO_LARGE", err.Error(), err)
 	case errors.Is(err, response.ErrInvalid):
 		return response.NewCodedError(http.StatusBadRequest, "INVALID_INPUT", err.Error(), err)
 	default:

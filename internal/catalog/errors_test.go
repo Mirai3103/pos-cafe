@@ -181,6 +181,18 @@ func TestMapHTTPError(t *testing.T) {
 			wantCode:   "INVALID_STORED_RESULT",
 		},
 		{
+			name:       "ErrInvalidImage",
+			err:        catalog.ErrInvalidImage,
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "INVALID_IMAGE",
+		},
+		{
+			name:       "ErrImageTooLarge",
+			err:        catalog.ErrImageTooLarge,
+			wantStatus: http.StatusRequestEntityTooLarge,
+			wantCode:   "IMAGE_TOO_LARGE",
+		},
+		{
 			name:       "response.ErrInvalid",
 			err:        response.ErrInvalid,
 			wantStatus: http.StatusBadRequest,

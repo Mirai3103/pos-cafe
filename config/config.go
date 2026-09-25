@@ -13,6 +13,7 @@ import (
 type Config struct {
 	Port               string
 	DatabaseURL        string
+	MediaDir           string
 	Environment        string
 	CORSAllowedOrigins []string
 	ReadTimeout        time.Duration
@@ -34,6 +35,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Port:               getEnv("PORT", "8080"),
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos?sslmode=disable"),
+		MediaDir:           getEnv("MEDIA_DIR", "./data/media"),
 		Environment:        getEnv("APP_ENV", "development"),
 		CORSAllowedOrigins: corsOrigins,
 		ReadTimeout:        getEnvDuration("HTTP_READ_TIMEOUT", 15*time.Second),
@@ -52,6 +54,10 @@ func Load() (*Config, error) {
 func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("DATABASE_URL must not be empty")
+	}
+
+	if strings.TrimSpace(c.MediaDir) == "" {
+		return fmt.Errorf("MEDIA_DIR must not be empty")
 	}
 
 	portNum, err := strconv.Atoi(c.Port)

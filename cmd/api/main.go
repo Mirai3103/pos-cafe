@@ -162,6 +162,13 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	// Swagger UI Documentation
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
+	// Catalog images (ADR-057): content-addressed files served without auth.
+	mediaStore, err := catalog.NewMediaStore(cfg.MediaDir)
+	if err != nil {
+		return fmt.Errorf("init media store: %w", err)
+	}
+	mediaStore.RegisterRoutes(e)
+
 	// 6. Register Vertical Slices
 	v1 := e.Group("/api/v1")
 	authSlices := auth.NewSlices(db, queries)

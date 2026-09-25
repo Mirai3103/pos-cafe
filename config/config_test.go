@@ -32,6 +32,7 @@ func TestConfigLoadAndValidate(t *testing.T) {
 		cfg := &config.Config{
 			Port:        "invalid-port",
 			DatabaseURL: "postgres://localhost/test",
+			MediaDir:    "./data/media",
 		}
 		err := cfg.Validate()
 		require.Error(t, err)
@@ -42,9 +43,21 @@ func TestConfigLoadAndValidate(t *testing.T) {
 		cfg := &config.Config{
 			Port:        "70000",
 			DatabaseURL: "postgres://localhost/test",
+			MediaDir:    "./data/media",
 		}
 		err := cfg.Validate()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "PORT must be a valid port number")
+	})
+
+	t.Run("invalid media dir", func(t *testing.T) {
+		cfg := &config.Config{
+			Port:        "8080",
+			DatabaseURL: "postgres://localhost/test",
+			MediaDir:    " ",
+		}
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "MEDIA_DIR must not be empty")
 	})
 }

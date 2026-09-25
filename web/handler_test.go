@@ -146,6 +146,14 @@ func TestRegisterFS(t *testing.T) {
 	})
 }
 
+func TestSPAHandlerLeavesMediaAlone(t *testing.T) {
+	e := setupTestEcho(t, fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}})
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/media/catalog/missing", nil))
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "spa")
+}
+
 func TestRegisterFS_MissingIndexHTML(t *testing.T) {
 	emptyFS := fstest.MapFS{}
 	e := echo.New()
