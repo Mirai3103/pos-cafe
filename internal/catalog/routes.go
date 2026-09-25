@@ -24,6 +24,8 @@ type Slices struct {
 	SetItemDetails                    *SetItemDetailsHandler
 	SetCategoryDetails                *SetCategoryDetailsHandler
 	MoveItemCategory                  *MoveItemCategoryHandler
+	AddSize                           *AddSizeHandler
+	AddModifierOption                 *AddModifierOptionHandler
 	SetItemImage                      *SetItemImageHandler
 	ClearItemImage                    *ClearItemImageHandler
 	RenameSize                        *RenameSizeHandler
@@ -66,6 +68,8 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries, media *MediaStore) *Slices {
 		SetItemDetails:                    NewSetItemDetailsHandler(runner),
 		SetCategoryDetails:                NewSetCategoryDetailsHandler(runner),
 		MoveItemCategory:                  NewMoveItemCategoryHandler(runner),
+		AddSize:                           NewAddSizeHandler(runner),
+		AddModifierOption:                 NewAddModifierOptionHandler(runner),
 		SetItemImage:                      NewSetItemImageHandler(runner, media),
 		ClearItemImage:                    NewClearItemImageHandler(runner),
 		RenameSize:                        NewRenameSizeHandler(runner),
@@ -124,6 +128,8 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 
 	// Structure (BA-1)
 	catalog.PATCH("/items/:item_id/category", s.handleMoveItemCategory, authn.RequireCapability(CapAdministerStructure))
+	catalog.POST("/items/:item_id/sizes", s.handleAddSize, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))
+	catalog.POST("/modifier-groups/:group_id/options", s.handleAddModifierOption, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))
 
 	// Sizes
 	catalog.PATCH("/sizes/:size_id/name", s.handleRenameSize, authn.RequireCapability(CapAdministerStructure))

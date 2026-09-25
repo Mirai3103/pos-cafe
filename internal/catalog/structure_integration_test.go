@@ -130,3 +130,122 @@ func TestMoveItemCategory(t *testing.T) {
 		assert.True(t, errors.Is(err, catalog.ErrNotFound))
 	})
 }
+
+func TestAddSize(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	handler := catalog.NewAddSizeHandler(catalog.NewRunner(db, q))
+	ctx := context.Background()
+
+	t.Run("adds an available size to a sized item", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cat := createTestCategoryDirect(t, db, "Coffee")
+		item := createTestItemDirect(t, db, cat, "Latte", nil, false)
+		createTestSizeDirect(t, db, item, "Size M", 35000, false)
+
+		status, res, err := handler.Handle(ctx, managerActor(t, db, q), catalog.AddSizeCommand{
+			RequestID: uuid.New(), ItemID: item, Name: "  Size XL ", PriceVND: 59000, ManagerPIN: testManagerPIN,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 201, status)
+		assert.Equal(t, "Size XL", res.Name)
+		assert.Equal(t, int64(59000), res.PriceVND)
+		assert.True(t, res.Available)
+		assert.Equal(t, 1, auditCount(t, db, catalog.EventSizeCreated))
+	})
+
+	t.Run("single-price item is INVALID_PRICING_CONFIGURATION", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cat := createTestCategoryDirect(t, db, "Bakery")
+		price := int64(35000)
+		item := createTestItemDirect(t, db, cat, "Croissant", &price, false)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.AddSizeCommand{
+			RequestID: uuid.New(), ItemID: item, Name: "Large", PriceVND: 40000, ManagerPIN: testManagerPIN,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrInvalidPricingConfiguration))
+	})
+
+	t.Run("a retired size's name is still taken", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cat := createTestCategoryDirect(t, db, "Coffee")
+		item := createTestItemDirect(t, db, cat, "Latte", nil, false)
+		createTestSizeDirect(t, db, item, "Size M", 35000, false)
+		createTestSizeDirect(t, db, item, "Size S", 29000, true)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.AddSizeCommand{
+			RequestID: uuid.New(), ItemID: item, Name: "size s", PriceVND: 30000, ManagerPIN: testManagerPIN,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrNameConflict))
+	})
+
+	t.Run("wrong PIN is ErrInvalidManagerPin", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cat := createTestCategoryDirect(t, db, "Coffee")
+		item := createTestItemDirect(t, db, cat, "Latte", nil, false)
+		createTestSizeDirect(t, db, item, "Size M", 35000, false)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.AddSizeCommand{
+			RequestID: uuid.New(), ItemID: item, Name: "Size L", PriceVND: 40000, ManagerPIN: "000000",
+		})
+		assert.True(t, errors.Is(err, catalog.ErrInvalidManagerPin))
+	})
+
+	t.Run("price out of range is INVALID_PRICING_CONFIGURATION", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		cat := createTestCategoryDirect(t, db, "Coffee")
+		item := createTestItemDirect(t, db, cat, "Latte", nil, false)
+		createTestSizeDirect(t, db, item, "Size M", 35000, false)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.AddSizeCommand{
+			RequestID: uuid.New(), ItemID: item, Name: "Size L", PriceVND: 0, ManagerPIN: testManagerPIN,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrInvalidPricingConfiguration))
+	})
+}
+
+func TestAddModifierOption(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	handler := catalog.NewAddModifierOptionHandler(catalog.NewRunner(db, q))
+	ctx := context.Background()
+
+	t.Run("adds an available, non-default option", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		group := createTestModifierGroupDirect(t, db, "Topping", 0, 1, false)
+		createTestModifierOptionDirect(t, db, group, "Pearl", 5000, true, false)
+
+		status, res, err := handler.Handle(ctx, managerActor(t, db, q), catalog.AddModifierOptionCommand{
+			RequestID: uuid.New(), GroupID: group, Name: "Thạch dừa", SurchargeVND: 8000, ManagerPIN: testManagerPIN,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 201, status)
+		assert.Equal(t, "Thạch dừa", res.Name)
+		assert.Equal(t, int64(8000), res.SurchargeVND)
+		assert.True(t, res.Available)
+		assert.Empty(t, idsFrom(t, db, `SELECT modifier_option_id FROM modifier_group_default_options WHERE modifier_group_id = $1`, group))
+		assert.Equal(t, 1, auditCount(t, db, catalog.EventModifierOptionCreated))
+	})
+
+	t.Run("duplicate name is CATALOG_NAME_CONFLICT", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		group := createTestModifierGroupDirect(t, db, "Topping", 0, 1, false)
+		createTestModifierOptionDirect(t, db, group, "Pearl", 5000, true, false)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.AddModifierOptionCommand{
+			RequestID: uuid.New(), GroupID: group, Name: "pearl", SurchargeVND: 0, ManagerPIN: testManagerPIN,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrNameConflict))
+	})
+
+	t.Run("retired group is ErrEntityRetired", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		group := createTestModifierGroupDirect(t, db, "Topping", 0, 1, true)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.AddModifierOptionCommand{
+			RequestID: uuid.New(), GroupID: group, Name: "Jelly", SurchargeVND: 0, ManagerPIN: testManagerPIN,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+	})
+
+	t.Run("cashier is forbidden", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		group := createTestModifierGroupDirect(t, db, "Topping", 0, 1, false)
+		_, _, err := handler.Handle(ctx, cashierActor(t, db, q), catalog.AddModifierOptionCommand{
+			RequestID: uuid.New(), GroupID: group, Name: "Jelly", SurchargeVND: 0, ManagerPIN: testManagerPIN,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrForbidden))
+	})
+}

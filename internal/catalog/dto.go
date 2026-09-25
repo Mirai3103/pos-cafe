@@ -636,3 +636,37 @@ type ItemCategoryResponse struct {
 	CategoryID               uuid.UUID   `json:"category_id"`
 	RemovedExclusionGroupIDs []uuid.UUID `json:"removed_exclusion_group_ids"`
 }
+
+// AddSizeRequest adds a Size to a sized item.
+type AddSizeRequest struct {
+	RequestID  uuid.UUID `json:"request_id"`
+	Name       string    `json:"name"`
+	PriceVND   int64     `json:"price_vnd"`
+	ManagerPIN string    `json:"manager_pin"`
+}
+
+// AddSizeCommand carries the parameters for adding a Size.
+type AddSizeCommand struct {
+	RequestID  uuid.UUID
+	ItemID     uuid.UUID
+	Name       string
+	PriceVND   int64
+	ManagerPIN string
+}
+
+// AddModifierOptionRequest adds an Option to a modifier group.
+type AddModifierOptionRequest struct {
+	RequestID    uuid.UUID `json:"request_id"`
+	Name         string    `json:"name"`
+	SurchargeVND int64     `json:"surcharge_vnd"`
+	ManagerPIN   string    `json:"manager_pin"`
+}
+
+// AddModifierOptionCommand carries the parameters for adding an Option.
+type AddModifierOptionCommand struct {
+	RequestID    uuid.UUID
+	GroupID      uuid.UUID
+	Name         string
+	SurchargeVND int64
+	ManagerPIN   string
+}
