@@ -296,6 +296,9 @@ type SellableItemResponse struct {
 	ID             uuid.UUID                       `json:"id"`
 	CategoryID     uuid.UUID                       `json:"category_id"`
 	Name           string                          `json:"name"`
+	Code           *string                         `json:"code"`
+	Badge          *string                         `json:"badge"`
+	ImageURL       *string                         `json:"image_url"`
 	PriceVND       *int64                          `json:"price_vnd,omitempty"`
 	Sizes          []SellableSizeResponse          `json:"sizes,omitempty"`
 	ModifierGroups []SellableModifierGroupResponse `json:"modifier_groups,omitempty"`
@@ -305,6 +308,7 @@ type SellableItemResponse struct {
 type SellableCategoryResponse struct {
 	ID    uuid.UUID              `json:"id"`
 	Name  string                 `json:"name"`
+	Icon  *string                `json:"icon"`
 	Items []SellableItemResponse `json:"items"`
 }
 
@@ -360,6 +364,10 @@ type ManagementItemResponse struct {
 	ID                       uuid.UUID                         `json:"id"`
 	CategoryID               uuid.UUID                         `json:"category_id"`
 	Name                     string                            `json:"name"`
+	Code                     *string                           `json:"code"`
+	Badge                    *string                           `json:"badge"`
+	Description              *string                           `json:"description"`
+	ImageURL                 *string                           `json:"image_url"`
 	PriceVND                 *int64                            `json:"price_vnd,omitempty"`
 	Available                bool                              `json:"available"`
 	Retired                  bool                              `json:"retired"`
@@ -376,6 +384,8 @@ type ManagementItemResponse struct {
 type ManagementCategoryResponse struct {
 	ID               uuid.UUID                `json:"id"`
 	Name             string                   `json:"name"`
+	Icon             *string                  `json:"icon"`
+	DisplayOrder     int32                    `json:"display_order"`
 	Retired          bool                     `json:"retired"`
 	RetiredAt        *time.Time               `json:"retired_at,omitempty"`
 	RetirementReason *string                  `json:"retirement_reason,omitempty"`
@@ -393,9 +403,11 @@ type ManagementMenuResponse struct {
 
 // AvailabilityModifierOptionResponse represents an option in the availability projection.
 type AvailabilityModifierOptionResponse struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Available bool      `json:"available"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	// SurchargeVND is present only for callers holding catalog.view_prices (ADR-061).
+	SurchargeVND *int64 `json:"surcharge_vnd,omitempty"`
+	Available    bool   `json:"available"`
 }
 
 // AvailabilityModifierGroupResponse represents a modifier group in the availability projection.
@@ -416,9 +428,14 @@ type AvailabilitySizeResponse struct {
 
 // AvailabilityItemResponse represents an item in the availability projection.
 type AvailabilityItemResponse struct {
-	ID             uuid.UUID                           `json:"id"`
-	CategoryID     uuid.UUID                           `json:"category_id"`
-	Name           string                              `json:"name"`
+	ID         uuid.UUID `json:"id"`
+	CategoryID uuid.UUID `json:"category_id"`
+	Name       string    `json:"name"`
+	Code       *string   `json:"code"`
+	ImageURL   *string   `json:"image_url"`
+	// PriceVND is the item price, or its lowest non-retired Size price. Present
+	// only for callers holding catalog.view_prices (ADR-061).
+	PriceVND       *int64                              `json:"price_vnd,omitempty"`
 	Available      bool                                `json:"available"`
 	Sizes          []AvailabilitySizeResponse          `json:"sizes,omitempty"`
 	ModifierGroups []AvailabilityModifierGroupResponse `json:"modifier_groups,omitempty"`
@@ -428,10 +445,11 @@ type AvailabilityItemResponse struct {
 type AvailabilityCategoryResponse struct {
 	ID    uuid.UUID                  `json:"id"`
 	Name  string                     `json:"name"`
+	Icon  *string                    `json:"icon"`
 	Items []AvailabilityItemResponse `json:"items"`
 }
 
-// AvailabilityMenuResponse is the price-free projection for managing availability.
+// AvailabilityMenuResponse is the availability projection; prices only with catalog.view_prices.
 type AvailabilityMenuResponse struct {
 	Categories []AvailabilityCategoryResponse `json:"categories"`
 }

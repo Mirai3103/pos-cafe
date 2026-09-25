@@ -244,6 +244,9 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 				ID:             item.ID,
 				CategoryID:     item.CategoryID,
 				Name:           item.Name,
+				Code:           nullStringPtr(item.Code),
+				Badge:          nullStringPtr(item.Badge),
+				ImageURL:       ImageURL(item.ImageKey),
 				PriceVND:       itemPrice,
 				Sizes:          availableSizes,
 				ModifierGroups: sellableGroups,
@@ -264,6 +267,7 @@ func (h *SellableMenuHandler) Handle(ctx context.Context, actor Actor) (Sellable
 			resultCategories = append(resultCategories, SellableCategoryResponse{
 				ID:    cat.ID,
 				Name:  cat.Name,
+				Icon:  nullStringPtr(cat.Icon),
 				Items: catItems,
 			})
 		}
@@ -433,6 +437,10 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 				ID:                       item.ID,
 				CategoryID:               item.CategoryID,
 				Name:                     item.Name,
+				Code:                     nullStringPtr(item.Code),
+				Badge:                    nullStringPtr(item.Badge),
+				Description:              nullStringPtr(item.Description),
+				ImageURL:                 ImageURL(item.ImageKey),
 				PriceVND:                 priceVND,
 				Available:                item.Available,
 				Retired:                  item.RetiredAt.Valid,
@@ -476,6 +484,8 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 			resultCategories = append(resultCategories, ManagementCategoryResponse{
 				ID:               cat.ID,
 				Name:             cat.Name,
+				Icon:             nullStringPtr(cat.Icon),
+				DisplayOrder:     cat.DisplayOrder,
 				Retired:          cat.RetiredAt.Valid,
 				RetiredAt:        retAt,
 				RetirementReason: reason,
@@ -493,7 +503,7 @@ func (h *ManagementMenuHandler) Handle(ctx context.Context, actor Actor) (Manage
 	})
 }
 
-// AvailabilityMenuHandler handles reading the price-free availability menu projection.
+// AvailabilityMenuHandler handles reading the availability menu projection; prices are included only for callers holding catalog.view_prices (ADR-061).
 type AvailabilityMenuHandler struct {
 	runner *Runner
 }
@@ -505,7 +515,9 @@ func NewAvailabilityMenuHandler(runner *Runner) *AvailabilityMenuHandler {
 
 // Handle executes the availability menu projection query.
 func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (AvailabilityMenuResponse, error) {
-	return ExecuteRead(ctx, h.runner, actor, CapManageAvailability, func(q *sqlc.Queries) (AvailabilityMenuResponse, error) {
+	return ExecuteReadWithCapabilities(ctx, h.runner, actor, CapManageAvailability, func(q *sqlc.Queries, caps []string) (AvailabilityMenuResponse, error) {
+		showPrices := verifyCapabilities([]string{CapViewPrices}, caps) == nil
+
 		snap, err := loadCatalogSnapshot(ctx, q)
 		if err != nil {
 			return AvailabilityMenuResponse{}, err
@@ -521,11 +533,12 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 			if opt.RetiredAt.Valid {
 				continue
 			}
-			optionsByGroup[opt.ModifierGroupID] = append(optionsByGroup[opt.ModifierGroupID], AvailabilityModifierOptionResponse{
-				ID:        opt.ID,
-				Name:      opt.Name,
-				Available: opt.Available,
-			})
+			optResp := AvailabilityModifierOptionResponse{ID: opt.ID, Name: opt.Name, Available: opt.Available}
+			if showPrices {
+				s := opt.SurchargeVnd
+				optResp.SurchargeVND = &s
+			}
+			optionsByGroup[opt.ModifierGroupID] = append(optionsByGroup[opt.ModifierGroupID], optResp)
 		}
 
 		categoryGroupIDs := make(map[uuid.UUID][]uuid.UUID)
@@ -553,6 +566,16 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 				Name:      s.Name,
 				Available: s.Available,
 			})
+		}
+
+		lowestSizePrice := make(map[uuid.UUID]int64)
+		for _, s := range snap.sizes {
+			if s.RetiredAt.Valid {
+				continue
+			}
+			if cur, ok := lowestSizePrice[s.MenuItemID]; !ok || s.PriceVnd < cur {
+				lowestSizePrice[s.MenuItemID] = s.PriceVnd
+			}
 		}
 
 		itemsByCategory := make(map[uuid.UUID][]AvailabilityItemResponse)
@@ -600,14 +623,25 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 				effGroups = []AvailabilityModifierGroupResponse{}
 			}
 
-			itemsByCategory[item.CategoryID] = append(itemsByCategory[item.CategoryID], AvailabilityItemResponse{
+			itemResp := AvailabilityItemResponse{
 				ID:             item.ID,
 				CategoryID:     item.CategoryID,
 				Name:           item.Name,
+				Code:           nullStringPtr(item.Code),
+				ImageURL:       ImageURL(item.ImageKey),
 				Available:      item.Available,
 				Sizes:          itemSizes,
 				ModifierGroups: effGroups,
-			})
+			}
+			if showPrices {
+				if item.PriceVnd.Valid {
+					p := item.PriceVnd.Int64
+					itemResp.PriceVND = &p
+				} else if p, ok := lowestSizePrice[item.ID]; ok {
+					itemResp.PriceVND = &p
+				}
+			}
+			itemsByCategory[item.CategoryID] = append(itemsByCategory[item.CategoryID], itemResp)
 		}
 
 		var resultCategories []AvailabilityCategoryResponse
@@ -624,6 +658,7 @@ func (h *AvailabilityMenuHandler) Handle(ctx context.Context, actor Actor) (Avai
 			resultCategories = append(resultCategories, AvailabilityCategoryResponse{
 				ID:    cat.ID,
 				Name:  cat.Name,
+				Icon:  nullStringPtr(cat.Icon),
 				Items: catItems,
 			})
 		}

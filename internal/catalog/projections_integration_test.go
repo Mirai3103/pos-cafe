@@ -880,16 +880,18 @@ func TestProjectionSecurity_FieldSeparation(t *testing.T) {
 	mgmtRes, err := mgmtHandler.Handle(ctx, actor)
 	require.NoError(t, err)
 
-	// Step 2 Requirement:
-	// Marshal each DTO and assert the availability JSON contains none of:
-	// price_vnd, surcharge_vnd, retired, default_option_ids, or excluded_modifier_group_ids.
+	// ADR-061: the availability projection now carries prices for callers
+	// holding catalog.view_prices. A manager holds that capability, so its
+	// availability JSON contains price_vnd/surcharge_vnd; retired,
+	// default_option_ids, and excluded_modifier_group_ids must still never appear.
 	availJSON, err := json.Marshal(availRes)
 	require.NoError(t, err)
 	availStr := string(availJSON)
 
+	assert.Contains(t, availStr, "\"price_vnd\"")
+	assert.Contains(t, availStr, "\"surcharge_vnd\"")
+
 	forbiddenFields := []string{
-		"\"price_vnd\"",
-		"\"surcharge_vnd\"",
 		"\"retired\"",
 		"\"default_option_ids\"",
 		"\"excluded_modifier_group_ids\"",
@@ -898,6 +900,18 @@ func TestProjectionSecurity_FieldSeparation(t *testing.T) {
 	for _, field := range forbiddenFields {
 		assert.False(t, strings.Contains(availStr, field), "availability JSON must not contain %s", field)
 	}
+
+	// Callers without catalog.view_prices (e.g. a barista) must still get a
+	// price-free availability projection.
+	barista := createTestIdentity(t, db, q, []string{auth.RoleBarista}, true)
+	baristaActor := catalog.Actor{StaffID: barista.StaffID, SessionID: barista.SessionID}
+	baristaAvailRes, err := availHandler.Handle(ctx, baristaActor)
+	require.NoError(t, err)
+	baristaAvailJSON, err := json.Marshal(baristaAvailRes)
+	require.NoError(t, err)
+	baristaAvailStr := string(baristaAvailJSON)
+	assert.False(t, strings.Contains(baristaAvailStr, "\"price_vnd\""), "barista availability JSON must not contain price_vnd")
+	assert.False(t, strings.Contains(baristaAvailStr, "\"surcharge_vnd\""), "barista availability JSON must not contain surcharge_vnd")
 
 	// Conversely, sellable JSON contains price_vnd and surcharge_vnd, but no retired
 	sellJSON, err := json.Marshal(sellRes)
