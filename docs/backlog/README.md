@@ -76,3 +76,9 @@ it. Phase 11 owns them.
 
 Design questions that gate this work but are not themselves implementable live in
 [open-questions.md](open-questions.md).
+
+Follow-ups outside the phase sequence:
+
+| Ticket | Status | Blocked by |
+| --- | --- | --- |
+| [Catalog fields the availability cards mock today](availability-card-fields.md) | ready-for-design | none |

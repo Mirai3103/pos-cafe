@@ -616,6 +616,93 @@ const docTemplate = `{
                 }
             }
         },
+        "/catalog/availability/batch": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bật hoặc tắt nhiều món, kích cỡ và tùy chọn trong một giao dịch. Thành công toàn bộ hoặc không thay đổi gì. Yêu cầu quyền catalog.manage_availability.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Cập nhật trạng thái khả dụng hàng loạt",
+                "parameters": [
+                    {
+                        "description": "Danh sách thay đổi (1 đến 200 mục)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/catalog.SetAvailabilityBatchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/catalog.AvailabilityBatchResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/catalog/categories": {
             "post": {
                 "security": [
@@ -7751,6 +7838,34 @@ const docTemplate = `{
                 }
             }
         },
+        "catalog.AvailabilityBatchResponse": {
+            "type": "object",
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.AvailabilityBatchResult"
+                    }
+                }
+            }
+        },
+        "catalog.AvailabilityBatchResult": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "changed": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                }
+            }
+        },
         "catalog.AvailabilityCategoryResponse": {
             "type": "object",
             "properties": {
@@ -7764,6 +7879,20 @@ const docTemplate = `{
                     }
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "catalog.AvailabilityChange": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
                     "type": "string"
                 }
             }
@@ -8474,6 +8603,20 @@ const docTemplate = `{
                 },
                 "price_vnd": {
                     "type": "integer"
+                }
+            }
+        },
+        "catalog.SetAvailabilityBatchRequest": {
+            "type": "object",
+            "properties": {
+                "changes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/catalog.AvailabilityChange"
+                    }
+                },
+                "request_id": {
+                    "type": "string"
                 }
             }
         },

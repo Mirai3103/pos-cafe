@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { SettingsView } from "@/features/settings/components/settings-view";
-import { requireCapability } from "@/lib/guards";
+import { AvailabilityCounter, CatalogItemCounter } from "@/features/settings/components/availability-counter";
+import { SettingsLayout } from "@/features/settings/components/settings-layout";
+import { SETTINGS_CAPABILITIES } from "@/features/settings/lib/tabs";
+import { requireAnyCapability } from "@/lib/guards";
 
 export const Route = createFileRoute("/_app/settings")({
-  beforeLoad: () => requireCapability("staff.administer"),
-  component: SettingsView,
+  beforeLoad: () => requireAnyCapability(SETTINGS_CAPABILITIES),
+  component: () => (
+    <SettingsLayout counters={{ "/settings/availability": <AvailabilityCounter />, catalog: <CatalogItemCounter /> }} />
+  ),
 });

@@ -290,7 +290,9 @@ describe("pos-view coordinator", () => {
       expect(html).toContain("Đang tải thực đơn bán hàng...");
     });
 
-    it("renders error state with retry button when menu query fails", () => {
+    it("renders error state with retry button when menu query fails on first load", () => {
+      // Genuine first-load failure: no previous data to fall back on.
+      mockMenuState.data = undefined;
       mockMenuState.isError = true;
       mockMenuState.error = new Error("Network timeout");
       const html = renderPosView();

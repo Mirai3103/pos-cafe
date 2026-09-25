@@ -45,15 +45,19 @@ export function requireAuthenticated(): void {
   // A locked session stays on the route; the lock overlay covers it.
 }
 
-export function requireCapability(capability: string): void {
+export function requireAnyCapability(capabilities: readonly string[]): void {
   requireAuthenticated();
-  const { state, capabilities } = useSessionStore.getState();
+  const { state, capabilities: held } = useSessionStore.getState();
   // Capability is not evaluated while locked: the overlay is showing and the
   // operator has not yet proven they are still there.
-  if (state === "authenticated" && !capabilities.includes(capability)) {
+  if (state === "authenticated" && !capabilities.some((c) => held.includes(c))) {
     // The miss target must be loop-free: `/` itself requires `sales.operate`,
     // so redirecting there would re-run this same failing guard forever.
     // `/no-access` is authentication-only, so the redirect always settles.
     throw redirect({ to: "/no-access" });
   }
+}
+
+export function requireCapability(capability: string): void {
+  requireAnyCapability([capability]);
 }

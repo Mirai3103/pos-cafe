@@ -760,7 +760,7 @@ CREATE TABLE idempotency_keys (
 ## ADR-054: Capability-denied routes redirect to /no-access, never to /
 
 * **Decision Date:** 2026-09-21
-* **Status:** Accepted
+* **Status:** Accepted; **superseded in part by ADR-056** for the `/settings` capability requirement.
 * **Context:** Web slice 1 ships `requireCapability(capability)` in `web/src/lib/guards.ts`, whose implementation plan mandated redirecting a capability miss to `/`. But `/` itself is guarded by `requireCapability("sales.operate")`, and the Barista role holds `catalog.manage_availability` and `preparation.operate` but not `sales.operate`. Under that composition, a Barista signing in, declaring any workspace, and landing on `/` — or entering any route they lack the capability for — triggers a redirect whose target re-runs the identical failing guard: an unresolvable self-redirect cycle.
 * **Decision:**
 * A dedicated `/no-access` route (`web/src/routes/_app/no-access.tsx`) is the redirect target for every capability miss. It carries no `beforeLoad` of its own; the `_app` layout's `requireAuthenticated` is its only guard, so the redirect always settles on the first hop.
@@ -768,3 +768,26 @@ CREATE TABLE idempotency_keys (
 * **Consequences:**
 * A role with no slice-1 screen of its own (Barista today) lands on an explicit Vietnamese access-denied screen instead of looping or silently rendering an unauthorized surface.
 * Later slices that give a role its first screen (KDS in slice 6) should land users on their first permitted route after workspace declaration, making `/no-access` a rarely-seen fallback rather than a destination.
+
+## ADR-055: Bulk availability is one atomic, explicit-list command with one audit event
+
+* **Decision Date:** 2026-09-28
+* **Status:** Accepted
+* **Context:** Web slice 9a's "Khôi phục tất cả còn hàng" must turn many Menu Items, Sizes, and Modifier Options back on at once. The catalog had only single-entity availability commands, each writing one audit event.
+* **Decision:**
+* `POST /catalog/availability/batch` takes an explicit list of `{kind, id, available}` (1 to 200 entries) and applies it inside one `ExecuteMutation` transaction: all entries succeed or none do. A retired entity is `409 ENTITY_RETIRED`; an unknown one is `404 CATALOG_NOT_FOUND`.
+* Same-state entries are no-ops, as in the single commands. One `catalog.availability.batch_changed` audit event lists only the entries that changed; a batch that changes nothing writes none.
+* The fingerprint is the list sorted by `(kind, id)`. Rows are locked in one global order (Menu Items then their Sizes, then Modifier Groups then their Options) so that crossed concurrent batches cannot deadlock.
+* **Rejected:** a server-scoped "restore all", which would turn back on an entity another terminal marked unavailable after the operator last saw the list; and one audit event per entity, which would require `ExecuteMutation` to accept several `AuditRecord`s for one caller.
+* **Consequences:** The client must send the list it displayed. One user intent produces one audit event, consistent with ADR-048.
+
+## ADR-056: /settings is guarded per tab, not by staff.administer
+
+* **Decision Date:** 2026-09-28
+* **Status:** Accepted
+* **Context:** ADR-054 recorded `/settings` as requiring `staff.administer`, a Manager-only capability. Web slice 9a puts availability — operational work Cashier and Barista hold `catalog.manage_availability` for — under `/settings`, as the prototype does.
+* **Decision:**
+* `/settings` is a layout route guarded by `requireAnyCapability` over every tab's capability. Each tab is a child route guarded by its own capability; `/settings` itself redirects to the first tab the session may open. `web/src/features/settings/lib/tabs.ts` is the single source for all three.
+* The header hides every navigation entry whose capabilities the session lacks. `/history` stays visible until slice 8 guards it.
+* This supersedes ADR-054's line "`/settings` requires `staff.administer`"; ADR-054's `/no-access` rule is unchanged.
+* **Consequences:** A Barista reaches "Món tạm hết" from the header. Slices 9b and 9c add tabs by appending to `SETTINGS_TABS`, without touching the layout guard.

@@ -58,9 +58,13 @@ The first four produced the static prototype in `design-system/pos-cafe/` and th
 placeholder React shell. The fifth orders their replacement by API-backed screens.
 [Slice 7, tables and dine-in](docs/superpowers/specs/2026-09-27-web-slice-7-tables-dine-in-design.md)
 adds table sessions and dine-in ordering to the POS terminal.
+[Slice 9a, availability](docs/superpowers/specs/2026-09-28-web-slice-9a-availability-design.md)
+splits slice 9 into 9a (availability), 9b (catalog structure), and 9c (staff), and
+ships the "Món tạm hết" tab with an atomic batch availability command (ADR-055)
+and per-tab settings guards (ADR-056).
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
-`preparation`. Fifty-two architecture decisions are recorded.
+`preparation`. Fifty-six architecture decisions are recorded.
 
 ---
 

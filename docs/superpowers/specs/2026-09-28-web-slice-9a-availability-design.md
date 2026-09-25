@@ -46,14 +46,27 @@ the only part used during service, every shift.
 
 | Prototype element (`settings.html`) | Why it is cut |
 | --- | --- |
-| Tab "Quản lý Thực đơn & Topping" | Slice 9b. |
+| Tab "Quản lý Thực đơn & Topping" (content) | Slice 9b. The tab button is shown disabled so the bar matches the design (UAT revision, below). |
 | Staff administration (not in the prototype) | Slice 9c. |
-| Tab "Thông tin Quán & VietQR" (store profile, bank setup) | No Go endpoint stores a store profile or VietQR beneficiary. |
-| Tab "Tùy chỉnh In & Hệ thống" (K80 receipt template, test data reset) | No endpoint; the receipt boundary is unresolved in [`open-questions.md`](../../backlog/open-questions.md). |
-| Item image, item code ("cfsd"), price on the stock card | The availability menu carries none of them; reading the management menu only to decorate the card is not worth a second query. |
+| Tab "Thông tin Quán & VietQR" (content: store profile, bank setup) | No Go endpoint stores a store profile or VietQR beneficiary. Button shown disabled. |
+| Tab "Tùy chỉnh In & Hệ thống" (content: K80 receipt template, test data reset) | No endpoint; the receipt boundary is unresolved in [`open-questions.md`](../../backlog/open-questions.md). Button shown disabled. |
+| ~~Item image, item code ("cfsd"), price on the stock card~~ | **Reversed by the UAT revision:** shown as in the design; image and price are mocked on the web, the code is derived from the name. Backend follow-up: [`availability-card-fields.md`](../../backlog/availability-card-fields.md). |
 | Landing on the first permitted route after workspace declaration | Suggested by ADR-054; not needed to ship this tab. |
 
 ---
+
+### 1.4 UAT revision (2026-09-25): match the design first
+
+UAT found the first build too far from `settings.html`. The tab is rebuilt to follow
+the prototype's "Kho & Món Tạm Hết" view: its tab bar (the three unbuilt tabs as
+disabled buttons, each shown only to a session that will be able to open it, plus
+"Về Quầy thu ngân" with F1), stat cards, filter card, and one card per Menu Item and
+per topping with thumbnail, code, price, status badge, and the large ON/OFF switch.
+Stats count one per item and per topping, as the design does. Additions the design
+lacks but this spec requires stay, restyled to fit: per-Size switches on sized item
+cards, the "Không bán được" warning, the restore confirmation dialog, and the
+restore count. Mocked fields are isolated in
+`web/src/features/settings/lib/availability-mock.ts`.
 
 ## 2. Backend: batch availability command
 
@@ -150,8 +163,9 @@ routes/_app/settings/availability.tsx  requireCapability("catalog.manage_availab
 
 `features/settings/lib/tabs.ts` exports `SETTINGS_TABS: { to, label, icon,
 capability }[]` and `firstPermittedTab(capabilities)`. It is the single source
-for the layout's guard, the index redirect, and the tab bar. A tab that is not
-built yet is absent, not a placeholder. In 9a the array has one entry.
+for the layout's guard, the index redirect, and the tab bar. In 9a the array has one
+entry. The design's unbuilt tabs live in a separate `PLANNED_SETTINGS_TABS` list
+that renders disabled buttons only; it never routes or grants access (section 1.4).
 
 ### 3.2 Guards
 

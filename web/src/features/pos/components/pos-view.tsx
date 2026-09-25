@@ -310,7 +310,11 @@ export function PosView() {
 
   if (isShiftLoading || isMenuLoading) return <PosMenuLoading />;
 
-  if (isMenuError) {
+  // A failed 30s poll must not blank the whole POS (menu, draft, open
+  // payment dialog): react-query keeps the last successful data alongside
+  // isError, so the full-screen failure is reserved for a genuine first-load
+  // error (e.g. the inactivity lock or a network blip mid-shift).
+  if (isMenuError && !menu) {
     return <PosMenuError message={messageForError(menuError)} onRetry={() => refetchMenu()} />;
   }
 

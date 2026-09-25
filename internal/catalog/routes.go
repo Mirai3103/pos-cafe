@@ -32,6 +32,7 @@ type Slices struct {
 	RenameModifierOption              *RenameModifierOptionHandler
 	RepriceModifierOption             *RepriceModifierOptionHandler
 	SetModifierOptionAvailability     *SetModifierOptionAvailabilityHandler
+	SetAvailabilityBatch              *SetAvailabilityBatchHandler
 	RetireModifierOption              *RetireModifierOptionHandler
 	AttachItemModifierGroup           *AttachItemModifierGroupHandler
 	AttachCategoryModifierGroup       *AttachCategoryModifierGroupHandler
@@ -68,6 +69,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		RenameModifierOption:              NewRenameModifierOptionHandler(runner),
 		RepriceModifierOption:             NewRepriceModifierOptionHandler(runner),
 		SetModifierOptionAvailability:     NewSetModifierOptionAvailabilityHandler(runner),
+		SetAvailabilityBatch:              NewSetAvailabilityBatchHandler(runner),
 		RetireModifierOption:              NewRetireModifierOptionHandler(runner),
 		AttachItemModifierGroup:           NewAttachItemModifierGroupHandler(runner),
 		AttachCategoryModifierGroup:       NewAttachCategoryModifierGroupHandler(runner),
@@ -90,6 +92,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	catalog.GET("/menu/availability", s.handleGetAvailabilityMenu, authn.RequireCapability(CapManageAvailability))
 	catalog.GET("/modifier-groups", s.handleGetModifierGroups, authn.RequireCapability(CapViewPrices))
 	catalog.GET("/audit-events", s.handleGetAuditEvents, authn.RequireCapability(CapAuditInspect))
+	catalog.POST("/availability/batch", s.handleSetAvailabilityBatch, authn.RequireCapability(CapManageAvailability)) // Bulk availability update
 
 	// Categories
 	catalog.POST("/categories", s.handleCreateCategory, authn.RequireCapability(CapAdministerStructure))

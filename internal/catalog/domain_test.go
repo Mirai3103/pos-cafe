@@ -381,4 +381,73 @@ func TestCatalogConstants(t *testing.T) {
 	assert.Equal(t, "audit.inspect", catalog.CapAuditInspect)
 	assert.Equal(t, "catalog.authorization_denied", catalog.EventAuthorizationDenied)
 	assert.Equal(t, "catalog.", catalog.EventPrefixCatalog)
+	assert.Equal(t, "catalog.availability.set_batch", catalog.OpAvailabilitySetBatch)
+	assert.Equal(t, "catalog.availability.batch_changed", catalog.EventAvailabilityBatchChanged)
+}
+
+func TestNormalizeAvailabilityChanges(t *testing.T) {
+	t.Parallel()
+
+	a := uuid.MustParse("00000000-0000-0000-0000-00000000000a")
+	b := uuid.MustParse("00000000-0000-0000-0000-00000000000b")
+
+	t.Run("sorts by kind then id without mutating input", func(t *testing.T) {
+		t.Parallel()
+		in := []catalog.AvailabilityChange{
+			{Kind: catalog.AvailabilityKindSize, ID: b, Available: true},
+			{Kind: catalog.AvailabilityKindItem, ID: b, Available: false},
+			{Kind: catalog.AvailabilityKindItem, ID: a, Available: true},
+			{Kind: catalog.AvailabilityKindModifierOption, ID: a, Available: true},
+		}
+		out, err := catalog.NormalizeAvailabilityChanges(in)
+		assert.NoError(t, err)
+		assert.Equal(t, []catalog.AvailabilityChange{
+			{Kind: catalog.AvailabilityKindItem, ID: a, Available: true},
+			{Kind: catalog.AvailabilityKindItem, ID: b, Available: false},
+			{Kind: catalog.AvailabilityKindModifierOption, ID: a, Available: true},
+			{Kind: catalog.AvailabilityKindSize, ID: b, Available: true},
+		}, out)
+		assert.Equal(t, catalog.AvailabilityKindSize, in[0].Kind, "input must not be reordered")
+	})
+
+	t.Run("same kind and id on different kinds is not a duplicate", func(t *testing.T) {
+		t.Parallel()
+		_, err := catalog.NormalizeAvailabilityChanges([]catalog.AvailabilityChange{
+			{Kind: catalog.AvailabilityKindItem, ID: a},
+			{Kind: catalog.AvailabilityKindSize, ID: a},
+		})
+		assert.NoError(t, err)
+	})
+
+	tooMany := make([]catalog.AvailabilityChange, catalog.MaxAvailabilityBatchSize+1)
+	for i := range tooMany {
+		tooMany[i] = catalog.AvailabilityChange{Kind: catalog.AvailabilityKindItem, ID: uuid.New()}
+	}
+
+	invalid := []struct {
+		name    string
+		changes []catalog.AvailabilityChange
+	}{
+		{name: "empty", changes: nil},
+		{name: "over the limit", changes: tooMany},
+		{name: "unknown kind", changes: []catalog.AvailabilityChange{{Kind: "category", ID: a}}},
+		{name: "nil id", changes: []catalog.AvailabilityChange{{Kind: catalog.AvailabilityKindItem, ID: uuid.Nil}}},
+		{name: "duplicate", changes: []catalog.AvailabilityChange{
+			{Kind: catalog.AvailabilityKindItem, ID: a, Available: true},
+			{Kind: catalog.AvailabilityKindItem, ID: a, Available: false},
+		}},
+	}
+	for _, tt := range invalid {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := catalog.NormalizeAvailabilityChanges(tt.changes)
+			assert.Error(t, err)
+		})
+	}
+
+	t.Run("exactly the limit is accepted", func(t *testing.T) {
+		t.Parallel()
+		_, err := catalog.NormalizeAvailabilityChanges(tooMany[:catalog.MaxAvailabilityBatchSize])
+		assert.NoError(t, err)
+	})
 }

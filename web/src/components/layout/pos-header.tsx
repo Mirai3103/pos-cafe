@@ -1,31 +1,11 @@
 import * as React from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  Coffee,
-  ShoppingCart,
-  Grid2X2,
-  ChefHat,
-  Clock,
-  Receipt,
-  Settings,
-  Lock,
-  LogOut,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { Coffee, Clock, Lock, LogOut, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/use-session-store";
 import { useLock, useSignOut } from "@/features/auth/api/use-auth";
 import { useSound, playTapChirp } from "@/lib/sound";
-
-const navItems = [
-  { to: "/", label: "Bán hàng", icon: ShoppingCart },
-  { to: "/tables", label: "Sơ đồ bàn", icon: Grid2X2 },
-  { to: "/kds", label: "Bếp KDS", icon: ChefHat },
-  { to: "/shift", label: "Ca làm việc", icon: Clock },
-  { to: "/history", label: "Lịch sử", icon: Receipt },
-  { to: "/settings", label: "Cài đặt", icon: Settings },
-];
+import { visibleNavItems } from "./nav-items";
 
 const WORKSPACE_LABELS: Record<string, string> = {
   cashier: "Quầy thu ngân",
@@ -38,6 +18,7 @@ export function PosHeader() {
   const currentPath = routerState.location.pathname;
   const displayName = useSessionStore((s) => s.displayName);
   const workspace = useSessionStore((s) => s.workspace);
+  const capabilities = useSessionStore((s) => s.capabilities);
   const lock = useLock();
   const signOut = useSignOut();
   const { enabled: soundEnabled, toggle: toggleSound } = useSound();
@@ -76,9 +57,9 @@ export function PosHeader() {
 
         {/* Navigation Tabs */}
         <nav className="hidden lg:flex items-center gap-1">
-          {navItems.map((item) => {
+          {visibleNavItems(capabilities).map((item) => {
             const Icon = item.icon;
-            const isActive = currentPath === item.to;
+            const isActive = item.to === "/" ? currentPath === "/" : currentPath.startsWith(item.to);
             return (
               <Link
                 key={item.to}
