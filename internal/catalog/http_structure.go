@@ -132,3 +132,46 @@ func (s *Slices) handleAddModifierOption(c echo.Context) error {
 	}
 	return sendResult(c, status, res)
 }
+
+// handleSetSelectionRule godoc
+//
+//	@Summary		Đổi quy tắc chọn của nhóm topping
+//	@Description	Đổi số lựa chọn tối thiểu, tối đa và các tùy chọn mặc định cùng lúc. Yêu cầu quyền catalog.administer_structure.
+//	@Tags			Catalog
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			group_id	path		string					true	"Modifier Group ID (UUID)"
+//	@Param			request		body		SetSelectionRuleRequest	true	"Quy tắc chọn"
+//	@Success		200			{object}	response.APIResponse{data=SelectionRuleResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/catalog/modifier-groups/{group_id}/selection-rule [put]
+func (s *Slices) handleSetSelectionRule(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	groupID, err := parseUUIDParam(c, "group_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	req, err := bindBody[SetSelectionRuleRequest](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(req.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	status, res, err := s.SetSelectionRule.Handle(c.Request().Context(), actor, SetSelectionRuleCommand{
+		RequestID: req.RequestID, GroupID: groupID, MinSelections: req.MinSelections, MaxSelections: req.MaxSelections, DefaultOptionIDs: req.DefaultOptionIDs,
+	})
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}

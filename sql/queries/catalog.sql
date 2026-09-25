@@ -299,6 +299,14 @@ RETURNING id, name, normalized_name, min_selections, max_selections,
           retired_at, retirement_reason, retirement_note,
           created_at, updated_at;
 
+-- name: UpdateModifierGroupBounds :one
+UPDATE modifier_groups
+SET min_selections = $2, max_selections = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, min_selections, max_selections,
+          retired_at, retirement_reason, retirement_note,
+          created_at, updated_at;
+
 -- name: ListModifierGroups :many
 SELECT id, name, normalized_name, min_selections, max_selections,
        retired_at, retirement_reason, retirement_note,

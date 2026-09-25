@@ -249,3 +249,77 @@ func TestAddModifierOption(t *testing.T) {
 		assert.True(t, errors.Is(err, catalog.ErrForbidden))
 	})
 }
+
+func TestSetSelectionRule(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	handler := catalog.NewSetSelectionRuleHandler(catalog.NewRunner(db, q))
+	ctx := context.Background()
+	const defaultsOf = `SELECT modifier_option_id FROM modifier_group_default_options WHERE modifier_group_id = $1 ORDER BY modifier_option_id`
+
+	setup := func(t *testing.T) (group, a, b, c uuid.UUID) {
+		t.Helper()
+		cleanCategoryTestTables(t, db)
+		group = createTestModifierGroupDirect(t, db, "Topping", 0, 1, false)
+		a = createTestModifierOptionDirect(t, db, group, "A", 0, true, false)
+		b = createTestModifierOptionDirect(t, db, group, "B", 0, true, false)
+		c = createTestModifierOptionDirect(t, db, group, "C", 0, false, false)
+		return group, a, b, c
+	}
+
+	t.Run("changes bounds and defaults together", func(t *testing.T) {
+		group, a, b, _ := setup(t)
+		status, res, err := handler.Handle(ctx, managerActor(t, db, q), catalog.SetSelectionRuleCommand{
+			RequestID: uuid.New(), GroupID: group, MinSelections: 2, MaxSelections: 3, DefaultOptionIDs: []uuid.UUID{b, a},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, int32(2), res.MinSelections)
+		assert.Equal(t, int32(3), res.MaxSelections)
+		assert.ElementsMatch(t, []uuid.UUID{a, b}, idsFrom(t, db, defaultsOf, group))
+		assert.Equal(t, 1, auditCount(t, db, catalog.EventModifierGroupSelectionRuleChanged))
+	})
+
+	t.Run("max above active options is INVALID_MODIFIER_CONFIGURATION", func(t *testing.T) {
+		group, _, _, _ := setup(t)
+		createTestModifierOptionDirect(t, db, group, "Retired", 0, true, true)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.SetSelectionRuleCommand{
+			RequestID: uuid.New(), GroupID: group, MinSelections: 0, MaxSelections: 4,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration), "3 active options, max 4: got %v", err)
+	})
+
+	t.Run("an unavailable default is INVALID_MODIFIER_CONFIGURATION", func(t *testing.T) {
+		group, _, _, c := setup(t)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.SetSelectionRuleCommand{
+			RequestID: uuid.New(), GroupID: group, MinSelections: 1, MaxSelections: 1, DefaultOptionIDs: []uuid.UUID{c},
+		})
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration))
+	})
+
+	t.Run("a default from another group is INVALID_MODIFIER_CONFIGURATION", func(t *testing.T) {
+		group, _, _, _ := setup(t)
+		other := createTestModifierGroupDirect(t, db, "Other", 0, 1, false)
+		foreign := createTestModifierOptionDirect(t, db, other, "X", 0, true, false)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.SetSelectionRuleCommand{
+			RequestID: uuid.New(), GroupID: group, MinSelections: 1, MaxSelections: 1, DefaultOptionIDs: []uuid.UUID{foreign},
+		})
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration))
+	})
+
+	t.Run("defaults below min are INVALID_MODIFIER_CONFIGURATION", func(t *testing.T) {
+		group, _, _, _ := setup(t)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.SetSelectionRuleCommand{
+			RequestID: uuid.New(), GroupID: group, MinSelections: 1, MaxSelections: 2,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrInvalidModifierConfiguration))
+	})
+
+	t.Run("retired group is ErrEntityRetired", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		group := createTestModifierGroupDirect(t, db, "Old", 0, 1, true)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.SetSelectionRuleCommand{
+			RequestID: uuid.New(), GroupID: group, MinSelections: 0, MaxSelections: 1,
+		})
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+	})
+}

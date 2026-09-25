@@ -220,3 +220,120 @@ func (h *AddModifierOptionHandler) Handle(ctx context.Context, actor Actor, cmd 
 		return 201, res, audit, nil
 	})
 }
+
+type selectionRuleFingerprint struct {
+	GroupID          uuid.UUID   `json:"group_id"`
+	MinSelections    int32       `json:"min_selections"`
+	MaxSelections    int32       `json:"max_selections"`
+	DefaultOptionIDs []uuid.UUID `json:"default_option_ids"`
+}
+
+type selectionRuleValues struct {
+	MinSelections    int32       `json:"min_selections"`
+	MaxSelections    int32       `json:"max_selections"`
+	DefaultOptionIDs []uuid.UUID `json:"default_option_ids"`
+}
+
+type selectionRuleChangedAudit struct {
+	GroupID uuid.UUID           `json:"group_id"`
+	Before  selectionRuleValues `json:"before"`
+	After   selectionRuleValues `json:"after"`
+}
+
+// SetSelectionRuleHandler changes a group's min, max, and defaults atomically,
+// so no intermediate state is ever invalid.
+type SetSelectionRuleHandler struct {
+	runner *Runner
+}
+
+// NewSetSelectionRuleHandler creates a SetSelectionRuleHandler.
+func NewSetSelectionRuleHandler(runner *Runner) *SetSelectionRuleHandler {
+	return &SetSelectionRuleHandler{runner: runner}
+}
+
+// Handle validates against the group's non-retired options.
+func (h *SetSelectionRuleHandler) Handle(ctx context.Context, actor Actor, cmd SetSelectionRuleCommand) (int, SelectionRuleResponse, error) {
+	defaults, err := NormalizeIDSet(cmd.DefaultOptionIDs, "default_option_ids")
+	if err != nil {
+		return 0, SelectionRuleResponse{}, fmt.Errorf("%w: %s", ErrInvalidModifierConfiguration, err.Error())
+	}
+	spec := MutationSpec{
+		RequestID: cmd.RequestID,
+		Operation: OpModifierGroupSetSelectionRule,
+		Fingerprint: selectionRuleFingerprint{
+			GroupID: cmd.GroupID, MinSelections: cmd.MinSelections, MaxSelections: cmd.MaxSelections, DefaultOptionIDs: defaults,
+		},
+		Required: []string{CapAdministerStructure},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, SelectionRuleResponse, AuditRecord, error) {
+		group, err := q.GetModifierGroupForUpdate(ctx, cmd.GroupID)
+		if err != nil {
+			return 0, SelectionRuleResponse{}, AuditRecord{}, MapDBError(err)
+		}
+		if group.RetiredAt.Valid {
+			return 0, SelectionRuleResponse{}, AuditRecord{}, fmt.Errorf("%w: modifier group is retired", ErrEntityRetired)
+		}
+
+		options, err := q.ListModifierOptionsByGroup(ctx, cmd.GroupID)
+		if err != nil {
+			return 0, SelectionRuleResponse{}, AuditRecord{}, MapDBError(err)
+		}
+		active := 0
+		optByID := make(map[uuid.UUID]sqlc.ModifierOption, len(options))
+		for _, o := range options {
+			optByID[o.ID] = o
+			if !o.RetiredAt.Valid {
+				active++
+			}
+		}
+		if err := ValidateSelectionRule(cmd.MinSelections, cmd.MaxSelections, active, len(defaults)); err != nil {
+			return 0, SelectionRuleResponse{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrInvalidModifierConfiguration, err.Error())
+		}
+		for _, id := range defaults {
+			o, ok := optByID[id]
+			if !ok || o.RetiredAt.Valid || !o.Available {
+				return 0, SelectionRuleResponse{}, AuditRecord{}, fmt.Errorf("%w: default option %s must belong to the group and be available", ErrInvalidModifierConfiguration, id)
+			}
+		}
+
+		beforeRows, err := q.ListModifierGroupDefaultOptionsByGroup(ctx, cmd.GroupID)
+		if err != nil {
+			return 0, SelectionRuleResponse{}, AuditRecord{}, MapDBError(err)
+		}
+		beforeDefaults := make([]uuid.UUID, 0, len(beforeRows))
+		for _, r := range beforeRows {
+			beforeDefaults = append(beforeDefaults, r.ModifierOptionID)
+		}
+
+		updated, err := q.UpdateModifierGroupBounds(ctx, sqlc.UpdateModifierGroupBoundsParams{
+			ID: cmd.GroupID, MinSelections: cmd.MinSelections, MaxSelections: cmd.MaxSelections,
+		})
+		if err != nil {
+			return 0, SelectionRuleResponse{}, AuditRecord{}, MapDBError(err)
+		}
+		if err := q.DeleteModifierGroupDefaultOptions(ctx, cmd.GroupID); err != nil {
+			return 0, SelectionRuleResponse{}, AuditRecord{}, MapDBError(err)
+		}
+		if len(defaults) > 0 {
+			if err := q.CreateModifierGroupDefaultOptions(ctx, sqlc.CreateModifierGroupDefaultOptionsParams{
+				ModifierGroupID: cmd.GroupID, OptionIds: defaults,
+			}); err != nil {
+				return 0, SelectionRuleResponse{}, AuditRecord{}, MapDBError(err)
+			}
+		}
+
+		res := SelectionRuleResponse{
+			GroupID: updated.ID, MinSelections: updated.MinSelections, MaxSelections: updated.MaxSelections, DefaultOptionIDs: defaults,
+		}
+		audit := AuditRecord{
+			EventType: EventModifierGroupSelectionRuleChanged,
+			Details: selectionRuleChangedAudit{
+				GroupID: updated.ID,
+				Before:  selectionRuleValues{MinSelections: group.MinSelections, MaxSelections: group.MaxSelections, DefaultOptionIDs: UnionIDs(beforeDefaults)},
+				After:   selectionRuleValues{MinSelections: res.MinSelections, MaxSelections: res.MaxSelections, DefaultOptionIDs: defaults},
+			},
+		}
+		return 200, res, audit, nil
+	})
+}

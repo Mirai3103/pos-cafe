@@ -814,6 +814,7 @@ type Querier interface {
 	UpdateDraftItemComposition(ctx context.Context, arg UpdateDraftItemCompositionParams) error
 	UpdateMenuCategoryDetails(ctx context.Context, arg UpdateMenuCategoryDetailsParams) (MenuCategory, error)
 	UpdateMenuItemDetails(ctx context.Context, arg UpdateMenuItemDetailsParams) (MenuItem, error)
+	UpdateModifierGroupBounds(ctx context.Context, arg UpdateModifierGroupBoundsParams) (ModifierGroup, error)
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
 	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error

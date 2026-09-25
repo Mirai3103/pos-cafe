@@ -35,6 +35,7 @@ type Slices struct {
 	CreateModifierGroup               *CreateModifierGroupHandler
 	RenameModifierGroup               *RenameModifierGroupHandler
 	SetModifierGroupDefaults          *SetModifierGroupDefaultsHandler
+	SetSelectionRule                  *SetSelectionRuleHandler
 	RetireModifierGroup               *RetireModifierGroupHandler
 	RenameModifierOption              *RenameModifierOptionHandler
 	RepriceModifierOption             *RepriceModifierOptionHandler
@@ -79,6 +80,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries, media *MediaStore) *Slices {
 		CreateModifierGroup:               NewCreateModifierGroupHandler(runner),
 		RenameModifierGroup:               NewRenameModifierGroupHandler(runner),
 		SetModifierGroupDefaults:          NewSetModifierGroupDefaultsHandler(runner),
+		SetSelectionRule:                  NewSetSelectionRuleHandler(runner),
 		RetireModifierGroup:               NewRetireModifierGroupHandler(runner),
 		RenameModifierOption:              NewRenameModifierOptionHandler(runner),
 		RepriceModifierOption:             NewRepriceModifierOptionHandler(runner),
@@ -141,6 +143,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	catalog.POST("/modifier-groups", s.handleCreateModifierGroup, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))
 	catalog.PATCH("/modifier-groups/:group_id/name", s.handleRenameModifierGroup, authn.RequireCapability(CapAdministerStructure))
 	catalog.PUT("/modifier-groups/:group_id/defaults", s.handleSetModifierGroupDefaults, authn.RequireCapability(CapAdministerStructure))
+	catalog.PUT("/modifier-groups/:group_id/selection-rule", s.handleSetSelectionRule, authn.RequireCapability(CapAdministerStructure))
 	catalog.POST("/modifier-groups/:group_id/retirement", s.handleRetireModifierGroup, authn.RequireCapability(CapAdministerStructure))
 
 	// Modifier Options

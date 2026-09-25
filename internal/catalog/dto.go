@@ -670,3 +670,28 @@ type AddModifierOptionCommand struct {
 	SurchargeVND int64
 	ManagerPIN   string
 }
+
+// SetSelectionRuleRequest replaces a group's bounds and defaults together.
+type SetSelectionRuleRequest struct {
+	RequestID        uuid.UUID   `json:"request_id"`
+	MinSelections    int32       `json:"min_selections"`
+	MaxSelections    int32       `json:"max_selections"`
+	DefaultOptionIDs []uuid.UUID `json:"default_option_ids"`
+}
+
+// SetSelectionRuleCommand carries the parameters for changing a selection rule.
+type SetSelectionRuleCommand struct {
+	RequestID        uuid.UUID
+	GroupID          uuid.UUID
+	MinSelections    int32
+	MaxSelections    int32
+	DefaultOptionIDs []uuid.UUID
+}
+
+// SelectionRuleResponse is a group's bounds and defaults.
+type SelectionRuleResponse struct {
+	GroupID          uuid.UUID   `json:"group_id"`
+	MinSelections    int32       `json:"min_selections"`
+	MaxSelections    int32       `json:"max_selections"`
+	DefaultOptionIDs []uuid.UUID `json:"default_option_ids"`
+}

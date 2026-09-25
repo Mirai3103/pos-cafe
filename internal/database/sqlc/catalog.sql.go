@@ -2783,3 +2783,36 @@ func (q *Queries) UpdateMenuItemDetails(ctx context.Context, arg UpdateMenuItemD
 	)
 	return i, err
 }
+
+const updateModifierGroupBounds = `-- name: UpdateModifierGroupBounds :one
+UPDATE modifier_groups
+SET min_selections = $2, max_selections = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, min_selections, max_selections,
+          retired_at, retirement_reason, retirement_note,
+          created_at, updated_at
+`
+
+type UpdateModifierGroupBoundsParams struct {
+	ID            uuid.UUID `json:"id"`
+	MinSelections int32     `json:"min_selections"`
+	MaxSelections int32     `json:"max_selections"`
+}
+
+func (q *Queries) UpdateModifierGroupBounds(ctx context.Context, arg UpdateModifierGroupBoundsParams) (ModifierGroup, error) {
+	row := q.db.QueryRowContext(ctx, updateModifierGroupBounds, arg.ID, arg.MinSelections, arg.MaxSelections)
+	var i ModifierGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.MinSelections,
+		&i.MaxSelections,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
