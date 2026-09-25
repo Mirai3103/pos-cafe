@@ -614,3 +614,25 @@ type ItemImageResponse struct {
 	ItemID   uuid.UUID `json:"item_id"`
 	ImageURL *string   `json:"image_url"`
 }
+
+// === Structure (BA-1) ===
+
+// MoveItemCategoryRequest moves an item to another category.
+type MoveItemCategoryRequest struct {
+	RequestID  uuid.UUID `json:"request_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+// MoveItemCategoryCommand carries the parameters for moving an item.
+type MoveItemCategoryCommand struct {
+	RequestID  uuid.UUID
+	ItemID     uuid.UUID
+	CategoryID uuid.UUID
+}
+
+// ItemCategoryResponse reports an item's category and the exclusions the move dropped.
+type ItemCategoryResponse struct {
+	ItemID                   uuid.UUID   `json:"item_id"`
+	CategoryID               uuid.UUID   `json:"category_id"`
+	RemovedExclusionGroupIDs []uuid.UUID `json:"removed_exclusion_group_ids"`
+}

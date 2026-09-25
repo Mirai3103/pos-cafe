@@ -576,3 +576,25 @@ RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
           created_at, updated_at,
           code, normalized_code, badge, description, image_key;
+
+-- -- Structure (BA-1) --
+
+-- name: MoveMenuItemToCategory :one
+UPDATE menu_items
+SET category_id = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key;
+
+-- name: DeleteItemExclusionsOutsideCategory :many
+-- Exclusion invariant (ADR-059): an exclusion exists only while the item's
+-- category provides the group.
+DELETE FROM item_modifier_group_exclusions e
+WHERE e.menu_item_id = sqlc.arg(item_id)
+  AND NOT EXISTS (
+      SELECT 1 FROM category_modifier_groups c
+      WHERE c.menu_category_id = sqlc.arg(category_id)
+        AND c.modifier_group_id = e.modifier_group_id)
+RETURNING e.modifier_group_id;

@@ -54,6 +54,9 @@ type Querier interface {
 	DeleteAllocations(ctx context.Context, ids []uuid.UUID) error
 	DeleteDraftItem(ctx context.Context, id uuid.UUID) error
 	DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error
+	// Exclusion invariant (ADR-059): an exclusion exists only while the item's
+	// category provides the group.
+	DeleteItemExclusionsOutsideCategory(ctx context.Context, arg DeleteItemExclusionsOutsideCategoryParams) ([]uuid.UUID, error)
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
@@ -699,6 +702,8 @@ type Querier interface {
 	MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error
 	MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error
 	MoveAllocationsToCheck(ctx context.Context, arg MoveAllocationsToCheckParams) error
+	// -- Structure (BA-1) --
+	MoveMenuItemToCategory(ctx context.Context, arg MoveMenuItemToCategoryParams) (MenuItem, error)
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
 	RaiseCheckCharge(ctx context.Context, arg RaiseCheckChargeParams) error

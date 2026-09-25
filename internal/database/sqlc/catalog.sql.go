@@ -472,6 +472,46 @@ func (q *Queries) CreateModifierOptions(ctx context.Context, arg CreateModifierO
 	return items, nil
 }
 
+const deleteItemExclusionsOutsideCategory = `-- name: DeleteItemExclusionsOutsideCategory :many
+DELETE FROM item_modifier_group_exclusions e
+WHERE e.menu_item_id = $1
+  AND NOT EXISTS (
+      SELECT 1 FROM category_modifier_groups c
+      WHERE c.menu_category_id = $2
+        AND c.modifier_group_id = e.modifier_group_id)
+RETURNING e.modifier_group_id
+`
+
+type DeleteItemExclusionsOutsideCategoryParams struct {
+	ItemID     uuid.UUID `json:"item_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+// Exclusion invariant (ADR-059): an exclusion exists only while the item's
+// category provides the group.
+func (q *Queries) DeleteItemExclusionsOutsideCategory(ctx context.Context, arg DeleteItemExclusionsOutsideCategoryParams) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, deleteItemExclusionsOutsideCategory, arg.ItemID, arg.CategoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteModifierGroupDefaultOptions = `-- name: DeleteModifierGroupDefaultOptions :exec
 DELETE FROM modifier_group_default_options
 WHERE modifier_group_id = $1
@@ -1970,6 +2010,47 @@ func (q *Queries) ListModifierOptionsByGroup(ctx context.Context, modifierGroupI
 		return nil, err
 	}
 	return items, nil
+}
+
+const moveMenuItemToCategory = `-- name: MoveMenuItemToCategory :one
+
+UPDATE menu_items
+SET category_id = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key
+`
+
+type MoveMenuItemToCategoryParams struct {
+	ID         uuid.UUID `json:"id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+// -- Structure (BA-1) --
+func (q *Queries) MoveMenuItemToCategory(ctx context.Context, arg MoveMenuItemToCategoryParams) (MenuItem, error) {
+	row := q.db.QueryRowContext(ctx, moveMenuItemToCategory, arg.ID, arg.CategoryID)
+	var i MenuItem
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
+	)
+	return i, err
 }
 
 const renameMenuCategory = `-- name: RenameMenuCategory :one

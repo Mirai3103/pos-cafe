@@ -23,6 +23,7 @@ type Slices struct {
 	RetireItem                        *RetireItemHandler
 	SetItemDetails                    *SetItemDetailsHandler
 	SetCategoryDetails                *SetCategoryDetailsHandler
+	MoveItemCategory                  *MoveItemCategoryHandler
 	SetItemImage                      *SetItemImageHandler
 	ClearItemImage                    *ClearItemImageHandler
 	RenameSize                        *RenameSizeHandler
@@ -64,6 +65,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries, media *MediaStore) *Slices {
 		RetireItem:                        NewRetireItemHandler(runner),
 		SetItemDetails:                    NewSetItemDetailsHandler(runner),
 		SetCategoryDetails:                NewSetCategoryDetailsHandler(runner),
+		MoveItemCategory:                  NewMoveItemCategoryHandler(runner),
 		SetItemImage:                      NewSetItemImageHandler(runner, media),
 		ClearItemImage:                    NewClearItemImageHandler(runner),
 		RenameSize:                        NewRenameSizeHandler(runner),
@@ -119,6 +121,9 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	catalog.PATCH("/categories/:category_id/details", s.handleSetCategoryDetails, authn.RequireCapability(CapAdministerStructure))
 	catalog.PUT("/items/:item_id/image", s.handleSetItemImage, authn.RequireCapability(CapAdministerStructure))
 	catalog.DELETE("/items/:item_id/image", s.handleClearItemImage, authn.RequireCapability(CapAdministerStructure))
+
+	// Structure (BA-1)
+	catalog.PATCH("/items/:item_id/category", s.handleMoveItemCategory, authn.RequireCapability(CapAdministerStructure))
 
 	// Sizes
 	catalog.PATCH("/sizes/:size_id/name", s.handleRenameSize, authn.RequireCapability(CapAdministerStructure))
