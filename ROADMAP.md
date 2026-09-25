@@ -64,7 +64,7 @@ ships the "Món tạm hết" tab with an atomic batch availability command (ADR-
 and per-tab settings guards (ADR-056).
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
-`preparation`. Fifty-six architecture decisions are recorded.
+`preparation`. Sixty-one architecture decisions are recorded.
 
 ---
 

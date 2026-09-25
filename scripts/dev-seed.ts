@@ -210,7 +210,7 @@ async function main(): Promise<void> {
 
   // 5. Create Items
   // Simple Item (no sizes, no modifiers)
-  await apiRequest("/catalog/items", {
+  const croissantRes = await apiRequest<IdResponse>("/catalog/items", {
     token,
     body: {
       category_id: catPastryId,
@@ -221,7 +221,7 @@ async function main(): Promise<void> {
   });
 
   // Items with Sizes
-  await apiRequest("/catalog/items", {
+  const denRes = await apiRequest<IdResponse>("/catalog/items", {
     token,
     body: {
       category_id: catCoffeeId,
@@ -235,7 +235,7 @@ async function main(): Promise<void> {
     },
   });
 
-  await apiRequest("/catalog/items", {
+  const suaDaRes = await apiRequest<IdResponse>("/catalog/items", {
     token,
     body: {
       category_id: catCoffeeId,
@@ -249,7 +249,7 @@ async function main(): Promise<void> {
     },
   });
 
-  await apiRequest("/catalog/items", {
+  const bacXiuRes = await apiRequest<IdResponse>("/catalog/items", {
     token,
     body: {
       category_id: catCoffeeId,
@@ -262,7 +262,7 @@ async function main(): Promise<void> {
     },
   });
 
-  await apiRequest("/catalog/items", {
+  const traDaoRes = await apiRequest<IdResponse>("/catalog/items", {
     token,
     body: {
       category_id: catTeaId,
@@ -274,6 +274,37 @@ async function main(): Promise<void> {
       ],
     },
   });
+
+  // 6. Display fields (BA-1). No images: the seed must run offline.
+  const categoryDetails: Array<[string, string, number]> = [
+    [catCoffeeId, "coffee", 1],
+    [catTeaId, "cup-soda", 2],
+    [catPastryId, "croissant", 3],
+  ];
+  for (const [id, icon, order] of categoryDetails) {
+    if (!id) continue;
+    await apiRequest(`/catalog/categories/${id}/details`, {
+      token,
+      method: "PATCH",
+      body: { icon, display_order: order },
+    });
+  }
+
+  const itemDetails: Array<[string | undefined, string, string | null]> = [
+    [croissantRes?.data?.id, "CBT", null],
+    [denRes?.data?.id, "CFD", null],
+    [suaDaRes?.data?.id, "CFSD", "BEST_SELLER"],
+    [bacXiuRes?.data?.id, "BX", "SIGNATURE"],
+    [traDaoRes?.data?.id, "TDCS", "HOT"],
+  ];
+  for (const [id, code, badge] of itemDetails) {
+    if (!id) continue;
+    await apiRequest(`/catalog/items/${id}/details`, {
+      token,
+      method: "PATCH",
+      body: { code, badge, description: null },
+    });
+  }
 
   console.log("Sample catalog successfully seeded.");
   console.log("Ready for POS-a UAT testing at http://localhost:5173/");

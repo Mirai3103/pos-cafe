@@ -45,6 +45,8 @@ gets its own design spec, pull request, and UAT gate.
 The order puts what unblocks the most, at the lowest domain risk, first. BA-1 blocks
 web slice 9b directly. BA-5 goes last because it needs the most domain work.
 
+BA-1 implemented on branch backend-alignment-ba1; awaiting UAT.
+
 ## Acceptance criteria
 
 - [ ] BA-1 through BA-5 each have an approved design spec, a merged pull request, and a
