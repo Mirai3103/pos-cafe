@@ -765,6 +765,7 @@ type Querier interface {
 	SetCheckCharge(ctx context.Context, arg SetCheckChargeParams) error
 	SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuantityParams) (SetDraftItemQuantityRow, error)
 	SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAvailabilityParams) (MenuItem, error)
+	SetMenuItemImageKey(ctx context.Context, arg SetMenuItemImageKeyParams) (MenuItem, error)
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error

@@ -595,3 +595,22 @@ type CategoryDetailsResponse struct {
 	Icon         *string   `json:"icon"`
 	DisplayOrder int32     `json:"display_order"`
 }
+
+// SetItemImageCommand carries the uploaded bytes for an item image.
+type SetItemImageCommand struct {
+	RequestID uuid.UUID
+	ItemID    uuid.UUID
+	Data      []byte
+}
+
+// ClearItemImageCommand removes an item's image.
+type ClearItemImageCommand struct {
+	RequestID uuid.UUID
+	ItemID    uuid.UUID
+}
+
+// ItemImageResponse is an item's image URL, or null.
+type ItemImageResponse struct {
+	ItemID   uuid.UUID `json:"item_id"`
+	ImageURL *string   `json:"image_url"`
+}

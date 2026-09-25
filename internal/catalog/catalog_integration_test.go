@@ -64,7 +64,7 @@ func setupE2EApp(t *testing.T) *e2eContext {
 	authSlices := auth.NewSlices(db, q)
 	authSlices.RegisterRoutes(v1)
 
-	catalogSlices := catalog.NewSlices(db, q)
+	catalogSlices := catalog.NewSlices(db, q, newTestMediaStore(t))
 	catalogSlices.RegisterRoutes(v1, authSlices.Middleware)
 
 	return &e2eContext{

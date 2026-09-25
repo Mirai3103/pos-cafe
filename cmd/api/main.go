@@ -174,7 +174,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	authSlices := auth.NewSlices(db, queries)
 	authSlices.RegisterRoutes(v1)
 
-	catalogSlices := catalog.NewSlices(db, queries)
+	catalogSlices := catalog.NewSlices(db, queries, mediaStore)
 	catalogSlices.RegisterRoutes(v1, authSlices.Middleware)
 
 	tablesSlices := tables.NewSlices(db, queries)

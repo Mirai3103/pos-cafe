@@ -567,3 +567,12 @@ WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
           retired_at, retirement_reason, retirement_note, updated_at,
           icon, display_order;
+
+-- name: SetMenuItemImageKey :one
+UPDATE menu_items
+SET image_key = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key;

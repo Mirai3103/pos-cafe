@@ -2494,6 +2494,45 @@ func (q *Queries) SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAv
 	return i, err
 }
 
+const setMenuItemImageKey = `-- name: SetMenuItemImageKey :one
+UPDATE menu_items
+SET image_key = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key
+`
+
+type SetMenuItemImageKeyParams struct {
+	ID       uuid.UUID      `json:"id"`
+	ImageKey sql.NullString `json:"image_key"`
+}
+
+func (q *Queries) SetMenuItemImageKey(ctx context.Context, arg SetMenuItemImageKeyParams) (MenuItem, error) {
+	row := q.db.QueryRowContext(ctx, setMenuItemImageKey, arg.ID, arg.ImageKey)
+	var i MenuItem
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
+	)
+	return i, err
+}
+
 const setMenuItemSizeAvailability = `-- name: SetMenuItemSizeAvailability :one
 UPDATE menu_item_sizes
 SET available = $2, updated_at = now()

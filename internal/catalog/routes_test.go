@@ -46,7 +46,7 @@ func setupHTTPTest(t *testing.T) *httpTestContext {
 	v1 := e.Group("/api/v1")
 
 	authMiddleware := auth.NewMiddleware(q)
-	slices := catalog.NewSlices(db, q)
+	slices := catalog.NewSlices(db, q, newTestMediaStore(t))
 	slices.RegisterRoutes(v1, authMiddleware)
 
 	// Manager has all catalog caps + audit.inspect + change_price
