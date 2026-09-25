@@ -606,3 +606,40 @@ WHERE e.menu_item_id = sqlc.arg(item_id)
       WHERE c.menu_category_id = sqlc.arg(category_id)
         AND c.modifier_group_id = e.modifier_group_id)
 RETURNING e.modifier_group_id;
+
+-- -- Replace-set Assignments (BA-1, ADR-059) --
+
+-- name: ListItemDirectGroupIDs :many
+SELECT modifier_group_id FROM item_modifier_groups
+WHERE menu_item_id = $1 ORDER BY modifier_group_id;
+
+-- name: ListItemExcludedGroupIDs :many
+SELECT modifier_group_id FROM item_modifier_group_exclusions
+WHERE menu_item_id = $1 ORDER BY modifier_group_id;
+
+-- name: ListCategoryGroupIDs :many
+SELECT modifier_group_id FROM category_modifier_groups
+WHERE menu_category_id = $1 ORDER BY modifier_group_id;
+
+-- name: LockModifierGroupsByIDs :many
+SELECT id, retired_at FROM modifier_groups
+WHERE id = ANY(sqlc.arg(ids)::uuid[])
+ORDER BY id
+FOR UPDATE;
+
+-- name: DeleteItemModifierGroup :exec
+DELETE FROM item_modifier_groups WHERE menu_item_id = $1 AND modifier_group_id = $2;
+
+-- name: DeleteItemModifierGroupExclusion :exec
+DELETE FROM item_modifier_group_exclusions WHERE menu_item_id = $1 AND modifier_group_id = $2;
+
+-- name: DeleteCategoryModifierGroup :exec
+DELETE FROM category_modifier_groups WHERE menu_category_id = $1 AND modifier_group_id = $2;
+
+-- name: DeleteCategoryGroupExclusions :many
+DELETE FROM item_modifier_group_exclusions e
+USING menu_items i
+WHERE e.menu_item_id = i.id
+  AND i.category_id = sqlc.arg(category_id)
+  AND e.modifier_group_id = sqlc.arg(group_id)
+RETURNING e.menu_item_id;

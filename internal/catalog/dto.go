@@ -695,3 +695,59 @@ type SelectionRuleResponse struct {
 	MaxSelections    int32       `json:"max_selections"`
 	DefaultOptionIDs []uuid.UUID `json:"default_option_ids"`
 }
+
+// === Replace-set Assignments (BA-1) ===
+
+// ExclusionRef names one item exclusion of a modifier group.
+type ExclusionRef struct {
+	ItemID          uuid.UUID `json:"item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+// IDSetChange lists what a replace-set command added and removed.
+type IDSetChange struct {
+	Added   []uuid.UUID `json:"added"`
+	Removed []uuid.UUID `json:"removed"`
+}
+
+// ReplaceItemModifierGroupsRequest replaces an item's direct and excluded groups.
+type ReplaceItemModifierGroupsRequest struct {
+	RequestID        uuid.UUID   `json:"request_id"`
+	DirectGroupIDs   []uuid.UUID `json:"direct_group_ids"`
+	ExcludedGroupIDs []uuid.UUID `json:"excluded_group_ids"`
+}
+
+// ReplaceItemModifierGroupsCommand carries the parameters for command 7.
+type ReplaceItemModifierGroupsCommand struct {
+	RequestID        uuid.UUID
+	ItemID           uuid.UUID
+	DirectGroupIDs   []uuid.UUID
+	ExcludedGroupIDs []uuid.UUID
+}
+
+// ItemModifierGroupsResponse is an item's direct and excluded groups.
+type ItemModifierGroupsResponse struct {
+	ItemID           uuid.UUID   `json:"item_id"`
+	DirectGroupIDs   []uuid.UUID `json:"direct_group_ids"`
+	ExcludedGroupIDs []uuid.UUID `json:"excluded_group_ids"`
+}
+
+// ReplaceCategoryModifierGroupsRequest replaces a category's groups.
+type ReplaceCategoryModifierGroupsRequest struct {
+	RequestID uuid.UUID   `json:"request_id"`
+	GroupIDs  []uuid.UUID `json:"group_ids"`
+}
+
+// ReplaceCategoryModifierGroupsCommand carries the parameters for command 8.
+type ReplaceCategoryModifierGroupsCommand struct {
+	RequestID  uuid.UUID
+	CategoryID uuid.UUID
+	GroupIDs   []uuid.UUID
+}
+
+// CategoryModifierGroupsResponse is a category's groups and the exclusions the change dropped.
+type CategoryModifierGroupsResponse struct {
+	CategoryID        uuid.UUID      `json:"category_id"`
+	GroupIDs          []uuid.UUID    `json:"group_ids"`
+	RemovedExclusions []ExclusionRef `json:"removed_exclusions"`
+}

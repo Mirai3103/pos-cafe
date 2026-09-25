@@ -52,11 +52,15 @@ type Querier interface {
 	// -- Tables --
 	CreateTable(ctx context.Context, arg CreateTableParams) (Table, error)
 	DeleteAllocations(ctx context.Context, ids []uuid.UUID) error
+	DeleteCategoryGroupExclusions(ctx context.Context, arg DeleteCategoryGroupExclusionsParams) ([]uuid.UUID, error)
+	DeleteCategoryModifierGroup(ctx context.Context, arg DeleteCategoryModifierGroupParams) error
 	DeleteDraftItem(ctx context.Context, id uuid.UUID) error
 	DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error
 	// Exclusion invariant (ADR-059): an exclusion exists only while the item's
 	// category provides the group.
 	DeleteItemExclusionsOutsideCategory(ctx context.Context, arg DeleteItemExclusionsOutsideCategoryParams) ([]uuid.UUID, error)
+	DeleteItemModifierGroup(ctx context.Context, arg DeleteItemModifierGroupParams) error
+	DeleteItemModifierGroupExclusion(ctx context.Context, arg DeleteItemModifierGroupExclusionParams) error
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
@@ -364,6 +368,7 @@ type Querier interface {
 	// carries CommittedItemIds rather than a positional Column2.
 	ListAllocationsForItems(ctx context.Context, arg ListAllocationsForItemsParams) ([]ListAllocationsForItemsRow, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
+	ListCategoryGroupIDs(ctx context.Context, menuCategoryID uuid.UUID) ([]uuid.UUID, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	ListCheckAllocationQuantities(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationQuantitiesRow, error)
 	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
@@ -442,6 +447,9 @@ type Querier interface {
 	// should not pay for them. See ADR-012.
 	ListEffectiveModifierGroupsForCommit(ctx context.Context, menuItemIds []uuid.UUID) ([]ListEffectiveModifierGroupsForCommitRow, error)
 	ListHeldTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]ListHeldTableAssignmentsRow, error)
+	// -- Replace-set Assignments (BA-1, ADR-059) --
+	ListItemDirectGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error)
+	ListItemExcludedGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -587,6 +595,7 @@ type Querier interface {
 	// busiest path in the system, for no correctness gain. internal/catalog's
 	// mutations take FOR UPDATE and are still excluded. See ADR-015.
 	LockMenuItemSizesForCommit(ctx context.Context, sizeIds []uuid.UUID) ([]LockMenuItemSizesForCommitRow, error)
+	LockModifierGroupsByIDs(ctx context.Context, ids []uuid.UUID) ([]LockModifierGroupsByIDsRow, error)
 	// Step 3: the one open Sales Shift. FOR SHARE, because Cancellation only reads
 	// the Shift for settlement evidence and never writes Shift state; Shift
 	// closure takes FOR UPDATE and stays excluded for the whole transaction. No

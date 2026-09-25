@@ -472,6 +472,57 @@ func (q *Queries) CreateModifierOptions(ctx context.Context, arg CreateModifierO
 	return items, nil
 }
 
+const deleteCategoryGroupExclusions = `-- name: DeleteCategoryGroupExclusions :many
+DELETE FROM item_modifier_group_exclusions e
+USING menu_items i
+WHERE e.menu_item_id = i.id
+  AND i.category_id = $1
+  AND e.modifier_group_id = $2
+RETURNING e.menu_item_id
+`
+
+type DeleteCategoryGroupExclusionsParams struct {
+	CategoryID uuid.UUID `json:"category_id"`
+	GroupID    uuid.UUID `json:"group_id"`
+}
+
+func (q *Queries) DeleteCategoryGroupExclusions(ctx context.Context, arg DeleteCategoryGroupExclusionsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, deleteCategoryGroupExclusions, arg.CategoryID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var menu_item_id uuid.UUID
+		if err := rows.Scan(&menu_item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, menu_item_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteCategoryModifierGroup = `-- name: DeleteCategoryModifierGroup :exec
+DELETE FROM category_modifier_groups WHERE menu_category_id = $1 AND modifier_group_id = $2
+`
+
+type DeleteCategoryModifierGroupParams struct {
+	MenuCategoryID  uuid.UUID `json:"menu_category_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) DeleteCategoryModifierGroup(ctx context.Context, arg DeleteCategoryModifierGroupParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCategoryModifierGroup, arg.MenuCategoryID, arg.ModifierGroupID)
+	return err
+}
+
 const deleteItemExclusionsOutsideCategory = `-- name: DeleteItemExclusionsOutsideCategory :many
 DELETE FROM item_modifier_group_exclusions e
 WHERE e.menu_item_id = $1
@@ -510,6 +561,34 @@ func (q *Queries) DeleteItemExclusionsOutsideCategory(ctx context.Context, arg D
 		return nil, err
 	}
 	return items, nil
+}
+
+const deleteItemModifierGroup = `-- name: DeleteItemModifierGroup :exec
+DELETE FROM item_modifier_groups WHERE menu_item_id = $1 AND modifier_group_id = $2
+`
+
+type DeleteItemModifierGroupParams struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) DeleteItemModifierGroup(ctx context.Context, arg DeleteItemModifierGroupParams) error {
+	_, err := q.db.ExecContext(ctx, deleteItemModifierGroup, arg.MenuItemID, arg.ModifierGroupID)
+	return err
+}
+
+const deleteItemModifierGroupExclusion = `-- name: DeleteItemModifierGroupExclusion :exec
+DELETE FROM item_modifier_group_exclusions WHERE menu_item_id = $1 AND modifier_group_id = $2
+`
+
+type DeleteItemModifierGroupExclusionParams struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) DeleteItemModifierGroupExclusion(ctx context.Context, arg DeleteItemModifierGroupExclusionParams) error {
+	_, err := q.db.ExecContext(ctx, deleteItemModifierGroupExclusion, arg.MenuItemID, arg.ModifierGroupID)
+	return err
 }
 
 const deleteModifierGroupDefaultOptions = `-- name: DeleteModifierGroupDefaultOptions :exec
@@ -1535,6 +1614,34 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 	return items, nil
 }
 
+const listCategoryGroupIDs = `-- name: ListCategoryGroupIDs :many
+SELECT modifier_group_id FROM category_modifier_groups
+WHERE menu_category_id = $1 ORDER BY modifier_group_id
+`
+
+func (q *Queries) ListCategoryGroupIDs(ctx context.Context, menuCategoryID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryGroupIDs, menuCategoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCategoryModifierGroupsByCategory = `-- name: ListCategoryModifierGroupsByCategory :many
 SELECT cmgr.modifier_group_id, mg.name, mg.normalized_name,
        mg.min_selections, mg.max_selections,
@@ -1578,6 +1685,64 @@ func (q *Queries) ListCategoryModifierGroupsByCategory(ctx context.Context, menu
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemDirectGroupIDs = `-- name: ListItemDirectGroupIDs :many
+
+SELECT modifier_group_id FROM item_modifier_groups
+WHERE menu_item_id = $1 ORDER BY modifier_group_id
+`
+
+// -- Replace-set Assignments (BA-1, ADR-059) --
+func (q *Queries) ListItemDirectGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listItemDirectGroupIDs, menuItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemExcludedGroupIDs = `-- name: ListItemExcludedGroupIDs :many
+SELECT modifier_group_id FROM item_modifier_group_exclusions
+WHERE menu_item_id = $1 ORDER BY modifier_group_id
+`
+
+func (q *Queries) ListItemExcludedGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listItemExcludedGroupIDs, menuItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1999,6 +2164,41 @@ func (q *Queries) ListModifierOptionsByGroup(ctx context.Context, modifierGroupI
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockModifierGroupsByIDs = `-- name: LockModifierGroupsByIDs :many
+SELECT id, retired_at FROM modifier_groups
+WHERE id = ANY($1::uuid[])
+ORDER BY id
+FOR UPDATE
+`
+
+type LockModifierGroupsByIDsRow struct {
+	ID        uuid.UUID    `json:"id"`
+	RetiredAt sql.NullTime `json:"retired_at"`
+}
+
+func (q *Queries) LockModifierGroupsByIDs(ctx context.Context, ids []uuid.UUID) ([]LockModifierGroupsByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockModifierGroupsByIDs, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockModifierGroupsByIDsRow{}
+	for rows.Next() {
+		var i LockModifierGroupsByIDsRow
+		if err := rows.Scan(&i.ID, &i.RetiredAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

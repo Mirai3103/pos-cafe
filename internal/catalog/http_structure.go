@@ -175,3 +175,89 @@ func (s *Slices) handleSetSelectionRule(c echo.Context) error {
 	}
 	return sendResult(c, status, res)
 }
+
+// handleReplaceItemModifierGroups godoc
+//
+//	@Summary		Thay toàn bộ nhóm topping của món
+//	@Description	Đặt đúng tập nhóm gán trực tiếp và tập nhóm loại trừ của món. Bỏ một id khỏi danh sách nghĩa là gỡ nó. Yêu cầu quyền catalog.administer_structure.
+//	@Tags			Catalog
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			item_id	path		string								true	"Item ID (UUID)"
+//	@Param			request	body		ReplaceItemModifierGroupsRequest	true	"Tập nhóm mong muốn"
+//	@Success		200		{object}	response.APIResponse{data=ItemModifierGroupsResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Failure		500		{object}	response.APIResponse
+//	@Router			/catalog/items/{item_id}/modifier-groups [put]
+func (s *Slices) handleReplaceItemModifierGroups(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	itemID, err := parseUUIDParam(c, "item_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	req, err := bindBody[ReplaceItemModifierGroupsRequest](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(req.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	status, res, err := s.ReplaceItemModifierGroups.Handle(c.Request().Context(), actor, ReplaceItemModifierGroupsCommand{
+		RequestID: req.RequestID, ItemID: itemID, DirectGroupIDs: req.DirectGroupIDs, ExcludedGroupIDs: req.ExcludedGroupIDs,
+	})
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}
+
+// handleReplaceCategoryModifierGroups godoc
+//
+//	@Summary		Thay toàn bộ nhóm topping của danh mục
+//	@Description	Đặt đúng tập nhóm danh mục cung cấp. Gỡ một nhóm sẽ xóa các loại trừ nhóm đó trên các món trong danh mục. Yêu cầu quyền catalog.administer_structure.
+//	@Tags			Catalog
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			category_id	path		string									true	"Category ID (UUID)"
+//	@Param			request		body		ReplaceCategoryModifierGroupsRequest	true	"Tập nhóm mong muốn"
+//	@Success		200			{object}	response.APIResponse{data=CategoryModifierGroupsResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/catalog/categories/{category_id}/modifier-groups [put]
+func (s *Slices) handleReplaceCategoryModifierGroups(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	catID, err := parseUUIDParam(c, "category_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	req, err := bindBody[ReplaceCategoryModifierGroupsRequest](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(req.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	status, res, err := s.ReplaceCategoryModifierGroups.Handle(c.Request().Context(), actor, ReplaceCategoryModifierGroupsCommand{
+		RequestID: req.RequestID, CategoryID: catID, GroupIDs: req.GroupIDs,
+	})
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}
