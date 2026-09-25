@@ -1,6 +1,6 @@
 # Follow-up: catalog fields the availability cards mock today
 
-**Status:** ready-for-design
+**Status:** superseded — absorbed by [backend alignment](backend-alignment.md) sub-project BA-1
 **Blocked by:** none
 **Source:** Web slice 9a UAT feedback (2026-09-25): the "Kho & Món Tạm Hết" tab must
 match `design-system/pos-cafe/pages/settings.html` first; fields the backend lacks are
