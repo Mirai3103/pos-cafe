@@ -760,7 +760,7 @@ CREATE TABLE idempotency_keys (
 ## ADR-054: Capability-denied routes redirect to /no-access, never to /
 
 * **Decision Date:** 2026-09-21
-* **Status:** Accepted
+* **Status:** Accepted; **superseded in part by ADR-056** for the `/settings` capability requirement.
 * **Context:** Web slice 1 ships `requireCapability(capability)` in `web/src/lib/guards.ts`, whose implementation plan mandated redirecting a capability miss to `/`. But `/` itself is guarded by `requireCapability("sales.operate")`, and the Barista role holds `catalog.manage_availability` and `preparation.operate` but not `sales.operate`. Under that composition, a Barista signing in, declaring any workspace, and landing on `/` — or entering any route they lack the capability for — triggers a redirect whose target re-runs the identical failing guard: an unresolvable self-redirect cycle.
 * **Decision:**
 * A dedicated `/no-access` route (`web/src/routes/_app/no-access.tsx`) is the redirect target for every capability miss. It carries no `beforeLoad` of its own; the `_app` layout's `requireAuthenticated` is its only guard, so the redirect always settles on the first hop.

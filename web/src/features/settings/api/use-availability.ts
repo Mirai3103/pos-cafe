@@ -54,7 +54,6 @@ export function useSetAvailability() {
     setAvailability: async (kind: AvailabilityKind, id: string, available: boolean) => {
       const data = { request_id: newRequestId(), available };
       await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<GetCatalogMenuAvailability200>(key);
       queryClient.setQueryData<GetCatalogMenuAvailability200>(key, (old) =>
         old?.data ? { ...old, data: applyAvailability(old.data, kind, id, available) } : old,
       );
@@ -63,7 +62,13 @@ export function useSetAvailability() {
         else if (kind === "size") unwrap(await size.mutateAsync({ sizeId: id, data }));
         else unwrap(await option.mutateAsync({ optionId: id, data }));
       } catch (err) {
-        queryClient.setQueryData(key, previous);
+        // Reverse only this toggle's optimistic write (a toggle always
+        // flips, so the entity's prior value is !available): rolling back
+        // to a full snapshot could overwrite a concurrent toggle's newer
+        // cache state.
+        queryClient.setQueryData<GetCatalogMenuAvailability200>(key, (old) =>
+          old?.data ? { ...old, data: applyAvailability(old.data, kind, id, !available) } : old,
+        );
         throw err;
       } finally {
         void invalidateMenus();
