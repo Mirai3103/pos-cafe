@@ -1,6 +1,6 @@
 /**
- * Development seed. Creates the first Manager and sample catalog entities
- * so the Cashier Terminal (POS-a) can be tested end-to-end.
+ * Development seed. Creates the first Manager, sample Tables, and sample
+ * catalog entities so the Cashier Terminal (POS-a) can be tested end-to-end.
  *
  * Never run against production: Phase 11 acceptance forbids production
  * configuration from exposing demo identities or sample sales.
@@ -64,6 +64,23 @@ interface MenuResponse {
   };
 }
 
+interface OverviewResponse {
+  data?: Array<{ name?: string }>;
+}
+
+const SEED_TABLES = Array.from({ length: 8 }, (_, i) => `Bàn ${i + 1}`);
+
+/** Creates each sample Table that does not exist yet, so re-running is harmless. */
+async function seedTables(token: string): Promise<void> {
+  const overview = await apiRequest<OverviewResponse>("/tables/overview", { method: "GET", token });
+  const existing = new Set((overview?.data ?? []).map((row) => row.name));
+  const missing = SEED_TABLES.filter((name) => !existing.has(name));
+  for (const name of missing) {
+    await apiRequest("/tables", { token, body: { name } });
+  }
+  console.log(missing.length > 0 ? `Created tables: ${missing.join(", ")}` : "Tables already seeded.");
+}
+
 async function main(): Promise<void> {
   console.log("=== Seeding Development Data ===");
 
@@ -85,6 +102,13 @@ async function main(): Promise<void> {
   } catch (error) {
     console.error("Failed to sign in manager. Ensure Go server is running:", error);
     return;
+  }
+
+  // Tables are seeded independently: the catalog check below returns early.
+  try {
+    await seedTables(token);
+  } catch (error) {
+    console.error("Failed to seed tables:", error);
   }
 
   // 2. Check if Catalog is already seeded

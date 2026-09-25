@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { Receipt, Trash2, ShoppingBag, Utensils, Banknote, QrCode } from "lucide-react";
 import type {
   SalesServiceSessionResponse,
@@ -119,15 +120,13 @@ export function DraftPanel({
             <ShoppingBag className="h-3.5 w-3.5" />
             <span>Mang đi</span>
           </div>
-          <button
-            type="button"
-            disabled
-            className="min-h-[40px] h-10 px-3 rounded-lg font-medium text-xs text-muted-foreground opacity-50 cursor-not-allowed flex items-center justify-center gap-1.5"
-            title="Chế độ Tại bàn sẽ hoạt động ở Slice 7"
+          <Link
+            to="/tables"
+            className="min-h-[40px] h-10 px-3 rounded-lg font-medium text-xs text-foreground hover:bg-card flex items-center justify-center gap-1.5"
           >
             <Utensils className="h-3.5 w-3.5" />
-            <span>Tại bàn (F2)</span>
-          </button>
+            <span>Tại bàn</span>
+          </Link>
         </div>
 
         {/* Payment method: cash only in Slice 4 */}

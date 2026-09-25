@@ -72,6 +72,13 @@ export const ERROR_MESSAGES: Record<string, string> = {
   PREPARATION_WASTE_ALREADY_REMADE: "Món này đã được pha lại trước đó.",
   NOT_AUTHORIZED: "Mã PIN Quản lý không đúng hoặc không có quyền thực hiện thao tác này.",
   INVALID_INPUT: "Dữ liệu gửi lên không hợp lệ.",
+  TABLE_NOT_FOUND: "Không tìm thấy bàn.",
+  TABLE_NAME_CONFLICT: "Tên bàn này đã tồn tại.",
+  DINE_IN_TABLE_SELECTION_REQUIRED: "Vui lòng chọn ít nhất một bàn.",
+  DINE_IN_TABLE_SELECTION_DUPLICATE: "Một bàn được chọn hai lần.",
+  DINE_IN_TABLE_NOT_FOUND: "Một bàn đã chọn không còn tồn tại.",
+  DINE_IN_TABLE_UNAVAILABLE: "Một bàn đã chọn đang tạm ngưng phục vụ.",
+  TAKEAWAY_TABLE_ASSIGNMENT_NOT_AVAILABLE: "Đơn mang đi không gắn được bàn.",
 };
 
 const NETWORK_MESSAGE = "Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại.";

@@ -1,5 +1,6 @@
 import { useHotkeys } from "react-hotkeys-hook";
 import type { PosPhase } from "../utils/phase";
+import { resolveDineInF9, type DineInStatus } from "../utils/dine-in";
 
 export type F9Action = "none" | "checkout" | "submit" | "next-customer" | "close";
 
@@ -31,6 +32,13 @@ export interface PosHotkeysOptions {
   onNextCustomer: () => void;
   onClose: () => Promise<void>;
   onToggleDrawer: () => void;
+  /** Present while a dine-in Session is active: F9 follows the dine-in action bar. */
+  dineIn?: {
+    status: DineInStatus;
+    onSend: () => Promise<void>;
+    onCollect: () => void;
+    onClose: () => Promise<void>;
+  };
 }
 
 export function usePosHotkeys({
@@ -42,11 +50,28 @@ export function usePosHotkeys({
   onNextCustomer,
   onClose,
   onToggleDrawer,
+  dineIn,
 }: PosHotkeysOptions): void {
   useHotkeys(
     "f9",
     (event) => {
       event.preventDefault();
+      if (dineIn) {
+        switch (resolveDineInF9(dineIn.status, blocked || isDrawerOpen)) {
+          case "send":
+            void dineIn.onSend();
+            break;
+          case "collect":
+            dineIn.onCollect();
+            break;
+          case "close":
+            void dineIn.onClose();
+            break;
+          default:
+            break;
+        }
+        return;
+      }
       switch (resolveF9Action(phase, blocked || isDrawerOpen)) {
         case "checkout":
           onCheckout();

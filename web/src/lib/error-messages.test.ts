@@ -98,3 +98,21 @@ describe("commit and payment error codes", () => {
     );
   });
 });
+
+describe("slice 7 error codes", () => {
+  /** Pinned against internal/tables/errors.go and internal/sales/errors.go. */
+  it("has a Vietnamese message for every Table and dine-in code", () => {
+    for (const code of [
+      "TABLE_NOT_FOUND",
+      "TABLE_NAME_CONFLICT",
+      "DINE_IN_TABLE_SELECTION_REQUIRED",
+      "DINE_IN_TABLE_SELECTION_DUPLICATE",
+      "DINE_IN_TABLE_NOT_FOUND",
+      "DINE_IN_TABLE_UNAVAILABLE",
+      "TAKEAWAY_TABLE_ASSIGNMENT_NOT_AVAILABLE",
+      "NEW_ORDER_DRAFT_NOT_AVAILABLE",
+    ]) {
+      expect(ERROR_MESSAGES[code]).toBeTruthy();
+    }
+  });
+});

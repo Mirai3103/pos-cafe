@@ -30,6 +30,17 @@ describe("PaymentDialog", () => {
     expect(html).toContain("100.000");
   });
 
+  it("defaults to the takeaway wording", () => {
+    const html = renderToString(<PaymentDialog {...base} />);
+    expect(html).toContain("Đơn mang đi #007");
+  });
+
+  it("shows the dine-in wording when collecting a seated party's bill", () => {
+    const html = renderToString(<PaymentDialog {...base} modeLabel="Tại bàn" />);
+    expect(html).toContain("Tại bàn #007");
+    expect(html).not.toContain("Đơn mang đi");
+  });
+
   it("labels the confirm action for an uncommitted draft", () => {
     const html = renderToString(<PaymentDialog {...base} />);
     expect(html).toContain("Xác nhận");
