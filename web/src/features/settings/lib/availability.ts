@@ -3,7 +3,6 @@ import type {
   CatalogAvailabilityMenuResponse,
 } from "@/api/generated/models";
 import { newRequestId } from "@/lib/command";
-import { matchesSearch } from "@/lib/search";
 
 export type AvailabilityKind = "item" | "size" | "modifier_option";
 
@@ -163,36 +162,6 @@ export function blockedMessage(blockedBy: string[]): string | null {
   const groupNames = blockedBy.filter((b) => b !== SIZE_BLOCK_LABEL);
   if (groupNames.length > 0) parts.push(`hết tùy chọn bắt buộc (${groupNames.join(", ")})`);
   return `Không bán được: ${parts.join("; ")}`;
-}
-
-export function isItemFullyAvailable(item: AvailabilityItemView): boolean {
-  return item.available && item.sizes.every((s) => s.available);
-}
-
-export function filterItems(items: AvailabilityItemView[], filter: AvailabilityFilter): AvailabilityItemView[] {
-  if (filter.scope === TOPPINGS_SCOPE) return [];
-  return items.filter((item) => {
-    if (filter.scope !== ALL_SCOPE && item.categoryId !== filter.scope) return false;
-    if (filter.onlyUnavailable && isItemFullyAvailable(item)) return false;
-    if (!filter.query.trim()) return true;
-    return (
-      matchesSearch(filter.query, item.name, item.categoryName) ||
-      item.sizes.some((s) => matchesSearch(filter.query, s.name))
-    );
-  });
-}
-
-export function filterGroups(groups: AvailabilityGroupView[], filter: AvailabilityFilter): AvailabilityGroupView[] {
-  if (filter.scope !== ALL_SCOPE && filter.scope !== TOPPINGS_SCOPE) return [];
-  return groups
-    .map((g) => ({
-      ...g,
-      options: g.options.filter((o) => {
-        if (filter.onlyUnavailable && o.available) return false;
-        return matchesSearch(filter.query, o.name, g.name);
-      }),
-    }))
-    .filter((g) => g.options.length > 0);
 }
 
 /** Optimistic patch: sets one entity's availability everywhere it appears. */

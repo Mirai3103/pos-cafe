@@ -1,13 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import type { CatalogAvailabilityMenuResponse } from "@/api/generated/models";
 import {
-  ALL_SCOPE,
-  EMPTY_FILTER,
-  TOPPINGS_SCOPE,
   applyAvailability,
   blockedMessage,
-  filterGroups,
-  filterItems,
   nextIntent,
   refsKey,
   toAvailabilityView,
@@ -125,38 +120,6 @@ describe("blockedBy", () => {
     expect(blockedMessage(["Kích cỡ", "Mức đường", "Đá"])).toBe(
       "Không bán được: hết kích cỡ; hết tùy chọn bắt buộc (Mức đường, Đá)",
     );
-  });
-});
-
-describe("filters", () => {
-  const view = toAvailabilityView(menu);
-
-  it("returns everything with the empty filter", () => {
-    expect(filterItems(view.items, EMPTY_FILTER)).toHaveLength(3);
-    expect(filterGroups(view.groups, EMPTY_FILTER)).toHaveLength(2);
-  });
-
-  it("searches without diacritics across item, size, and category names", () => {
-    expect(filterItems(view.items, { ...EMPTY_FILTER, query: "ca phe sua" }).map((i) => i.id)).toEqual(["i-sua"]);
-    expect(filterItems(view.items, { ...EMPTY_FILTER, query: "banh" }).map((i) => i.id)).toEqual(["i-croissant"]);
-  });
-
-  it("scopes to one category, hiding toppings", () => {
-    const f = { ...EMPTY_FILTER, scope: "c-cake" };
-    expect(filterItems(view.items, f).map((i) => i.id)).toEqual(["i-croissant"]);
-    expect(filterGroups(view.groups, f)).toEqual([]);
-  });
-
-  it("scopes to toppings, hiding items", () => {
-    const f = { ...EMPTY_FILTER, scope: TOPPINGS_SCOPE };
-    expect(filterItems(view.items, f)).toEqual([]);
-    expect(filterGroups(view.groups, f)).toHaveLength(2);
-  });
-
-  it("keeps only items or options with something off", () => {
-    const f = { ...EMPTY_FILTER, scope: ALL_SCOPE, onlyUnavailable: true };
-    expect(filterItems(view.items, f).map((i) => i.id)).toEqual(["i-den", "i-sua"]);
-    expect(filterGroups(view.groups, f).map((g) => g.id)).toEqual(["g-top"]);
   });
 });
 

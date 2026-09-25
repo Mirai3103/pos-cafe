@@ -32,7 +32,15 @@ describe("AvailabilityBoard", () => {
     expect(html).toContain("Topping");
     expect(html).toContain("Cà phê đen");
     expect(html).toContain("Trân châu trắng");
-    expect(html).toContain("Chỉ xem món tạm hết");
+    expect(html).toContain("Chỉ xem món Tạm hết");
+    expect(html).toContain("Tìm theo tên món hoặc mã (cfsd, bạc xỉu, trà đào, topping...)");
+  });
+
+  it("shows the active only-unavailable filter the design's way", () => {
+    const html = render({ ...EMPTY_FILTER, onlyUnavailable: true });
+    expect(html).toContain("Đang lọc: Chỉ món Tạm hết");
+    expect(html).not.toContain("Cà phê đen");
+    expect(html).toContain("Trân châu trắng");
   });
 
   it("shows only toppings under the topping pill", () => {
@@ -44,7 +52,7 @@ describe("AvailabilityBoard", () => {
   it("shows the no-match state with a reset", () => {
     const html = render({ ...EMPTY_FILTER, query: "khong co mon nay" });
     expect(html).toContain("Không tìm thấy món hoặc topping phù hợp");
-    expect(html).toContain("Xóa bộ lọc");
+    expect(html).toContain("Xóa bộ lọc &amp; Hiển thị tất cả");
   });
 
   it("shows the empty-menu state", () => {
