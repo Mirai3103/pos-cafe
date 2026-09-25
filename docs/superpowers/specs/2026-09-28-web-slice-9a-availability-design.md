@@ -91,10 +91,14 @@ denial audit, idempotency claim, and replay are inherited unchanged.
 - **Operation:** `catalog.availability.set_batch` (`OpAvailabilitySetBatch`).
 - **Fingerprint:** the `changes` list sorted by `(kind, id)`. Reordering the
   same request replays; changing any entry is `409 REQUEST_CONFLICT`.
-- **Order:** entries are processed sorted by `(kind, id)`, locking each row
-  with the existing `GetMenuItemForUpdate`, `GetMenuItemSizeForUpdate`, and
-  `GetModifierOptionForUpdate`. A fixed lock order keeps two concurrent batches
-  from deadlocking.
+- **Order:** the existing lock helpers take a parent before its child
+  (`lockSizeWithParentCheck` locks the Menu Item, then the Size), so sorting by
+  `(kind, id)` alone could deadlock two concurrent batches. The command first
+  resolves each entry's parent with the non-locking `GetMenuItemSizeByID` and
+  `GetModifierOptionByID`, then locks in one global order: Menu Items by id,
+  each followed by its Sizes by id; then Modifier Groups by id, each followed
+  by its Options by id. Single-entity commands already follow that order.
+  `results` and the fingerprint still use `(kind, id)` order.
 - **Refusal:** an unknown id is `404 CATALOG_NOT_FOUND`; a retired entity is
   `409 ENTITY_RETIRED`. Either rolls back the whole batch.
 - **No-op:** an entry already in the requested state is not written, exactly as
@@ -193,10 +197,11 @@ visible. A Barista sees "Bếp KDS" and "Cài đặt".
 `features/settings/lib/availability.ts`, `toAvailabilityView(menu)`:
 
 - `items[]`: id, name, category id and name, `available`, `sizes[]`, and
-  `blockedBy: string[]` — the names of required modifier groups
-  (`min_selections > 0`) that have no available option. CONTEXT.md: an item is
-  not sellable while any required Modifier Group has no valid available
-  selection.
+  `blockedBy: string[]` — why an item that is itself on still cannot be sold,
+  mirroring `catalog.IsSellable`: "Kích cỡ" when it has Sizes and none is
+  available, plus the name of every Modifier Group whose available options
+  number fewer than its `min_selections`. CONTEXT.md: an item is not sellable
+  while any required Modifier Group has no valid available selection.
 - `toppings[]`: modifier options **deduplicated by id** (the response repeats a
   group under every item that uses it), each with its group name, grouped by
   group.
@@ -205,9 +210,10 @@ visible. A Barista sees "Bếp KDS" and "Cài đặt".
 
 `filterAvailability(view, { query, categoryId | "toppings" | "all",
 onlyUnavailable })` is pure. Search is diacritic-insensitive over item, size,
-option, and category names. `normalizeVietnamese` moves from
-`features/pos/utils/search.ts` to `src/lib/search.ts` so both features import it
-without crossing feature boundaries.
+option, and category names, and accepts the POS's cafe acronyms ("cfsd").
+`normalizeVietnamese`, `getAcronym`, and `matchesSearch` move from
+`features/pos/utils/search.ts` to `src/lib/search.ts` so both features import
+them without crossing feature boundaries; the POS file re-exports them.
 
 ### 4.3 Layout
 
@@ -221,8 +227,9 @@ Following the prototype's stock tab:
   size chips (each a switch, "S ●  M ●  L ○"). When the item is off, its size
   chips are dimmed but still operable. When `blockedBy` is non-empty, a warning
   badge reads "Không bán được: hết tùy chọn bắt buộc (Đường)".
-- **Topping view** (the "Topping" pill): options grouped under their group
-  name, one switch each.
+- **Topping section:** options grouped under their group name, one switch
+  each. It follows the items under "Tất cả" (so a search finds toppings too)
+  and stands alone under the "Topping" pill; a category pill hides it.
 - **Tab counter:** "N tạm hết" in the tab bar, red when N > 0.
 
 Touch targets follow `--spacing-touch`.
@@ -290,8 +297,8 @@ sales codes of section 5 already have messages.
 | `src/features/settings/components/availability-toppings.tsx` | topping view |
 | `src/features/settings/components/restore-availability-dialog.tsx` | restore all |
 | `src/features/settings/components/settings-view.tsx` | deleted (placeholder) |
-| `src/features/pos/api/use-pos.ts` | sellable refetch interval; draft-item mutations invalidate the sellable menu on the section 5 codes |
-| `src/features/pos/api/use-checkout.ts`, `use-dine-in.ts` | commit failures with a `COMMIT_*` availability code invalidate the sellable menu |
+| `src/features/pos/api/use-pos.ts` | sellable refetch interval |
+| `src/lib/query-client.ts` | the `MutationCache` `onError` invalidates the sellable menu on any section 5 code, covering draft-item, commit, and dine-in paths in one place |
 | `src/features/pos/utils/search.ts` | import from `lib/search` |
 
 ---
