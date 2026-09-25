@@ -116,3 +116,10 @@ describe("slice 7 error codes", () => {
     }
   });
 });
+
+describe("catalog availability messages", () => {
+  it("translates retirement and missing entities", () => {
+    expect(messageForError(new ApiError(409, "ENTITY_RETIRED", "x"))).toBe("Mục này đã ngừng kinh doanh.");
+    expect(messageForError(new ApiError(404, "CATALOG_NOT_FOUND", "x"))).toBe("Không tìm thấy mục trong thực đơn.");
+  });
+});

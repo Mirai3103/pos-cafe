@@ -25,6 +25,9 @@ import type {
   SalesSetDraftItemNoteCommand,
 } from "@/api/generated/models";
 
+/** Another terminal may mark items unavailable; there is no push channel. */
+export const SELLABLE_MENU_POLL_MS = 30_000;
+
 /**
  * Reads sellable menu categories and items.
  */
@@ -33,6 +36,7 @@ export function useSellableMenu() {
     query: {
       select: unwrapNullable,
       staleTime: 60_000,
+      refetchInterval: SELLABLE_MENU_POLL_MS,
     },
   });
 }

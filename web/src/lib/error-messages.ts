@@ -79,6 +79,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   DINE_IN_TABLE_NOT_FOUND: "Một bàn đã chọn không còn tồn tại.",
   DINE_IN_TABLE_UNAVAILABLE: "Một bàn đã chọn đang tạm ngưng phục vụ.",
   TAKEAWAY_TABLE_ASSIGNMENT_NOT_AVAILABLE: "Đơn mang đi không gắn được bàn.",
+  ENTITY_RETIRED: "Mục này đã ngừng kinh doanh.",
+  CATALOG_NOT_FOUND: "Không tìm thấy mục trong thực đơn.",
 };
 
 const NETWORK_MESSAGE = "Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại.";

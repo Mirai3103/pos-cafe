@@ -19,6 +19,8 @@ import { Route as AppShiftRouteImport } from './routes/_app/shift'
 import { Route as AppTablesRouteImport } from './routes/_app/tables'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthWorkspaceRouteImport } from './routes/auth/workspace'
+import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
+import { Route as AppSettingsAvailabilityRouteImport } from './routes/_app/settings/availability'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -69,28 +71,41 @@ const AuthWorkspaceRoute = AuthWorkspaceRouteImport.update({
   path: '/auth/workspace',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAvailabilityRoute = AppSettingsAvailabilityRouteImport.update({
+  id: '/availability',
+  path: '/availability',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/history': typeof AppHistoryRoute
   '/kds': typeof AppKdsRoute
   '/no-access': typeof AppNoAccessRoute
-  '/settings': typeof AppSettingsRoute
+  '/settings': typeof AppSettingsRouteWithChildren
   '/shift': typeof AppShiftRoute
   '/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/workspace': typeof AuthWorkspaceRoute
+  '/settings/availability': typeof AppSettingsAvailabilityRoute
+  '/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
   '/kds': typeof AppKdsRoute
   '/no-access': typeof AppNoAccessRoute
-  '/settings': typeof AppSettingsRoute
   '/shift': typeof AppShiftRoute
   '/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/workspace': typeof AuthWorkspaceRoute
   '/': typeof AppIndexRoute
+  '/settings/availability': typeof AppSettingsAvailabilityRoute
+  '/settings': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,12 +113,14 @@ export interface FileRoutesById {
   '/_app/history': typeof AppHistoryRoute
   '/_app/kds': typeof AppKdsRoute
   '/_app/no-access': typeof AppNoAccessRoute
-  '/_app/settings': typeof AppSettingsRoute
+  '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/shift': typeof AppShiftRoute
   '/_app/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/workspace': typeof AuthWorkspaceRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/settings/availability': typeof AppSettingsAvailabilityRoute
+  '/_app/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -117,17 +134,20 @@ export interface FileRouteTypes {
     | '/tables'
     | '/auth/login'
     | '/auth/workspace'
+    | '/settings/availability'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/history'
     | '/kds'
     | '/no-access'
-    | '/settings'
     | '/shift'
     | '/tables'
     | '/auth/login'
     | '/auth/workspace'
     | '/'
+    | '/settings/availability'
+    | '/settings'
   id:
     | '__root__'
     | '/_app'
@@ -140,6 +160,8 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/workspace'
     | '/_app/'
+    | '/_app/settings/availability'
+    | '/_app/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -220,14 +242,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthWorkspaceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/settings/': {
+      id: '/_app/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/availability': {
+      id: '/_app/settings/availability'
+      path: '/availability'
+      fullPath: '/settings/availability'
+      preLoaderRoute: typeof AppSettingsAvailabilityRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
   }
 }
+
+interface AppSettingsRouteChildren {
+  AppSettingsAvailabilityRoute: typeof AppSettingsAvailabilityRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+}
+
+const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsAvailabilityRoute: AppSettingsAvailabilityRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+}
+
+const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
+  AppSettingsRouteChildren,
+)
 
 interface AppRouteChildren {
   AppHistoryRoute: typeof AppHistoryRoute
   AppKdsRoute: typeof AppKdsRoute
   AppNoAccessRoute: typeof AppNoAccessRoute
-  AppSettingsRoute: typeof AppSettingsRoute
+  AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppShiftRoute: typeof AppShiftRoute
   AppTablesRoute: typeof AppTablesRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -237,7 +287,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHistoryRoute: AppHistoryRoute,
   AppKdsRoute: AppKdsRoute,
   AppNoAccessRoute: AppNoAccessRoute,
-  AppSettingsRoute: AppSettingsRoute,
+  AppSettingsRoute: AppSettingsRouteWithChildren,
   AppShiftRoute: AppShiftRoute,
   AppTablesRoute: AppTablesRoute,
   AppIndexRoute: AppIndexRoute,

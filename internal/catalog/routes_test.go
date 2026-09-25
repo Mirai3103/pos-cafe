@@ -799,3 +799,39 @@ func TestCatalogRoutes(t *testing.T) {
 		assert.Equal(t, "ENTITY_RETIRED", res.Error.Code)
 	})
 }
+
+func TestAvailabilityBatchRoute(t *testing.T) {
+	tc := setupHTTPTest(t)
+	path := "/api/v1/catalog/availability/batch"
+
+	t.Run("rejects unauthenticated", func(t *testing.T) {
+		rec := doJSONRequest(t, tc.e, http.MethodPost, path, "", catalog.SetAvailabilityBatchRequest{RequestID: uuid.New()})
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
+	t.Run("requires request_id", func(t *testing.T) {
+		rec := doJSONRequest(t, tc.e, http.MethodPost, path, tc.baristaToken, map[string]any{
+			"changes": []map[string]any{{"kind": "item", "id": uuid.New(), "available": true}},
+		})
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("empty batch is INVALID_INPUT", func(t *testing.T) {
+		rec := doJSONRequest(t, tc.e, http.MethodPost, path, tc.baristaToken, catalog.SetAvailabilityBatchRequest{RequestID: uuid.New()})
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		var res response.APIResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+		assert.Equal(t, "INVALID_INPUT", res.Error.Code)
+	})
+
+	t.Run("unknown entity is CATALOG_NOT_FOUND for a cashier", func(t *testing.T) {
+		rec := doJSONRequest(t, tc.e, http.MethodPost, path, tc.cashierToken, catalog.SetAvailabilityBatchRequest{
+			RequestID: uuid.New(),
+			Changes:   []catalog.AvailabilityChange{{Kind: catalog.AvailabilityKindItem, ID: uuid.New(), Available: true}},
+		})
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		var res response.APIResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+		assert.Equal(t, "CATALOG_NOT_FOUND", res.Error.Code)
+	})
+}

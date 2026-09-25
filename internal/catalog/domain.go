@@ -38,6 +38,7 @@ const (
 	OpItemSetAvailability               = "catalog.item.set_availability"
 	OpSizeSetAvailability               = "catalog.size.set_availability"
 	OpModifierOptionSetAvailability     = "catalog.modifier_option.set_availability"
+	OpAvailabilitySetBatch              = "catalog.availability.set_batch"
 	OpCategoryRetire                    = "catalog.category.retire"
 	OpItemRetire                        = "catalog.item.retire"
 	OpSizeRetire                        = "catalog.size.retire"
@@ -65,6 +66,7 @@ const (
 	EventItemAvailabilityChanged            = "catalog.item.availability_changed"
 	EventSizeAvailabilityChanged            = "catalog.size.availability_changed"
 	EventModifierOptionAvailabilityChanged  = "catalog.modifier_option.availability_changed"
+	EventAvailabilityBatchChanged           = "catalog.availability.batch_changed"
 	EventCategoryRetired                    = "catalog.category.retired"
 	EventItemRetired                        = "catalog.item.retired"
 	EventSizeRetired                        = "catalog.size.retired"
@@ -206,4 +208,57 @@ func IsSellable(state ItemState) bool {
 	}
 
 	return true
+}
+
+// Availability batch entry kinds.
+const (
+	AvailabilityKindItem           = "item"
+	AvailabilityKindSize           = "size"
+	AvailabilityKindModifierOption = "modifier_option"
+)
+
+// MaxAvailabilityBatchSize bounds one batch availability command.
+const MaxAvailabilityBatchSize = 200
+
+// AvailabilityChange is one entry of a batch availability command.
+type AvailabilityChange struct {
+	Kind      string    `json:"kind"`
+	ID        uuid.UUID `json:"id"`
+	Available bool      `json:"available"`
+}
+
+// NormalizeAvailabilityChanges validates a batch and returns a copy sorted by
+// (kind, id), so that the same set of changes in any order fingerprints alike.
+func NormalizeAvailabilityChanges(changes []AvailabilityChange) ([]AvailabilityChange, error) {
+	if len(changes) == 0 {
+		return nil, fmt.Errorf("changes must not be empty")
+	}
+	if len(changes) > MaxAvailabilityBatchSize {
+		return nil, fmt.Errorf("changes must hold at most %d entries", MaxAvailabilityBatchSize)
+	}
+	seen := make(map[string]struct{}, len(changes))
+	out := make([]AvailabilityChange, len(changes))
+	for i, c := range changes {
+		switch c.Kind {
+		case AvailabilityKindItem, AvailabilityKindSize, AvailabilityKindModifierOption:
+		default:
+			return nil, fmt.Errorf("unknown availability kind %q", c.Kind)
+		}
+		if c.ID == uuid.Nil {
+			return nil, fmt.Errorf("change %d has no id", i)
+		}
+		key := c.Kind + ":" + c.ID.String()
+		if _, dup := seen[key]; dup {
+			return nil, fmt.Errorf("duplicate change for %s %s", c.Kind, c.ID)
+		}
+		seen[key] = struct{}{}
+		out[i] = c
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].ID.String() < out[j].ID.String()
+	})
+	return out, nil
 }
