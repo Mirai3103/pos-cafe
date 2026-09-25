@@ -261,3 +261,46 @@ func (s *Slices) handleReplaceCategoryModifierGroups(c echo.Context) error {
 	}
 	return sendResult(c, status, res)
 }
+
+// handleReplaceGroupAssignments godoc
+//
+//	@Summary		Gán hàng loạt một nhóm topping
+//	@Description	Đặt đúng tập món và danh mục được gán trực tiếp nhóm topping này (Batch Linker). Gỡ nhóm khỏi danh mục sẽ xóa các loại trừ liên quan. Yêu cầu quyền catalog.administer_structure.
+//	@Tags			Catalog
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			group_id	path		string							true	"Modifier Group ID (UUID)"
+//	@Param			request		body		ReplaceGroupAssignmentsRequest	true	"Tập món và danh mục mong muốn"
+//	@Success		200			{object}	response.APIResponse{data=ModifierGroupAssignmentsResponse}
+//	@Failure		400			{object}	response.APIResponse
+//	@Failure		401			{object}	response.APIResponse
+//	@Failure		403			{object}	response.APIResponse
+//	@Failure		404			{object}	response.APIResponse
+//	@Failure		409			{object}	response.APIResponse
+//	@Failure		500			{object}	response.APIResponse
+//	@Router			/catalog/modifier-groups/{group_id}/assignments [put]
+func (s *Slices) handleReplaceGroupAssignments(c echo.Context) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	groupID, err := parseUUIDParam(c, "group_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	req, err := bindBody[ReplaceGroupAssignmentsRequest](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(req.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	status, res, err := s.ReplaceGroupAssignments.Handle(c.Request().Context(), actor, ReplaceGroupAssignmentsCommand{
+		RequestID: req.RequestID, GroupID: groupID, ItemIDs: req.ItemIDs, CategoryIDs: req.CategoryIDs,
+	})
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, res)
+}

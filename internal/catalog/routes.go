@@ -47,6 +47,7 @@ type Slices struct {
 	ExcludeItemInheritedModifierGroup *ExcludeInheritedModifierGroupHandler
 	ReplaceItemModifierGroups         *ReplaceItemModifierGroupsHandler
 	ReplaceCategoryModifierGroups     *ReplaceCategoryModifierGroupsHandler
+	ReplaceGroupAssignments           *ReplaceGroupAssignmentsHandler
 	SellableMenu                      *SellableMenuHandler
 	ManagementMenu                    *ManagementMenuHandler
 	AvailabilityMenu                  *AvailabilityMenuHandler
@@ -94,6 +95,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries, media *MediaStore) *Slices {
 		ExcludeItemInheritedModifierGroup: NewExcludeInheritedModifierGroupHandler(runner),
 		ReplaceItemModifierGroups:         NewReplaceItemModifierGroupsHandler(runner),
 		ReplaceCategoryModifierGroups:     NewReplaceCategoryModifierGroupsHandler(runner),
+		ReplaceGroupAssignments:           NewReplaceGroupAssignmentsHandler(runner),
 		SellableMenu:                      NewSellableMenuHandler(runner),
 		ManagementMenu:                    NewManagementMenuHandler(runner),
 		AvailabilityMenu:                  NewAvailabilityMenuHandler(runner),
@@ -161,5 +163,6 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	catalog.POST("/categories/:category_id/modifier-groups/:group_id", s.handleAttachCategoryModifierGroup, authn.RequireCapability(CapAdministerStructure))
 	catalog.PUT("/items/:item_id/modifier-groups", s.handleReplaceItemModifierGroups, authn.RequireCapability(CapAdministerStructure))
 	catalog.PUT("/categories/:category_id/modifier-groups", s.handleReplaceCategoryModifierGroups, authn.RequireCapability(CapAdministerStructure))
+	catalog.PUT("/modifier-groups/:group_id/assignments", s.handleReplaceGroupAssignments, authn.RequireCapability(CapAdministerStructure))
 	catalog.POST("/items/:item_id/inherited-modifier-group-exclusions/:group_id", s.handleExcludeInheritedModifierGroup, authn.RequireCapability(CapAdministerStructure))
 }

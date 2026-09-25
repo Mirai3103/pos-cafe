@@ -158,3 +158,71 @@ func TestReplaceCategoryModifierGroups(t *testing.T) {
 		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
 	})
 }
+
+func TestReplaceGroupAssignments(t *testing.T) {
+	db, q := openExecutorTestDB(t)
+	handler := catalog.NewReplaceGroupAssignmentsHandler(catalog.NewRunner(db, q))
+	ctx := context.Background()
+	price := int64(30000)
+	const itemsWithGroup = `SELECT menu_item_id FROM item_modifier_groups WHERE modifier_group_id = $1 ORDER BY menu_item_id`
+	const categoriesWithGroup = `SELECT menu_category_id FROM category_modifier_groups WHERE modifier_group_id = $1 ORDER BY menu_category_id`
+
+	t.Run("sets exactly the items and categories, one audit event", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		coffee := createTestCategoryDirect(t, db, "Coffee")
+		tea := createTestCategoryDirect(t, db, "Tea")
+		topping := createTestModifierGroupDirect(t, db, "Topping", 0, 3, false)
+		latte := createTestItemDirect(t, db, coffee, "Latte", &price, false)
+		mocha := createTestItemDirect(t, db, coffee, "Mocha", &price, false)
+		peach := createTestItemDirect(t, db, tea, "Peach tea", &price, false)
+		attachItemGroupDirect(t, db, latte, topping)
+		attachCategoryGroupDirect(t, db, coffee, topping)
+		excludeItemGroupDirect(t, db, mocha, topping)
+
+		status, res, err := handler.Handle(ctx, managerActor(t, db, q), catalog.ReplaceGroupAssignmentsCommand{
+			RequestID: uuid.New(), GroupID: topping, ItemIDs: []uuid.UUID{peach}, CategoryIDs: []uuid.UUID{tea},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Equal(t, []uuid.UUID{peach}, idsFrom(t, db, itemsWithGroup, topping))
+		assert.Equal(t, []uuid.UUID{tea}, idsFrom(t, db, categoriesWithGroup, topping))
+		assert.Equal(t, []catalog.ExclusionRef{{ItemID: mocha, ModifierGroupID: topping}}, res.RemovedExclusions,
+			"coffee no longer provides the group, so mocha's exclusion goes")
+		assert.Equal(t, 1, auditCount(t, db, catalog.EventModifierGroupAssignmentsReplaced))
+	})
+
+	t.Run("adding an item that excludes the group is INVALID_INHERITANCE", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		coffee := createTestCategoryDirect(t, db, "Coffee")
+		sugar := createTestModifierGroupDirect(t, db, "Sugar", 0, 1, false)
+		attachCategoryGroupDirect(t, db, coffee, sugar)
+		latte := createTestItemDirect(t, db, coffee, "Latte", &price, false)
+		excludeItemGroupDirect(t, db, latte, sugar)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.ReplaceGroupAssignmentsCommand{
+			RequestID: uuid.New(), GroupID: sugar, ItemIDs: []uuid.UUID{latte}, CategoryIDs: []uuid.UUID{coffee},
+		})
+		assert.True(t, errors.Is(err, catalog.ErrInvalidInheritance))
+	})
+
+	t.Run("adding a retired item is ErrEntityRetired; unknown is ErrNotFound", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		coffee := createTestCategoryDirect(t, db, "Coffee")
+		g := createTestModifierGroupDirect(t, db, "G", 0, 1, false)
+		retired := createTestItemDirect(t, db, coffee, "Old", &price, true)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.ReplaceGroupAssignmentsCommand{
+			RequestID: uuid.New(), GroupID: g, ItemIDs: []uuid.UUID{retired},
+		})
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+		_, _, err = handler.Handle(ctx, managerActor(t, db, q), catalog.ReplaceGroupAssignmentsCommand{
+			RequestID: uuid.New(), GroupID: g, CategoryIDs: []uuid.UUID{uuid.New()},
+		})
+		assert.True(t, errors.Is(err, catalog.ErrNotFound))
+	})
+
+	t.Run("retired group is ErrEntityRetired", func(t *testing.T) {
+		cleanCategoryTestTables(t, db)
+		g := createTestModifierGroupDirect(t, db, "Old", 0, 1, true)
+		_, _, err := handler.Handle(ctx, managerActor(t, db, q), catalog.ReplaceGroupAssignmentsCommand{RequestID: uuid.New(), GroupID: g})
+		assert.True(t, errors.Is(err, catalog.ErrEntityRetired))
+	})
+}

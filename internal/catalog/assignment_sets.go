@@ -257,3 +257,163 @@ func (h *ReplaceCategoryModifierGroupsHandler) Handle(ctx context.Context, actor
 		return 200, res, audit, nil
 	})
 }
+
+// === Command 9 ===
+
+type replaceGroupAssignmentsFingerprint struct {
+	GroupID     uuid.UUID   `json:"group_id"`
+	ItemIDs     []uuid.UUID `json:"item_ids"`
+	CategoryIDs []uuid.UUID `json:"category_ids"`
+}
+
+type modifierGroupAssignmentsReplacedAudit struct {
+	GroupID           uuid.UUID      `json:"group_id"`
+	Items             IDSetChange    `json:"items"`
+	Categories        IDSetChange    `json:"categories"`
+	RemovedExclusions []ExclusionRef `json:"removed_exclusions"`
+}
+
+// ReplaceGroupAssignmentsHandler sets exactly which items and categories a
+// group is directly attached to. It serves the 9b Batch Linker.
+type ReplaceGroupAssignmentsHandler struct {
+	runner *Runner
+}
+
+// NewReplaceGroupAssignmentsHandler creates a ReplaceGroupAssignmentsHandler.
+func NewReplaceGroupAssignmentsHandler(runner *Runner) *ReplaceGroupAssignmentsHandler {
+	return &ReplaceGroupAssignmentsHandler{runner: runner}
+}
+
+// lockOwners locks rows in id order and rejects unknown ids and retired added ones.
+func lockOwners(ids, added []uuid.UUID, lock func([]uuid.UUID) ([]uuid.UUID, []bool, error), kind string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	locked, retired, err := lock(ids)
+	if err != nil {
+		return MapDBError(err)
+	}
+	if len(locked) != len(ids) {
+		return fmt.Errorf("%w: %s not found", ErrNotFound, kind)
+	}
+	for i, id := range locked {
+		if retired[i] && ContainsID(added, id) {
+			return fmt.Errorf("%w: %s %s is retired", ErrEntityRetired, kind, id)
+		}
+	}
+	return nil
+}
+
+// Handle locks the group first, then items and categories in id order.
+func (h *ReplaceGroupAssignmentsHandler) Handle(ctx context.Context, actor Actor, cmd ReplaceGroupAssignmentsCommand) (int, ModifierGroupAssignmentsResponse, error) {
+	items, err := NormalizeIDSet(cmd.ItemIDs, "item_ids")
+	if err != nil {
+		return 0, ModifierGroupAssignmentsResponse{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+	cats, err := NormalizeIDSet(cmd.CategoryIDs, "category_ids")
+	if err != nil {
+		return 0, ModifierGroupAssignmentsResponse{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+	spec := MutationSpec{
+		RequestID:   cmd.RequestID,
+		Operation:   OpModifierGroupReplaceAssignments,
+		Fingerprint: replaceGroupAssignmentsFingerprint{GroupID: cmd.GroupID, ItemIDs: items, CategoryIDs: cats},
+		Required:    []string{CapAdministerStructure},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, ModifierGroupAssignmentsResponse, AuditRecord, error) {
+		zero := ModifierGroupAssignmentsResponse{}
+		group, err := q.GetModifierGroupForUpdate(ctx, cmd.GroupID)
+		if err != nil {
+			return 0, zero, AuditRecord{}, MapDBError(err)
+		}
+		if group.RetiredAt.Valid {
+			return 0, zero, AuditRecord{}, fmt.Errorf("%w: modifier group is retired", ErrEntityRetired)
+		}
+
+		curItems, err := q.ListItemIDsWithDirectGroup(ctx, cmd.GroupID)
+		if err != nil {
+			return 0, zero, AuditRecord{}, MapDBError(err)
+		}
+		curCats, err := q.ListCategoryIDsWithGroup(ctx, cmd.GroupID)
+		if err != nil {
+			return 0, zero, AuditRecord{}, MapDBError(err)
+		}
+		iAdd, iRem := DiffIDSets(curItems, items)
+		cAdd, cRem := DiffIDSets(curCats, cats)
+
+		if err := lockOwners(UnionIDs(curItems, items), iAdd, func(ids []uuid.UUID) ([]uuid.UUID, []bool, error) {
+			rows, err := q.LockMenuItemsByIDs(ctx, ids)
+			locked, retired := make([]uuid.UUID, len(rows)), make([]bool, len(rows))
+			for i, r := range rows {
+				locked[i], retired[i] = r.ID, r.RetiredAt.Valid
+			}
+			return locked, retired, err
+		}, "menu item"); err != nil {
+			return 0, zero, AuditRecord{}, err
+		}
+		if err := lockOwners(UnionIDs(curCats, cats), cAdd, func(ids []uuid.UUID) ([]uuid.UUID, []bool, error) {
+			rows, err := q.LockMenuCategoriesByIDs(ctx, ids)
+			locked, retired := make([]uuid.UUID, len(rows)), make([]bool, len(rows))
+			for i, r := range rows {
+				locked[i], retired[i] = r.ID, r.RetiredAt.Valid
+			}
+			return locked, retired, err
+		}, "category"); err != nil {
+			return 0, zero, AuditRecord{}, err
+		}
+
+		excluding, err := q.ListItemIDsExcludingGroup(ctx, cmd.GroupID)
+		if err != nil {
+			return 0, zero, AuditRecord{}, MapDBError(err)
+		}
+		for _, id := range iAdd {
+			if ContainsID(excluding, id) {
+				return 0, zero, AuditRecord{}, fmt.Errorf("%w: item %s excludes this group; lift the exclusion first", ErrInvalidInheritance, id)
+			}
+		}
+
+		removedExcl := []ExclusionRef{}
+		for _, c := range cRem {
+			if err := q.DeleteCategoryModifierGroup(ctx, sqlc.DeleteCategoryModifierGroupParams{MenuCategoryID: c, ModifierGroupID: cmd.GroupID}); err != nil {
+				return 0, zero, AuditRecord{}, MapDBError(err)
+			}
+			refs, err := deleteCategoryGroupExclusions(ctx, q, c, cmd.GroupID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			removedExcl = append(removedExcl, refs...)
+		}
+		for _, c := range cAdd {
+			if err := q.CreateCategoryModifierGroup(ctx, sqlc.CreateCategoryModifierGroupParams{MenuCategoryID: c, ModifierGroupID: cmd.GroupID}); err != nil {
+				return 0, zero, AuditRecord{}, MapDBError(err)
+			}
+		}
+		for _, i := range iRem {
+			if err := q.DeleteItemModifierGroup(ctx, sqlc.DeleteItemModifierGroupParams{MenuItemID: i, ModifierGroupID: cmd.GroupID}); err != nil {
+				return 0, zero, AuditRecord{}, MapDBError(err)
+			}
+		}
+		for _, i := range iAdd {
+			if err := q.CreateItemModifierGroup(ctx, sqlc.CreateItemModifierGroupParams{MenuItemID: i, ModifierGroupID: cmd.GroupID}); err != nil {
+				return 0, zero, AuditRecord{}, MapDBError(err)
+			}
+		}
+		sortExclusionRefs(removedExcl)
+
+		res := ModifierGroupAssignmentsResponse{GroupID: cmd.GroupID, ItemIDs: items, CategoryIDs: cats, RemovedExclusions: removedExcl}
+		if len(iAdd)+len(iRem)+len(cAdd)+len(cRem) == 0 {
+			return 200, res, AuditRecord{}, nil
+		}
+		audit := AuditRecord{
+			EventType: EventModifierGroupAssignmentsReplaced,
+			Details: modifierGroupAssignmentsReplacedAudit{
+				GroupID:           cmd.GroupID,
+				Items:             IDSetChange{Added: iAdd, Removed: iRem},
+				Categories:        IDSetChange{Added: cAdd, Removed: cRem},
+				RemovedExclusions: removedExcl,
+			},
+		}
+		return 200, res, audit, nil
+	})
+}

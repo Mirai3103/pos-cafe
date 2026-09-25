@@ -369,6 +369,7 @@ type Querier interface {
 	ListAllocationsForItems(ctx context.Context, arg ListAllocationsForItemsParams) ([]ListAllocationsForItemsRow, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 	ListCategoryGroupIDs(ctx context.Context, menuCategoryID uuid.UUID) ([]uuid.UUID, error)
+	ListCategoryIDsWithGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	ListCheckAllocationQuantities(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationQuantitiesRow, error)
 	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
@@ -450,6 +451,8 @@ type Querier interface {
 	// -- Replace-set Assignments (BA-1, ADR-059) --
 	ListItemDirectGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error)
 	ListItemExcludedGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error)
+	ListItemIDsExcludingGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error)
+	ListItemIDsWithDirectGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -581,6 +584,7 @@ type Querier interface {
 	// all four: the remedy is the same, and distinguishing them would leak state
 	// about Sessions the caller did not ask about.
 	LockEditableDraft(ctx context.Context, id uuid.UUID) (LockEditableDraftRow, error)
+	LockMenuCategoriesByIDs(ctx context.Context, ids []uuid.UUID) ([]LockMenuCategoriesByIDsRow, error)
 	// Locked FOR UPDATE so the Item cannot be retired between validation and
 	// write. Sales rows are always locked before Catalog rows, and
 	// internal/catalog never locks Sales rows, so no deadlock cycle exists.
@@ -595,6 +599,7 @@ type Querier interface {
 	// busiest path in the system, for no correctness gain. internal/catalog's
 	// mutations take FOR UPDATE and are still excluded. See ADR-015.
 	LockMenuItemSizesForCommit(ctx context.Context, sizeIds []uuid.UUID) ([]LockMenuItemSizesForCommitRow, error)
+	LockMenuItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]LockMenuItemsByIDsRow, error)
 	LockModifierGroupsByIDs(ctx context.Context, ids []uuid.UUID) ([]LockModifierGroupsByIDsRow, error)
 	// Step 3: the one open Sales Shift. FOR SHARE, because Cancellation only reads
 	// the Shift for settlement evidence and never writes Shift state; Shift

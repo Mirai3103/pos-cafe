@@ -643,3 +643,27 @@ WHERE e.menu_item_id = i.id
   AND i.category_id = sqlc.arg(category_id)
   AND e.modifier_group_id = sqlc.arg(group_id)
 RETURNING e.menu_item_id;
+
+-- name: ListItemIDsWithDirectGroup :many
+SELECT menu_item_id FROM item_modifier_groups
+WHERE modifier_group_id = $1 ORDER BY menu_item_id;
+
+-- name: ListCategoryIDsWithGroup :many
+SELECT menu_category_id FROM category_modifier_groups
+WHERE modifier_group_id = $1 ORDER BY menu_category_id;
+
+-- name: ListItemIDsExcludingGroup :many
+SELECT menu_item_id FROM item_modifier_group_exclusions
+WHERE modifier_group_id = $1 ORDER BY menu_item_id;
+
+-- name: LockMenuItemsByIDs :many
+SELECT id, retired_at FROM menu_items
+WHERE id = ANY(sqlc.arg(ids)::uuid[])
+ORDER BY id
+FOR UPDATE;
+
+-- name: LockMenuCategoriesByIDs :many
+SELECT id, retired_at FROM menu_categories
+WHERE id = ANY(sqlc.arg(ids)::uuid[])
+ORDER BY id
+FOR UPDATE;

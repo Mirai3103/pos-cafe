@@ -751,3 +751,26 @@ type CategoryModifierGroupsResponse struct {
 	GroupIDs          []uuid.UUID    `json:"group_ids"`
 	RemovedExclusions []ExclusionRef `json:"removed_exclusions"`
 }
+
+// ReplaceGroupAssignmentsRequest sets exactly which items and categories a group is attached to.
+type ReplaceGroupAssignmentsRequest struct {
+	RequestID   uuid.UUID   `json:"request_id"`
+	ItemIDs     []uuid.UUID `json:"item_ids"`
+	CategoryIDs []uuid.UUID `json:"category_ids"`
+}
+
+// ReplaceGroupAssignmentsCommand carries the parameters for command 9.
+type ReplaceGroupAssignmentsCommand struct {
+	RequestID   uuid.UUID
+	GroupID     uuid.UUID
+	ItemIDs     []uuid.UUID
+	CategoryIDs []uuid.UUID
+}
+
+// ModifierGroupAssignmentsResponse is where a group is directly attached.
+type ModifierGroupAssignmentsResponse struct {
+	GroupID           uuid.UUID      `json:"group_id"`
+	ItemIDs           []uuid.UUID    `json:"item_ids"`
+	CategoryIDs       []uuid.UUID    `json:"category_ids"`
+	RemovedExclusions []ExclusionRef `json:"removed_exclusions"`
+}
