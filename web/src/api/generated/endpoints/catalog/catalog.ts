@@ -25,25 +25,38 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CatalogAddModifierOptionRequest,
+  CatalogAddSizeRequest,
   CatalogCreateCategoryCommand,
   CatalogCreateItemCommand,
   CatalogCreateModifierGroupCommand,
+  CatalogMoveItemCategoryRequest,
   CatalogMutationRequest,
   CatalogRenameRequest,
+  CatalogReplaceCategoryModifierGroupsRequest,
+  CatalogReplaceGroupAssignmentsRequest,
+  CatalogReplaceItemModifierGroupsRequest,
   CatalogRepriceModifierOptionRequest,
   CatalogRepriceRequest,
   CatalogRetireRequest,
   CatalogSetAvailabilityBatchRequest,
   CatalogSetAvailabilityRequest,
+  CatalogSetCategoryDetailsRequest,
+  CatalogSetItemDetailsRequest,
   CatalogSetModifierGroupDefaultsRequest,
+  CatalogSetSelectionRuleRequest,
+  DeleteCatalogItemsItemIdImage200,
   GetCatalogAuditEvents200,
   GetCatalogAuditEventsParams,
   GetCatalogMenuAvailability200,
   GetCatalogMenuManage200,
   GetCatalogMenuSellable200,
   GetCatalogModifierGroups200,
+  PatchCatalogCategoriesCategoryIdDetails200,
   PatchCatalogCategoriesCategoryIdName200,
   PatchCatalogItemsItemIdAvailability200,
+  PatchCatalogItemsItemIdCategory200,
+  PatchCatalogItemsItemIdDetails200,
   PatchCatalogItemsItemIdName200,
   PatchCatalogItemsItemIdPrice200,
   PatchCatalogModifierGroupsGroupIdName200,
@@ -61,11 +74,19 @@ import type {
   PostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId200,
   PostCatalogItemsItemIdModifierGroupsGroupId200,
   PostCatalogItemsItemIdRetirement200,
+  PostCatalogItemsItemIdSizes201,
   PostCatalogModifierGroups201,
+  PostCatalogModifierGroupsGroupIdOptions201,
   PostCatalogModifierGroupsGroupIdRetirement200,
   PostCatalogModifierOptionsOptionIdRetirement200,
   PostCatalogSizesSizeIdRetirement200,
+  PutCatalogCategoriesCategoryIdModifierGroups200,
+  PutCatalogItemsItemIdImage200,
+  PutCatalogItemsItemIdImageBody,
+  PutCatalogItemsItemIdModifierGroups200,
+  PutCatalogModifierGroupsGroupIdAssignments200,
   PutCatalogModifierGroupsGroupIdDefaults200,
+  PutCatalogModifierGroupsGroupIdSelectionRule200,
   ResponseAPIResponse
 } from '../../models';
 
@@ -320,6 +341,144 @@ export const usePostCatalogCategories = <TError = ResponseAPIResponse,
         TContext
       > => {
       return useMutation(getPostCatalogCategoriesMutationOptions(options), queryClient);
+    }
+    /**
+ * Đặt biểu tượng (tên icon Lucide) và thứ tự hiển thị (0 đến 9999). Yêu cầu quyền catalog.administer_structure.
+ * @summary Cập nhật biểu tượng và thứ tự danh mục
+ */
+export const patchCatalogCategoriesCategoryIdDetails = (
+    categoryId: string,
+    catalogSetCategoryDetailsRequest: CatalogSetCategoryDetailsRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PatchCatalogCategoriesCategoryIdDetails200>(
+      {url: `/catalog/categories/${categoryId}/details`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogSetCategoryDetailsRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPatchCatalogCategoriesCategoryIdDetailsMutationKey = () => ['patchCatalogCategoriesCategoryIdDetails'] as const;
+
+export const getPatchCatalogCategoriesCategoryIdDetailsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdDetails>>, TError,PatchCatalogCategoriesCategoryIdDetailsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdDetails>>, TError,PatchCatalogCategoriesCategoryIdDetailsMutationVariables, TContext> => {
+
+const mutationKey = getPatchCatalogCategoriesCategoryIdDetailsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdDetails>>, PatchCatalogCategoriesCategoryIdDetailsMutationVariables> = (props) => {
+          const {categoryId,data} = props ?? {};
+
+          return  patchCatalogCategoriesCategoryIdDetails(categoryId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogCategoriesCategoryIdDetailsMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdDetails>>>
+    export type PatchCatalogCategoriesCategoryIdDetailsMutationBody = CatalogSetCategoryDetailsRequest
+    export type PatchCatalogCategoriesCategoryIdDetailsMutationError = ResponseAPIResponse
+    export type PatchCatalogCategoriesCategoryIdDetailsMutationVariables = {categoryId: string;data: CatalogSetCategoryDetailsRequest}
+
+    /**
+ * @summary Cập nhật biểu tượng và thứ tự danh mục
+ */
+export const usePatchCatalogCategoriesCategoryIdDetails = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdDetails>>, TError,PatchCatalogCategoriesCategoryIdDetailsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogCategoriesCategoryIdDetails>>,
+        TError,
+        PatchCatalogCategoriesCategoryIdDetailsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogCategoriesCategoryIdDetailsMutationOptions(options), queryClient);
+    }
+    /**
+ * Đặt đúng tập nhóm danh mục cung cấp. Gỡ một nhóm sẽ xóa các loại trừ nhóm đó trên các món trong danh mục. Yêu cầu quyền catalog.administer_structure.
+ * @summary Thay toàn bộ nhóm topping của danh mục
+ */
+export const putCatalogCategoriesCategoryIdModifierGroups = (
+    categoryId: string,
+    catalogReplaceCategoryModifierGroupsRequest: CatalogReplaceCategoryModifierGroupsRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PutCatalogCategoriesCategoryIdModifierGroups200>(
+      {url: `/catalog/categories/${categoryId}/modifier-groups`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogReplaceCategoryModifierGroupsRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPutCatalogCategoriesCategoryIdModifierGroupsMutationKey = () => ['putCatalogCategoriesCategoryIdModifierGroups'] as const;
+
+export const getPutCatalogCategoriesCategoryIdModifierGroupsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogCategoriesCategoryIdModifierGroups>>, TError,PutCatalogCategoriesCategoryIdModifierGroupsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putCatalogCategoriesCategoryIdModifierGroups>>, TError,PutCatalogCategoriesCategoryIdModifierGroupsMutationVariables, TContext> => {
+
+const mutationKey = getPutCatalogCategoriesCategoryIdModifierGroupsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putCatalogCategoriesCategoryIdModifierGroups>>, PutCatalogCategoriesCategoryIdModifierGroupsMutationVariables> = (props) => {
+          const {categoryId,data} = props ?? {};
+
+          return  putCatalogCategoriesCategoryIdModifierGroups(categoryId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutCatalogCategoriesCategoryIdModifierGroupsMutationResult = NonNullable<Awaited<ReturnType<typeof putCatalogCategoriesCategoryIdModifierGroups>>>
+    export type PutCatalogCategoriesCategoryIdModifierGroupsMutationBody = CatalogReplaceCategoryModifierGroupsRequest
+    export type PutCatalogCategoriesCategoryIdModifierGroupsMutationError = ResponseAPIResponse
+    export type PutCatalogCategoriesCategoryIdModifierGroupsMutationVariables = {categoryId: string;data: CatalogReplaceCategoryModifierGroupsRequest}
+
+    /**
+ * @summary Thay toàn bộ nhóm topping của danh mục
+ */
+export const usePutCatalogCategoriesCategoryIdModifierGroups = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogCategoriesCategoryIdModifierGroups>>, TError,PutCatalogCategoriesCategoryIdModifierGroupsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putCatalogCategoriesCategoryIdModifierGroups>>,
+        TError,
+        PutCatalogCategoriesCategoryIdModifierGroupsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutCatalogCategoriesCategoryIdModifierGroupsMutationOptions(options), queryClient);
     }
     /**
  * Gắn một nhóm modifier vào danh mục để các món con kế thừa. Yêu cầu quyền catalog.administer_structure.
@@ -667,6 +826,289 @@ export const usePatchCatalogItemsItemIdAvailability = <TError = ResponseAPIRespo
       return useMutation(getPatchCatalogItemsItemIdAvailabilityMutationOptions(options), queryClient);
     }
     /**
+ * Chuyển món sang danh mục khác. Các loại trừ nhóm topping mà danh mục mới không cung cấp sẽ bị xóa. Yêu cầu quyền catalog.administer_structure.
+ * @summary Chuyển món sang danh mục khác
+ */
+export const patchCatalogItemsItemIdCategory = (
+    itemId: string,
+    catalogMoveItemCategoryRequest: CatalogMoveItemCategoryRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PatchCatalogItemsItemIdCategory200>(
+      {url: `/catalog/items/${itemId}/category`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogMoveItemCategoryRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPatchCatalogItemsItemIdCategoryMutationKey = () => ['patchCatalogItemsItemIdCategory'] as const;
+
+export const getPatchCatalogItemsItemIdCategoryMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdCategory>>, TError,PatchCatalogItemsItemIdCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdCategory>>, TError,PatchCatalogItemsItemIdCategoryMutationVariables, TContext> => {
+
+const mutationKey = getPatchCatalogItemsItemIdCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogItemsItemIdCategory>>, PatchCatalogItemsItemIdCategoryMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
+
+          return  patchCatalogItemsItemIdCategory(itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogItemsItemIdCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogItemsItemIdCategory>>>
+    export type PatchCatalogItemsItemIdCategoryMutationBody = CatalogMoveItemCategoryRequest
+    export type PatchCatalogItemsItemIdCategoryMutationError = ResponseAPIResponse
+    export type PatchCatalogItemsItemIdCategoryMutationVariables = {itemId: string;data: CatalogMoveItemCategoryRequest}
+
+    /**
+ * @summary Chuyển món sang danh mục khác
+ */
+export const usePatchCatalogItemsItemIdCategory = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdCategory>>, TError,PatchCatalogItemsItemIdCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogItemsItemIdCategory>>,
+        TError,
+        PatchCatalogItemsItemIdCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogItemsItemIdCategoryMutationOptions(options), queryClient);
+    }
+    /**
+ * Ghi đè mã món, huy hiệu và mô tả. Cả ba khóa đều bắt buộc; gửi null để xóa. Yêu cầu quyền catalog.administer_structure.
+ * @summary Cập nhật thông tin hiển thị của món
+ */
+export const patchCatalogItemsItemIdDetails = (
+    itemId: string,
+    catalogSetItemDetailsRequest: CatalogSetItemDetailsRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PatchCatalogItemsItemIdDetails200>(
+      {url: `/catalog/items/${itemId}/details`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogSetItemDetailsRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPatchCatalogItemsItemIdDetailsMutationKey = () => ['patchCatalogItemsItemIdDetails'] as const;
+
+export const getPatchCatalogItemsItemIdDetailsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdDetails>>, TError,PatchCatalogItemsItemIdDetailsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdDetails>>, TError,PatchCatalogItemsItemIdDetailsMutationVariables, TContext> => {
+
+const mutationKey = getPatchCatalogItemsItemIdDetailsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCatalogItemsItemIdDetails>>, PatchCatalogItemsItemIdDetailsMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
+
+          return  patchCatalogItemsItemIdDetails(itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCatalogItemsItemIdDetailsMutationResult = NonNullable<Awaited<ReturnType<typeof patchCatalogItemsItemIdDetails>>>
+    export type PatchCatalogItemsItemIdDetailsMutationBody = CatalogSetItemDetailsRequest
+    export type PatchCatalogItemsItemIdDetailsMutationError = ResponseAPIResponse
+    export type PatchCatalogItemsItemIdDetailsMutationVariables = {itemId: string;data: CatalogSetItemDetailsRequest}
+
+    /**
+ * @summary Cập nhật thông tin hiển thị của món
+ */
+export const usePatchCatalogItemsItemIdDetails = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCatalogItemsItemIdDetails>>, TError,PatchCatalogItemsItemIdDetailsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCatalogItemsItemIdDetails>>,
+        TError,
+        PatchCatalogItemsItemIdDetailsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchCatalogItemsItemIdDetailsMutationOptions(options), queryClient);
+    }
+    /**
+ * Gỡ ảnh khỏi món. File ảnh vẫn được giữ trên đĩa. Yêu cầu quyền catalog.administer_structure.
+ * @summary Gỡ ảnh món
+ */
+export const deleteCatalogItemsItemIdImage = (
+    itemId: string,
+    catalogMutationRequest: CatalogMutationRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<DeleteCatalogItemsItemIdImage200>(
+      {url: `/catalog/items/${itemId}/image`, method: 'DELETE',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogMutationRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getDeleteCatalogItemsItemIdImageMutationKey = () => ['deleteCatalogItemsItemIdImage'] as const;
+
+export const getDeleteCatalogItemsItemIdImageMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCatalogItemsItemIdImage>>, TError,DeleteCatalogItemsItemIdImageMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCatalogItemsItemIdImage>>, TError,DeleteCatalogItemsItemIdImageMutationVariables, TContext> => {
+
+const mutationKey = getDeleteCatalogItemsItemIdImageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCatalogItemsItemIdImage>>, DeleteCatalogItemsItemIdImageMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
+
+          return  deleteCatalogItemsItemIdImage(itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCatalogItemsItemIdImageMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCatalogItemsItemIdImage>>>
+    export type DeleteCatalogItemsItemIdImageMutationBody = CatalogMutationRequest
+    export type DeleteCatalogItemsItemIdImageMutationError = ResponseAPIResponse
+    export type DeleteCatalogItemsItemIdImageMutationVariables = {itemId: string;data: CatalogMutationRequest}
+
+    /**
+ * @summary Gỡ ảnh món
+ */
+export const useDeleteCatalogItemsItemIdImage = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCatalogItemsItemIdImage>>, TError,DeleteCatalogItemsItemIdImageMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCatalogItemsItemIdImage>>,
+        TError,
+        DeleteCatalogItemsItemIdImageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteCatalogItemsItemIdImageMutationOptions(options), queryClient);
+    }
+    /**
+ * Tải ảnh JPEG, PNG hoặc WebP (tối đa 1 MB) cho món. Trình duyệt nên thu nhỏ ảnh trước khi gửi. Yêu cầu quyền catalog.administer_structure.
+ * @summary Tải ảnh món
+ */
+export const putCatalogItemsItemIdImage = (
+    itemId: string,
+    putCatalogItemsItemIdImageBody?: PutCatalogItemsItemIdImageBody,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+      const formData = new FormData();
+if(putCatalogItemsItemIdImageBody?.request_id !== undefined) {
+ formData.append(`request_id`, putCatalogItemsItemIdImageBody.request_id);
+ }
+if(putCatalogItemsItemIdImageBody?.file !== undefined) {
+ formData.append(`file`, putCatalogItemsItemIdImageBody.file);
+ }
+
+      return customAxiosInstance<PutCatalogItemsItemIdImage200>(
+      {url: `/catalog/items/${itemId}/image`, method: 'PUT',
+      headers: {'Content-Type': 'multipart/form-data', },
+       data: formData, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPutCatalogItemsItemIdImageMutationKey = () => ['putCatalogItemsItemIdImage'] as const;
+
+export const getPutCatalogItemsItemIdImageMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogItemsItemIdImage>>, TError,PutCatalogItemsItemIdImageMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putCatalogItemsItemIdImage>>, TError,PutCatalogItemsItemIdImageMutationVariables, TContext> => {
+
+const mutationKey = getPutCatalogItemsItemIdImageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putCatalogItemsItemIdImage>>, PutCatalogItemsItemIdImageMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
+
+          return  putCatalogItemsItemIdImage(itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutCatalogItemsItemIdImageMutationResult = NonNullable<Awaited<ReturnType<typeof putCatalogItemsItemIdImage>>>
+    export type PutCatalogItemsItemIdImageMutationBody = PutCatalogItemsItemIdImageBody | undefined
+    export type PutCatalogItemsItemIdImageMutationError = ResponseAPIResponse
+    export type PutCatalogItemsItemIdImageMutationVariables = {itemId: string;data?: PutCatalogItemsItemIdImageBody}
+
+    /**
+ * @summary Tải ảnh món
+ */
+export const usePutCatalogItemsItemIdImage = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogItemsItemIdImage>>, TError,PutCatalogItemsItemIdImageMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putCatalogItemsItemIdImage>>,
+        TError,
+        PutCatalogItemsItemIdImageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutCatalogItemsItemIdImageMutationOptions(options), queryClient);
+    }
+    /**
  * Đánh dấu loại trừ một nhóm modifier kế thừa từ danh mục cho món cụ thể. Yêu cầu quyền catalog.administer_structure.
  * @summary Loại trừ nhóm tùy chọn kế thừa cho món
  */
@@ -735,6 +1177,75 @@ export const usePostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupId = 
         TContext
       > => {
       return useMutation(getPostCatalogItemsItemIdInheritedModifierGroupExclusionsGroupIdMutationOptions(options), queryClient);
+    }
+    /**
+ * Đặt đúng tập nhóm gán trực tiếp và tập nhóm loại trừ của món. Bỏ một id khỏi danh sách nghĩa là gỡ nó. Yêu cầu quyền catalog.administer_structure.
+ * @summary Thay toàn bộ nhóm topping của món
+ */
+export const putCatalogItemsItemIdModifierGroups = (
+    itemId: string,
+    catalogReplaceItemModifierGroupsRequest: CatalogReplaceItemModifierGroupsRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PutCatalogItemsItemIdModifierGroups200>(
+      {url: `/catalog/items/${itemId}/modifier-groups`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogReplaceItemModifierGroupsRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPutCatalogItemsItemIdModifierGroupsMutationKey = () => ['putCatalogItemsItemIdModifierGroups'] as const;
+
+export const getPutCatalogItemsItemIdModifierGroupsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogItemsItemIdModifierGroups>>, TError,PutCatalogItemsItemIdModifierGroupsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putCatalogItemsItemIdModifierGroups>>, TError,PutCatalogItemsItemIdModifierGroupsMutationVariables, TContext> => {
+
+const mutationKey = getPutCatalogItemsItemIdModifierGroupsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putCatalogItemsItemIdModifierGroups>>, PutCatalogItemsItemIdModifierGroupsMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
+
+          return  putCatalogItemsItemIdModifierGroups(itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutCatalogItemsItemIdModifierGroupsMutationResult = NonNullable<Awaited<ReturnType<typeof putCatalogItemsItemIdModifierGroups>>>
+    export type PutCatalogItemsItemIdModifierGroupsMutationBody = CatalogReplaceItemModifierGroupsRequest
+    export type PutCatalogItemsItemIdModifierGroupsMutationError = ResponseAPIResponse
+    export type PutCatalogItemsItemIdModifierGroupsMutationVariables = {itemId: string;data: CatalogReplaceItemModifierGroupsRequest}
+
+    /**
+ * @summary Thay toàn bộ nhóm topping của món
+ */
+export const usePutCatalogItemsItemIdModifierGroups = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogItemsItemIdModifierGroups>>, TError,PutCatalogItemsItemIdModifierGroupsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putCatalogItemsItemIdModifierGroups>>,
+        TError,
+        PutCatalogItemsItemIdModifierGroupsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutCatalogItemsItemIdModifierGroupsMutationOptions(options), queryClient);
     }
     /**
  * Gắn một nhóm modifier trực tiếp vào món thực đơn. Yêu cầu quyền catalog.administer_structure.
@@ -1012,6 +1523,75 @@ export const usePostCatalogItemsItemIdRetirement = <TError = ResponseAPIResponse
         TContext
       > => {
       return useMutation(getPostCatalogItemsItemIdRetirementMutationOptions(options), queryClient);
+    }
+    /**
+ * Thêm kích cỡ mới cho món đang bán theo kích cỡ. Món bán giá đơn không nhận kích cỡ. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.
+ * @summary Thêm kích cỡ cho món
+ */
+export const postCatalogItemsItemIdSizes = (
+    itemId: string,
+    catalogAddSizeRequest: CatalogAddSizeRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PostCatalogItemsItemIdSizes201>(
+      {url: `/catalog/items/${itemId}/sizes`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogAddSizeRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPostCatalogItemsItemIdSizesMutationKey = () => ['postCatalogItemsItemIdSizes'] as const;
+
+export const getPostCatalogItemsItemIdSizesMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdSizes>>, TError,PostCatalogItemsItemIdSizesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdSizes>>, TError,PostCatalogItemsItemIdSizesMutationVariables, TContext> => {
+
+const mutationKey = getPostCatalogItemsItemIdSizesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogItemsItemIdSizes>>, PostCatalogItemsItemIdSizesMutationVariables> = (props) => {
+          const {itemId,data} = props ?? {};
+
+          return  postCatalogItemsItemIdSizes(itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogItemsItemIdSizesMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogItemsItemIdSizes>>>
+    export type PostCatalogItemsItemIdSizesMutationBody = CatalogAddSizeRequest
+    export type PostCatalogItemsItemIdSizesMutationError = ResponseAPIResponse
+    export type PostCatalogItemsItemIdSizesMutationVariables = {itemId: string;data: CatalogAddSizeRequest}
+
+    /**
+ * @summary Thêm kích cỡ cho món
+ */
+export const usePostCatalogItemsItemIdSizes = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogItemsItemIdSizes>>, TError,PostCatalogItemsItemIdSizesMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogItemsItemIdSizes>>,
+        TError,
+        PostCatalogItemsItemIdSizesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogItemsItemIdSizesMutationOptions(options), queryClient);
     }
     /**
  * Trả về projection nhẹ danh mục, món, size, tùy chọn và cờ khả dụng để thu ngân/pha chế bật tắt nhanh. Yêu cầu quyền catalog.manage_availability.
@@ -1454,6 +2034,75 @@ export const usePostCatalogModifierGroups = <TError = ResponseAPIResponse,
       return useMutation(getPostCatalogModifierGroupsMutationOptions(options), queryClient);
     }
     /**
+ * Đặt đúng tập món và danh mục được gán trực tiếp nhóm topping này (Batch Linker). Gỡ nhóm khỏi danh mục sẽ xóa các loại trừ liên quan. Yêu cầu quyền catalog.administer_structure.
+ * @summary Gán hàng loạt một nhóm topping
+ */
+export const putCatalogModifierGroupsGroupIdAssignments = (
+    groupId: string,
+    catalogReplaceGroupAssignmentsRequest: CatalogReplaceGroupAssignmentsRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PutCatalogModifierGroupsGroupIdAssignments200>(
+      {url: `/catalog/modifier-groups/${groupId}/assignments`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogReplaceGroupAssignmentsRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPutCatalogModifierGroupsGroupIdAssignmentsMutationKey = () => ['putCatalogModifierGroupsGroupIdAssignments'] as const;
+
+export const getPutCatalogModifierGroupsGroupIdAssignmentsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdAssignments>>, TError,PutCatalogModifierGroupsGroupIdAssignmentsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdAssignments>>, TError,PutCatalogModifierGroupsGroupIdAssignmentsMutationVariables, TContext> => {
+
+const mutationKey = getPutCatalogModifierGroupsGroupIdAssignmentsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdAssignments>>, PutCatalogModifierGroupsGroupIdAssignmentsMutationVariables> = (props) => {
+          const {groupId,data} = props ?? {};
+
+          return  putCatalogModifierGroupsGroupIdAssignments(groupId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutCatalogModifierGroupsGroupIdAssignmentsMutationResult = NonNullable<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdAssignments>>>
+    export type PutCatalogModifierGroupsGroupIdAssignmentsMutationBody = CatalogReplaceGroupAssignmentsRequest
+    export type PutCatalogModifierGroupsGroupIdAssignmentsMutationError = ResponseAPIResponse
+    export type PutCatalogModifierGroupsGroupIdAssignmentsMutationVariables = {groupId: string;data: CatalogReplaceGroupAssignmentsRequest}
+
+    /**
+ * @summary Gán hàng loạt một nhóm topping
+ */
+export const usePutCatalogModifierGroupsGroupIdAssignments = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdAssignments>>, TError,PutCatalogModifierGroupsGroupIdAssignmentsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdAssignments>>,
+        TError,
+        PutCatalogModifierGroupsGroupIdAssignmentsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutCatalogModifierGroupsGroupIdAssignmentsMutationOptions(options), queryClient);
+    }
+    /**
  * Thiết lập danh sách tùy chọn mặc định cho nhóm modifier. Yêu cầu quyền catalog.administer_structure.
  * @summary Cập nhật tùy chọn mặc định của nhóm
  */
@@ -1592,6 +2241,75 @@ export const usePatchCatalogModifierGroupsGroupIdName = <TError = ResponseAPIRes
       return useMutation(getPatchCatalogModifierGroupsGroupIdNameMutationOptions(options), queryClient);
     }
     /**
+ * Thêm tùy chọn mới vào nhóm topping. Tùy chọn mới không phải mặc định. Yêu cầu quyền catalog.administer_structure, catalog.change_price và PIN quản lý.
+ * @summary Thêm tùy chọn vào nhóm topping
+ */
+export const postCatalogModifierGroupsGroupIdOptions = (
+    groupId: string,
+    catalogAddModifierOptionRequest: CatalogAddModifierOptionRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PostCatalogModifierGroupsGroupIdOptions201>(
+      {url: `/catalog/modifier-groups/${groupId}/options`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogAddModifierOptionRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPostCatalogModifierGroupsGroupIdOptionsMutationKey = () => ['postCatalogModifierGroupsGroupIdOptions'] as const;
+
+export const getPostCatalogModifierGroupsGroupIdOptionsMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdOptions>>, TError,PostCatalogModifierGroupsGroupIdOptionsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdOptions>>, TError,PostCatalogModifierGroupsGroupIdOptionsMutationVariables, TContext> => {
+
+const mutationKey = getPostCatalogModifierGroupsGroupIdOptionsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdOptions>>, PostCatalogModifierGroupsGroupIdOptionsMutationVariables> = (props) => {
+          const {groupId,data} = props ?? {};
+
+          return  postCatalogModifierGroupsGroupIdOptions(groupId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCatalogModifierGroupsGroupIdOptionsMutationResult = NonNullable<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdOptions>>>
+    export type PostCatalogModifierGroupsGroupIdOptionsMutationBody = CatalogAddModifierOptionRequest
+    export type PostCatalogModifierGroupsGroupIdOptionsMutationError = ResponseAPIResponse
+    export type PostCatalogModifierGroupsGroupIdOptionsMutationVariables = {groupId: string;data: CatalogAddModifierOptionRequest}
+
+    /**
+ * @summary Thêm tùy chọn vào nhóm topping
+ */
+export const usePostCatalogModifierGroupsGroupIdOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdOptions>>, TError,PostCatalogModifierGroupsGroupIdOptionsMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postCatalogModifierGroupsGroupIdOptions>>,
+        TError,
+        PostCatalogModifierGroupsGroupIdOptionsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostCatalogModifierGroupsGroupIdOptionsMutationOptions(options), queryClient);
+    }
+    /**
  * Đánh dấu ngừng kinh doanh vĩnh viễn nhóm modifier. Yêu cầu quyền catalog.administer_structure.
  * @summary Ngừng kinh doanh nhóm tùy chọn
  */
@@ -1659,6 +2377,75 @@ export const usePostCatalogModifierGroupsGroupIdRetirement = <TError = ResponseA
         TContext
       > => {
       return useMutation(getPostCatalogModifierGroupsGroupIdRetirementMutationOptions(options), queryClient);
+    }
+    /**
+ * Đổi số lựa chọn tối thiểu, tối đa và các tùy chọn mặc định cùng lúc. Yêu cầu quyền catalog.administer_structure.
+ * @summary Đổi quy tắc chọn của nhóm topping
+ */
+export const putCatalogModifierGroupsGroupIdSelectionRule = (
+    groupId: string,
+    catalogSetSelectionRuleRequest: CatalogSetSelectionRuleRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PutCatalogModifierGroupsGroupIdSelectionRule200>(
+      {url: `/catalog/modifier-groups/${groupId}/selection-rule`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: catalogSetSelectionRuleRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPutCatalogModifierGroupsGroupIdSelectionRuleMutationKey = () => ['putCatalogModifierGroupsGroupIdSelectionRule'] as const;
+
+export const getPutCatalogModifierGroupsGroupIdSelectionRuleMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdSelectionRule>>, TError,PutCatalogModifierGroupsGroupIdSelectionRuleMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdSelectionRule>>, TError,PutCatalogModifierGroupsGroupIdSelectionRuleMutationVariables, TContext> => {
+
+const mutationKey = getPutCatalogModifierGroupsGroupIdSelectionRuleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdSelectionRule>>, PutCatalogModifierGroupsGroupIdSelectionRuleMutationVariables> = (props) => {
+          const {groupId,data} = props ?? {};
+
+          return  putCatalogModifierGroupsGroupIdSelectionRule(groupId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutCatalogModifierGroupsGroupIdSelectionRuleMutationResult = NonNullable<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdSelectionRule>>>
+    export type PutCatalogModifierGroupsGroupIdSelectionRuleMutationBody = CatalogSetSelectionRuleRequest
+    export type PutCatalogModifierGroupsGroupIdSelectionRuleMutationError = ResponseAPIResponse
+    export type PutCatalogModifierGroupsGroupIdSelectionRuleMutationVariables = {groupId: string;data: CatalogSetSelectionRuleRequest}
+
+    /**
+ * @summary Đổi quy tắc chọn của nhóm topping
+ */
+export const usePutCatalogModifierGroupsGroupIdSelectionRule = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdSelectionRule>>, TError,PutCatalogModifierGroupsGroupIdSelectionRuleMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putCatalogModifierGroupsGroupIdSelectionRule>>,
+        TError,
+        PutCatalogModifierGroupsGroupIdSelectionRuleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutCatalogModifierGroupsGroupIdSelectionRuleMutationOptions(options), queryClient);
     }
     /**
  * Bật hoặc tắt trạng thái khả dụng của tùy chọn modifier. Yêu cầu quyền catalog.manage_availability.

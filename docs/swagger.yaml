@@ -211,6 +211,28 @@ definitions:
     required:
     - pin
     type: object
+  catalog.AddModifierOptionRequest:
+    properties:
+      manager_pin:
+        type: string
+      name:
+        type: string
+      request_id:
+        type: string
+      surcharge_vnd:
+        type: integer
+    type: object
+  catalog.AddSizeRequest:
+    properties:
+      manager_pin:
+        type: string
+      name:
+        type: string
+      price_vnd:
+        type: integer
+      request_id:
+        type: string
+    type: object
   catalog.AuditEventResponse:
     properties:
       actor_id:
@@ -246,6 +268,8 @@ definitions:
     type: object
   catalog.AvailabilityCategoryResponse:
     properties:
+      icon:
+        type: string
       id:
         type: string
       items:
@@ -270,7 +294,11 @@ definitions:
         type: boolean
       category_id:
         type: string
+      code:
+        type: string
       id:
+        type: string
+      image_url:
         type: string
       modifier_groups:
         items:
@@ -278,6 +306,11 @@ definitions:
         type: array
       name:
         type: string
+      price_vnd:
+        description: |-
+          PriceVND is the item price, or its lowest non-retired Size price. Present
+          only for callers holding catalog.view_prices (ADR-061).
+        type: integer
       sizes:
         items:
           $ref: '#/definitions/catalog.AvailabilitySizeResponse'
@@ -313,6 +346,10 @@ definitions:
         type: string
       name:
         type: string
+      surcharge_vnd:
+        description: SurchargeVND is present only for callers holding catalog.view_prices
+          (ADR-061).
+        type: integer
     type: object
   catalog.AvailabilitySizeResponse:
     properties:
@@ -323,12 +360,34 @@ definitions:
       name:
         type: string
     type: object
+  catalog.CategoryDetailsResponse:
+    properties:
+      category_id:
+        type: string
+      display_order:
+        type: integer
+      icon:
+        type: string
+    type: object
   catalog.CategoryModifierGroupResponse:
     properties:
       category_id:
         type: string
       modifier_group_id:
         type: string
+    type: object
+  catalog.CategoryModifierGroupsResponse:
+    properties:
+      category_id:
+        type: string
+      group_ids:
+        items:
+          type: string
+        type: array
+      removed_exclusions:
+        items:
+          $ref: '#/definitions/catalog.ExclusionRef'
+        type: array
     type: object
   catalog.CategoryResponse:
     properties:
@@ -404,6 +463,42 @@ definitions:
       price_vnd:
         type: integer
     type: object
+  catalog.ExclusionRef:
+    properties:
+      item_id:
+        type: string
+      modifier_group_id:
+        type: string
+    type: object
+  catalog.ItemCategoryResponse:
+    properties:
+      category_id:
+        type: string
+      item_id:
+        type: string
+      removed_exclusion_group_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  catalog.ItemDetailsResponse:
+    properties:
+      badge:
+        type: string
+      code:
+        type: string
+      description:
+        type: string
+      item_id:
+        type: string
+    type: object
+  catalog.ItemImageResponse:
+    properties:
+      image_url:
+        type: string
+      item_id:
+        type: string
+    type: object
   catalog.ItemModifierGroupExclusionResponse:
     properties:
       item_id:
@@ -416,6 +511,19 @@ definitions:
       item_id:
         type: string
       modifier_group_id:
+        type: string
+    type: object
+  catalog.ItemModifierGroupsResponse:
+    properties:
+      direct_group_ids:
+        items:
+          type: string
+        type: array
+      excluded_group_ids:
+        items:
+          type: string
+        type: array
+      item_id:
         type: string
     type: object
   catalog.ItemResponse:
@@ -437,6 +545,10 @@ definitions:
     type: object
   catalog.ManagementCategoryResponse:
     properties:
+      display_order:
+        type: integer
+      icon:
+        type: string
       id:
         type: string
       items:
@@ -462,7 +574,13 @@ definitions:
     properties:
       available:
         type: boolean
+      badge:
+        type: string
       category_id:
+        type: string
+      code:
+        type: string
+      description:
         type: string
       direct_modifier_group_ids:
         items:
@@ -473,6 +591,8 @@ definitions:
           type: string
         type: array
       id:
+        type: string
+      image_url:
         type: string
       modifier_groups:
         items:
@@ -571,6 +691,23 @@ definitions:
       retirement_reason:
         type: string
     type: object
+  catalog.ModifierGroupAssignmentsResponse:
+    properties:
+      category_ids:
+        items:
+          type: string
+        type: array
+      group_id:
+        type: string
+      item_ids:
+        items:
+          type: string
+        type: array
+      removed_exclusions:
+        items:
+          $ref: '#/definitions/catalog.ExclusionRef'
+        type: array
+    type: object
   catalog.ModifierGroupDefaultsResponse:
     properties:
       group_id:
@@ -612,6 +749,13 @@ definitions:
       surcharge_vnd:
         type: integer
     type: object
+  catalog.MoveItemCategoryRequest:
+    properties:
+      category_id:
+        type: string
+      request_id:
+        type: string
+    type: object
   catalog.MutationRequest:
     properties:
       request_id:
@@ -621,6 +765,41 @@ definitions:
     properties:
       name:
         type: string
+      request_id:
+        type: string
+    type: object
+  catalog.ReplaceCategoryModifierGroupsRequest:
+    properties:
+      group_ids:
+        items:
+          type: string
+        type: array
+      request_id:
+        type: string
+    type: object
+  catalog.ReplaceGroupAssignmentsRequest:
+    properties:
+      category_ids:
+        items:
+          type: string
+        type: array
+      item_ids:
+        items:
+          type: string
+        type: array
+      request_id:
+        type: string
+    type: object
+  catalog.ReplaceItemModifierGroupsRequest:
+    properties:
+      direct_group_ids:
+        items:
+          type: string
+        type: array
+      excluded_group_ids:
+        items:
+          type: string
+        type: array
       request_id:
         type: string
     type: object
@@ -651,8 +830,23 @@ definitions:
       request_id:
         type: string
     type: object
+  catalog.SelectionRuleResponse:
+    properties:
+      default_option_ids:
+        items:
+          type: string
+        type: array
+      group_id:
+        type: string
+      max_selections:
+        type: integer
+      min_selections:
+        type: integer
+    type: object
   catalog.SellableCategoryResponse:
     properties:
+      icon:
+        type: string
       id:
         type: string
       items:
@@ -664,9 +858,15 @@ definitions:
     type: object
   catalog.SellableItemResponse:
     properties:
+      badge:
+        type: string
       category_id:
         type: string
+      code:
+        type: string
       id:
+        type: string
+      image_url:
         type: string
       modifier_groups:
         items:
@@ -741,12 +941,54 @@ definitions:
       request_id:
         type: string
     type: object
+  catalog.SetCategoryDetailsRequest:
+    properties:
+      display_order:
+        type: integer
+      icon:
+        type: string
+      request_id:
+        type: string
+    type: object
+  catalog.SetItemDetailsRequest:
+    properties:
+      badge:
+        enum:
+        - BEST_SELLER
+        - HOT
+        - NEW
+        - SIGNATURE
+        - CHEF_PICK
+        type: string
+        x-nullable: true
+      code:
+        type: string
+        x-nullable: true
+      description:
+        type: string
+        x-nullable: true
+      request_id:
+        type: string
+    type: object
   catalog.SetModifierGroupDefaultsRequest:
     properties:
       option_ids:
         items:
           type: string
         type: array
+      request_id:
+        type: string
+    type: object
+  catalog.SetSelectionRuleRequest:
+    properties:
+      default_option_ids:
+        items:
+          type: string
+        type: array
+      max_selections:
+        type: integer
+      min_selections:
+        type: integer
       request_id:
         type: string
     type: object
@@ -2818,6 +3060,124 @@ paths:
       summary: Tạo danh mục thực đơn
       tags:
       - Catalog
+  /catalog/categories/{category_id}/details:
+    patch:
+      consumes:
+      - application/json
+      description: Đặt biểu tượng (tên icon Lucide) và thứ tự hiển thị (0 đến 9999).
+        Yêu cầu quyền catalog.administer_structure.
+      parameters:
+      - description: Category ID (UUID)
+        in: path
+        name: category_id
+        required: true
+        type: string
+      - description: Thông tin hiển thị
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.SetCategoryDetailsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.CategoryDetailsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật biểu tượng và thứ tự danh mục
+      tags:
+      - Catalog
+  /catalog/categories/{category_id}/modifier-groups:
+    put:
+      consumes:
+      - application/json
+      description: Đặt đúng tập nhóm danh mục cung cấp. Gỡ một nhóm sẽ xóa các loại
+        trừ nhóm đó trên các món trong danh mục. Yêu cầu quyền catalog.administer_structure.
+      parameters:
+      - description: Category ID (UUID)
+        in: path
+        name: category_id
+        required: true
+        type: string
+      - description: Tập nhóm mong muốn
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.ReplaceCategoryModifierGroupsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.CategoryModifierGroupsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Thay toàn bộ nhóm topping của danh mục
+      tags:
+      - Catalog
   /catalog/categories/{category_id}/modifier-groups/{group_id}:
     post:
       consumes:
@@ -3112,6 +3472,249 @@ paths:
       summary: Cập nhật trạng thái khả dụng của món
       tags:
       - Catalog
+  /catalog/items/{item_id}/category:
+    patch:
+      consumes:
+      - application/json
+      description: Chuyển món sang danh mục khác. Các loại trừ nhóm topping mà danh
+        mục mới không cung cấp sẽ bị xóa. Yêu cầu quyền catalog.administer_structure.
+      parameters:
+      - description: Item ID (UUID)
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Danh mục đích
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.MoveItemCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.ItemCategoryResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Chuyển món sang danh mục khác
+      tags:
+      - Catalog
+  /catalog/items/{item_id}/details:
+    patch:
+      consumes:
+      - application/json
+      description: Ghi đè mã món, huy hiệu và mô tả. Cả ba khóa đều bắt buộc; gửi
+        null để xóa. Yêu cầu quyền catalog.administer_structure.
+      parameters:
+      - description: Item ID (UUID)
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Thông tin hiển thị
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.SetItemDetailsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.ItemDetailsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật thông tin hiển thị của món
+      tags:
+      - Catalog
+  /catalog/items/{item_id}/image:
+    delete:
+      consumes:
+      - application/json
+      description: Gỡ ảnh khỏi món. File ảnh vẫn được giữ trên đĩa. Yêu cầu quyền
+        catalog.administer_structure.
+      parameters:
+      - description: Item ID (UUID)
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Request ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.MutationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.ItemImageResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Gỡ ảnh món
+      tags:
+      - Catalog
+    put:
+      consumes:
+      - multipart/form-data
+      description: Tải ảnh JPEG, PNG hoặc WebP (tối đa 1 MB) cho món. Trình duyệt
+        nên thu nhỏ ảnh trước khi gửi. Yêu cầu quyền catalog.administer_structure.
+      parameters:
+      - description: Item ID (UUID)
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Request ID (UUID)
+        in: formData
+        name: request_id
+        required: true
+        type: string
+      - description: Ảnh món
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.ItemImageResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Tải ảnh món
+      tags:
+      - Catalog
   /catalog/items/{item_id}/inherited-modifier-group-exclusions/{group_id}:
     post:
       consumes:
@@ -3174,6 +3777,65 @@ paths:
       security:
       - BearerAuth: []
       summary: Loại trừ nhóm tùy chọn kế thừa cho món
+      tags:
+      - Catalog
+  /catalog/items/{item_id}/modifier-groups:
+    put:
+      consumes:
+      - application/json
+      description: Đặt đúng tập nhóm gán trực tiếp và tập nhóm loại trừ của món. Bỏ
+        một id khỏi danh sách nghĩa là gỡ nó. Yêu cầu quyền catalog.administer_structure.
+      parameters:
+      - description: Item ID (UUID)
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Tập nhóm mong muốn
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.ReplaceItemModifierGroupsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.ItemModifierGroupsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Thay toàn bộ nhóm topping của món
       tags:
       - Catalog
   /catalog/items/{item_id}/modifier-groups/{group_id}:
@@ -3416,6 +4078,66 @@ paths:
       summary: Ngừng kinh doanh món thực đơn
       tags:
       - Catalog
+  /catalog/items/{item_id}/sizes:
+    post:
+      consumes:
+      - application/json
+      description: Thêm kích cỡ mới cho món đang bán theo kích cỡ. Món bán giá đơn
+        không nhận kích cỡ. Yêu cầu quyền catalog.administer_structure, catalog.change_price
+        và PIN quản lý.
+      parameters:
+      - description: Item ID (UUID)
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Kích cỡ mới
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.AddSizeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.SizeResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Thêm kích cỡ cho món
+      tags:
+      - Catalog
   /catalog/menu/availability:
     get:
       description: Trả về projection nhẹ danh mục, món, size, tùy chọn và cờ khả dụng
@@ -3651,6 +4373,66 @@ paths:
       summary: Tạo nhóm tùy chọn / topping
       tags:
       - Catalog
+  /catalog/modifier-groups/{group_id}/assignments:
+    put:
+      consumes:
+      - application/json
+      description: Đặt đúng tập món và danh mục được gán trực tiếp nhóm topping này
+        (Batch Linker). Gỡ nhóm khỏi danh mục sẽ xóa các loại trừ liên quan. Yêu cầu
+        quyền catalog.administer_structure.
+      parameters:
+      - description: Modifier Group ID (UUID)
+        in: path
+        name: group_id
+        required: true
+        type: string
+      - description: Tập món và danh mục mong muốn
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.ReplaceGroupAssignmentsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.ModifierGroupAssignmentsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Gán hàng loạt một nhóm topping
+      tags:
+      - Catalog
   /catalog/modifier-groups/{group_id}/defaults:
     put:
       consumes:
@@ -3768,6 +4550,66 @@ paths:
       summary: Đổi tên nhóm tùy chọn
       tags:
       - Catalog
+  /catalog/modifier-groups/{group_id}/options:
+    post:
+      consumes:
+      - application/json
+      description: Thêm tùy chọn mới vào nhóm topping. Tùy chọn mới không phải mặc
+        định. Yêu cầu quyền catalog.administer_structure, catalog.change_price và
+        PIN quản lý.
+      parameters:
+      - description: Modifier Group ID (UUID)
+        in: path
+        name: group_id
+        required: true
+        type: string
+      - description: Tùy chọn mới
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.AddModifierOptionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.ModifierOptionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Thêm tùy chọn vào nhóm topping
+      tags:
+      - Catalog
   /catalog/modifier-groups/{group_id}/retirement:
     post:
       consumes:
@@ -3825,6 +4667,65 @@ paths:
       security:
       - BearerAuth: []
       summary: Ngừng kinh doanh nhóm tùy chọn
+      tags:
+      - Catalog
+  /catalog/modifier-groups/{group_id}/selection-rule:
+    put:
+      consumes:
+      - application/json
+      description: Đổi số lựa chọn tối thiểu, tối đa và các tùy chọn mặc định cùng
+        lúc. Yêu cầu quyền catalog.administer_structure.
+      parameters:
+      - description: Modifier Group ID (UUID)
+        in: path
+        name: group_id
+        required: true
+        type: string
+      - description: Quy tắc chọn
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/catalog.SetSelectionRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/catalog.SelectionRuleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Đổi quy tắc chọn của nhóm topping
       tags:
       - Catalog
   /catalog/modifier-options/{option_id}/availability:

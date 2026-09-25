@@ -8,6 +8,8 @@
 import type { CatalogManagementItemResponse } from './catalogManagementItemResponse';
 
 export interface CatalogManagementCategoryResponse {
+  display_order?: number;
+  icon?: string;
   id?: string;
   items?: CatalogManagementItemResponse[];
   modifier_group_ids?: string[];

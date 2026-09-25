@@ -11,7 +11,10 @@ import {
   getReasonsForDimension,
   getDefaultReasonForDimension,
 } from "@/features/shift/utils/discrepancy";
-import type { ShiftCloseDiscrepancyInputDimension } from "@/features/shift/utils/discrepancy";
+import type {
+  ShiftCloseDiscrepancyInputDimension,
+  ShiftCloseDiscrepancyInputReason,
+} from "@/features/shift/utils/discrepancy";
 import { newRequestId } from "@/lib/command";
 import { formatVND } from "@/lib/utils";
 import { playClick, playSuccess, playError } from "@/lib/sound";
@@ -20,7 +23,6 @@ import type {
   ShiftCurrentShiftResponse,
   ShiftClosingShiftResponse,
   ShiftCloseDiscrepancyInput,
-  ShiftCloseDiscrepancyInputReason,
 } from "@/api/generated/models";
 
 export interface CloseShiftDialogProps {

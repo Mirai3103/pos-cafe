@@ -31,6 +31,10 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_URL || "http://localhost:8080",
         changeOrigin: true,
       },
+      "/media": {
+        target: process.env.VITE_BACKEND_URL || "http://localhost:8080",
+        changeOrigin: true,
+      },
       "/health": {
         target: process.env.VITE_BACKEND_URL || "http://localhost:8080",
         changeOrigin: true,

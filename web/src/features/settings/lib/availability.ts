@@ -23,6 +23,11 @@ export interface AvailabilityItemView {
   name: string;
   categoryId: string;
   categoryName: string;
+  /** Stored code, or null; cards derive one from the name when null. */
+  code: string | null;
+  imageUrl: string | null;
+  /** Item price or lowest Size price; null when the caller lacks catalog.view_prices. */
+  priceVnd: number | null;
   available: boolean;
   sizes: AvailabilitySizeView[];
   /** Why an item that is itself on still cannot be sold (mirrors catalog.IsSellable). */
@@ -34,6 +39,7 @@ export interface AvailabilityOptionView {
   name: string;
   groupId: string;
   groupName: string;
+  priceVnd: number | null;
   available: boolean;
 }
 
@@ -109,6 +115,7 @@ export function toAvailabilityView(menu: CatalogAvailabilityMenuResponse | null 
             name: o.name ?? "",
             groupId,
             groupName: group.name,
+            priceVnd: o.surcharge_vnd ?? null,
             available: o.available ?? false,
           });
         }
@@ -119,6 +126,9 @@ export function toAvailabilityView(menu: CatalogAvailabilityMenuResponse | null 
         name: item.name ?? "",
         categoryId,
         categoryName,
+        code: item.code ?? null,
+        imageUrl: item.image_url ?? null,
+        priceVnd: item.price_vnd ?? null,
         available: item.available ?? false,
         sizes,
         blockedBy,

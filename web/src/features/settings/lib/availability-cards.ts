@@ -1,5 +1,4 @@
 import { getAcronym, matchesSearch, normalizeVietnamese } from "@/lib/search";
-import { mockImageUrl, mockPriceVnd } from "./availability-mock";
 import {
   ALL_SCOPE,
   TOPPINGS_SCOPE,
@@ -19,7 +18,7 @@ export interface StockCard {
   kind: "item" | "modifier_option";
   id: string;
   name: string;
-  /** Short code shown next to the name ("CFSD"); derived from the name until the catalog stores one. */
+  /** Short code shown next to the name ("CFSD"): the stored code, else derived from the name. */
   code: string;
   /** Category (item) or Modifier Group (topping) name. */
   groupName: string;
@@ -33,9 +32,9 @@ export interface StockCard {
   /** Item only: why it cannot be sold although it is on (see blockedMessage). */
   blockedBy: string[];
   icon: StockIcon;
-  /** MOCK until the catalog stores prices on this projection (availability-mock.ts). */
+  /** Item price, lowest Size price, or topping surcharge; null when the caller cannot see prices. */
   priceVnd: number | null;
-  /** MOCK until the catalog stores images (availability-mock.ts). */
+  /** Served from /media/catalog; null when the item has no image. */
   imageUrl: string | null;
 }
 
@@ -76,7 +75,7 @@ export function toStockCards(view: AvailabilityView): StockCard[] {
       kind: "item",
       id: item.id,
       name: item.name,
-      code: getAcronym(item.name).toUpperCase(),
+      code: (item.code ?? getAcronym(item.name)).toUpperCase(),
       groupName: item.categoryName,
       scope: item.categoryId,
       detail: sizes.map((s) => sizeLabel(s.name)).join(" / "),
@@ -84,8 +83,8 @@ export function toStockCards(view: AvailabilityView): StockCard[] {
       sizes,
       blockedBy: item.blockedBy,
       icon: categoryIcon(item.categoryName),
-      priceVnd: mockPriceVnd(item.name),
-      imageUrl: mockImageUrl(item.id),
+      priceVnd: item.priceVnd,
+      imageUrl: item.imageUrl,
     };
   });
   const toppings: StockCard[] = view.groups.flatMap((group) =>
@@ -101,7 +100,7 @@ export function toStockCards(view: AvailabilityView): StockCard[] {
       sizes: [],
       blockedBy: [],
       icon: "layers" as const,
-      priceVnd: mockPriceVnd(option.name),
+      priceVnd: option.priceVnd,
       imageUrl: null,
     })),
   );

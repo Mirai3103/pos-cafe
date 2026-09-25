@@ -6,8 +6,9 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface ShiftCloseDiscrepancyInput {
-  dimension?: string;
-  note?: string;
-  reason?: string;
-}
+export type PutCatalogItemsItemIdImageBody = {
+  /** Request ID (UUID) */
+  request_id: string;
+  /** Ảnh món */
+  file: Blob | File;
+};

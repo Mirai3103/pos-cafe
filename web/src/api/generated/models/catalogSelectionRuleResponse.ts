@@ -6,8 +6,9 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface ShiftCloseDiscrepancyInput {
-  dimension?: string;
-  note?: string;
-  reason?: string;
+export interface CatalogSelectionRuleResponse {
+  default_option_ids?: string[];
+  group_id?: string;
+  max_selections?: number;
+  min_selections?: number;
 }

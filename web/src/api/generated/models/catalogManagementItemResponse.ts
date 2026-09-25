@@ -10,10 +10,14 @@ import type { CatalogManagementSizeResponse } from './catalogManagementSizeRespo
 
 export interface CatalogManagementItemResponse {
   available?: boolean;
+  badge?: string;
   category_id?: string;
+  code?: string;
+  description?: string;
   direct_modifier_group_ids?: string[];
   excluded_modifier_group_ids?: string[];
   id?: string;
+  image_url?: string;
   modifier_groups?: CatalogManagementModifierGroupResponse[];
   name?: string;
   price_vnd?: number;

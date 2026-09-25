@@ -81,6 +81,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
   TAKEAWAY_TABLE_ASSIGNMENT_NOT_AVAILABLE: "Đơn mang đi không gắn được bàn.",
   ENTITY_RETIRED: "Mục này đã ngừng kinh doanh.",
   CATALOG_NOT_FOUND: "Không tìm thấy mục trong thực đơn.",
+  CATALOG_CODE_CONFLICT: "Mã món này đã được dùng cho một món khác.",
+  INVALID_IMAGE: "Ảnh không hợp lệ. Chỉ nhận JPEG, PNG hoặc WebP.",
+  IMAGE_TOO_LARGE: "Ảnh quá lớn. Dung lượng tối đa là 1 MB.",
 };
 
 const NETWORK_MESSAGE = "Không kết nối được máy chủ. Kiểm tra mạng nội bộ rồi thử lại.";

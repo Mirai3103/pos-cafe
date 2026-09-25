@@ -6,10 +6,9 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface CatalogAvailabilityModifierOptionResponse {
-  available?: boolean;
-  id?: string;
+export interface CatalogAddModifierOptionRequest {
+  manager_pin?: string;
   name?: string;
-  /** SurchargeVND is present only for callers holding catalog.view_prices (ADR-061). */
+  request_id?: string;
   surcharge_vnd?: number;
 }

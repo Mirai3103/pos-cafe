@@ -5,11 +5,9 @@
  * Backend API for Cafe Point of Sale System built with Vertical Slice Architecture and Idiomatic Go.
  * OpenAPI spec version: 1.0
  */
-import type { CatalogSellableItemResponse } from './catalogSellableItemResponse';
 
-export interface CatalogSellableCategoryResponse {
+export interface CatalogCategoryDetailsResponse {
+  category_id?: string;
+  display_order?: number;
   icon?: string;
-  id?: string;
-  items?: CatalogSellableItemResponse[];
-  name?: string;
 }

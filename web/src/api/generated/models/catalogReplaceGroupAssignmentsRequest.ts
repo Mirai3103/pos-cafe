@@ -6,8 +6,8 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface ShiftCloseDiscrepancyInput {
-  dimension?: string;
-  note?: string;
-  reason?: string;
+export interface CatalogReplaceGroupAssignmentsRequest {
+  category_ids?: string[];
+  item_ids?: string[];
+  request_id?: string;
 }

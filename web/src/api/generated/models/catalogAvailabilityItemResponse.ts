@@ -11,8 +11,15 @@ import type { CatalogAvailabilitySizeResponse } from './catalogAvailabilitySizeR
 export interface CatalogAvailabilityItemResponse {
   available?: boolean;
   category_id?: string;
+  code?: string;
   id?: string;
+  image_url?: string;
   modifier_groups?: CatalogAvailabilityModifierGroupResponse[];
   name?: string;
+  /**
+     * PriceVND is the item price, or its lowest non-retired Size price. Present
+     * only for callers holding catalog.view_prices (ADR-061).
+     */
+  price_vnd?: number;
   sizes?: CatalogAvailabilitySizeResponse[];
 }
