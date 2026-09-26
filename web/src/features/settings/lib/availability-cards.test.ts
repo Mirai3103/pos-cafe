@@ -19,7 +19,7 @@ const topping = {
   name: "Topping thêm",
   min_selections: 0,
   max_selections: 3,
-  options: [{ id: "o-pearl", name: "Trân châu trắng", available: false }],
+  options: [{ id: "o-pearl", name: "Trân châu trắng", available: false, surcharge_vnd: 5_000 }],
 };
 
 const menu: CatalogAvailabilityMenuResponse = {
@@ -32,6 +32,9 @@ const menu: CatalogAvailabilityMenuResponse = {
           id: "i-den",
           name: "Cà phê đen",
           category_id: "c-coffee",
+          code: "CFD",
+          image_url: "/media/catalog/abc.webp",
+          price_vnd: 25_000,
           available: true,
           sizes: [
             { id: "s-den-l", name: "Size L", available: false },
@@ -45,7 +48,7 @@ const menu: CatalogAvailabilityMenuResponse = {
     {
       id: "c-cake",
       name: "Bánh ngọt",
-      items: [{ id: "i-croissant", name: "Croissant bơ tỏi", category_id: "c-cake", available: true }],
+      items: [{ id: "i-croissant", name: "Croissant bơ tỏi", category_id: "c-cake", price_vnd: 35_000, available: true }],
     },
   ],
 };
@@ -72,10 +75,23 @@ describe("toStockCards", () => {
     expect(pearl.detail).toBe("1 phần thêm");
   });
 
-  it("fills mock price and image until the backend provides them", () => {
-    expect(cards[2].priceVnd).toBe(35_000);
-    expect(cards[2].imageUrl).toMatch(/^https:\/\//);
-    expect(toStockCards(toAvailabilityView({ categories: [{ id: "c", name: "C", items: [{ id: "x", name: "Món lạ", available: true }] }] }))[0].priceVnd).toBeNull();
+  it("reads price, image, and code from the API", () => {
+    const den = cards.find((c) => c.id === "i-den")!;
+    expect(den.priceVnd).toBe(25_000);
+    expect(den.imageUrl).toBe("/media/catalog/abc.webp");
+    expect(den.code).toBe("CFD");
+
+    const croissant = cards.find((c) => c.id === "i-croissant")!;
+    expect(croissant.priceVnd).toBe(35_000);
+    expect(croissant.imageUrl).toBeNull();
+    expect(croissant.code).toBe("CBT"); // derived from the name when the API has none
+
+    expect(cards.find((c) => c.id === "o-pearl")!.priceVnd).toBe(5_000);
+  });
+
+  it("shows no price when the API omits it (Barista)", () => {
+    const view = toAvailabilityView({ categories: [{ id: "c", name: "C", items: [{ id: "x", name: "Món lạ", available: true }] }] });
+    expect(toStockCards(view)[0].priceVnd).toBeNull();
   });
 });
 

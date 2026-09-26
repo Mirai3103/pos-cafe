@@ -70,17 +70,20 @@ LIMIT $1;
 INSERT INTO menu_categories (name, normalized_name)
 VALUES ($1, $2)
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at;
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order;
 
 -- name: GetMenuCategoryByID :one
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
 WHERE id = $1;
 
 -- name: GetMenuCategoryForUpdate :one
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
 WHERE id = $1
 FOR UPDATE;
@@ -90,20 +93,23 @@ UPDATE menu_categories
 SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at;
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order;
 
 -- name: RetireMenuCategory :one
 UPDATE menu_categories
 SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at;
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order;
 
 -- name: ListMenuCategories :many
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
-ORDER BY normalized_name ASC, id ASC;
+ORDER BY display_order ASC, normalized_name ASC, id ASC;
 
 -- -- Menu Items --
 
@@ -113,19 +119,22 @@ INSERT INTO menu_items
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: GetMenuItemByID :one
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE id = $1;
 
 -- name: GetMenuItemForUpdate :one
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE id = $1
 FOR UPDATE;
@@ -136,7 +145,8 @@ SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: RepriceMenuItem :one
 UPDATE menu_items
@@ -144,7 +154,8 @@ SET price_vnd = $2, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: SetMenuItemAvailability :one
 UPDATE menu_items
@@ -152,7 +163,8 @@ SET available = $2, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: RetireMenuItem :one
 UPDATE menu_items
@@ -160,12 +172,14 @@ SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = 
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at;
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key;
 
 -- name: ListMenuItemsByCategory :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE category_id = $1
 ORDER BY normalized_name ASC, id ASC;
@@ -280,6 +294,14 @@ RETURNING id, name, normalized_name, min_selections, max_selections,
 -- name: RetireModifierGroup :one
 UPDATE modifier_groups
 SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, min_selections, max_selections,
+          retired_at, retirement_reason, retirement_note,
+          created_at, updated_at;
+
+-- name: UpdateModifierGroupBounds :one
+UPDATE modifier_groups
+SET min_selections = $2, max_selections = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, min_selections, max_selections,
           retired_at, retirement_reason, retirement_note,
@@ -442,7 +464,8 @@ SELECT pg_advisory_xact_lock($1);
 -- name: ListMenuItemsByCategoryPaginated :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE category_id = $1
 ORDER BY normalized_name ASC, id ASC
@@ -451,7 +474,8 @@ LIMIT $2 OFFSET $3;
 -- name: ListAllMenuItemsPaginated :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 ORDER BY normalized_name ASC, id ASC
 LIMIT $1 OFFSET $2;
@@ -485,7 +509,8 @@ LIMIT $1 OFFSET $2;
 -- name: ListAllMenuItems :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 ORDER BY normalized_name ASC, id ASC;
 
@@ -524,3 +549,121 @@ FROM modifier_group_default_options
 ORDER BY modifier_group_id ASC, modifier_option_id ASC;
 
 
+
+-- -- Display Details (BA-1) --
+
+-- name: GetActiveMenuItemIDByCode :one
+SELECT id
+FROM menu_items
+WHERE normalized_code = sqlc.arg(normalized_code)
+  AND retired_at IS NULL
+  AND id <> sqlc.arg(exclude_id);
+
+-- name: UpdateMenuItemDetails :one
+UPDATE menu_items
+SET code = $2, normalized_code = $3, badge = $4, description = $5, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key;
+
+-- name: UpdateMenuCategoryDetails :one
+UPDATE menu_categories
+SET icon = $2, display_order = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at,
+          icon, display_order;
+
+-- name: SetMenuItemImageKey :one
+UPDATE menu_items
+SET image_key = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key;
+
+-- -- Structure (BA-1) --
+
+-- name: MoveMenuItemToCategory :one
+UPDATE menu_items
+SET category_id = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key;
+
+-- name: DeleteItemExclusionsOutsideCategory :many
+-- Exclusion invariant (ADR-059): an exclusion exists only while the item's
+-- category provides the group.
+DELETE FROM item_modifier_group_exclusions e
+WHERE e.menu_item_id = sqlc.arg(item_id)
+  AND NOT EXISTS (
+      SELECT 1 FROM category_modifier_groups c
+      WHERE c.menu_category_id = sqlc.arg(category_id)
+        AND c.modifier_group_id = e.modifier_group_id)
+RETURNING e.modifier_group_id;
+
+-- -- Replace-set Assignments (BA-1, ADR-059) --
+
+-- name: ListItemDirectGroupIDs :many
+SELECT modifier_group_id FROM item_modifier_groups
+WHERE menu_item_id = $1 ORDER BY modifier_group_id;
+
+-- name: ListItemExcludedGroupIDs :many
+SELECT modifier_group_id FROM item_modifier_group_exclusions
+WHERE menu_item_id = $1 ORDER BY modifier_group_id;
+
+-- name: ListCategoryGroupIDs :many
+SELECT modifier_group_id FROM category_modifier_groups
+WHERE menu_category_id = $1 ORDER BY modifier_group_id;
+
+-- name: LockModifierGroupsByIDs :many
+SELECT id, retired_at FROM modifier_groups
+WHERE id = ANY(sqlc.arg(ids)::uuid[])
+ORDER BY id
+FOR UPDATE;
+
+-- name: DeleteItemModifierGroup :exec
+DELETE FROM item_modifier_groups WHERE menu_item_id = $1 AND modifier_group_id = $2;
+
+-- name: DeleteItemModifierGroupExclusion :exec
+DELETE FROM item_modifier_group_exclusions WHERE menu_item_id = $1 AND modifier_group_id = $2;
+
+-- name: DeleteCategoryModifierGroup :exec
+DELETE FROM category_modifier_groups WHERE menu_category_id = $1 AND modifier_group_id = $2;
+
+-- name: DeleteCategoryGroupExclusions :many
+DELETE FROM item_modifier_group_exclusions e
+USING menu_items i
+WHERE e.menu_item_id = i.id
+  AND i.category_id = sqlc.arg(category_id)
+  AND e.modifier_group_id = sqlc.arg(group_id)
+RETURNING e.menu_item_id;
+
+-- name: ListItemIDsWithDirectGroup :many
+SELECT menu_item_id FROM item_modifier_groups
+WHERE modifier_group_id = $1 ORDER BY menu_item_id;
+
+-- name: ListCategoryIDsWithGroup :many
+SELECT menu_category_id FROM category_modifier_groups
+WHERE modifier_group_id = $1 ORDER BY menu_category_id;
+
+-- name: ListItemIDsExcludingGroup :many
+SELECT menu_item_id FROM item_modifier_group_exclusions
+WHERE modifier_group_id = $1 ORDER BY menu_item_id;
+
+-- name: LockMenuItemsByIDs :many
+SELECT id, retired_at FROM menu_items
+WHERE id = ANY(sqlc.arg(ids)::uuid[])
+ORDER BY id
+FOR UPDATE;
+
+-- name: LockMenuCategoriesByIDs :many
+SELECT id, retired_at FROM menu_categories
+WHERE id = ANY(sqlc.arg(ids)::uuid[])
+ORDER BY id
+FOR UPDATE;

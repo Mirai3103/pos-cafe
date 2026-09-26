@@ -64,7 +64,7 @@ ships the "Món tạm hết" tab with an atomic batch availability command (ADR-
 and per-tab settings guards (ADR-056).
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
-`preparation`. Fifty-six architecture decisions are recorded.
+`preparation`. Sixty-one architecture decisions are recorded.
 
 ---
 
@@ -81,6 +81,7 @@ criteria live in the ticket, not here.
 | **10** | Recover numbered-paper outage Sales | 09 | [ticket](docs/backlog/phase-10-recover-numbered-paper-outage-sales.md) |
 | **11** | Serve clients over LAN, single-binary packaging, frontend | none | [ticket](docs/backlog/phase-11-clients-over-lan-and-single-binary.md) |
 | **12** | Back up, restore, update, verify readiness | 10, 11 | [ticket](docs/backlog/phase-12-backup-restore-update-readiness.md) |
+| **BA** | Backend alignment: close the gaps the web slices recorded (BA-1 catalog, BA-2 store profile and VietQR, BA-3 preparation station, BA-4 tables and floor, BA-5 Service Session operations) — **BA-1 done** | none | [ticket](docs/backlog/backend-alignment.md) |
 
 Phase 11 is the one exception to "no approved Go design exists": its UI half has a
 design, and slices 1 through 6 of the sequence satisfy its Sign-in, Cashier, and

@@ -8,6 +8,7 @@
 import type { CatalogSellableItemResponse } from './catalogSellableItemResponse';
 
 export interface CatalogSellableCategoryResponse {
+  icon?: string;
   id?: string;
   items?: CatalogSellableItemResponse[];
   name?: string;

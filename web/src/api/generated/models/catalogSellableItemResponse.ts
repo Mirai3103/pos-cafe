@@ -9,8 +9,11 @@ import type { CatalogSellableModifierGroupResponse } from './catalogSellableModi
 import type { CatalogSellableSizeResponse } from './catalogSellableSizeResponse';
 
 export interface CatalogSellableItemResponse {
+  badge?: string;
   category_id?: string;
+  code?: string;
   id?: string;
+  image_url?: string;
   modifier_groups?: CatalogSellableModifierGroupResponse[];
   name?: string;
   price_vnd?: number;

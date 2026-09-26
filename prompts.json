@@ -1,0 +1,382 @@
+[
+  {
+    "name": "Cà phê đen đá",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese iced black coffee in a short clear glass filled with dark amber coffee over large ice cubes, a traditional aluminum phin filter dripping coffee on top of the glass. Shot from a 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy Vietnamese cafe interior in the background. Soft natural window light from the left with warm golden tones. Condensation droplets on the glass, deep coffee tones, wisps of aromatic steam from the phin. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cà phê đen nóng",
+    "prompt": "Photorealistic commercial menu photograph of hot Vietnamese black coffee in a small white ceramic cup on a matching saucer, glossy dark coffee surface with light crema swirl, a small stainless steel spoon beside it. Eye-level centered close-up on a rustic wooden cafe table, blurred warm Vietnamese cafe interior in the background. Soft natural window light from the left, gentle steam rising from the cup. Rich brown tones, warm inviting mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cà phê sữa đá",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese iced milk coffee in a tall clear glass, thick sweetened condensed milk layer at the bottom blending upward into dark coffee over large ice cubes, a long spoon resting inside. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy Vietnamese cafe interior behind. Soft natural window light from the left with warm golden tones. Heavy condensation droplets, beautiful marbled layers of milk and coffee. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cà phê sữa nóng",
+    "prompt": "Photorealistic commercial menu photograph of hot Vietnamese milk coffee in a small clear glass cup, dark coffee swirling into creamy condensed milk at the bottom, served on a small wooden coaster. Eye-level close-up, centered, rustic wooden cafe table, blurred warm Vietnamese cafe interior in the background. Soft natural window light from the left, delicate steam rising. Warm caramel and brown gradient tones. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Bạc xỉu",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese bac xiu in a tall clear glass, mostly creamy milky white drink with a light coffee layer on top over ice cubes, gentle gradient from pale cream to soft tan. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy Vietnamese cafe interior behind. Soft natural window light from the left. Dense condensation droplets, smooth silky texture, mild sweet character visible in the pale layers. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cà phê trứng",
+    "prompt": "Photorealistic commercial menu photograph of Hanoi egg coffee, a small white ceramic cup with thick pale yellow egg custard foam topped with a dusting of cocoa powder, the cup sitting inside a bowl of hot water. Eye-level centered close-up on a rustic wooden cafe table, blurred traditional Hanoi cafe interior with warm lamps in the background. Soft warm side lighting, gentle steam. Silky custard texture, contrast of dark cup and golden foam. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cà phê muối",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese salt coffee in a short clear glass, dark coffee under a thick creamy salted foam layer with a light caramel drizzle on top, served over ice. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred modern Vietnamese cafe interior behind. Soft natural window light from the left. Condensation on the glass, beautiful contrast between the dark coffee and the fluffy pale foam crown. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cà phê dừa",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese coconut coffee in a tall glass, pale creamy coconut slush topped with dark coffee dripping down the sides, garnished with toasted coconut flakes and a small piece of fresh coconut on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred tropical Vietnamese cafe interior behind. Soft natural window light from the left. Frosty texture, condensation, creamy white and coffee brown contrast. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cà phê kem trứng muối",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese coffee with salted egg custard cream, dark iced coffee in a clear glass topped with a thick golden salted egg custard cream swirl dusted with light salted powder. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred trendy Vietnamese cafe interior behind. Soft natural window light from the left. Luxurious glossy golden cream texture over dark coffee, condensation droplets. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cà phê yogurt",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese yogurt coffee in a tall clear glass, thick white yogurt layer at the bottom under dark coffee swirls and ice cubes, topped with a spoonful of chewy fermented rice or granola. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred bright Vietnamese cafe interior behind. Soft natural window light from the left. Fresh contrast of white yogurt and dark coffee, condensation, clean appetizing look. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Cold brew cà phê",
+    "prompt": "Photorealistic commercial menu photograph of cold brew coffee in a tall slender glass, deep amber coffee over large crystal-clear ice cubes with a light crema foam head. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred minimalist Vietnamese specialty cafe interior behind. Soft natural window light from the left catching the amber tones. Large slow-melting ice cubes, glass condensation, smooth rich color gradient. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Việt"
+  },
+  {
+    "name": "Espresso",
+    "prompt": "Photorealistic commercial menu photograph of a double espresso in a small white ceramic cup on a saucer, thick golden-tiger crema on the surface, a tiny spoon beside. Eye-level close-up, centered, rustic wooden cafe table, blurred warm European-style Vietnamese cafe interior behind. Soft natural window light from the left, faint steam rising. Intense hazelnut-brown crema texture, elegant minimal composition. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Âu"
+  },
+  {
+    "name": "Americano đá",
+    "prompt": "Photorealistic commercial menu photograph of iced americano in a tall clear glass, dark espresso-based coffee over large ice cubes with a subtle crema layer on top. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy modern cafe interior behind. Soft natural window light from the left. Crisp condensation droplets, clean dark amber color, large crystal ice cubes. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Âu"
+  },
+  {
+    "name": "Cà phê latte",
+    "prompt": "Photorealistic commercial menu photograph of a hot cafe latte in a wide white ceramic cup with a delicate rosetta latte art pattern in microfoam, served on a saucer with a small spoon. Eye-level close-up, centered, rustic wooden cafe table, blurred warm cafe interior with plants in the background. Soft natural window light from the left, faint steam rising. Velvety milk foam texture, clean latte art lines. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Âu"
+  },
+  {
+    "name": "Cappuccino",
+    "prompt": "Photorealistic commercial menu photograph of a cappuccino in a white ceramic cup, thick dense milk foam dusted with cocoa powder in a heart pattern, on a saucer. Eye-level close-up, centered, rustic wooden cafe table, blurred warm cafe interior behind. Soft natural window light from the left, gentle steam. Fluffy thick foam texture, cocoa dusting detail, classic Italian cafe mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Âu"
+  },
+  {
+    "name": "Mocha",
+    "prompt": "Photorealistic commercial menu photograph of a cafe mocha in a tall clear glass, layers of chocolate and coffee topped with a swirl of whipped cream drizzled with chocolate sauce, chocolate shavings on top. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy cafe interior behind. Soft natural window light from the left. Glossy chocolate drizzle, whipped cream peaks, rich brown tones. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Âu"
+  },
+  {
+    "name": "Caramel macchiato",
+    "prompt": "Photorealistic commercial menu photograph of an iced caramel macchiato in a tall clear glass, layered vanilla milk at the bottom with espresso poured on top forming a gradient, finished with a caramel sauce crosshatch drizzle over the foam. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred modern cafe interior behind. Soft natural window light from the left. Glossy caramel drizzle, visible layering, condensation droplets. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Cà phê Âu"
+  },
+  {
+    "name": "Matcha latte đá",
+    "prompt": "Photorealistic commercial menu photograph of an iced matcha latte in a tall clear glass, vivid green matcha layered over creamy white milk with ice cubes, gentle gradient from white to bright green. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred zen Japanese-style cafe corner behind. Soft natural window light from the left. Fresh vibrant green color, silky milk layers, condensation droplets. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Matcha & Chocolate"
+  },
+  {
+    "name": "Chocolate nóng",
+    "prompt": "Photorealistic commercial menu photograph of hot chocolate in a large white ceramic mug, thick glossy chocolate topped with a generous swirl of whipped cream and chocolate shavings, on a saucer. Eye-level close-up, centered, rustic wooden cafe table, blurred warm cafe interior behind. Soft natural window light from the left, gentle steam rising. Rich dark chocolate color, creamy whipped cream texture, cozy winter mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Matcha & Chocolate"
+  },
+  {
+    "name": "Chocolate đá",
+    "prompt": "Photorealistic commercial menu photograph of iced chocolate in a tall clear glass, dark chocolate milk over ice cubes topped with whipped cream and a chocolate drizzle running down the inner wall. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy cafe interior behind. Soft natural window light from the left. Condensation droplets, glossy drizzle detail, deep chocolate tones. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Matcha & Chocolate"
+  },
+  {
+    "name": "Trà đào cam sả",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese peach orange lemongrass iced tea in a tall clear glass, amber peach tea with fresh peach slices, an orange slice and a bruised lemongrass stalk, ice cubes filling the glass. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred sunny Vietnamese cafe interior behind. Soft natural window light from the left. Glistening fruit slices, condensation droplets, bright refreshing golden-orange tones. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà vải",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese lychee iced tea in a tall clear glass, pale golden tea with peeled fresh lychee fruits and a sprig of mint, ice cubes. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred bright Vietnamese cafe interior behind. Soft natural window light from the left. Translucent juicy lychees, condensation, delicate pale gold color. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà chanh đá",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese iced lime tea in a short clear glass, golden-green tea with fresh lime wedges and crushed kumquats, ice cubes filling to the brim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred lively Vietnamese street cafe behind. Soft natural window light from the left. Fresh citrus slices, sparkling condensation, bright yellow-green freshness. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà tắc",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese kumquat tea in a short clear glass, amber tea with hand-crushed kumquats floating on top, their skins slightly bruised releasing oils, ice cubes. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred casual Vietnamese cafe behind. Soft natural window light from the left. Tiny bright orange kumquats, fresh citrus aroma visible, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà ô long cao sơn",
+    "prompt": "Photorealistic commercial menu photograph of Taiwanese high-mountain oolong tea served in a clear heatproof glass teapot and a small glass cup, golden-amber liquor with tightly rolled tea leaves unfurling, on a wooden tray. Eye-level close-up, centered, minimalist tea corner with a blurred warm cafe interior behind. Soft natural window light from the left, gentle steam rising from the cup. Crystal-clear amber tea color, elegant calm mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà atiso",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese artichoke tea in a clear glass, deep ruby-amber herbal tea over ice with a few dried artichoke petals, on a small wooden coaster. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred highland Dalat-style cafe interior behind. Soft natural window light from the left. Rich herbal red-gold color, condensation, healthy natural mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà gừng",
+    "prompt": "Photorealistic commercial menu photograph of hot ginger tea in a clear glass mug, warm amber tea with fresh ginger slices and a honey dipper drizzling honey, a slice of lemon on the rim. Eye-level close-up, centered, rustic wooden cafe table, blurred cozy warm cafe interior behind. Soft golden window light, visible steam rising. Spicy warm mood, glossy honey drizzle, fresh ginger texture. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà xoài",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese mango iced tea in a tall clear glass, orange-amber fruit tea with fresh mango cubes, a mango slice on the rim, ice cubes. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred bright Vietnamese cafe interior behind. Soft natural window light from the left. Juicy golden mango pieces, condensation, vibrant tropical orange tones. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà dâu",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese strawberry iced tea in a tall clear glass, pink-red fruit tea with fresh strawberry halves macerated at the bottom and a strawberry garnish on the rim, ice cubes. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred pastel Vietnamese cafe interior behind. Soft natural window light from the left. Glossy red strawberries, condensation, romantic pink tones. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà mãng cầu",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese soursop iced tea in a tall clear glass, creamy pale green tea with white soursop flesh pieces and dark shiny seeds visible, ice cubes. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred tropical Vietnamese cafe interior behind. Soft natural window light from the left. Creamy fibrous soursop texture, fresh green-white tones, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà & Trà trái cây"
+  },
+  {
+    "name": "Trà sữa trân châu",
+    "prompt": "Photorealistic commercial menu photograph of classic Vietnamese milk tea in a tall clear glass, creamy amber milk tea over a generous layer of glossy black tapioca pearls at the bottom, ice cubes, a wide paper straw. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred youthful Vietnamese bubble tea cafe behind. Soft natural window light from the left. Chewy glistening pearls, silky milk tea gradient, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà sữa"
+  },
+  {
+    "name": "Trà sữa trân châu đường đen",
+    "prompt": "Photorealistic commercial menu photograph of brown sugar boba milk tea in a tall clear glass, dramatic dark brown sugar syrup streaks painted down the inner wall, fresh milk poured over chewy golden-brown tapioca pearls, crushed ice. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred trendy Vietnamese tea shop behind. Soft natural window light from the left. Glossy caramel streaks, marbling effect, glistening pearls. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà sữa"
+  },
+  {
+    "name": "Trà sữa matcha",
+    "prompt": "Photorealistic commercial menu photograph of matcha milk tea in a tall clear glass, vivid green matcha layered over creamy milk with black tapioca pearls at the bottom, ice cubes. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred Japanese-inspired cafe corner behind. Soft natural window light from the left. Bright green and white gradient, glistening pearls, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà sữa"
+  },
+  {
+    "name": "Trà sữa khoai môn",
+    "prompt": "Photorealistic commercial menu photograph of taro milk tea in a tall clear glass, soft pastel lavender-purple taro milk tea over ice with chewy white pearl toppings, a small taro piece garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred pastel Vietnamese tea shop behind. Soft natural window light from the left. Dreamy purple gradient, creamy texture, condensation droplets. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà sữa"
+  },
+  {
+    "name": "Trà sữa sương sáo",
+    "prompt": "Photorealistic commercial menu photograph of grass jelly milk tea in a tall clear glass, creamy milk tea over glossy black grass jelly cubes and ice, gentle layering. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred casual Vietnamese tea shop behind. Soft natural window light from the left. Shiny jet-black jelly cubes against creamy tea, refreshing contrast, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Trà sữa"
+  },
+  {
+    "name": "Đá xay chocolate",
+    "prompt": "Photorealistic commercial menu photograph of a chocolate frappe in a tall clear glass, thick blended icy chocolate topped with a tall swirl of whipped cream and chocolate sauce drizzle, chocolate chips scattered. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy cafe interior behind. Soft natural window light from the left. Frosty blended texture, glossy drizzle, tall whipped cream peaks. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đá xay"
+  },
+  {
+    "name": "Đá xay matcha",
+    "prompt": "Photorealistic commercial menu photograph of a matcha frappe in a tall clear glass, thick blended icy green matcha topped with whipped cream and a light dusting of matcha powder, red bean garnish at the bottom. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred zen cafe corner behind. Soft natural window light from the left. Frosty vivid green texture, powder dusting detail, fresh and creamy. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đá xay"
+  },
+  {
+    "name": "Đá xay caramel",
+    "prompt": "Photorealistic commercial menu photograph of a caramel frappe in a tall clear glass, blended icy coffee topped with whipped cream and a generous glossy caramel sauce drizzle, caramel pieces on top. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred modern cafe interior behind. Soft natural window light from the left. Golden caramel drizzle detail, frosty coffee texture, whipped cream peaks. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đá xay"
+  },
+  {
+    "name": "Đá xay Oreo",
+    "prompt": "Photorealistic commercial menu photograph of a cookies-and-cream frappe in a tall clear glass, white blended ice cream drink speckled with crushed chocolate cookie pieces, topped with whipped cream, cookie crumbs and a whole sandwich cookie on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred playful cafe interior behind. Soft natural window light from the left. Black-and-white cookie speckle texture, frosty creamy look. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đá xay"
+  },
+  {
+    "name": "Đá xay dâu",
+    "prompt": "Photorealistic commercial menu photograph of a strawberry frappe in a tall clear glass, pink blended icy strawberry drink topped with whipped cream and a fresh strawberry on the rim, strawberry sauce drizzle inside the glass. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred pastel cafe interior behind. Soft natural window light from the left. Frosty pink texture, glossy red strawberry, sweet romantic mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đá xay"
+  },
+  {
+    "name": "Sinh tố bơ",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese avocado smoothie in a tall clear glass, thick pale-green creamy smoothie rising in a smooth crown above the rim, a drizzle of condensed milk on top, avocado slice garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred tropical Vietnamese cafe interior behind. Soft natural window light from the left. Dense velvety texture, fresh green color, creamy swirl detail. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sinh tố"
+  },
+  {
+    "name": "Sinh tố xoài",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese mango smoothie in a tall clear glass, thick bright-orange smoothie with a whipped crown, fresh mango cubes and a mango cheek garnish on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred tropical Vietnamese cafe interior behind. Soft natural window light from the left. Juicy golden mango texture, vivid orange color, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sinh tố"
+  },
+  {
+    "name": "Sinh tố dâu",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese strawberry smoothie in a tall clear glass, thick pink smoothie with a soft crown, fresh strawberry slices and a whole strawberry on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred pastel Vietnamese cafe interior behind. Soft natural window light from the left. Creamy pink texture, glossy red strawberries, fresh sweet mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sinh tố"
+  },
+  {
+    "name": "Sinh tố chuối",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese banana smoothie in a tall clear glass, thick cream-yellow smoothie with a smooth crown, a light dusting of cinnamon and fresh banana slices on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred warm Vietnamese cafe interior behind. Soft natural window light from the left. Velvety pale-yellow texture, fresh banana detail, comforting wholesome mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sinh tố"
+  },
+  {
+    "name": "Sinh tố mãng cầu",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese soursop smoothie in a tall clear glass, thick creamy white-green smoothie with soft fibrous soursop pulp visible, a green soursop leaf and flesh piece garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred tropical Vietnamese cafe interior behind. Soft natural window light from the left. Dense creamy texture, delicate pale green color, fresh tropical mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sinh tố"
+  },
+  {
+    "name": "Sinh tố sa pô chê",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese sapodilla smoothie in a tall clear glass, thick caramel-brown smoothie with a smooth crown, a slice of sapodilla fruit on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred nostalgic Vietnamese cafe interior behind. Soft natural window light from the left. Rich caramel-brown creamy texture, sweet malty character, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sinh tố"
+  },
+  {
+    "name": "Sinh tố chanh dây",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese passion fruit smoothie in a tall clear glass, bright yellow thick smoothie with visible passion fruit seeds swirling on top, half a passion fruit shell garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred sunny Vietnamese cafe interior behind. Soft natural window light from the left. Glistening seeds, vivid yellow color, tangy fresh energy. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sinh tố"
+  },
+  {
+    "name": "Nước ép cam",
+    "prompt": "Photorealistic commercial menu photograph of fresh orange juice in a tall clear glass, pure vibrant-orange juice with a light foam on top, a fresh orange half and thin orange wheel on the rim, ice cubes. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred bright Vietnamese cafe interior behind. Soft natural window light from the left glowing through the juice. Fresh pulp detail, condensation, sunny citrus color. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Nước ép"
+  },
+  {
+    "name": "Nước ép dưa hấu",
+    "prompt": "Photorealistic commercial menu photograph of fresh watermelon juice in a tall clear glass, vivid red-pink juice over ice, a small watermelon wedge on the rim and tiny black seeds visible in the garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred bright summer cafe interior behind. Soft natural window light from the left backlighting the juice. Juicy translucent red color, condensation, refreshing summer mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Nước ép"
+  },
+  {
+    "name": "Nước ép dứa",
+    "prompt": "Photorealistic commercial menu photograph of fresh pineapple juice in a tall clear glass, golden-yellow juice over ice with a pineapple wedge and green leaf crown garnish on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred tropical Vietnamese cafe interior behind. Soft natural window light from the left. Golden translucent juice, spiky pineapple texture, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Nước ép"
+  },
+  {
+    "name": "Nước ép táo",
+    "prompt": "Photorealistic commercial menu photograph of fresh apple juice in a tall clear glass, pale golden-green juice over ice with a thin apple slice fan on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred fresh green-toned cafe interior behind. Soft natural window light from the left. Crisp clean color, fresh apple texture, light and healthy mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Nước ép"
+  },
+  {
+    "name": "Nước ép dưa lưới",
+    "prompt": "Photorealistic commercial menu photograph of fresh cantaloupe melon juice in a tall clear glass, soft orange juice over ice with a cantaloupe ball skewer and melon slice on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred bright Vietnamese cafe interior behind. Soft natural window light from the left. Pale orange juicy color, melon netting texture on the garnish, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Nước ép"
+  },
+  {
+    "name": "Nước ép ổi",
+    "prompt": "Photorealistic commercial menu photograph of fresh guava juice in a tall clear glass, creamy pale pink-green guava juice over ice, a fresh guava slice and tiny mint sprig on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred lush green Vietnamese cafe interior behind. Soft natural window light from the left. Smooth creamy tropical texture, soft pink blush color, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Nước ép"
+  },
+  {
+    "name": "Nước ép nho",
+    "prompt": "Photorealistic commercial menu photograph of fresh grape juice in a tall clear glass, deep purple-red juice over ice with a small bunch of seedless grapes on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred elegant Vietnamese cafe interior behind. Soft natural window light from the left glowing through the rich purple. Glossy grape skins, deep jewel tone, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Nước ép"
+  },
+  {
+    "name": "Soda chanh",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese lime soda in a tall clear glass, sparkling soda over hand-crushed limes and fresh mint leaves, fine bubbles rising, crushed ice filling the glass. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred airy Vietnamese cafe interior behind. Soft natural window light from the left making the bubbles sparkle. Effervescent fizz detail, bright green lime, extreme freshness. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Soda & Mojito"
+  },
+  {
+    "name": "Soda dứa",
+    "prompt": "Photorealistic commercial menu photograph of pineapple soda in a tall clear glass, golden sparkling soda with pineapple syrup swirl at the bottom, a pineapple wedge garnish, crushed ice. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred tropical Vietnamese cafe interior behind. Soft natural window light from the left. Rising bubbles, golden gradient, tropical garnish detail. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Soda & Mojito"
+  },
+  {
+    "name": "Soda việt quất",
+    "prompt": "Photorealistic commercial menu photograph of blueberry soda in a tall clear glass, purple-blue syrup at the bottom blending upward into sparkling clear soda, fresh blueberries floating, crushed ice, a lemon wheel on the rim. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred modern Vietnamese cafe interior behind. Soft natural window light from the left. Jewel-purple gradient, floating berries, rising bubbles. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Soda & Mojito"
+  },
+  {
+    "name": "Mojito chanh bạc hà",
+    "prompt": "Photorealistic commercial menu photograph of a virgin mint lime mojito in a tall clear glass, muddled limes and fresh mint leaves under crushed ice with sparkling soda, a mint bouquet and lime wheel garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred garden-style Vietnamese cafe interior behind. Soft natural window light from the left. Vibrant green mint, fine fizz bubbles, frosted glass, cool refreshing mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Soda & Mojito"
+  },
+  {
+    "name": "Mojito dâu",
+    "prompt": "Photorealistic commercial menu photograph of a strawberry mojito in a tall clear glass, muddled strawberries and lime under crushed ice with sparkling soda, fresh mint and a strawberry fan garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred pastel Vietnamese cafe interior behind. Soft natural window light from the left. Pink-red gradient, glistening berry pieces, mint freshness, fine bubbles. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Soda & Mojito"
+  },
+  {
+    "name": "Sữa chua nha đam",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese aloe vera yogurt drink in a tall clear glass, creamy white yogurt drink with translucent crunchy aloe vera cubes and a light pandan aroma feel, crushed ice, pandan leaf garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred fresh green Vietnamese cafe interior behind. Soft natural window light from the left. Translucent aloe cubes glistening, creamy white texture, healthy fresh mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sữa chua & Kem"
+  },
+  {
+    "name": "Sữa chua chanh dây",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese passion fruit yogurt drink in a tall clear glass, creamy pale yogurt swirled with bright yellow passion fruit pulp and seeds on top, crushed ice, a mint sprig. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred bright Vietnamese cafe interior behind. Soft natural window light from the left. Glistening seeds over creamy white, tangy yellow-and-white contrast, condensation. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sữa chua & Kem"
+  },
+  {
+    "name": "Sữa chua dâu",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese strawberry yogurt drink in a tall clear glass, creamy pink yogurt drink with fresh strawberry slices and strawberry sauce layered at the bottom, crushed ice. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred pastel Vietnamese cafe interior behind. Soft natural window light from the left. Pink gradient layers, glossy strawberry pieces, sweet fresh mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sữa chua & Kem"
+  },
+  {
+    "name": "Kem dừa",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese coconut ice cream served in half a fresh coconut shell, three scoops of creamy white coconut ice cream topped with roasted peanuts and dried coconut flakes, a tiny paper umbrella and spoon. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred tropical Vietnamese cafe interior behind. Soft natural window light from the left. Coconut husk texture, creamy scoop detail, tropical vacation mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sữa chua & Kem"
+  },
+  {
+    "name": "Affogato",
+    "prompt": "Photorealistic commercial menu photograph of an affogato in a small clear glass, a scoop of vanilla ice cream with a shot of hot espresso being poured over it, dark coffee pooling around the melting cream, a small biscuit on the saucer. Eye-level close-up, centered, rustic wooden cafe table, blurred warm European-style cafe interior behind. Soft natural window light from the left, steam from the espresso. Dramatic pour moment, melting swirl of cream into dark coffee. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Sữa chua & Kem"
+  },
+  {
+    "name": "Croissant bơ tỏi",
+    "prompt": "Photorealistic commercial menu photograph of a golden garlic butter croissant on a small round wooden board, flaky laminated layers glazed with glossy garlic butter and sprinkled with finely chopped parsley and herbs, a small dish of dipping butter beside. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy Vietnamese bakery cafe interior behind. Soft natural window light from the left. Crisp golden flaky texture, glistening herb butter, fresh baked aroma feel. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Croissant bơ",
+    "prompt": "Photorealistic commercial menu photograph of a classic French butter croissant on a small ceramic plate, deep golden flaky laminated layers with visible crisp ridges, a light dusting of flour, torn corner revealing airy interior. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred warm bakery cafe interior behind. Soft natural window light from the left. Buttery flaky texture, golden caramelized crust, artisan bake mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Bánh mì que pa tê",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese banh mi que, two thin crispy baguette sticks filled with smooth liver pate, scattered pickled daikon and carrot strips and fresh cilantro, wrapped in brown paper on a small plate. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred old Saigon street corner visible through the window behind. Soft natural window light from the left. Crackly golden crust, rustic street-food charm, warm nostalgic mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Bánh mì thịt nướng",
+    "prompt": "Photorealistic commercial menu photograph of a Vietnamese grilled pork banh mi on a small wooden board, crusty baguette filled with caramelized grilled pork slices, pickled carrot and daikon, cucumber sticks, fresh cilantro and a drizzle of soy glaze, cut in half showing the filling. Eye-level close-up, centered, rustic wooden cafe table, blurred lively Vietnamese street cafe behind. Soft natural window light from the left. Charred juicy pork texture, vibrant pickle colors, hearty appetizing mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Bánh flan caramel",
+    "prompt": "Photorealistic commercial menu photograph of Vietnamese caramel flan on a small white ceramic plate, silky egg custard with a glossy amber caramel sauce pooling around it, a mint leaf on top, a small spoon lifting one edge showing the wobble. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred warm cozy cafe interior behind. Soft natural window light from the left. Silky trembling custard texture, glossy caramel sheen, gentle sweetness. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Bánh tart trứng",
+    "prompt": "Photorealistic commercial menu photograph of two Hong Kong style egg tarts on a small plate, golden flaky pastry shells filled with glossy wobbly egg custard with light caramel spots on top. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred warm Vietnamese bakery cafe interior behind. Soft natural window light from the left. Layered flaky pastry, silky custard surface with caramelized freckles, comforting bake mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Bánh donut",
+    "prompt": "Photorealistic commercial menu photograph of a ring donut with pastel pink strawberry glaze and colorful sprinkles on a small white plate, a bite taken out showing the fluffy interior, a second plain glazed donut beside. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred playful pastel cafe interior behind. Soft natural window light from the left. Glossy dripping glaze, cheerful sprinkle detail, soft airy dough. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Bánh brownie",
+    "prompt": "Photorealistic commercial menu photograph of fudgy chocolate brownie squares stacked on a small ceramic plate, crackly shiny top with a light cocoa dust, a warm molten center visible in the front square, a few chocolate chunks beside. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred dark moody cafe interior behind. Soft natural window light from the left. Dense fudgy texture, glossy crackled crust, rich chocolate tones. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Bánh tiramisu",
+    "prompt": "Photorealistic commercial menu photograph of a tiramisu slice on a small white plate, distinct layers of coffee-soaked ladyfingers and mascarpone cream with a thick dusting of cocoa powder on top, a mint leaf garnish. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred elegant Italian-style cafe corner behind. Soft natural window light from the left. Visible cream and coffee layers, velvety cocoa dust, refined dessert mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Bánh cheesecake",
+    "prompt": "Photorealistic commercial menu photograph of a New York cheesecake slice on a small plate, creamy pale-yellow filling on a golden crumb base, topped with glossy mixed berry compote dripping down one side. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred cozy cafe interior behind. Soft natural window light from the left. Silky dense cream texture, glossy berries, classic dessert elegance. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Khoai tây chiên",
+    "prompt": "Photorealistic commercial menu photograph of golden french fries in a small metal basket lined with paper, extra crispy with flaky salt and a sprinkle of chopped herbs, a small bowl of ketchup and a bowl of mayonnaise beside. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred casual cafe interior behind. Soft natural window light from the left. Crisp golden texture, light steam, snack-time comfort mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  },
+  {
+    "name": "Gà chiên giòn",
+    "prompt": "Photorealistic commercial menu photograph of crispy fried chicken bites piled on a small wooden board lined with paper, golden craggy crust with a light chili-salt dusting, lime wedges and a small bowl of sriracha mayo dip beside. 45-degree angle, centered close-up on a rustic wooden cafe table, blurred lively Vietnamese cafe interior behind. Soft natural window light from the left. Crunchy craggy golden crust, juicy look, finger-food sharing mood. Shallow depth of field, high resolution, 1:1 square aspect ratio.",
+    "category": "Đồ ăn nhẹ"
+  }
+]

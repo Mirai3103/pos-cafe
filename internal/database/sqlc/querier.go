@@ -52,8 +52,15 @@ type Querier interface {
 	// -- Tables --
 	CreateTable(ctx context.Context, arg CreateTableParams) (Table, error)
 	DeleteAllocations(ctx context.Context, ids []uuid.UUID) error
+	DeleteCategoryGroupExclusions(ctx context.Context, arg DeleteCategoryGroupExclusionsParams) ([]uuid.UUID, error)
+	DeleteCategoryModifierGroup(ctx context.Context, arg DeleteCategoryModifierGroupParams) error
 	DeleteDraftItem(ctx context.Context, id uuid.UUID) error
 	DeleteDraftItemModifierOptions(ctx context.Context, orderDraftItemID uuid.UUID) error
+	// Exclusion invariant (ADR-059): an exclusion exists only while the item's
+	// category provides the group.
+	DeleteItemExclusionsOutsideCategory(ctx context.Context, arg DeleteItemExclusionsOutsideCategoryParams) ([]uuid.UUID, error)
+	DeleteItemModifierGroup(ctx context.Context, arg DeleteItemModifierGroupParams) error
+	DeleteItemModifierGroupExclusion(ctx context.Context, arg DeleteItemModifierGroupExclusionParams) error
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
@@ -76,6 +83,8 @@ type Querier interface {
 	// never matches itself. A separate query rather than a nullable exclusion
 	// parameter keeps the add path's query untouched.
 	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
+	// -- Display Details (BA-1) --
+	GetActiveMenuItemIDByCode(ctx context.Context, arg GetActiveMenuItemIDByCodeParams) (uuid.UUID, error)
 	// The one active Shift (OPEN or CLOSING) for the current-Shift read. The
 	// active-Shift unique index permits at most one row in either state; the
 	// ordering and limit keep the query one-row by construction, matching
@@ -359,6 +368,8 @@ type Querier interface {
 	// carries CommittedItemIds rather than a positional Column2.
 	ListAllocationsForItems(ctx context.Context, arg ListAllocationsForItemsParams) ([]ListAllocationsForItemsRow, error)
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
+	ListCategoryGroupIDs(ctx context.Context, menuCategoryID uuid.UUID) ([]uuid.UUID, error)
+	ListCategoryIDsWithGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error)
 	ListCategoryModifierGroupsByCategory(ctx context.Context, menuCategoryID uuid.UUID) ([]ListCategoryModifierGroupsByCategoryRow, error)
 	ListCheckAllocationQuantities(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationQuantitiesRow, error)
 	ListCheckAllocations(ctx context.Context, checkID uuid.UUID) ([]ListCheckAllocationsRow, error)
@@ -437,6 +448,11 @@ type Querier interface {
 	// should not pay for them. See ADR-012.
 	ListEffectiveModifierGroupsForCommit(ctx context.Context, menuItemIds []uuid.UUID) ([]ListEffectiveModifierGroupsForCommitRow, error)
 	ListHeldTableAssignments(ctx context.Context, serviceSessionID uuid.UUID) ([]ListHeldTableAssignmentsRow, error)
+	// -- Replace-set Assignments (BA-1, ADR-059) --
+	ListItemDirectGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error)
+	ListItemExcludedGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error)
+	ListItemIDsExcludingGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error)
+	ListItemIDsWithDirectGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error)
 	ListItemModifierGroupExclusionsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupExclusionsByItemRow, error)
 	ListItemModifierGroupsByItem(ctx context.Context, menuItemID uuid.UUID) ([]ListItemModifierGroupsByItemRow, error)
 	ListMenuCategories(ctx context.Context) ([]MenuCategory, error)
@@ -568,6 +584,7 @@ type Querier interface {
 	// all four: the remedy is the same, and distinguishing them would leak state
 	// about Sessions the caller did not ask about.
 	LockEditableDraft(ctx context.Context, id uuid.UUID) (LockEditableDraftRow, error)
+	LockMenuCategoriesByIDs(ctx context.Context, ids []uuid.UUID) ([]LockMenuCategoriesByIDsRow, error)
 	// Locked FOR UPDATE so the Item cannot be retired between validation and
 	// write. Sales rows are always locked before Catalog rows, and
 	// internal/catalog never locks Sales rows, so no deadlock cycle exists.
@@ -582,6 +599,8 @@ type Querier interface {
 	// busiest path in the system, for no correctness gain. internal/catalog's
 	// mutations take FOR UPDATE and are still excluded. See ADR-015.
 	LockMenuItemSizesForCommit(ctx context.Context, sizeIds []uuid.UUID) ([]LockMenuItemSizesForCommitRow, error)
+	LockMenuItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]LockMenuItemsByIDsRow, error)
+	LockModifierGroupsByIDs(ctx context.Context, ids []uuid.UUID) ([]LockModifierGroupsByIDsRow, error)
 	// Step 3: the one open Sales Shift. FOR SHARE, because Cancellation only reads
 	// the Shift for settlement evidence and never writes Shift state; Shift
 	// closure takes FOR UPDATE and stays excluded for the whole transaction. No
@@ -697,6 +716,8 @@ type Querier interface {
 	MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error
 	MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error
 	MoveAllocationsToCheck(ctx context.Context, arg MoveAllocationsToCheckParams) error
+	// -- Structure (BA-1) --
+	MoveMenuItemToCategory(ctx context.Context, arg MoveMenuItemToCategoryParams) (MenuItem, error)
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
 	RaiseCheckCharge(ctx context.Context, arg RaiseCheckChargeParams) error
@@ -763,6 +784,7 @@ type Querier interface {
 	SetCheckCharge(ctx context.Context, arg SetCheckChargeParams) error
 	SetDraftItemQuantity(ctx context.Context, arg SetDraftItemQuantityParams) (SetDraftItemQuantityRow, error)
 	SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAvailabilityParams) (MenuItem, error)
+	SetMenuItemImageKey(ctx context.Context, arg SetMenuItemImageKeyParams) (MenuItem, error)
 	SetMenuItemSizeAvailability(ctx context.Context, arg SetMenuItemSizeAvailabilityParams) (MenuItemSize, error)
 	SetModifierOptionAvailability(ctx context.Context, arg SetModifierOptionAvailabilityParams) (ModifierOption, error)
 	SetOrderDraftCheckTarget(ctx context.Context, arg SetOrderDraftCheckTargetParams) error
@@ -804,6 +826,9 @@ type Querier interface {
 	UpdateAdjustedCheckCharge(ctx context.Context, arg UpdateAdjustedCheckChargeParams) error
 	// size_key and note_key are generated columns, so they follow the write.
 	UpdateDraftItemComposition(ctx context.Context, arg UpdateDraftItemCompositionParams) error
+	UpdateMenuCategoryDetails(ctx context.Context, arg UpdateMenuCategoryDetailsParams) (MenuCategory, error)
+	UpdateMenuItemDetails(ctx context.Context, arg UpdateMenuItemDetailsParams) (MenuItem, error)
+	UpdateModifierGroupBounds(ctx context.Context, arg UpdateModifierGroupBoundsParams) (ModifierGroup, error)
 	UpdateSessionActivity(ctx context.Context, arg UpdateSessionActivityParams) error
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
 	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error

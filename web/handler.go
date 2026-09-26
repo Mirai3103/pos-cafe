@@ -27,9 +27,10 @@ func RegisterFS(e *echo.Echo, fsys fs.FS) error {
 	handler := func(c echo.Context) error {
 		reqPath := path.Clean(c.Request().URL.Path)
 
-		// Never handle API, Swagger, or health check routes in SPA handler
+		// Never handle API, Swagger, media, or health check routes in SPA handler
 		if strings.HasPrefix(reqPath, "/api") ||
 			strings.HasPrefix(reqPath, "/swagger") ||
+			strings.HasPrefix(reqPath, "/media") ||
 			reqPath == "/health" {
 			return echo.ErrNotFound
 		}

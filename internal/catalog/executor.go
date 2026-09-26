@@ -336,6 +336,17 @@ func ExecuteRead[T any](ctx context.Context, r *Runner, actor Actor,
 	requiredCapability string,
 	fn func(*sqlc.Queries) (T, error),
 ) (T, error) {
+	return ExecuteReadWithCapabilities(ctx, r, actor, requiredCapability, func(q *sqlc.Queries, _ []string) (T, error) {
+		return fn(q)
+	})
+}
+
+// ExecuteReadWithCapabilities is ExecuteRead for projections whose fields
+// depend on the caller's capabilities (ADR-061).
+func ExecuteReadWithCapabilities[T any](ctx context.Context, r *Runner, actor Actor,
+	requiredCapability string,
+	fn func(q *sqlc.Queries, caps []string) (T, error),
+) (T, error) {
 	var zero T
 
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
@@ -355,7 +366,7 @@ func ExecuteRead[T any](ctx context.Context, r *Runner, actor Actor,
 		return zero, err
 	}
 
-	result, err := fn(q)
+	result, err := fn(q, caps)
 	if err != nil {
 		return zero, err
 	}

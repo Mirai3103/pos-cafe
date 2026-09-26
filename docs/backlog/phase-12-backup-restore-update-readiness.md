@@ -52,6 +52,8 @@ Everything else is new, and most of it lives outside the Go module.
 - [ ] Recovery covers authoritative business data, required runtime configuration,
       and application-version identity without placing readable secrets in ordinary
       backup contents.
+- [ ] Backup and restore include MEDIA_DIR (catalog images, ADR-057) together with
+      the database, and a scheduled job removes image files no Menu Item references.
 - [ ] A production update requires approval, a verified pre-update backup, compatible
       migrations, and a recoverable preceding application version.
 - [ ] Failed essential post-update checks trigger same-window rollback or restore

@@ -13,6 +13,7 @@ import (
 var (
 	ErrNotFound                     = errors.New("catalog entity not found")
 	ErrNameConflict                 = errors.New("catalog name conflict")
+	ErrCodeConflict                 = errors.New("catalog code conflict")
 	ErrRequestConflict              = errors.New("request conflict")
 	ErrInvalidPricingConfiguration  = errors.New("invalid pricing configuration")
 	ErrInvalidModifierConfiguration = errors.New("invalid modifier configuration")
@@ -38,6 +39,9 @@ func MapDBError(err error) error {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505": // unique_violation
+			if pgErr.ConstraintName == "menu_items_active_code_key" {
+				return fmt.Errorf("%w: %s", ErrCodeConflict, pgErr.Detail)
+			}
 			msg := pgErr.Detail
 			if msg == "" {
 				msg = pgErr.Message
@@ -66,6 +70,8 @@ func MapHTTPError(err error) error {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		return response.NewCodedError(http.StatusNotFound, "CATALOG_NOT_FOUND", err.Error(), err)
+	case errors.Is(err, ErrCodeConflict):
+		return response.NewCodedError(http.StatusConflict, "CATALOG_CODE_CONFLICT", err.Error(), err)
 	case errors.Is(err, ErrNameConflict):
 		return response.NewCodedError(http.StatusConflict, "CATALOG_NAME_CONFLICT", err.Error(), err)
 	case errors.Is(err, ErrRequestConflict):
@@ -90,6 +96,10 @@ func MapHTTPError(err error) error {
 		return response.NewCodedError(http.StatusUnauthorized, "UNAUTHORIZED", err.Error(), err)
 	case errors.Is(err, ErrInvalidStoredResult):
 		return response.NewCodedError(http.StatusInternalServerError, "INVALID_STORED_RESULT", "an unexpected error occurred", err)
+	case errors.Is(err, ErrInvalidImage):
+		return response.NewCodedError(http.StatusBadRequest, "INVALID_IMAGE", err.Error(), err)
+	case errors.Is(err, ErrImageTooLarge):
+		return response.NewCodedError(http.StatusRequestEntityTooLarge, "IMAGE_TOO_LARGE", err.Error(), err)
 	case errors.Is(err, response.ErrInvalid):
 		return response.NewCodedError(http.StatusBadRequest, "INVALID_INPUT", err.Error(), err)
 	default:

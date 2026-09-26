@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
@@ -322,19 +323,28 @@ func TestCashMovementPinNeverPersisted(t *testing.T) {
 	f := newShiftFixture(t)
 	ctx := context.Background()
 
+	// The PIN must reach neither the audit trail nor the idempotency record.
+	// Both tables accumulate rows across the package (truncateShiftTables
+	// leaves them alone), and UUID/hash payloads are hex, so an unscooped
+	// digit-only LIKE pattern collides with unrelated rows at random. Scan
+	// only what this test writes.
+	before := time.Now().UTC().Add(-time.Second)
+
 	_, _, err := f.Movement.Handle(ctx, f.Cashier.actor(),
 		f.command(shift.MethodPayOut, shift.ReasonSafeDrop, 50000, nil))
 	require.NoError(t, err)
 
-	// The PIN must reach neither the audit trail nor the idempotency record.
 	var auditHits int
 	require.NoError(t, f.DB.QueryRow(
-		`SELECT count(*) FROM audit_events WHERE details::text LIKE '%8642%'`).Scan(&auditHits))
+		`SELECT count(*) FROM audit_events
+		 WHERE occurred_at >= $1 AND details::text LIKE '%8642%'`, before).Scan(&auditHits))
 	assert.Equal(t, 0, auditHits)
 
 	var idempotencyHits int
 	require.NoError(t, f.DB.QueryRow(
 		`SELECT count(*) FROM idempotency_keys
-		 WHERE response_body::text LIKE '%8642%' OR request_hash LIKE '%8642%'`).Scan(&idempotencyHits))
+		 WHERE created_at >= $1
+		   AND (response_body::text LIKE '%8642%' OR request_hash LIKE '%8642%')`,
+		before).Scan(&idempotencyHits))
 	assert.Equal(t, 0, idempotencyHits)
 }

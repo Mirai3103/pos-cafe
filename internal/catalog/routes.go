@@ -21,6 +21,13 @@ type Slices struct {
 	RepriceItem                       *RepriceItemHandler
 	SetItemAvailability               *SetItemAvailabilityHandler
 	RetireItem                        *RetireItemHandler
+	SetItemDetails                    *SetItemDetailsHandler
+	SetCategoryDetails                *SetCategoryDetailsHandler
+	MoveItemCategory                  *MoveItemCategoryHandler
+	AddSize                           *AddSizeHandler
+	AddModifierOption                 *AddModifierOptionHandler
+	SetItemImage                      *SetItemImageHandler
+	ClearItemImage                    *ClearItemImageHandler
 	RenameSize                        *RenameSizeHandler
 	RepriceSize                       *RepriceSizeHandler
 	SetSizeAvailability               *SetSizeAvailabilityHandler
@@ -28,6 +35,7 @@ type Slices struct {
 	CreateModifierGroup               *CreateModifierGroupHandler
 	RenameModifierGroup               *RenameModifierGroupHandler
 	SetModifierGroupDefaults          *SetModifierGroupDefaultsHandler
+	SetSelectionRule                  *SetSelectionRuleHandler
 	RetireModifierGroup               *RetireModifierGroupHandler
 	RenameModifierOption              *RenameModifierOptionHandler
 	RepriceModifierOption             *RepriceModifierOptionHandler
@@ -37,6 +45,9 @@ type Slices struct {
 	AttachItemModifierGroup           *AttachItemModifierGroupHandler
 	AttachCategoryModifierGroup       *AttachCategoryModifierGroupHandler
 	ExcludeItemInheritedModifierGroup *ExcludeInheritedModifierGroupHandler
+	ReplaceItemModifierGroups         *ReplaceItemModifierGroupsHandler
+	ReplaceCategoryModifierGroups     *ReplaceCategoryModifierGroupsHandler
+	ReplaceGroupAssignments           *ReplaceGroupAssignmentsHandler
 	SellableMenu                      *SellableMenuHandler
 	ManagementMenu                    *ManagementMenuHandler
 	AvailabilityMenu                  *AvailabilityMenuHandler
@@ -44,7 +55,7 @@ type Slices struct {
 	AuditEvents                       *AuditEventsHandler
 }
 
-func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
+func NewSlices(db *sql.DB, queries *sqlc.Queries, media *MediaStore) *Slices {
 	runner := NewRunner(db, queries)
 	return &Slices{
 		Runner:                            runner,
@@ -58,6 +69,13 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		RepriceItem:                       NewRepriceItemHandler(runner),
 		SetItemAvailability:               NewSetItemAvailabilityHandler(runner),
 		RetireItem:                        NewRetireItemHandler(runner),
+		SetItemDetails:                    NewSetItemDetailsHandler(runner),
+		SetCategoryDetails:                NewSetCategoryDetailsHandler(runner),
+		MoveItemCategory:                  NewMoveItemCategoryHandler(runner),
+		AddSize:                           NewAddSizeHandler(runner),
+		AddModifierOption:                 NewAddModifierOptionHandler(runner),
+		SetItemImage:                      NewSetItemImageHandler(runner, media),
+		ClearItemImage:                    NewClearItemImageHandler(runner),
 		RenameSize:                        NewRenameSizeHandler(runner),
 		RepriceSize:                       NewRepriceSizeHandler(runner),
 		SetSizeAvailability:               NewSetSizeAvailabilityHandler(runner),
@@ -65,6 +83,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		CreateModifierGroup:               NewCreateModifierGroupHandler(runner),
 		RenameModifierGroup:               NewRenameModifierGroupHandler(runner),
 		SetModifierGroupDefaults:          NewSetModifierGroupDefaultsHandler(runner),
+		SetSelectionRule:                  NewSetSelectionRuleHandler(runner),
 		RetireModifierGroup:               NewRetireModifierGroupHandler(runner),
 		RenameModifierOption:              NewRenameModifierOptionHandler(runner),
 		RepriceModifierOption:             NewRepriceModifierOptionHandler(runner),
@@ -74,6 +93,9 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		AttachItemModifierGroup:           NewAttachItemModifierGroupHandler(runner),
 		AttachCategoryModifierGroup:       NewAttachCategoryModifierGroupHandler(runner),
 		ExcludeItemInheritedModifierGroup: NewExcludeInheritedModifierGroupHandler(runner),
+		ReplaceItemModifierGroups:         NewReplaceItemModifierGroupsHandler(runner),
+		ReplaceCategoryModifierGroups:     NewReplaceCategoryModifierGroupsHandler(runner),
+		ReplaceGroupAssignments:           NewReplaceGroupAssignmentsHandler(runner),
 		SellableMenu:                      NewSellableMenuHandler(runner),
 		ManagementMenu:                    NewManagementMenuHandler(runner),
 		AvailabilityMenu:                  NewAvailabilityMenuHandler(runner),
@@ -106,6 +128,17 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	catalog.PATCH("/items/:item_id/availability", s.handleSetItemAvailability, authn.RequireCapability(CapManageAvailability))
 	catalog.POST("/items/:item_id/retirement", s.handleRetireItem, authn.RequireCapability(CapAdministerStructure))
 
+	// Display details (BA-1)
+	catalog.PATCH("/items/:item_id/details", s.handleSetItemDetails, authn.RequireCapability(CapAdministerStructure))
+	catalog.PATCH("/categories/:category_id/details", s.handleSetCategoryDetails, authn.RequireCapability(CapAdministerStructure))
+	catalog.PUT("/items/:item_id/image", s.handleSetItemImage, authn.RequireCapability(CapAdministerStructure))
+	catalog.DELETE("/items/:item_id/image", s.handleClearItemImage, authn.RequireCapability(CapAdministerStructure))
+
+	// Structure (BA-1)
+	catalog.PATCH("/items/:item_id/category", s.handleMoveItemCategory, authn.RequireCapability(CapAdministerStructure))
+	catalog.POST("/items/:item_id/sizes", s.handleAddSize, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))
+	catalog.POST("/modifier-groups/:group_id/options", s.handleAddModifierOption, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))
+
 	// Sizes
 	catalog.PATCH("/sizes/:size_id/name", s.handleRenameSize, authn.RequireCapability(CapAdministerStructure))
 	catalog.PATCH("/sizes/:size_id/price", s.handleRepriceSize, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))
@@ -116,6 +149,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	catalog.POST("/modifier-groups", s.handleCreateModifierGroup, authn.RequireCapability(CapAdministerStructure), authn.RequireCapability(CapChangePrice))
 	catalog.PATCH("/modifier-groups/:group_id/name", s.handleRenameModifierGroup, authn.RequireCapability(CapAdministerStructure))
 	catalog.PUT("/modifier-groups/:group_id/defaults", s.handleSetModifierGroupDefaults, authn.RequireCapability(CapAdministerStructure))
+	catalog.PUT("/modifier-groups/:group_id/selection-rule", s.handleSetSelectionRule, authn.RequireCapability(CapAdministerStructure))
 	catalog.POST("/modifier-groups/:group_id/retirement", s.handleRetireModifierGroup, authn.RequireCapability(CapAdministerStructure))
 
 	// Modifier Options
@@ -127,5 +161,8 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	// Assignments
 	catalog.POST("/items/:item_id/modifier-groups/:group_id", s.handleAttachItemModifierGroup, authn.RequireCapability(CapAdministerStructure))
 	catalog.POST("/categories/:category_id/modifier-groups/:group_id", s.handleAttachCategoryModifierGroup, authn.RequireCapability(CapAdministerStructure))
+	catalog.PUT("/items/:item_id/modifier-groups", s.handleReplaceItemModifierGroups, authn.RequireCapability(CapAdministerStructure))
+	catalog.PUT("/categories/:category_id/modifier-groups", s.handleReplaceCategoryModifierGroups, authn.RequireCapability(CapAdministerStructure))
+	catalog.PUT("/modifier-groups/:group_id/assignments", s.handleReplaceGroupAssignments, authn.RequireCapability(CapAdministerStructure))
 	catalog.POST("/items/:item_id/inherited-modifier-group-exclusions/:group_id", s.handleExcludeInheritedModifierGroup, authn.RequireCapability(CapAdministerStructure))
 }

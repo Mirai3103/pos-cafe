@@ -791,3 +791,54 @@ CREATE TABLE idempotency_keys (
 * The header hides every navigation entry whose capabilities the session lacks. `/history` stays visible until slice 8 guards it.
 * This supersedes ADR-054's line "`/settings` requires `staff.administer`"; ADR-054's `/no-access` rule is unchanged.
 * **Consequences:** A Barista reaches "Món tạm hết" from the header. Slices 9b and 9c add tabs by appending to `SETTINGS_TABS`, without touching the layout guard.
+
+## ADR-057: Catalog images are content-addressed files under MEDIA_DIR, served unauthenticated at /media
+
+* **Decision Date:** 2026-09-29
+* **Status:** Accepted
+* **Context:** The menu screens show an image per Menu Item. Phase 11 forbids an Internet dependency; Phase 12 must back everything up.
+* **Decision:**
+* `PUT /catalog/items/{item_id}/image` stores the file under `MEDIA_DIR/catalog/` named `sha256 + ext` (`.jpg`, `.png`, `.webp`), written and renamed into place before the database transaction begins. A rolled-back transaction leaves an unreferenced file, never a reference to a missing file.
+* `GET /media/catalog/{key}` is served without authentication because an `<img>` tag sends no bearer token and the hash cannot be guessed. Projections return a relative `image_url`, so the URL works on any LAN host name.
+* **Rejected:** bytes in PostgreSQL (heavier database and backups), external URLs (break offline).
+* **Consequences:** Backups must include `MEDIA_DIR`; unreferenced files accumulate until a cleanup job exists.
+
+## ADR-058: Menu display fields are non-commercial
+
+* **Decision Date:** 2026-09-29
+* **Status:** Accepted
+* **Context:** The prototype's admin forms edit a Menu Item's code, badge, description, and image and a category's icon and display order. The catalog's commercial facts need a fresh Manager PIN and are snapshotted into Committed Items; treating the display fields the same would make every typo a financial ceremony.
+* **Decision:**
+* Code, badge, description, image, icon, and display order are edited in place, need no Manager Approval, and are not snapshotted into Committed Items. They still go through the command pipeline: request identity, idempotency, and an Audit Event (ADR-048).
+* Code is optional; the web derives one from the name when it is empty, so the backend holds no Vietnamese word-splitting logic. Badge is a closed enum.
+* **Consequences:** A Manager can fix a typo or reorder the menu mid-service without a PIN, and the audit trail still records who changed what. Commit is unaffected: the fields change how the menu looks, never what is sold or what it costs.
+
+## ADR-059: Modifier assignments have replace-set commands, and an exclusion exists only while the item's category provides the group
+
+* **Decision Date:** 2026-09-29
+* **Status:** Accepted
+* **Context:** The prototype's Batch Linker sets one Modifier Group's assignments in bulk, and its forms detach a group by omission. The catalog had only attach commands, with no way to detach or to lift an inherited-group exclusion, and nothing kept an exclusion row meaningful when its category stopped providing the group.
+* **Decision:**
+* `PUT /catalog/items/{item_id}/modifier-groups`, `PUT /catalog/categories/{category_id}/modifier-groups`, and `PUT /catalog/modifier-groups/{group_id}/assignments` each replace a whole set atomically, record one Audit Event listing added and removed, and treat an identical set as a successful no-op. Detach is expressed by omitting an id.
+* An exclusion row exists only while the item's category provides that group. Detaching a group from a category or moving an item deletes orphaned exclusions in the same transaction and lists them in the audit. Adding an item that excludes a group through the group-centric command is rejected; the caller lifts the exclusion with the item-centric command first.
+* **Consequences:** An item's effective modifier set is always consistent with its category; no read path has to filter orphaned exclusions. "Direct" and "excluded" never mean both at once for one item and group.
+
+## ADR-060: Pricing mode is fixed at item creation
+
+* **Decision Date:** 2026-09-29
+* **Status:** Accepted
+* **Context:** The prototype's item form hides the price-type toggle when editing, implying the mode never changes. A conversion would have to decide what happens to Order Drafts holding the item, whose Committed Items are immutable snapshots.
+* **Decision:**
+* A sized item gains Sizes; a single-price item never does. Adding a Size to an existing item is valid only for a sized item.
+* **Rejected:** a conversion command, which needs rules for Order Drafts holding the item.
+* **Consequences:** The item form can branch on a fact that never changes; the web hides the toggle when editing.
+
+## ADR-061: The availability projection returns prices only to callers holding `catalog.view_prices`
+
+* **Decision Date:** 2026-09-29
+* **Status:** Accepted
+* **Context:** The availability capability `catalog.manage_availability` is held by Barista, who lacks `catalog.view_prices`. The availability cards must show a price, so the design had to decide whether a session without the price capability sees one.
+* **Decision:**
+* `GET /catalog/menu/availability` returns `price_vnd` and `surcharge_vnd` only when the caller holds `catalog.view_prices`, as `omitempty` pointer fields: a caller without the capability receives the fields absent, not zeroed. For a sized item `price_vnd` is the lowest price among its non-retired sizes.
+* **Rejected:** prices for everyone, which would hollow out the capability.
+* **Consequences:** Granting `catalog.view_prices` to another role widens visibility without an API change; the web falls back to "—" when the price is absent.

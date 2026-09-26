@@ -1,6 +1,6 @@
 # Follow-up: catalog fields the availability cards mock today
 
-**Status:** ready-for-design
+**Status:** completed by backend alignment BA-1 ([spec](../superpowers/specs/2026-09-29-backend-alignment-ba1-catalog-design.md))
 **Blocked by:** none
 **Source:** Web slice 9a UAT feedback (2026-09-25): the "Kho & Món Tạm Hết" tab must
 match `design-system/pos-cafe/pages/settings.html` first; fields the backend lacks are
@@ -17,11 +17,11 @@ API. Today three of them do not.
 
 ## Acceptance criteria
 
-- [ ] `GET /catalog/menu/availability` returns image URL and price (and code, if stored)
+- [x] `GET /catalog/menu/availability` returns image URL and price (and code, if stored)
       for Menu Items, and price for Modifier Options, per the decisions above.
-- [ ] `web/src/features/settings/lib/availability-mock.ts` is deleted, and
+- [x] `web/src/features/settings/lib/availability-mock.ts` is deleted, and
       `availability-cards.ts` reads those fields from the response.
-- [ ] Price visibility for a session without `catalog.view_prices` follows the decision
+- [x] Price visibility for a session without `catalog.view_prices` follows the decision
       recorded in `spec/decisions.md`.
 
 ## Already present

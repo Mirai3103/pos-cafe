@@ -152,6 +152,8 @@ type MenuCategory struct {
 	RetirementReason sql.NullString `json:"retirement_reason"`
 	RetirementNote   sql.NullString `json:"retirement_note"`
 	UpdatedAt        time.Time      `json:"updated_at"`
+	Icon             sql.NullString `json:"icon"`
+	DisplayOrder     int32          `json:"display_order"`
 }
 
 type MenuItem struct {
@@ -166,6 +168,11 @@ type MenuItem struct {
 	RetirementNote   sql.NullString `json:"retirement_note"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
+	Code             sql.NullString `json:"code"`
+	NormalizedCode   sql.NullString `json:"normalized_code"`
+	Badge            sql.NullString `json:"badge"`
+	Description      sql.NullString `json:"description"`
+	ImageKey         sql.NullString `json:"image_key"`
 }
 
 type MenuItemSize struct {

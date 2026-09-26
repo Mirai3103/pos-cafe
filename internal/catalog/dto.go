@@ -296,6 +296,9 @@ type SellableItemResponse struct {
 	ID             uuid.UUID                       `json:"id"`
 	CategoryID     uuid.UUID                       `json:"category_id"`
 	Name           string                          `json:"name"`
+	Code           *string                         `json:"code"`
+	Badge          *string                         `json:"badge"`
+	ImageURL       *string                         `json:"image_url"`
 	PriceVND       *int64                          `json:"price_vnd,omitempty"`
 	Sizes          []SellableSizeResponse          `json:"sizes,omitempty"`
 	ModifierGroups []SellableModifierGroupResponse `json:"modifier_groups,omitempty"`
@@ -305,6 +308,7 @@ type SellableItemResponse struct {
 type SellableCategoryResponse struct {
 	ID    uuid.UUID              `json:"id"`
 	Name  string                 `json:"name"`
+	Icon  *string                `json:"icon"`
 	Items []SellableItemResponse `json:"items"`
 }
 
@@ -360,6 +364,10 @@ type ManagementItemResponse struct {
 	ID                       uuid.UUID                         `json:"id"`
 	CategoryID               uuid.UUID                         `json:"category_id"`
 	Name                     string                            `json:"name"`
+	Code                     *string                           `json:"code"`
+	Badge                    *string                           `json:"badge"`
+	Description              *string                           `json:"description"`
+	ImageURL                 *string                           `json:"image_url"`
 	PriceVND                 *int64                            `json:"price_vnd,omitempty"`
 	Available                bool                              `json:"available"`
 	Retired                  bool                              `json:"retired"`
@@ -376,6 +384,8 @@ type ManagementItemResponse struct {
 type ManagementCategoryResponse struct {
 	ID               uuid.UUID                `json:"id"`
 	Name             string                   `json:"name"`
+	Icon             *string                  `json:"icon"`
+	DisplayOrder     int32                    `json:"display_order"`
 	Retired          bool                     `json:"retired"`
 	RetiredAt        *time.Time               `json:"retired_at,omitempty"`
 	RetirementReason *string                  `json:"retirement_reason,omitempty"`
@@ -393,9 +403,11 @@ type ManagementMenuResponse struct {
 
 // AvailabilityModifierOptionResponse represents an option in the availability projection.
 type AvailabilityModifierOptionResponse struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Available bool      `json:"available"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	// SurchargeVND is present only for callers holding catalog.view_prices (ADR-061).
+	SurchargeVND *int64 `json:"surcharge_vnd,omitempty"`
+	Available    bool   `json:"available"`
 }
 
 // AvailabilityModifierGroupResponse represents a modifier group in the availability projection.
@@ -416,9 +428,14 @@ type AvailabilitySizeResponse struct {
 
 // AvailabilityItemResponse represents an item in the availability projection.
 type AvailabilityItemResponse struct {
-	ID             uuid.UUID                           `json:"id"`
-	CategoryID     uuid.UUID                           `json:"category_id"`
-	Name           string                              `json:"name"`
+	ID         uuid.UUID `json:"id"`
+	CategoryID uuid.UUID `json:"category_id"`
+	Name       string    `json:"name"`
+	Code       *string   `json:"code"`
+	ImageURL   *string   `json:"image_url"`
+	// PriceVND is the item price, or its lowest non-retired Size price. Present
+	// only for callers holding catalog.view_prices (ADR-061).
+	PriceVND       *int64                              `json:"price_vnd,omitempty"`
 	Available      bool                                `json:"available"`
 	Sizes          []AvailabilitySizeResponse          `json:"sizes,omitempty"`
 	ModifierGroups []AvailabilityModifierGroupResponse `json:"modifier_groups,omitempty"`
@@ -428,10 +445,11 @@ type AvailabilityItemResponse struct {
 type AvailabilityCategoryResponse struct {
 	ID    uuid.UUID                  `json:"id"`
 	Name  string                     `json:"name"`
+	Icon  *string                    `json:"icon"`
 	Items []AvailabilityItemResponse `json:"items"`
 }
 
-// AvailabilityMenuResponse is the price-free projection for managing availability.
+// AvailabilityMenuResponse is the availability projection; prices only with catalog.view_prices.
 type AvailabilityMenuResponse struct {
 	Categories []AvailabilityCategoryResponse `json:"categories"`
 }
@@ -522,4 +540,255 @@ type SetModifierGroupDefaultsRequest struct {
 // MutationRequest carries only the request ID for parameter-free mutation routes.
 type MutationRequest struct {
 	RequestID uuid.UUID `json:"request_id"`
+}
+
+// === Display Details (BA-1) ===
+
+// PresentString records whether a JSON key was present, so a missing key and
+// an explicit null are told apart.
+type PresentString struct {
+	Present bool
+	Value   *string
+}
+
+// UnmarshalJSON marks the key present; null leaves Value nil.
+func (p *PresentString) UnmarshalJSON(b []byte) error {
+	p.Present = true
+	if string(b) == "null" {
+		p.Value = nil
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	p.Value = &s
+	return nil
+}
+
+// SetItemDetailsRequest replaces all three display fields. Every key must be
+// present; null clears.
+type SetItemDetailsRequest struct {
+	RequestID   uuid.UUID     `json:"request_id"`
+	Code        PresentString `json:"code" swaggertype:"string" extensions:"x-nullable"`
+	Badge       PresentString `json:"badge" swaggertype:"string" enums:"BEST_SELLER,HOT,NEW,SIGNATURE,CHEF_PICK" extensions:"x-nullable"`
+	Description PresentString `json:"description" swaggertype:"string" extensions:"x-nullable"`
+}
+
+// SetItemDetailsCommand carries the parameters for setting item display fields.
+type SetItemDetailsCommand struct {
+	RequestID   uuid.UUID
+	ItemID      uuid.UUID
+	Code        *string
+	Badge       *string
+	Description *string
+}
+
+// ItemDetailsResponse is an item's display fields.
+type ItemDetailsResponse struct {
+	ItemID      uuid.UUID `json:"item_id"`
+	Code        *string   `json:"code"`
+	Badge       *string   `json:"badge"`
+	Description *string   `json:"description"`
+}
+
+// SetCategoryDetailsRequest sets a category's icon and display order.
+type SetCategoryDetailsRequest struct {
+	RequestID    uuid.UUID `json:"request_id"`
+	Icon         *string   `json:"icon"`
+	DisplayOrder int32     `json:"display_order"`
+}
+
+// SetCategoryDetailsCommand carries the parameters for setting category display fields.
+type SetCategoryDetailsCommand struct {
+	RequestID    uuid.UUID
+	CategoryID   uuid.UUID
+	Icon         *string
+	DisplayOrder int32
+}
+
+// CategoryDetailsResponse is a category's display fields.
+type CategoryDetailsResponse struct {
+	CategoryID   uuid.UUID `json:"category_id"`
+	Icon         *string   `json:"icon"`
+	DisplayOrder int32     `json:"display_order"`
+}
+
+// SetItemImageCommand carries the uploaded bytes for an item image.
+type SetItemImageCommand struct {
+	RequestID uuid.UUID
+	ItemID    uuid.UUID
+	Data      []byte
+}
+
+// ClearItemImageCommand removes an item's image.
+type ClearItemImageCommand struct {
+	RequestID uuid.UUID
+	ItemID    uuid.UUID
+}
+
+// ItemImageResponse is an item's image URL, or null.
+type ItemImageResponse struct {
+	ItemID   uuid.UUID `json:"item_id"`
+	ImageURL *string   `json:"image_url"`
+}
+
+// === Structure (BA-1) ===
+
+// MoveItemCategoryRequest moves an item to another category.
+type MoveItemCategoryRequest struct {
+	RequestID  uuid.UUID `json:"request_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+// MoveItemCategoryCommand carries the parameters for moving an item.
+type MoveItemCategoryCommand struct {
+	RequestID  uuid.UUID
+	ItemID     uuid.UUID
+	CategoryID uuid.UUID
+}
+
+// ItemCategoryResponse reports an item's category and the exclusions the move dropped.
+type ItemCategoryResponse struct {
+	ItemID                   uuid.UUID   `json:"item_id"`
+	CategoryID               uuid.UUID   `json:"category_id"`
+	RemovedExclusionGroupIDs []uuid.UUID `json:"removed_exclusion_group_ids"`
+}
+
+// AddSizeRequest adds a Size to a sized item.
+type AddSizeRequest struct {
+	RequestID  uuid.UUID `json:"request_id"`
+	Name       string    `json:"name"`
+	PriceVND   int64     `json:"price_vnd"`
+	ManagerPIN string    `json:"manager_pin"`
+}
+
+// AddSizeCommand carries the parameters for adding a Size.
+type AddSizeCommand struct {
+	RequestID  uuid.UUID
+	ItemID     uuid.UUID
+	Name       string
+	PriceVND   int64
+	ManagerPIN string
+}
+
+// AddModifierOptionRequest adds an Option to a modifier group.
+type AddModifierOptionRequest struct {
+	RequestID    uuid.UUID `json:"request_id"`
+	Name         string    `json:"name"`
+	SurchargeVND int64     `json:"surcharge_vnd"`
+	ManagerPIN   string    `json:"manager_pin"`
+}
+
+// AddModifierOptionCommand carries the parameters for adding an Option.
+type AddModifierOptionCommand struct {
+	RequestID    uuid.UUID
+	GroupID      uuid.UUID
+	Name         string
+	SurchargeVND int64
+	ManagerPIN   string
+}
+
+// SetSelectionRuleRequest replaces a group's bounds and defaults together.
+type SetSelectionRuleRequest struct {
+	RequestID        uuid.UUID   `json:"request_id"`
+	MinSelections    int32       `json:"min_selections"`
+	MaxSelections    int32       `json:"max_selections"`
+	DefaultOptionIDs []uuid.UUID `json:"default_option_ids"`
+}
+
+// SetSelectionRuleCommand carries the parameters for changing a selection rule.
+type SetSelectionRuleCommand struct {
+	RequestID        uuid.UUID
+	GroupID          uuid.UUID
+	MinSelections    int32
+	MaxSelections    int32
+	DefaultOptionIDs []uuid.UUID
+}
+
+// SelectionRuleResponse is a group's bounds and defaults.
+type SelectionRuleResponse struct {
+	GroupID          uuid.UUID   `json:"group_id"`
+	MinSelections    int32       `json:"min_selections"`
+	MaxSelections    int32       `json:"max_selections"`
+	DefaultOptionIDs []uuid.UUID `json:"default_option_ids"`
+}
+
+// === Replace-set Assignments (BA-1) ===
+
+// ExclusionRef names one item exclusion of a modifier group.
+type ExclusionRef struct {
+	ItemID          uuid.UUID `json:"item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+// IDSetChange lists what a replace-set command added and removed.
+type IDSetChange struct {
+	Added   []uuid.UUID `json:"added"`
+	Removed []uuid.UUID `json:"removed"`
+}
+
+// ReplaceItemModifierGroupsRequest replaces an item's direct and excluded groups.
+type ReplaceItemModifierGroupsRequest struct {
+	RequestID        uuid.UUID   `json:"request_id"`
+	DirectGroupIDs   []uuid.UUID `json:"direct_group_ids"`
+	ExcludedGroupIDs []uuid.UUID `json:"excluded_group_ids"`
+}
+
+// ReplaceItemModifierGroupsCommand carries the parameters for command 7.
+type ReplaceItemModifierGroupsCommand struct {
+	RequestID        uuid.UUID
+	ItemID           uuid.UUID
+	DirectGroupIDs   []uuid.UUID
+	ExcludedGroupIDs []uuid.UUID
+}
+
+// ItemModifierGroupsResponse is an item's direct and excluded groups.
+type ItemModifierGroupsResponse struct {
+	ItemID           uuid.UUID   `json:"item_id"`
+	DirectGroupIDs   []uuid.UUID `json:"direct_group_ids"`
+	ExcludedGroupIDs []uuid.UUID `json:"excluded_group_ids"`
+}
+
+// ReplaceCategoryModifierGroupsRequest replaces a category's groups.
+type ReplaceCategoryModifierGroupsRequest struct {
+	RequestID uuid.UUID   `json:"request_id"`
+	GroupIDs  []uuid.UUID `json:"group_ids"`
+}
+
+// ReplaceCategoryModifierGroupsCommand carries the parameters for command 8.
+type ReplaceCategoryModifierGroupsCommand struct {
+	RequestID  uuid.UUID
+	CategoryID uuid.UUID
+	GroupIDs   []uuid.UUID
+}
+
+// CategoryModifierGroupsResponse is a category's groups and the exclusions the change dropped.
+type CategoryModifierGroupsResponse struct {
+	CategoryID        uuid.UUID      `json:"category_id"`
+	GroupIDs          []uuid.UUID    `json:"group_ids"`
+	RemovedExclusions []ExclusionRef `json:"removed_exclusions"`
+}
+
+// ReplaceGroupAssignmentsRequest sets exactly which items and categories a group is attached to.
+type ReplaceGroupAssignmentsRequest struct {
+	RequestID   uuid.UUID   `json:"request_id"`
+	ItemIDs     []uuid.UUID `json:"item_ids"`
+	CategoryIDs []uuid.UUID `json:"category_ids"`
+}
+
+// ReplaceGroupAssignmentsCommand carries the parameters for command 9.
+type ReplaceGroupAssignmentsCommand struct {
+	RequestID   uuid.UUID
+	GroupID     uuid.UUID
+	ItemIDs     []uuid.UUID
+	CategoryIDs []uuid.UUID
+}
+
+// ModifierGroupAssignmentsResponse is where a group is directly attached.
+type ModifierGroupAssignmentsResponse struct {
+	GroupID           uuid.UUID      `json:"group_id"`
+	ItemIDs           []uuid.UUID    `json:"item_ids"`
+	CategoryIDs       []uuid.UUID    `json:"category_ids"`
+	RemovedExclusions []ExclusionRef `json:"removed_exclusions"`
 }

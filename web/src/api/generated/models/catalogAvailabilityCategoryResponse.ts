@@ -8,6 +8,7 @@
 import type { CatalogAvailabilityItemResponse } from './catalogAvailabilityItemResponse';
 
 export interface CatalogAvailabilityCategoryResponse {
+  icon?: string;
   id?: string;
   items?: CatalogAvailabilityItemResponse[];
   name?: string;

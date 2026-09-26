@@ -33,3 +33,6 @@ build/
 
 # Agent tooling session state
 .pi/
+
+# Uploaded media (content-addressed files, backed up with the database)
+/data/

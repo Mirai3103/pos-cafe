@@ -120,7 +120,8 @@ const createMenuCategory = `-- name: CreateMenuCategory :one
 INSERT INTO menu_categories (name, normalized_name)
 VALUES ($1, $2)
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 `
 
 type CreateMenuCategoryParams struct {
@@ -141,6 +142,8 @@ func (q *Queries) CreateMenuCategory(ctx context.Context, arg CreateMenuCategory
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -152,7 +155,8 @@ INSERT INTO menu_items
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type CreateMenuItemParams struct {
@@ -185,6 +189,11 @@ func (q *Queries) CreateMenuItem(ctx context.Context, arg CreateMenuItemParams) 
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -463,6 +472,125 @@ func (q *Queries) CreateModifierOptions(ctx context.Context, arg CreateModifierO
 	return items, nil
 }
 
+const deleteCategoryGroupExclusions = `-- name: DeleteCategoryGroupExclusions :many
+DELETE FROM item_modifier_group_exclusions e
+USING menu_items i
+WHERE e.menu_item_id = i.id
+  AND i.category_id = $1
+  AND e.modifier_group_id = $2
+RETURNING e.menu_item_id
+`
+
+type DeleteCategoryGroupExclusionsParams struct {
+	CategoryID uuid.UUID `json:"category_id"`
+	GroupID    uuid.UUID `json:"group_id"`
+}
+
+func (q *Queries) DeleteCategoryGroupExclusions(ctx context.Context, arg DeleteCategoryGroupExclusionsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, deleteCategoryGroupExclusions, arg.CategoryID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var menu_item_id uuid.UUID
+		if err := rows.Scan(&menu_item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, menu_item_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteCategoryModifierGroup = `-- name: DeleteCategoryModifierGroup :exec
+DELETE FROM category_modifier_groups WHERE menu_category_id = $1 AND modifier_group_id = $2
+`
+
+type DeleteCategoryModifierGroupParams struct {
+	MenuCategoryID  uuid.UUID `json:"menu_category_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) DeleteCategoryModifierGroup(ctx context.Context, arg DeleteCategoryModifierGroupParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCategoryModifierGroup, arg.MenuCategoryID, arg.ModifierGroupID)
+	return err
+}
+
+const deleteItemExclusionsOutsideCategory = `-- name: DeleteItemExclusionsOutsideCategory :many
+DELETE FROM item_modifier_group_exclusions e
+WHERE e.menu_item_id = $1
+  AND NOT EXISTS (
+      SELECT 1 FROM category_modifier_groups c
+      WHERE c.menu_category_id = $2
+        AND c.modifier_group_id = e.modifier_group_id)
+RETURNING e.modifier_group_id
+`
+
+type DeleteItemExclusionsOutsideCategoryParams struct {
+	ItemID     uuid.UUID `json:"item_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+// Exclusion invariant (ADR-059): an exclusion exists only while the item's
+// category provides the group.
+func (q *Queries) DeleteItemExclusionsOutsideCategory(ctx context.Context, arg DeleteItemExclusionsOutsideCategoryParams) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, deleteItemExclusionsOutsideCategory, arg.ItemID, arg.CategoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteItemModifierGroup = `-- name: DeleteItemModifierGroup :exec
+DELETE FROM item_modifier_groups WHERE menu_item_id = $1 AND modifier_group_id = $2
+`
+
+type DeleteItemModifierGroupParams struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) DeleteItemModifierGroup(ctx context.Context, arg DeleteItemModifierGroupParams) error {
+	_, err := q.db.ExecContext(ctx, deleteItemModifierGroup, arg.MenuItemID, arg.ModifierGroupID)
+	return err
+}
+
+const deleteItemModifierGroupExclusion = `-- name: DeleteItemModifierGroupExclusion :exec
+DELETE FROM item_modifier_group_exclusions WHERE menu_item_id = $1 AND modifier_group_id = $2
+`
+
+type DeleteItemModifierGroupExclusionParams struct {
+	MenuItemID      uuid.UUID `json:"menu_item_id"`
+	ModifierGroupID uuid.UUID `json:"modifier_group_id"`
+}
+
+func (q *Queries) DeleteItemModifierGroupExclusion(ctx context.Context, arg DeleteItemModifierGroupExclusionParams) error {
+	_, err := q.db.ExecContext(ctx, deleteItemModifierGroupExclusion, arg.MenuItemID, arg.ModifierGroupID)
+	return err
+}
+
 const deleteModifierGroupDefaultOptions = `-- name: DeleteModifierGroupDefaultOptions :exec
 DELETE FROM modifier_group_default_options
 WHERE modifier_group_id = $1
@@ -471,6 +599,28 @@ WHERE modifier_group_id = $1
 func (q *Queries) DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteModifierGroupDefaultOptions, modifierGroupID)
 	return err
+}
+
+const getActiveMenuItemIDByCode = `-- name: GetActiveMenuItemIDByCode :one
+
+SELECT id
+FROM menu_items
+WHERE normalized_code = $1
+  AND retired_at IS NULL
+  AND id <> $2
+`
+
+type GetActiveMenuItemIDByCodeParams struct {
+	NormalizedCode sql.NullString `json:"normalized_code"`
+	ExcludeID      uuid.UUID      `json:"exclude_id"`
+}
+
+// -- Display Details (BA-1) --
+func (q *Queries) GetActiveMenuItemIDByCode(ctx context.Context, arg GetActiveMenuItemIDByCodeParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, getActiveMenuItemIDByCode, arg.NormalizedCode, arg.ExcludeID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getCatalogMutationRequest = `-- name: GetCatalogMutationRequest :one
@@ -596,7 +746,8 @@ func (q *Queries) GetCategoryModifierGroup(ctx context.Context, arg GetCategoryM
 
 const getMenuCategoryByID = `-- name: GetMenuCategoryByID :one
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
 WHERE id = $1
 `
@@ -613,13 +764,16 @@ func (q *Queries) GetMenuCategoryByID(ctx context.Context, id uuid.UUID) (MenuCa
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
 
 const getMenuCategoryForUpdate = `-- name: GetMenuCategoryForUpdate :one
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
 WHERE id = $1
 FOR UPDATE
@@ -637,6 +791,8 @@ func (q *Queries) GetMenuCategoryForUpdate(ctx context.Context, id uuid.UUID) (M
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -644,7 +800,8 @@ func (q *Queries) GetMenuCategoryForUpdate(ctx context.Context, id uuid.UUID) (M
 const getMenuItemByID = `-- name: GetMenuItemByID :one
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE id = $1
 `
@@ -664,6 +821,11 @@ func (q *Queries) GetMenuItemByID(ctx context.Context, id uuid.UUID) (MenuItem, 
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -671,7 +833,8 @@ func (q *Queries) GetMenuItemByID(ctx context.Context, id uuid.UUID) (MenuItem, 
 const getMenuItemForUpdate = `-- name: GetMenuItemForUpdate :one
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE id = $1
 FOR UPDATE
@@ -692,6 +855,11 @@ func (q *Queries) GetMenuItemForUpdate(ctx context.Context, id uuid.UUID) (MenuI
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -1127,7 +1295,8 @@ const listAllMenuItems = `-- name: ListAllMenuItems :many
 
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 ORDER BY normalized_name ASC, id ASC
 `
@@ -1154,6 +1323,11 @@ func (q *Queries) ListAllMenuItems(ctx context.Context) ([]MenuItem, error) {
 			&i.RetirementNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Code,
+			&i.NormalizedCode,
+			&i.Badge,
+			&i.Description,
+			&i.ImageKey,
 		); err != nil {
 			return nil, err
 		}
@@ -1171,7 +1345,8 @@ func (q *Queries) ListAllMenuItems(ctx context.Context) ([]MenuItem, error) {
 const listAllMenuItemsPaginated = `-- name: ListAllMenuItemsPaginated :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 ORDER BY normalized_name ASC, id ASC
 LIMIT $1 OFFSET $2
@@ -1203,6 +1378,11 @@ func (q *Queries) ListAllMenuItemsPaginated(ctx context.Context, arg ListAllMenu
 			&i.RetirementNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Code,
+			&i.NormalizedCode,
+			&i.Badge,
+			&i.Description,
+			&i.ImageKey,
 		); err != nil {
 			return nil, err
 		}
@@ -1434,6 +1614,62 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 	return items, nil
 }
 
+const listCategoryGroupIDs = `-- name: ListCategoryGroupIDs :many
+SELECT modifier_group_id FROM category_modifier_groups
+WHERE menu_category_id = $1 ORDER BY modifier_group_id
+`
+
+func (q *Queries) ListCategoryGroupIDs(ctx context.Context, menuCategoryID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryGroupIDs, menuCategoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCategoryIDsWithGroup = `-- name: ListCategoryIDsWithGroup :many
+SELECT menu_category_id FROM category_modifier_groups
+WHERE modifier_group_id = $1 ORDER BY menu_category_id
+`
+
+func (q *Queries) ListCategoryIDsWithGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryIDsWithGroup, modifierGroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var menu_category_id uuid.UUID
+		if err := rows.Scan(&menu_category_id); err != nil {
+			return nil, err
+		}
+		items = append(items, menu_category_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCategoryModifierGroupsByCategory = `-- name: ListCategoryModifierGroupsByCategory :many
 SELECT cmgr.modifier_group_id, mg.name, mg.normalized_name,
        mg.min_selections, mg.max_selections,
@@ -1477,6 +1713,120 @@ func (q *Queries) ListCategoryModifierGroupsByCategory(ctx context.Context, menu
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemDirectGroupIDs = `-- name: ListItemDirectGroupIDs :many
+
+SELECT modifier_group_id FROM item_modifier_groups
+WHERE menu_item_id = $1 ORDER BY modifier_group_id
+`
+
+// -- Replace-set Assignments (BA-1, ADR-059) --
+func (q *Queries) ListItemDirectGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listItemDirectGroupIDs, menuItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemExcludedGroupIDs = `-- name: ListItemExcludedGroupIDs :many
+SELECT modifier_group_id FROM item_modifier_group_exclusions
+WHERE menu_item_id = $1 ORDER BY modifier_group_id
+`
+
+func (q *Queries) ListItemExcludedGroupIDs(ctx context.Context, menuItemID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listItemExcludedGroupIDs, menuItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var modifier_group_id uuid.UUID
+		if err := rows.Scan(&modifier_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, modifier_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemIDsExcludingGroup = `-- name: ListItemIDsExcludingGroup :many
+SELECT menu_item_id FROM item_modifier_group_exclusions
+WHERE modifier_group_id = $1 ORDER BY menu_item_id
+`
+
+func (q *Queries) ListItemIDsExcludingGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listItemIDsExcludingGroup, modifierGroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var menu_item_id uuid.UUID
+		if err := rows.Scan(&menu_item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, menu_item_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemIDsWithDirectGroup = `-- name: ListItemIDsWithDirectGroup :many
+SELECT menu_item_id FROM item_modifier_groups
+WHERE modifier_group_id = $1 ORDER BY menu_item_id
+`
+
+func (q *Queries) ListItemIDsWithDirectGroup(ctx context.Context, modifierGroupID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listItemIDsWithDirectGroup, modifierGroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var menu_item_id uuid.UUID
+		if err := rows.Scan(&menu_item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, menu_item_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1579,9 +1929,10 @@ func (q *Queries) ListItemModifierGroupsByItem(ctx context.Context, menuItemID u
 
 const listMenuCategories = `-- name: ListMenuCategories :many
 SELECT id, name, normalized_name, created_at,
-       retired_at, retirement_reason, retirement_note, updated_at
+       retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 FROM menu_categories
-ORDER BY normalized_name ASC, id ASC
+ORDER BY display_order ASC, normalized_name ASC, id ASC
 `
 
 func (q *Queries) ListMenuCategories(ctx context.Context) ([]MenuCategory, error) {
@@ -1602,6 +1953,8 @@ func (q *Queries) ListMenuCategories(ctx context.Context) ([]MenuCategory, error
 			&i.RetirementReason,
 			&i.RetirementNote,
 			&i.UpdatedAt,
+			&i.Icon,
+			&i.DisplayOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -1663,7 +2016,8 @@ func (q *Queries) ListMenuItemSizesByItem(ctx context.Context, menuItemID uuid.U
 const listMenuItemsByCategory = `-- name: ListMenuItemsByCategory :many
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE category_id = $1
 ORDER BY normalized_name ASC, id ASC
@@ -1690,6 +2044,11 @@ func (q *Queries) ListMenuItemsByCategory(ctx context.Context, categoryID uuid.U
 			&i.RetirementNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Code,
+			&i.NormalizedCode,
+			&i.Badge,
+			&i.Description,
+			&i.ImageKey,
 		); err != nil {
 			return nil, err
 		}
@@ -1708,7 +2067,8 @@ const listMenuItemsByCategoryPaginated = `-- name: ListMenuItemsByCategoryPagina
 
 SELECT id, category_id, name, normalized_name, price_vnd,
        available, retired_at, retirement_reason, retirement_note,
-       created_at, updated_at
+       created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 FROM menu_items
 WHERE category_id = $1
 ORDER BY normalized_name ASC, id ASC
@@ -1743,6 +2103,11 @@ func (q *Queries) ListMenuItemsByCategoryPaginated(ctx context.Context, arg List
 			&i.RetirementNote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Code,
+			&i.NormalizedCode,
+			&i.Badge,
+			&i.Description,
+			&i.ImageKey,
 		); err != nil {
 			return nil, err
 		}
@@ -1896,12 +2261,159 @@ func (q *Queries) ListModifierOptionsByGroup(ctx context.Context, modifierGroupI
 	return items, nil
 }
 
+const lockMenuCategoriesByIDs = `-- name: LockMenuCategoriesByIDs :many
+SELECT id, retired_at FROM menu_categories
+WHERE id = ANY($1::uuid[])
+ORDER BY id
+FOR UPDATE
+`
+
+type LockMenuCategoriesByIDsRow struct {
+	ID        uuid.UUID    `json:"id"`
+	RetiredAt sql.NullTime `json:"retired_at"`
+}
+
+func (q *Queries) LockMenuCategoriesByIDs(ctx context.Context, ids []uuid.UUID) ([]LockMenuCategoriesByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockMenuCategoriesByIDs, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockMenuCategoriesByIDsRow{}
+	for rows.Next() {
+		var i LockMenuCategoriesByIDsRow
+		if err := rows.Scan(&i.ID, &i.RetiredAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockMenuItemsByIDs = `-- name: LockMenuItemsByIDs :many
+SELECT id, retired_at FROM menu_items
+WHERE id = ANY($1::uuid[])
+ORDER BY id
+FOR UPDATE
+`
+
+type LockMenuItemsByIDsRow struct {
+	ID        uuid.UUID    `json:"id"`
+	RetiredAt sql.NullTime `json:"retired_at"`
+}
+
+func (q *Queries) LockMenuItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]LockMenuItemsByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockMenuItemsByIDs, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockMenuItemsByIDsRow{}
+	for rows.Next() {
+		var i LockMenuItemsByIDsRow
+		if err := rows.Scan(&i.ID, &i.RetiredAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockModifierGroupsByIDs = `-- name: LockModifierGroupsByIDs :many
+SELECT id, retired_at FROM modifier_groups
+WHERE id = ANY($1::uuid[])
+ORDER BY id
+FOR UPDATE
+`
+
+type LockModifierGroupsByIDsRow struct {
+	ID        uuid.UUID    `json:"id"`
+	RetiredAt sql.NullTime `json:"retired_at"`
+}
+
+func (q *Queries) LockModifierGroupsByIDs(ctx context.Context, ids []uuid.UUID) ([]LockModifierGroupsByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockModifierGroupsByIDs, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockModifierGroupsByIDsRow{}
+	for rows.Next() {
+		var i LockModifierGroupsByIDsRow
+		if err := rows.Scan(&i.ID, &i.RetiredAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const moveMenuItemToCategory = `-- name: MoveMenuItemToCategory :one
+
+UPDATE menu_items
+SET category_id = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key
+`
+
+type MoveMenuItemToCategoryParams struct {
+	ID         uuid.UUID `json:"id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+// -- Structure (BA-1) --
+func (q *Queries) MoveMenuItemToCategory(ctx context.Context, arg MoveMenuItemToCategoryParams) (MenuItem, error) {
+	row := q.db.QueryRowContext(ctx, moveMenuItemToCategory, arg.ID, arg.CategoryID)
+	var i MenuItem
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
+	)
+	return i, err
+}
+
 const renameMenuCategory = `-- name: RenameMenuCategory :one
 UPDATE menu_categories
 SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 `
 
 type RenameMenuCategoryParams struct {
@@ -1922,6 +2434,8 @@ func (q *Queries) RenameMenuCategory(ctx context.Context, arg RenameMenuCategory
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -1932,7 +2446,8 @@ SET name = $2, normalized_name = $3, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type RenameMenuItemParams struct {
@@ -1956,6 +2471,11 @@ func (q *Queries) RenameMenuItem(ctx context.Context, arg RenameMenuItemParams) 
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -2067,7 +2587,8 @@ SET price_vnd = $2, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type RepriceMenuItemParams struct {
@@ -2090,6 +2611,11 @@ func (q *Queries) RepriceMenuItem(ctx context.Context, arg RepriceMenuItemParams
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -2165,7 +2691,8 @@ UPDATE menu_categories
 SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = now()
 WHERE id = $1
 RETURNING id, name, normalized_name, created_at,
-          retired_at, retirement_reason, retirement_note, updated_at
+          retired_at, retirement_reason, retirement_note, updated_at,
+       icon, display_order
 `
 
 type RetireMenuCategoryParams struct {
@@ -2192,6 +2719,8 @@ func (q *Queries) RetireMenuCategory(ctx context.Context, arg RetireMenuCategory
 		&i.RetirementReason,
 		&i.RetirementNote,
 		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -2202,7 +2731,8 @@ SET retired_at = $2, retirement_reason = $3, retirement_note = $4, updated_at = 
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type RetireMenuItemParams struct {
@@ -2232,6 +2762,11 @@ func (q *Queries) RetireMenuItem(ctx context.Context, arg RetireMenuItemParams) 
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -2361,7 +2896,8 @@ SET available = $2, updated_at = now()
 WHERE id = $1
 RETURNING id, category_id, name, normalized_name, price_vnd,
           available, retired_at, retirement_reason, retirement_note,
-          created_at, updated_at
+          created_at, updated_at,
+       code, normalized_code, badge, description, image_key
 `
 
 type SetMenuItemAvailabilityParams struct {
@@ -2384,6 +2920,50 @@ func (q *Queries) SetMenuItemAvailability(ctx context.Context, arg SetMenuItemAv
 		&i.RetirementNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
+	)
+	return i, err
+}
+
+const setMenuItemImageKey = `-- name: SetMenuItemImageKey :one
+UPDATE menu_items
+SET image_key = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key
+`
+
+type SetMenuItemImageKeyParams struct {
+	ID       uuid.UUID      `json:"id"`
+	ImageKey sql.NullString `json:"image_key"`
+}
+
+func (q *Queries) SetMenuItemImageKey(ctx context.Context, arg SetMenuItemImageKeyParams) (MenuItem, error) {
+	row := q.db.QueryRowContext(ctx, setMenuItemImageKey, arg.ID, arg.ImageKey)
+	var i MenuItem
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
 	)
 	return i, err
 }
@@ -2475,4 +3055,118 @@ func (q *Queries) StoreCatalogRequestResult(ctx context.Context, arg StoreCatalo
 		arg.ResponseBody,
 	)
 	return err
+}
+
+const updateMenuCategoryDetails = `-- name: UpdateMenuCategoryDetails :one
+UPDATE menu_categories
+SET icon = $2, display_order = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, created_at,
+          retired_at, retirement_reason, retirement_note, updated_at,
+          icon, display_order
+`
+
+type UpdateMenuCategoryDetailsParams struct {
+	ID           uuid.UUID      `json:"id"`
+	Icon         sql.NullString `json:"icon"`
+	DisplayOrder int32          `json:"display_order"`
+}
+
+func (q *Queries) UpdateMenuCategoryDetails(ctx context.Context, arg UpdateMenuCategoryDetailsParams) (MenuCategory, error) {
+	row := q.db.QueryRowContext(ctx, updateMenuCategoryDetails, arg.ID, arg.Icon, arg.DisplayOrder)
+	var i MenuCategory
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.CreatedAt,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.UpdatedAt,
+		&i.Icon,
+		&i.DisplayOrder,
+	)
+	return i, err
+}
+
+const updateMenuItemDetails = `-- name: UpdateMenuItemDetails :one
+UPDATE menu_items
+SET code = $2, normalized_code = $3, badge = $4, description = $5, updated_at = now()
+WHERE id = $1
+RETURNING id, category_id, name, normalized_name, price_vnd,
+          available, retired_at, retirement_reason, retirement_note,
+          created_at, updated_at,
+          code, normalized_code, badge, description, image_key
+`
+
+type UpdateMenuItemDetailsParams struct {
+	ID             uuid.UUID      `json:"id"`
+	Code           sql.NullString `json:"code"`
+	NormalizedCode sql.NullString `json:"normalized_code"`
+	Badge          sql.NullString `json:"badge"`
+	Description    sql.NullString `json:"description"`
+}
+
+func (q *Queries) UpdateMenuItemDetails(ctx context.Context, arg UpdateMenuItemDetailsParams) (MenuItem, error) {
+	row := q.db.QueryRowContext(ctx, updateMenuItemDetails,
+		arg.ID,
+		arg.Code,
+		arg.NormalizedCode,
+		arg.Badge,
+		arg.Description,
+	)
+	var i MenuItem
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.PriceVnd,
+		&i.Available,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Code,
+		&i.NormalizedCode,
+		&i.Badge,
+		&i.Description,
+		&i.ImageKey,
+	)
+	return i, err
+}
+
+const updateModifierGroupBounds = `-- name: UpdateModifierGroupBounds :one
+UPDATE modifier_groups
+SET min_selections = $2, max_selections = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, min_selections, max_selections,
+          retired_at, retirement_reason, retirement_note,
+          created_at, updated_at
+`
+
+type UpdateModifierGroupBoundsParams struct {
+	ID            uuid.UUID `json:"id"`
+	MinSelections int32     `json:"min_selections"`
+	MaxSelections int32     `json:"max_selections"`
+}
+
+func (q *Queries) UpdateModifierGroupBounds(ctx context.Context, arg UpdateModifierGroupBoundsParams) (ModifierGroup, error) {
+	row := q.db.QueryRowContext(ctx, updateModifierGroupBounds, arg.ID, arg.MinSelections, arg.MaxSelections)
+	var i ModifierGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NormalizedName,
+		&i.MinSelections,
+		&i.MaxSelections,
+		&i.RetiredAt,
+		&i.RetirementReason,
+		&i.RetirementNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

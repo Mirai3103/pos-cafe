@@ -95,5 +95,5 @@ clean: ## Remove build artifacts
 
 ## --- Development seed (dev only, never for production) ---
 
-dev-seed: ## Seed a development Manager identity against a running API (never for production)
+dev-seed: ## Reset dev DB and seed full demo data (staff, tables, menu, images) via the running API
 	cd web && bun run ../scripts/dev-seed.ts

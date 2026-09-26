@@ -1,13 +1,19 @@
-import type {
-  ShiftCloseDiscrepancyInputDimension,
-  ShiftCloseDiscrepancyInputReason,
-  ShiftReconciliationPreviewEntry,
-} from "@/api/generated/models";
+import type { ShiftReconciliationPreviewEntry } from "@/api/generated/models";
 
-export type {
-  ShiftCloseDiscrepancyInputDimension,
-  ShiftCloseDiscrepancyInputReason,
-};
+/**
+ * Closure dimensions and catalogued reasons, mirroring internal/shift/domain.go.
+ * The OpenAPI spec types them as plain strings, so the unions live here.
+ */
+export type ShiftCloseDiscrepancyInputDimension =
+  | "CASH"
+  | "MANUAL_QR_RECEIVED"
+  | "MANUAL_QR_REFUNDED";
+
+export type ShiftCloseDiscrepancyInputReason =
+  | "CASH_COUNT_DIFFERENCE"
+  | "QR_OBSERVATION_DIFFERENCE"
+  | "UNEXPLAINED"
+  | "OTHER";
 
 export const DIMENSION_LABELS: Record<ShiftCloseDiscrepancyInputDimension, string> = {
   CASH: "Tiền mặt",
