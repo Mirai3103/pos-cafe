@@ -1,6 +1,6 @@
 # Backend alignment: close the gaps the web slices recorded
 
-**Status:** in-design (BA-1)
+**Status:** in-progress (BA-1 done; BA-2–BA-5 ready-for-design)
 **Blocked by:** none
 **Source:** Operator decision (2026-09-25), before web slice 9b: align the backend with the
 prototype in `design-system/pos-cafe/` before the next screens are built, instead of
@@ -45,7 +45,7 @@ gets its own design spec, pull request, and UAT gate.
 The order puts what unblocks the most, at the lowest domain risk, first. BA-1 blocks
 web slice 9b directly. BA-5 goes last because it needs the most domain work.
 
-BA-1 implemented on branch backend-alignment-ba1; awaiting UAT.
+BA-1 done: UAT passed 2026-09-26; implemented on branch backend-alignment-ba1 and merged into master.
 
 ## Acceptance criteria
 
@@ -53,7 +53,7 @@ BA-1 implemented on branch backend-alignment-ba1; awaiting UAT.
       passed UAT gate.
 - [ ] Every web cut that a sub-project resolves is removed from the web (disabled
       buttons enabled, mocks deleted).
-- [ ] `availability-card-fields.md` is closed by BA-1.
+- [x] `availability-card-fields.md` is closed by BA-1.
 
 ## Already present
 

@@ -81,5 +81,5 @@ Follow-ups outside the phase sequence:
 
 | Ticket | Status | Blocked by |
 | --- | --- | --- |
-| [Backend alignment: close the gaps the web slices recorded](backend-alignment.md) | in-design (BA-1) | none |
+| [Backend alignment: close the gaps the web slices recorded](backend-alignment.md) | in-progress (BA-1 done) | none |
 | [Catalog fields the availability cards mock today](availability-card-fields.md) | completed (BA-1) | none |
