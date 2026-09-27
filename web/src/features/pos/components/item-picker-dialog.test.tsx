@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from "bun:test";
 import { renderToString } from "react-dom/server";
-import { ItemPickerDialog } from "./item-picker-dialog";
+import { ItemPickerDialog, ItemPickerBody } from "./item-picker-dialog";
 import type { CatalogSellableItemResponse } from "@/api/generated/models";
 import { formatVND } from "@/lib/utils";
 
@@ -219,5 +219,17 @@ describe("ItemPickerDialog", () => {
 
     expect(html).toContain("font-mono");
     expect(html).toContain("tabular-nums");
+  });
+});
+
+describe("ItemPickerBody", () => {
+  it("renders the picker controls without the dialog chrome", () => {
+    const html = renderToString(
+      <ItemPickerBody item={mockItemWithSizesAndModifiers} onConfirm={() => {}} confirmLabel="Xem trước" />,
+    );
+    expect(html).toContain("Nhỏ (S)");
+    expect(html).toContain("Độ ngọt");
+    expect(html).toContain("Xem trước");
+    expect(html).not.toContain('role="dialog"');
   });
 });
