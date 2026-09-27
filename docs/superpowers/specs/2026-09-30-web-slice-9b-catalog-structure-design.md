@@ -189,11 +189,17 @@ that run and is never stored. A wrong PIN fails the step like any other error.
   already succeeded no longer differ and drop out. This is also safe when a request
   timed out after the server committed, because the refetch shows the true state.
 - When the create step succeeded, the modal switches to edit mode on the new id.
+- Re-planning matches a form's unsaved size or option row to an existing one with the
+  same name, so a row created by a step that succeeded is not added twice. A completed
+  image upload resets the form's image to "keep", because a blob cannot be diffed
+  against a stored image.
 
 ### 4.5 Client validation
 
-Before planning, and shown on the field without a server call: name non-empty; price
-and surcharge are whole VND ≥ 0; at least one size; code matches `^[a-z0-9]{1,12}$`
+Before planning, and shown on the field without a server call: name non-empty; a
+price is whole VND from 1 to 2,147,483,647 (the backend's `ValidatePrice`) and a
+surcharge from 0 to 2,147,483,647; size and option names are unique within their
+item or group; at least one size; code matches `^[a-z0-9]{1,12}$`
 after trim and lowercase; description ≤ 300; `0 ≤ min ≤ |defaults| ≤ max`,
 `max ≥ 1`, and `max ≤` the number of options remaining after the save.
 
