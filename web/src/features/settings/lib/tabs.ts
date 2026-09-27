@@ -1,7 +1,7 @@
 import { PackageX, Printer, Store, Utensils, type LucideIcon } from "lucide-react";
 
 export interface SettingsTab {
-  to: "/settings/availability";
+  to: "/settings/availability" | "/settings/catalog";
   label: string;
   icon: LucideIcon;
   capability: string;
@@ -14,6 +14,12 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     label: "Kho & Món Tạm Hết",
     icon: PackageX,
     capability: "catalog.manage_availability",
+  },
+  {
+    to: "/settings/catalog",
+    label: "Quản lý Thực đơn & Topping",
+    icon: Utensils,
+    capability: "catalog.administer_structure",
   },
 ];
 
@@ -28,20 +34,19 @@ export function firstPermittedTab(held: readonly string[]): SettingsTab | null {
 }
 
 /**
- * Tabs the design shows that later slices build (9b catalog, then store and
- * print settings, which have no endpoint yet). They render disabled so the bar
- * matches the design; they never route and never grant access. Each is shown
- * only to a session that will be able to open it.
+ * Tabs the design shows that later work builds (store and print settings,
+ * which have no endpoint yet). They render disabled so the bar matches the
+ * design; they never route and never grant access. Each is shown only to a
+ * session that will be able to open it.
  */
 export interface PlannedSettingsTab {
-  key: "catalog" | "store" | "system";
+  key: "store" | "system";
   label: string;
   icon: LucideIcon;
   capability: string;
 }
 
 export const PLANNED_SETTINGS_TABS: readonly PlannedSettingsTab[] = [
-  { key: "catalog", label: "Quản lý Thực đơn & Topping", icon: Utensils, capability: "catalog.administer_structure" },
   { key: "store", label: "Thông tin Quán & VietQR", icon: Store, capability: "staff.administer" },
   { key: "system", label: "Tùy chỉnh In & Hệ thống", icon: Printer, capability: "staff.administer" },
 ];

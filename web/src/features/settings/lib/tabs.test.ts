@@ -9,22 +9,22 @@ describe("settings tabs", () => {
     expect(permittedTabs(["catalog.manage_availability"]).map((t) => t.label)).toEqual(["Kho & Món Tạm Hết"]);
   });
 
+  it("gives a manager both routable tabs", () => {
+    expect(permittedTabs(MANAGER).map((t) => t.to)).toEqual(["/settings/availability", "/settings/catalog"]);
+  });
+
   it("has no tab for a session without a settings capability", () => {
     expect(firstPermittedTab(["sales.operate"])).toBeNull();
   });
 
   it("exposes every routable tab capability for the layout guard", () => {
-    expect(SETTINGS_CAPABILITIES).toEqual(["catalog.manage_availability"]);
+    expect(SETTINGS_CAPABILITIES).toEqual(["catalog.manage_availability", "catalog.administer_structure"]);
   });
 });
 
 describe("planned tabs", () => {
-  it("shows a manager the design's three upcoming tabs", () => {
-    expect(visiblePlannedTabs(MANAGER).map((t) => t.label)).toEqual([
-      "Quản lý Thực đơn & Topping",
-      "Thông tin Quán & VietQR",
-      "Tùy chỉnh In & Hệ thống",
-    ]);
+  it("shows a manager the two tabs still to come", () => {
+    expect(visiblePlannedTabs(MANAGER).map((t) => t.label)).toEqual(["Thông tin Quán & VietQR", "Tùy chỉnh In & Hệ thống"]);
   });
 
   it("shows a barista or cashier none of them", () => {
@@ -34,6 +34,5 @@ describe("planned tabs", () => {
 
   it("never grants access to the settings layout", () => {
     expect(SETTINGS_CAPABILITIES).not.toContain("staff.administer");
-    expect(SETTINGS_CAPABILITIES).not.toContain("catalog.administer_structure");
   });
 });
