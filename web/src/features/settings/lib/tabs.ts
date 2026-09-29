@@ -1,7 +1,7 @@
-import { PackageX, Printer, Store, Utensils, type LucideIcon } from "lucide-react";
+import { PackageX, Printer, Store, Users, Utensils, type LucideIcon } from "lucide-react";
 
 export interface SettingsTab {
-  to: "/settings/availability" | "/settings/catalog";
+  to: "/settings/availability" | "/settings/catalog" | "/settings/staff";
   label: string;
   icon: LucideIcon;
   capability: string;
@@ -20,6 +20,12 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     label: "Quản lý Thực đơn & Topping",
     icon: Utensils,
     capability: "catalog.administer_structure",
+  },
+  {
+    to: "/settings/staff",
+    label: "Nhân viên",
+    icon: Users,
+    capability: "staff.administer",
   },
 ];
 

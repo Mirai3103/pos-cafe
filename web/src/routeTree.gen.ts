@@ -22,6 +22,7 @@ import { Route as AuthWorkspaceRouteImport } from './routes/auth/workspace'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAvailabilityRouteImport } from './routes/_app/settings/availability'
 import { Route as AppSettingsCatalogRouteImport } from './routes/_app/settings/catalog'
+import { Route as AppSettingsStaffRouteImport } from './routes/_app/settings/staff'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -87,6 +88,11 @@ const AppSettingsCatalogRoute = AppSettingsCatalogRouteImport.update({
   path: '/catalog',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsStaffRoute = AppSettingsStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/auth/workspace': typeof AuthWorkspaceRoute
   '/settings/availability': typeof AppSettingsAvailabilityRoute
   '/settings/catalog': typeof AppSettingsCatalogRoute
+  '/settings/staff': typeof AppSettingsStaffRoute
   '/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -113,6 +120,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/settings/availability': typeof AppSettingsAvailabilityRoute
   '/settings/catalog': typeof AppSettingsCatalogRoute
+  '/settings/staff': typeof AppSettingsStaffRoute
   '/settings': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -129,6 +137,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/settings/availability': typeof AppSettingsAvailabilityRoute
   '/_app/settings/catalog': typeof AppSettingsCatalogRoute
+  '/_app/settings/staff': typeof AppSettingsStaffRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | '/auth/workspace'
     | '/settings/availability'
     | '/settings/catalog'
+    | '/settings/staff'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings/availability'
     | '/settings/catalog'
+    | '/settings/staff'
     | '/settings'
   id:
     | '__root__'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/settings/availability'
     | '/_app/settings/catalog'
+    | '/_app/settings/staff'
     | '/_app/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -275,18 +287,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsCatalogRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/staff': {
+      id: '/_app/settings/staff'
+      path: '/staff'
+      fullPath: '/settings/staff'
+      preLoaderRoute: typeof AppSettingsStaffRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
   }
 }
 
 interface AppSettingsRouteChildren {
   AppSettingsAvailabilityRoute: typeof AppSettingsAvailabilityRoute
   AppSettingsCatalogRoute: typeof AppSettingsCatalogRoute
+  AppSettingsStaffRoute: typeof AppSettingsStaffRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAvailabilityRoute: AppSettingsAvailabilityRoute,
   AppSettingsCatalogRoute: AppSettingsCatalogRoute,
+  AppSettingsStaffRoute: AppSettingsStaffRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
 }
 

@@ -9,8 +9,12 @@ describe("settings tabs", () => {
     expect(permittedTabs(["catalog.manage_availability"]).map((t) => t.label)).toEqual(["Kho & Món Tạm Hết"]);
   });
 
-  it("gives a manager both routable tabs", () => {
-    expect(permittedTabs(MANAGER).map((t) => t.to)).toEqual(["/settings/availability", "/settings/catalog"]);
+  it("gives a manager the three routable tabs", () => {
+    expect(permittedTabs(MANAGER).map((t) => t.to)).toEqual(["/settings/availability", "/settings/catalog", "/settings/staff"]);
+  });
+
+  it("gives a cashier or barista no staff tab", () => {
+    expect(permittedTabs(["catalog.manage_availability", "sales.operate"]).map((t) => t.to)).not.toContain("/settings/staff");
   });
 
   it("has no tab for a session without a settings capability", () => {
@@ -18,7 +22,7 @@ describe("settings tabs", () => {
   });
 
   it("exposes every routable tab capability for the layout guard", () => {
-    expect(SETTINGS_CAPABILITIES).toEqual(["catalog.manage_availability", "catalog.administer_structure"]);
+    expect(SETTINGS_CAPABILITIES).toEqual(["catalog.manage_availability", "catalog.administer_structure", "staff.administer"]);
   });
 });
 
@@ -30,9 +34,5 @@ describe("planned tabs", () => {
   it("shows a barista or cashier none of them", () => {
     expect(visiblePlannedTabs(["catalog.manage_availability", "preparation.operate"])).toEqual([]);
     expect(visiblePlannedTabs(["catalog.manage_availability", "sales.operate", "sales_shift.operate"])).toEqual([]);
-  });
-
-  it("never grants access to the settings layout", () => {
-    expect(SETTINGS_CAPABILITIES).not.toContain("staff.administer");
   });
 });
