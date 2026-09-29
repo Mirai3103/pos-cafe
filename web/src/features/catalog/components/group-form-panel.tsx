@@ -4,6 +4,7 @@ import { Layers, Plus, Trash2 } from "lucide-react";
 import { selectionType, setSelectionType, toggleDefault, type GroupForm, type OptionRow } from "../lib/forms";
 import type { StepResult } from "../lib/run-plan";
 import type { FieldErrors } from "../lib/validation";
+import { cn } from "@/lib/utils";
 import { Chip, Field, FormFooter, INPUT_CLASS, ModalFrame, MONEY_INPUT_CLASS, readNumber } from "./form-bits";
 import { SaveProgress } from "./save-progress";
 
@@ -109,7 +110,7 @@ export function GroupFormPanel(p: GroupFormPanelProps): ReactElement {
                 <input
                   aria-label="Tên lựa chọn"
                   autoFocus={row.key === p.focusKey}
-                  className={INPUT_CLASS}
+                  className={cn(INPUT_CLASS, "min-w-0 flex-1")}
                   value={row.name}
                   placeholder="Trân châu trắng"
                   onChange={(e) => setRow(row.key, { name: e.target.value })}
@@ -119,7 +120,7 @@ export function GroupFormPanel(p: GroupFormPanelProps): ReactElement {
                   type="number"
                   min={0}
                   step={1000}
-                  className={`${MONEY_INPUT_CLASS} w-36 shrink-0`}
+                  className={cn(MONEY_INPUT_CLASS, "w-36 shrink-0")}
                   value={row.surchargeVnd}
                   onChange={(e) => setRow(row.key, { surchargeVnd: readNumber(e.target.value) })}
                   onKeyDown={(e) => {
@@ -159,7 +160,7 @@ export function GroupFormPanel(p: GroupFormPanelProps): ReactElement {
             onClick={p.onAddRow}
             className="flex h-12 min-h-[48px] items-center gap-1.5 rounded-xl border border-dashed border-emerald-300 bg-white px-4 text-xs font-bold text-emerald-700 transition hover:bg-emerald-50 active:scale-[0.98] dark:bg-card"
           >
-            <Plus className="h-4 w-4" />+ Thêm dòng Topping
+            <Plus className="h-4 w-4" />Thêm dòng Topping
           </button>
         </div>
         <SaveProgress results={p.results} />

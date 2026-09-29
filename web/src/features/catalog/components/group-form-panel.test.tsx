@@ -32,7 +32,7 @@ describe("GroupFormPanel", () => {
     expect(html).toContain("Chọn 1 duy nhất (Radio)");
     expect(html).toContain("Chọn nhiều (Checkbox)");
     expect(html).toContain("100% đá");
-    expect(html).toContain("+ Thêm dòng Topping");
+    expect(html).toContain("Thêm dòng Topping");
     expect(html).toContain("Xóa nhóm topping");
     expect(html).toContain("LƯU NHÓM TOPPING");
   });
