@@ -294,7 +294,7 @@ in ascending `(created_at, id)`.
 | Race | Outcome |
 | --- | --- |
 | Cancel and Submit | Serialized on the Session lock. The loser sees the draft cancelled (`NOTHING_TO_SUBMIT`) or the Order present (`SESSION_HAS_ORDER`). Both never succeed. |
-| Abandon and Commit, Start Draft, or Submit | Serialized on the Session lock. The loser sees a Session no longer `ACTIVE` or an Order present. |
+| Abandon and Commit, Start Draft, or Submit | Serialized on the Session lock. The loser sees a Session no longer `ACTIVE` or an Order present. Commit and draft edits lock draft and Session in one statement, whose tuple-lock order PostgreSQL does not fix, so this pair can also abort one side with 40P01; the contract is ADR-031's. |
 | Cancel or Abandon and Payment or Refund | Payment and Refund lock Check then Session, so this is ADR-031's AB-BA window. At worst one side aborts with 40P01, a `500`; the rollback includes its idempotency claim, so a retry runs as a first attempt. Otherwise the serialized loser sees current money and answers from it. |
 
 Abandon re-reads money under its Check locks, so a Payment that commits first
