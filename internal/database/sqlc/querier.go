@@ -130,6 +130,7 @@ type Querier interface {
 	// conventions: valid Payments exclude voided ones, completed live Refunds are
 	// completed Refunds without a Completed Sale, and base charge comes from the
 	// Charge Allocations' frozen unit prices.
+	// Phase 08 adds awaiting_submission_count: ACTIVE Sessions whose committed, orderless draft sits on a Check holding net money.
 	GetGlobalShiftClosureBlockers(ctx context.Context) (GetGlobalShiftClosureBlockersRow, error)
 	// Includes released assignments, so a released sequence number is never
 	// reused and the audit trail stays unambiguous.

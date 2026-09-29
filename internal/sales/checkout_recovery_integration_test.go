@@ -356,3 +356,33 @@ func TestCancelRefundAbandonManualQR(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sales.StateAbandoned, got.State)
 }
+
+func TestShiftBlockersTrackAwaitingSubmission(t *testing.T) {
+	env := newRecoveryEnv(t)
+	ctx := context.Background()
+	session, checkID := env.paidTakeaway(t)
+
+	blockers, err := env.Queries.GetGlobalShiftClosureBlockers(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), blockers.AwaitingSubmissionCount)
+
+	_, _, err = env.cancel(t, session.ID)
+	require.NoError(t, err)
+	blockers, err = env.Queries.GetGlobalShiftClosureBlockers(ctx)
+	require.NoError(t, err)
+	require.Zero(t, blockers.AwaitingSubmissionCount)
+	require.Equal(t, int64(50000), blockers.UnresolvedCorrectionVnd,
+		"withdrawn but not yet refunded money blocks as an unresolved correction")
+
+	env.refundWithdrawal(t, session.ID, checkID, sales.RefundMethodCash)
+	_, _, err = env.abandon(t, session.ID)
+	require.NoError(t, err)
+
+	blockers, err = env.Queries.GetGlobalShiftClosureBlockers(ctx)
+	require.NoError(t, err)
+	require.Zero(t, blockers.UnsettledCheckCount)
+	require.Zero(t, blockers.PendingRefundCount)
+	require.Zero(t, blockers.UnresolvedCorrectionVnd)
+	require.Zero(t, blockers.AwaitingSubmissionCount)
+	require.Zero(t, blockers.ActiveServiceSessionCount, "the Shift may now close")
+}
