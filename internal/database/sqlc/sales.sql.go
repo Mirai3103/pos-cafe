@@ -203,6 +203,34 @@ func (q *Queries) FindDraftItemByCompositionExcluding(ctx context.Context, arg F
 	return i, err
 }
 
+const getAbandonedCheckoutBySession = `-- name: GetAbandonedCheckoutBySession :one
+SELECT id, reason, note, actor_staff_identity_id, occurred_at
+FROM abandoned_checkouts
+WHERE service_session_id = $1
+`
+
+type GetAbandonedCheckoutBySessionRow struct {
+	ID                   uuid.UUID      `json:"id"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	OccurredAt           time.Time      `json:"occurred_at"`
+}
+
+// Phase 08: the terminal record the Service Session projection reads.
+func (q *Queries) GetAbandonedCheckoutBySession(ctx context.Context, serviceSessionID uuid.UUID) (GetAbandonedCheckoutBySessionRow, error) {
+	row := q.db.QueryRowContext(ctx, getAbandonedCheckoutBySession, serviceSessionID)
+	var i GetAbandonedCheckoutBySessionRow
+	err := row.Scan(
+		&i.ID,
+		&i.Reason,
+		&i.Note,
+		&i.ActorStaffIdentityID,
+		&i.OccurredAt,
+	)
+	return i, err
+}
+
 const getCompletedSale = `-- name: GetCompletedSale :one
 SELECT cs.id, cs.service_session_id, cs.completed_by_staff_identity_id,
        cs.completed_staff_access_session_id, cs.completed_at,

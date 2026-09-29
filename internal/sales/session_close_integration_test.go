@@ -118,7 +118,7 @@ func TestCloseServiceSessionRejections(t *testing.T) {
 		require.ErrorIs(t, err, sales.ErrCheckNotSettledForClosure)
 	})
 
-	t.Run("unsubmitted work is refused once checks are settled", func(t *testing.T) {
+	t.Run("paid but unsubmitted work is refused as awaiting submission (Phase 08 precedence)", func(t *testing.T) {
 		session := env.commitDineInDraftWithQuantity(t, 1)
 		checkID := env.soleCheckID(t, session.ID)
 		charge := env.checkCharge(t, checkID)
@@ -126,7 +126,7 @@ func TestCloseServiceSessionRejections(t *testing.T) {
 		require.NoError(t, err)
 
 		_, _, err = env.TryClose(t, session.ID)
-		require.ErrorIs(t, err, sales.ErrUnsubmittedWorkForClosure)
+		require.ErrorIs(t, err, sales.ErrAwaitingSubmissionForClosure)
 	})
 
 	t.Run("nonterminal preparation is refused last", func(t *testing.T) {

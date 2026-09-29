@@ -1231,3 +1231,9 @@ SELECT count(*)::BIGINT AS live_adjustment_count
 FROM charge_adjustments
 WHERE check_id = ANY(sqlc.arg(check_ids)::uuid[])
   AND scope = 'LIVE_CHECK';
+
+-- name: GetAbandonedCheckoutBySession :one
+-- Phase 08: the terminal record the Service Session projection reads.
+SELECT id, reason, note, actor_staff_identity_id, occurred_at
+FROM abandoned_checkouts
+WHERE service_session_id = $1;

@@ -83,6 +83,8 @@ type Querier interface {
 	// never matches itself. A separate query rather than a nullable exclusion
 	// parameter keeps the add path's query untouched.
 	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
+	// Phase 08: the terminal record the Service Session projection reads.
+	GetAbandonedCheckoutBySession(ctx context.Context, serviceSessionID uuid.UUID) (GetAbandonedCheckoutBySessionRow, error)
 	// -- Display Details (BA-1) --
 	GetActiveMenuItemIDByCode(ctx context.Context, arg GetActiveMenuItemIDByCodeParams) (uuid.UUID, error)
 	// The one active Shift (OPEN or CLOSING) for the current-Shift read. The

@@ -232,6 +232,7 @@ func TestPhase6CRefundErrorMapping(t *testing.T) {
 		{ErrRefundAllocationInvalid, http.StatusBadRequest, "REFUND_ALLOCATION_INVALID"},
 		{ErrRefundExceedsAdjustmentCapacity, http.StatusConflict, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY"},
 		{ErrRefundExceedsPaymentCapacity, http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY"},
+		{ErrAwaitingSubmissionForClosure, http.StatusConflict, "AWAITING_SUBMISSION_FOR_CLOSURE"},
 		{ErrRefundExceedsPendingRefund, http.StatusConflict, "REFUND_EXCEEDS_PENDING_REFUND"},
 		{ErrRefundMethodMismatch, http.StatusConflict, "REFUND_METHOD_MISMATCH"},
 		{ErrRefundAlreadyCompleted, http.StatusConflict, "REFUND_ALREADY_COMPLETED"},

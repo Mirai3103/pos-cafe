@@ -112,6 +112,7 @@ var (
 	ErrNothingToSubmit                  = errors.New("no committed order draft awaits submission")
 	ErrCheckNotSettledForSubmission     = errors.New("every check must be settled before a takeaway order is submitted")
 	ErrCheckNotSettledForClosure        = errors.New("every check must be settled before the service session closes")
+	ErrAwaitingSubmissionForClosure     = errors.New("paid committed items must be submitted or cancelled before the service session closes")
 	ErrPendingRefundForClosure          = errors.New("every pending refund must be resolved before the service session closes")
 	ErrUnsubmittedWorkForClosure        = errors.New("every committed item must be submitted before the service session closes")
 	ErrOrderRequiredForClosure          = errors.New("a service session with no order cannot close")
@@ -349,6 +350,8 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_SUBMISSION", ErrCheckNotSettledForSubmission)
 	case errors.Is(err, ErrCheckNotSettledForClosure):
 		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_CLOSURE", ErrCheckNotSettledForClosure)
+	case errors.Is(err, ErrAwaitingSubmissionForClosure):
+		return coded(http.StatusConflict, "AWAITING_SUBMISSION_FOR_CLOSURE", ErrAwaitingSubmissionForClosure)
 	case errors.Is(err, ErrPendingRefundForClosure):
 		return coded(http.StatusConflict, "PENDING_REFUND_FOR_CLOSURE", ErrPendingRefundForClosure)
 	case errors.Is(err, ErrUnsubmittedWorkForClosure):
