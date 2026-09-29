@@ -30,7 +30,6 @@ disable or re-enable an account. It is the last sub-slice of slice 9.
 - A staff table with search and a "show disabled" filter, a create/edit modal, a
   reset-PIN modal, and a disable/enable confirmation (section 4).
 - Self-protection on the signed-in Manager's own row (section 5).
-- `ManagerApprovalDialog` gains a `selfOnly` mode (section 6).
 
 ### 1.2 Out of Scope (Recorded Cuts)
 
@@ -160,16 +159,15 @@ is signed out on every device. → `POST /staff/{id}/reset-pin`.
 
 A confirmation dialog. Disabling states that the staff member is signed out
 everywhere. → `PATCH /staff/{id}/enabled` with `expected_enabled` = the row's
-current value. A `409` stale state refetches the list and shows "Trạng thái nhân
-viên đã thay đổi, đã tải lại".
+current value. A `409` stale state shows the server's message; the list is refetched (4.5).
 
 ### 4.5 Commands and errors
 
 Every command gets a fresh `request_id` per intent (slice sequence §4.3) and a
-Manager PIN through `ManagerApprovalDialog` in `selfOnly` mode. After success,
-invalidate the staff list. Errors use the shared `ApiError` table; the
-last-Manager `409` (reachable only when two Managers act concurrently) shows the
-server's message as a toast and refetches the list.
+Manager PIN through `ManagerApprovalDialog` (section 6). After every command,
+successful or not, invalidate the staff list so a stale row is corrected. Errors
+show inline in the open modal or dialog with the server's message; the last-Manager
+`409` is reachable only when two Managers act concurrently.
 
 ---
 
@@ -189,13 +187,12 @@ These rules live in `lib/staff.ts` as pure functions so they are unit-tested.
 
 ---
 
-## 6. `ManagerApprovalDialog` `selfOnly`
+## 6. Manager PIN
 
 The staff commands verify the PIN of the **acting** staff member; they take no
-approver login code. The dialog today lets the user type another Manager's code,
-which the staff commands would silently ignore. `ManagerApprovalRequest` gains
-`selfOnly?: boolean`: the login code field is filled with the session's code and
-read-only. Existing callers are unchanged.
+approver login code. `ManagerApprovalDialog` already pre-fills and locks the login
+code field when the signed-in user holds `MANAGER`, which every user of this tab
+does, so the dialog is reused unchanged.
 
 ---
 
@@ -227,8 +224,6 @@ Web (`bun test`, pure logic and components, no end-to-end):
 - `staff.test.ts`: search (diacritics, code), disabled filter, sort; form
   validation; self rules (hidden actions, locked Manager checkbox).
 - `staff-table.test.tsx`: the "Bạn" row shows no reset/disable actions.
-- `manager-approval-dialog` `selfOnly`: the login code field is read-only and
-  pre-filled.
 
 ---
 
