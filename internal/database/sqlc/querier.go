@@ -833,6 +833,7 @@ type Querier interface {
 	UpdateSessionState(ctx context.Context, arg UpdateSessionStateParams) error
 	UpdateSessionWorkspace(ctx context.Context, arg UpdateSessionWorkspaceParams) error
 	UpdateStaffPin(ctx context.Context, arg UpdateStaffPinParams) error
+	UpdateStaffProfile(ctx context.Context, arg UpdateStaffProfileParams) (UpdateStaffProfileRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

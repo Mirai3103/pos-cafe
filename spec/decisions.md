@@ -853,3 +853,15 @@ CREATE TABLE idempotency_keys (
 * The run stops at the first failure and shows which steps finished. Pressing "Lưu" again re-plans against refreshed server state instead of replaying request ids: finished steps no longer differ and drop out, unsaved rows are matched to rows the server already created by name, and a finished image upload is removed from the form.
 * **Rejected:** a composite backend command per form, which would merge capabilities and Audit Events that ADR-048 keeps one per intent; one save button per form section, which departs from the prototype's single save.
 * **Consequences:** A save can stop part-way, and the form says so. A concurrent edit of the same entity on another terminal can be overwritten, because details and replace-set commands replace whole values. This is accepted while one Manager edits the menu.
+
+## ADR-063: Staff profile and roles change in one command
+
+* **Decision Date:** 2026-10-01
+* **Status:** Accepted
+* **Context:** Web slice 9c edits a Staff Identity's display name, login code, and Operational Roles in one form. The API could change roles (`PUT /staff/{id}/roles`) but not the name or code. ADR-062 answers a multi-field form with a planned sequence of existing commands, but its reason, keeping capabilities and Audit Events one per intent, does not hold here: every staff command needs the same `MANAGER` role and the same PIN rule, and none writes an Audit Event yet.
+* **Decision:**
+* `PATCH /staff/{id}` replaces display name, login code, and roles atomically, under the enabled-Manager invariant lock, and is idempotent under operation `staff.update`.
+* The last-enabled-Manager check is one function, `ensureManagerRemains`, shared by this command and `PUT /staff/{id}/roles`. `PATCH /staff/{id}/enabled` keeps its own check, which asks about disabling rather than role removal.
+* `PUT /staff/{id}/roles` is kept for API compatibility; the web no longer calls it.
+* **Rejected:** a name-and-code-only endpoint run with the 9b plan runner. A partial save could apply a rename without its role change or the reverse, and the role change is the step most likely to fail (the invariant).
+* **Consequences:** Two endpoints can change roles. Staff commands still write no Audit Event; backlog BA-6 owns that gap.

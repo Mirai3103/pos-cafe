@@ -1233,6 +1233,7 @@ func TestStaffConstructors(t *testing.T) {
 	assert.NotNil(t, auth.NewStaffMeHandler(nil))
 	assert.NotNil(t, auth.NewStaffListHandler(nil))
 	assert.NotNil(t, auth.NewStaffCreateHandler(nil, nil))
+	assert.NotNil(t, auth.NewStaffUpdateHandler(nil, nil))
 	assert.NotNil(t, auth.NewStaffSetEnabledHandler(nil, nil))
 	assert.NotNil(t, auth.NewStaffReplaceRolesHandler(nil, nil))
 	assert.NotNil(t, auth.NewStaffResetPinHandler(nil, nil))

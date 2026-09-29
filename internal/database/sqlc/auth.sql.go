@@ -676,3 +676,38 @@ func (q *Queries) UpdateStaffPin(ctx context.Context, arg UpdateStaffPinParams) 
 	_, err := q.db.ExecContext(ctx, updateStaffPin, arg.ID, arg.PinHash)
 	return err
 }
+
+const updateStaffProfile = `-- name: UpdateStaffProfile :one
+UPDATE staff_identities
+SET display_name = $1,
+    login_code = upper(btrim($2::text))
+WHERE id = $3
+RETURNING id, display_name, login_code, enabled, created_at
+`
+
+type UpdateStaffProfileParams struct {
+	DisplayName string    `json:"display_name"`
+	LoginCode   string    `json:"login_code"`
+	ID          uuid.UUID `json:"id"`
+}
+
+type UpdateStaffProfileRow struct {
+	ID          uuid.UUID `json:"id"`
+	DisplayName string    `json:"display_name"`
+	LoginCode   string    `json:"login_code"`
+	Enabled     bool      `json:"enabled"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (q *Queries) UpdateStaffProfile(ctx context.Context, arg UpdateStaffProfileParams) (UpdateStaffProfileRow, error) {
+	row := q.db.QueryRowContext(ctx, updateStaffProfile, arg.DisplayName, arg.LoginCode, arg.ID)
+	var i UpdateStaffProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.LoginCode,
+		&i.Enabled,
+		&i.CreatedAt,
+	)
+	return i, err
+}

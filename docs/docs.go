@@ -7980,6 +7980,100 @@ const docTemplate = `{
                 }
             }
         },
+        "/staff/{id}": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đổi tên hiển thị, mã đăng nhập và toàn bộ vai trò trong một lệnh (ADR-063)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Staff"
+                ],
+                "summary": "Cập nhật thông tin và vai trò nhân viên",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Staff ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin mới",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.UpdateStaffRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/auth.StaffDetailResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/staff/{id}/enabled": {
             "patch": {
                 "security": [
@@ -8855,6 +8949,43 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 8,
                     "minLength": 4
+                }
+            }
+        },
+        "auth.UpdateStaffRequest": {
+            "type": "object",
+            "required": [
+                "display_name",
+                "login_code",
+                "manager_pin",
+                "request_id",
+                "roles"
+            ],
+            "properties": {
+                "display_name": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "minLength": 1
+                },
+                "login_code": {
+                    "type": "string",
+                    "maxLength": 24,
+                    "minLength": 1
+                },
+                "manager_pin": {
+                    "type": "string",
+                    "maxLength": 8,
+                    "minLength": 4
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

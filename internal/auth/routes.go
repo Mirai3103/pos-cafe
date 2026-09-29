@@ -28,6 +28,7 @@ type Slices struct {
 	StaffMe          *StaffMeHandler
 	StaffList        *StaffListHandler
 	StaffCreate      *StaffCreateHandler
+	StaffUpdate      *StaffUpdateHandler
 	StaffSetEnabled  *StaffSetEnabledHandler
 	StaffReplaceRole *StaffReplaceRolesHandler
 	StaffResetPin    *StaffResetPinHandler
@@ -55,6 +56,7 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		StaffMe:          NewStaffMeHandler(queries),
 		StaffList:        NewStaffListHandler(queries),
 		StaffCreate:      NewStaffCreateHandler(db, queries),
+		StaffUpdate:      NewStaffUpdateHandler(db, queries),
 		StaffSetEnabled:  NewStaffSetEnabledHandler(db, queries),
 		StaffReplaceRole: NewStaffReplaceRolesHandler(db, queries),
 		StaffResetPin:    NewStaffResetPinHandler(db, queries),
@@ -81,6 +83,7 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group) {
 	staffGroup.GET("/me", s.StaffMe.HandleHTTP)
 	staffGroup.GET("", s.StaffList.HandleHTTP)
 	staffGroup.POST("", s.StaffCreate.HandleHTTP)
+	staffGroup.PATCH("/:id", s.StaffUpdate.HandleHTTP)
 	staffGroup.PATCH("/:id/enabled", s.StaffSetEnabled.HandleHTTP)
 	staffGroup.PUT("/:id/roles", s.StaffReplaceRole.HandleHTTP)
 	staffGroup.POST("/:id/reset-pin", s.StaffResetPin.HandleHTTP)

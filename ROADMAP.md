@@ -65,9 +65,13 @@ and per-tab settings guards (ADR-056).
 [Slice 9b, catalog structure](docs/superpowers/specs/2026-09-30-web-slice-9b-catalog-structure-design.md)
 ships the "Quản lý Thực đơn & Topping" tab on the BA-1 commands, with a planned,
 re-plannable multi-command form save (ADR-062).
+[Slice 9c, staff administration](docs/superpowers/specs/2026-10-01-web-slice-9c-staff-administration-design.md)
+ships the "Nhân viên" tab and one Go command, `PATCH /staff/{id}`, that changes a
+Staff Identity's name, login code, and roles atomically (ADR-063). It records the
+missing staff Audit Events as backlog BA-6.
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
-`preparation`. Sixty-one architecture decisions are recorded.
+`preparation`. Sixty-three architecture decisions are recorded.
 
 ---
 
@@ -84,7 +88,7 @@ criteria live in the ticket, not here.
 | **10** | Recover numbered-paper outage Sales | 09 | [ticket](docs/backlog/phase-10-recover-numbered-paper-outage-sales.md) |
 | **11** | Serve clients over LAN, single-binary packaging, frontend | none | [ticket](docs/backlog/phase-11-clients-over-lan-and-single-binary.md) |
 | **12** | Back up, restore, update, verify readiness | 10, 11 | [ticket](docs/backlog/phase-12-backup-restore-update-readiness.md) |
-| **BA** | Backend alignment: close the gaps the web slices recorded (BA-1 catalog, BA-2 store profile and VietQR, BA-3 preparation station, BA-4 tables and floor, BA-5 Service Session operations) — **BA-1 done** | none | [ticket](docs/backlog/backend-alignment.md) |
+| **BA** | Backend alignment: close the gaps the web slices recorded (BA-1 catalog, BA-2 store profile and VietQR, BA-3 preparation station, BA-4 tables and floor, BA-5 Service Session operations, BA-6 staff audit) — **BA-1 done** | none | [ticket](docs/backlog/backend-alignment.md) |
 
 Phase 11 is the one exception to "no approved Go design exists": its UI half has a
 design, and slices 1 through 6 of the sequence satisfy its Sign-in, Cashier, and
