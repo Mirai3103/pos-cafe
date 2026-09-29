@@ -842,3 +842,14 @@ CREATE TABLE idempotency_keys (
 * `GET /catalog/menu/availability` returns `price_vnd` and `surcharge_vnd` only when the caller holds `catalog.view_prices`, as `omitempty` pointer fields: a caller without the capability receives the fields absent, not zeroed. For a sized item `price_vnd` is the lowest price among its non-retired sizes.
 * **Rejected:** prices for everyone, which would hollow out the capability.
 * **Consequences:** Granting `catalog.view_prices` to another role widens visibility without an API change; the web falls back to "—" when the price is absent.
+
+## ADR-062: A web form save is a planned sequence of existing commands
+
+* **Decision Date:** 2026-09-30
+* **Status:** Accepted
+* **Context:** The slice 9b item, category, and modifier-group forms each edit fields that belong to several catalog commands (rename, reprice, sizes, details, image, assignments), and the prototype gives each form one "Lưu" button. The commands are separate by design: each carries its own capability, Manager PIN rule, and Audit Event (ADR-048).
+* **Decision:**
+* "Lưu" diffs the form against the snapshot taken when the modal opened and runs the resulting commands in a fixed order that never exposes an invalid intermediate state (move before assignments; add options before the selection rule; the rule before retiring options). The Manager PIN is asked once when any command needs it and is held only for that run.
+* The run stops at the first failure and shows which steps finished. Pressing "Lưu" again re-plans against refreshed server state instead of replaying request ids: finished steps no longer differ and drop out, unsaved rows are matched to rows the server already created by name, and a finished image upload is removed from the form.
+* **Rejected:** a composite backend command per form, which would merge capabilities and Audit Events that ADR-048 keeps one per intent; one save button per form section, which departs from the prototype's single save.
+* **Consequences:** A save can stop part-way, and the form says so. A concurrent edit of the same entity on another terminal can be overwritten, because details and replace-set commands replace whole values. This is accepted while one Manager edits the menu.
