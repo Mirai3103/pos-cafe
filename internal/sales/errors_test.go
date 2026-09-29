@@ -29,6 +29,7 @@ func TestMapHTTPErrorCodes(t *testing.T) {
 		{"open shift required", ErrOpenShiftRequired, http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED"},
 		{"session not found", ErrServiceSessionNotFound, http.StatusNotFound, "SERVICE_SESSION_NOT_FOUND"},
 		{"session closed", ErrServiceSessionClosed, http.StatusConflict, "SERVICE_SESSION_ALREADY_CLOSED"},
+		{"payment requires refund", ErrPaymentRequiresRefund, http.StatusConflict, "PAYMENT_REQUIRES_REFUND"},
 		{"draft not found", ErrEditableDraftNotFound, http.StatusConflict, "EDITABLE_DRAFT_NOT_FOUND"},
 		{"draft item not found", ErrDraftItemNotFound, http.StatusNotFound, "DRAFT_ITEM_NOT_FOUND"},
 		{"menu item not found", ErrMenuItemNotFound, http.StatusNotFound, "MENU_ITEM_NOT_FOUND"},

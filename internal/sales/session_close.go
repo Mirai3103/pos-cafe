@@ -94,45 +94,10 @@ func (h *CloseServiceSessionHandler) Handle(ctx context.Context, actor Actor,
 				return 0, zero, AuditRecord{}, fmt.Errorf("insert completed sale: %w", err)
 			}
 
-			assignments, err := q.ListHeldTableAssignments(ctx, cmd.ServiceSessionID)
+			releasedTableIDs, err := releaseHeldTableAssignments(ctx, q, actor,
+				cmd.ServiceSessionID, completedAt)
 			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("list held table assignments: %w", err)
-			}
-			for _, assignment := range assignments {
-				// The existing ReleaseTableAssignment query sets released_at =
-				// now() server-side: the release and the Completed Sale happen
-				// in this one transaction, so the timestamps are the same
-				// moment and the evidence constraint stays satisfied without a
-				// second, redundant query.
-				if err := q.ReleaseTableAssignment(ctx, sqlc.ReleaseTableAssignmentParams{
-					ID:                        assignment.ID,
-					ReleasedByStaffIdentityID: uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-				}); err != nil {
-					return 0, zero, AuditRecord{}, fmt.Errorf("release table assignment: %w", err)
-				}
-				// Each released assignment carries its own audit event, the
-				// same event type and details shape the Table Assignment
-				// release path writes; AuditRecord holds only the one
-				// Session-level event.
-				details, err := json.Marshal(tableAssignmentAudit{
-					TableAssignmentID: assignment.ID,
-					TableID:           assignment.TableID,
-					ServiceSessionID:  cmd.ServiceSessionID,
-				})
-				if err != nil {
-					return 0, zero, AuditRecord{},
-						fmt.Errorf("marshal table assignment audit: %w", err)
-				}
-				if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-					EventType:  EventTableAssignmentReleased,
-					ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-					SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-					Details:    details,
-					OccurredAt: completedAt,
-				}); err != nil {
-					return 0, zero, AuditRecord{}, fmt.Errorf(
-						"insert %s audit event: %w", EventTableAssignmentReleased, err)
-				}
+				return 0, zero, AuditRecord{}, err
 			}
 
 			if err := q.CloseServiceSession(ctx, cmd.ServiceSessionID); err != nil {
@@ -144,10 +109,6 @@ func (h *CloseServiceSessionHandler) Handle(ctx context.Context, actor Actor,
 				return 0, zero, AuditRecord{}, err
 			}
 
-			releasedTableIDs := make([]uuid.UUID, 0, len(assignments))
-			for _, assignment := range assignments {
-				releasedTableIDs = append(releasedTableIDs, assignment.TableID)
-			}
 			return http.StatusCreated, out, AuditRecord{
 				EventType: EventServiceSessionClosed,
 				Details: map[string]any{
@@ -157,4 +118,51 @@ func (h *CloseServiceSessionHandler) Handle(ctx context.Context, actor Actor,
 				},
 			}, nil
 		})
+}
+
+// releaseHeldTableAssignments releases every Table the Session holds, one
+// TABLE_ASSIGNMENT_RELEASED Audit Event each, and returns the released Table
+// ids. Service Session closure and Abandon Checkout share it.
+func releaseHeldTableAssignments(ctx context.Context, q *sqlc.Queries, actor Actor,
+	sessionID uuid.UUID, occurredAt time.Time,
+) ([]uuid.UUID, error) {
+	assignments, err := q.ListHeldTableAssignments(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("list held table assignments: %w", err)
+	}
+	released := make([]uuid.UUID, 0, len(assignments))
+	for _, assignment := range assignments {
+		// The existing ReleaseTableAssignment query sets released_at = now()
+		// server-side: the release and the Session's terminal write happen in
+		// one transaction, so the timestamps are the same moment and the
+		// evidence constraint stays satisfied without a second query.
+		if err := q.ReleaseTableAssignment(ctx, sqlc.ReleaseTableAssignmentParams{
+			ID:                        assignment.ID,
+			ReleasedByStaffIdentityID: uuid.NullUUID{UUID: actor.StaffID, Valid: true},
+		}); err != nil {
+			return nil, fmt.Errorf("release table assignment: %w", err)
+		}
+		// Each released assignment carries its own audit event, the same
+		// event type and details shape the Table Assignment release path
+		// writes; AuditRecord holds only the one Session-level event.
+		details, err := json.Marshal(tableAssignmentAudit{
+			TableAssignmentID: assignment.ID,
+			TableID:           assignment.TableID,
+			ServiceSessionID:  sessionID,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("marshal table assignment audit: %w", err)
+		}
+		if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
+			EventType:  EventTableAssignmentReleased,
+			ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
+			SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
+			Details:    details,
+			OccurredAt: occurredAt,
+		}); err != nil {
+			return nil, fmt.Errorf("insert %s audit event: %w", EventTableAssignmentReleased, err)
+		}
+		released = append(released, assignment.TableID)
+	}
+	return released, nil
 }

@@ -15,6 +15,57 @@ import (
 	"github.com/lib/pq"
 )
 
+const abandonServiceSession = `-- name: AbandonServiceSession :exec
+UPDATE service_sessions SET state = 'ABANDONED' WHERE id = $1
+`
+
+func (q *Queries) AbandonServiceSession(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, abandonServiceSession, id)
+	return err
+}
+
+const abandonSessionChecks = `-- name: AbandonSessionChecks :many
+UPDATE checks SET state = 'ABANDONED'
+WHERE service_session_id = $1 AND state IN ('OPEN', 'SETTLED')
+RETURNING id
+`
+
+// MERGED Checks keep their state; they already carry no charge.
+func (q *Queries) AbandonSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, abandonSessionChecks, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cancelSessionDrafts = `-- name: CancelSessionDrafts :exec
+UPDATE order_drafts SET state = 'CANCELLED'
+WHERE service_session_id = $1 AND state IN ('EDITABLE', 'COMMITTED')
+`
+
+// Only a Session with no Order is abandoned, so every COMMITTED draft here is
+// unsubmitted.
+func (q *Queries) CancelSessionDrafts(ctx context.Context, serviceSessionID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, cancelSessionDrafts, serviceSessionID)
+	return err
+}
+
 const closeServiceSession = `-- name: CloseServiceSession :exec
 UPDATE service_sessions SET state = 'CLOSED' WHERE id = $1
 `
@@ -490,6 +541,80 @@ func (q *Queries) GetServiceSession(ctx context.Context, id uuid.UUID) (GetServi
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getSessionHeldMoney = `-- name: GetSessionHeldMoney :one
+SELECT
+    COALESCE((SELECT SUM(p.applied_amount_vnd)
+              FROM payments AS p
+              JOIN checks AS c ON c.id = p.check_id
+              WHERE c.service_session_id = $1::uuid
+                AND NOT EXISTS (SELECT 1 FROM payment_voids AS pv
+                                WHERE pv.payment_id = p.id)), 0)::BIGINT
+        AS valid_payment_vnd,
+    COALESCE((SELECT SUM(r.amount_vnd)
+              FROM refunds AS r
+              JOIN refund_completions AS rc ON rc.refund_id = r.id
+              JOIN checks AS c ON c.id = r.check_id
+              WHERE c.service_session_id = $1::uuid
+                AND r.completed_sale_id IS NULL), 0)::BIGINT
+        AS completed_refund_vnd,
+    (SELECT count(*)
+     FROM refunds AS r
+     JOIN checks AS c ON c.id = r.check_id
+     WHERE c.service_session_id = $1::uuid
+       AND NOT EXISTS (SELECT 1 FROM refund_completions AS rc
+                       WHERE rc.refund_id = r.id))::BIGINT
+        AS pending_refund_count
+`
+
+type GetSessionHeldMoneyRow struct {
+	ValidPaymentVnd    int64 `json:"valid_payment_vnd"`
+	CompletedRefundVnd int64 `json:"completed_refund_vnd"`
+	PendingRefundCount int64 `json:"pending_refund_count"`
+}
+
+// Phase 08: the money an Abandon must see returned. Valid Payments exclude
+// voided ones; a Refund counts only once completed; a pending Refund is
+// counted separately because it has not moved money.
+func (q *Queries) GetSessionHeldMoney(ctx context.Context, serviceSessionID uuid.UUID) (GetSessionHeldMoneyRow, error) {
+	row := q.db.QueryRowContext(ctx, getSessionHeldMoney, serviceSessionID)
+	var i GetSessionHeldMoneyRow
+	err := row.Scan(&i.ValidPaymentVnd, &i.CompletedRefundVnd, &i.PendingRefundCount)
+	return i, err
+}
+
+const insertAbandonedCheckout = `-- name: InsertAbandonedCheckout :one
+INSERT INTO abandoned_checkouts (
+    service_session_id, sales_shift_id, reason, note,
+    actor_staff_identity_id, staff_access_session_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id
+`
+
+type InsertAbandonedCheckoutParams struct {
+	ServiceSessionID     uuid.UUID      `json:"service_session_id"`
+	SalesShiftID         uuid.UUID      `json:"sales_shift_id"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	OccurredAt           time.Time      `json:"occurred_at"`
+}
+
+func (q *Queries) InsertAbandonedCheckout(ctx context.Context, arg InsertAbandonedCheckoutParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, insertAbandonedCheckout,
+		arg.ServiceSessionID,
+		arg.SalesShiftID,
+		arg.Reason,
+		arg.Note,
+		arg.ActorStaffIdentityID,
+		arg.StaffAccessSessionID,
+		arg.OccurredAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertChargeAllocation = `-- name: InsertChargeAllocation :exec

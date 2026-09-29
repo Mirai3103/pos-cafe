@@ -174,3 +174,185 @@ func TestCancelAwaitingSubmissionReplays(t *testing.T) {
 	require.ErrorIs(t, err, sales.ErrNothingAwaitingSubmission)
 	require.Equal(t, 1, env.countAuditEvents(t, sales.EventAwaitingSubmissionCancelled))
 }
+
+func (e *recoveryEnv) abandonWithRequestID(t *testing.T, requestID, sessionID uuid.UUID,
+	reason string, note *string,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewAbandonCheckoutHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.CheckoutRecoveryCommand{
+			RequestID: requestID, ServiceSessionID: sessionID, Reason: reason, Note: note,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+func (e *recoveryEnv) abandon(t *testing.T, sessionID uuid.UUID) (
+	sales.ServiceSessionResponse, int, error,
+) {
+	t.Helper()
+	return e.abandonWithRequestID(t, uuid.New(), sessionID, sales.RecoveryReasonCustomerLeft, nil)
+}
+
+// refundWithdrawal refunds the Check's whole withdrawn charge against its
+// single Payment, through the unchanged Refund command.
+func (e *recoveryEnv) refundWithdrawal(t *testing.T, sessionID, checkID uuid.UUID,
+	method string,
+) sales.RefundResult {
+	t.Helper()
+	check := e.findCheck(t, e.GetSessionOK(t, sessionID), checkID)
+	require.Len(t, check.ChargeAdjustments, 1)
+	require.Len(t, check.Payments, 1)
+	amount := check.ChargeAdjustments[0].AmountVND
+	status, result, err := sales.NewRecordRefundHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.RecordRefundCommand{
+			RequestID: uuid.New(),
+			CheckID:   checkID,
+			Method:    method,
+			AdjustmentAllocations: []sales.RefundAdjustmentAllocationInput{
+				{ChargeAdjustmentID: check.ChargeAdjustments[0].ID, AmountVND: amount},
+			},
+			PaymentAllocations: []sales.RefundPaymentAllocationInput{
+				{PaymentID: check.Payments[0].ID, AmountVND: amount},
+			},
+			Reason: sales.RefundReasonCustomerRequest,
+			ManagerApproval: sales.ManagerApprovalInput{
+				ApproverLoginCode: e.managerCode, ManagerPIN: "1234",
+			},
+		})
+	require.NoError(t, err)
+	require.Equal(t, 201, status)
+	return result
+}
+
+func TestAbandonUnpaidDineInReleasesTheTable(t *testing.T) {
+	env := newRecoveryEnv(t)
+	ctx := context.Background()
+	session := env.commitDineInDraft(t, 1)
+
+	got, status, err := env.abandon(t, session.ID)
+	require.NoError(t, err)
+	require.Equal(t, 200, status)
+	require.Equal(t, sales.StateAbandoned, got.State)
+	require.NotNil(t, got.AbandonedCheckout)
+	require.Equal(t, sales.RecoveryReasonCustomerLeft, got.AbandonedCheckout.Reason)
+	for _, check := range got.Checks {
+		require.Equal(t, sales.CheckStateAbandoned, check.State)
+	}
+
+	var held int
+	require.NoError(t, env.DB.QueryRowContext(ctx, `
+		SELECT count(*) FROM table_assignments
+		WHERE service_session_id = $1 AND released_at IS NULL`, session.ID).Scan(&held))
+	require.Equal(t, 0, held)
+
+	var orders, completed int
+	require.NoError(t, env.DB.QueryRowContext(ctx,
+		`SELECT count(*) FROM orders WHERE service_session_id = $1`, session.ID).Scan(&orders))
+	require.NoError(t, env.DB.QueryRowContext(ctx,
+		`SELECT count(*) FROM completed_sales WHERE service_session_id = $1`, session.ID).Scan(&completed))
+	require.Zero(t, orders)
+	require.Zero(t, completed)
+	require.Equal(t, 1, env.countAuditEvents(t, sales.EventCheckoutAbandoned))
+	require.Equal(t, 1, env.countAuditEvents(t, sales.EventTableAssignmentReleased))
+}
+
+func TestAbandonEmptySession(t *testing.T) {
+	env := newRecoveryEnv(t)
+	session := env.StartTakeaway(t)
+
+	got, _, err := env.abandon(t, session.ID)
+	require.NoError(t, err)
+	require.Equal(t, sales.StateAbandoned, got.State)
+	require.Nil(t, got.Draft)
+}
+
+func TestAbandonRejections(t *testing.T) {
+	env := newRecoveryEnv(t)
+
+	paid, _ := env.paidTakeaway(t)
+	_, _, err := env.abandon(t, paid.ID)
+	require.ErrorIs(t, err, sales.ErrPaymentRequiresRefund)
+
+	withOrder, _ := env.paidTakeaway(t)
+	env.Submit(t, withOrder.ID)
+	_, _, err = env.abandon(t, withOrder.ID)
+	require.ErrorIs(t, err, sales.ErrSessionHasOrder)
+
+	cancelledNotRefunded, _ := env.paidTakeaway(t)
+	_, _, err = env.cancel(t, cancelledNotRefunded.ID)
+	require.NoError(t, err)
+	_, _, err = env.abandon(t, cancelledNotRefunded.ID)
+	require.ErrorIs(t, err, sales.ErrPaymentRequiresRefund)
+
+	note := "  "
+	unpaid := env.commitTakeawayDraft(t, 1)
+	_, status, err := env.abandonWithRequestID(t, uuid.New(), unpaid.ID, sales.RecoveryReasonOther, &note)
+	require.Error(t, err)
+	require.Equal(t, 400, status, "a blank note normalizes to none, and OTHER requires one")
+}
+
+func TestAbandonReplaysAndThenRefusesANewRequest(t *testing.T) {
+	env := newRecoveryEnv(t)
+	session := env.commitTakeawayDraft(t, 1)
+
+	requestID := uuid.New()
+	first, _, err := env.abandonWithRequestID(t, requestID, session.ID, sales.RecoveryReasonCustomerLeft, nil)
+	require.NoError(t, err)
+	replay, _, err := env.abandonWithRequestID(t, requestID, session.ID, sales.RecoveryReasonCustomerLeft, nil)
+	require.NoError(t, err)
+	require.Equal(t, first.AbandonedCheckout.ID, replay.AbandonedCheckout.ID)
+
+	_, _, err = env.abandon(t, session.ID)
+	require.ErrorIs(t, err, sales.ErrServiceSessionClosed)
+}
+
+func TestCancelRefundAbandonCash(t *testing.T) {
+	env := newRecoveryEnv(t)
+	ctx := context.Background()
+	session, checkID := env.paidTakeaway(t)
+
+	_, _, err := env.cancel(t, session.ID)
+	require.NoError(t, err)
+	env.refundWithdrawal(t, session.ID, checkID, sales.RefundMethodCash)
+
+	got, _, err := env.abandon(t, session.ID)
+	require.NoError(t, err)
+	require.Equal(t, sales.StateAbandoned, got.State)
+
+	var netCash int64
+	require.NoError(t, env.DB.QueryRowContext(ctx, `
+		SELECT COALESCE((SELECT SUM(applied_amount_vnd) FROM payments WHERE sales_shift_id = $1), 0)
+		     - COALESCE((SELECT SUM(r.amount_vnd) FROM refunds r
+		                 JOIN refund_completions rc ON rc.refund_id = r.id
+		                 WHERE r.sales_shift_id = $1), 0)`, env.ShiftID).Scan(&netCash))
+	require.Zero(t, netCash, "the cash that came in went back out")
+}
+
+func TestCancelRefundAbandonManualQR(t *testing.T) {
+	env := newRecoveryEnv(t)
+	session := env.commitTakeawayDraft(t, 1)
+	checkID := env.soleCheckID(t, session.ID)
+	_, _, err := env.payManualQR(t, checkID, 50000, true, nil)
+	require.NoError(t, err)
+
+	_, _, err = env.cancel(t, session.ID)
+	require.NoError(t, err)
+	result := env.refundWithdrawal(t, session.ID, checkID, sales.RefundMethodManualQR)
+	require.Equal(t, sales.RefundStatePending, result.Refund.State)
+
+	_, _, err = env.abandon(t, session.ID)
+	require.ErrorIs(t, err, sales.ErrPaymentRequiresRefund, "a pending Refund has not moved money")
+
+	_, _, err = sales.NewConfirmManualQRRefundHandler(env.Runner).
+		Handle(context.Background(), env.Actor, sales.ConfirmManualQRRefundCommand{
+			RequestID: uuid.New(), RefundID: result.Refund.ID,
+		})
+	require.NoError(t, err)
+
+	got, _, err := env.abandon(t, session.ID)
+	require.NoError(t, err)
+	require.Equal(t, sales.StateAbandoned, got.State)
+}

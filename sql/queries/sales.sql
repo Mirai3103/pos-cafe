@@ -1265,3 +1265,52 @@ ORDER BY ca.check_id, ca.id;
 
 -- name: MarkOrderDraftCancelled :exec
 UPDATE order_drafts SET state = 'CANCELLED' WHERE id = $1;
+
+-- name: GetSessionHeldMoney :one
+-- Phase 08: the money an Abandon must see returned. Valid Payments exclude
+-- voided ones; a Refund counts only once completed; a pending Refund is
+-- counted separately because it has not moved money.
+SELECT
+    COALESCE((SELECT SUM(p.applied_amount_vnd)
+              FROM payments AS p
+              JOIN checks AS c ON c.id = p.check_id
+              WHERE c.service_session_id = sqlc.arg(service_session_id)::uuid
+                AND NOT EXISTS (SELECT 1 FROM payment_voids AS pv
+                                WHERE pv.payment_id = p.id)), 0)::BIGINT
+        AS valid_payment_vnd,
+    COALESCE((SELECT SUM(r.amount_vnd)
+              FROM refunds AS r
+              JOIN refund_completions AS rc ON rc.refund_id = r.id
+              JOIN checks AS c ON c.id = r.check_id
+              WHERE c.service_session_id = sqlc.arg(service_session_id)::uuid
+                AND r.completed_sale_id IS NULL), 0)::BIGINT
+        AS completed_refund_vnd,
+    (SELECT count(*)
+     FROM refunds AS r
+     JOIN checks AS c ON c.id = r.check_id
+     WHERE c.service_session_id = sqlc.arg(service_session_id)::uuid
+       AND NOT EXISTS (SELECT 1 FROM refund_completions AS rc
+                       WHERE rc.refund_id = r.id))::BIGINT
+        AS pending_refund_count;
+
+-- name: InsertAbandonedCheckout :one
+INSERT INTO abandoned_checkouts (
+    service_session_id, sales_shift_id, reason, note,
+    actor_staff_identity_id, staff_access_session_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id;
+
+-- name: CancelSessionDrafts :exec
+-- Only a Session with no Order is abandoned, so every COMMITTED draft here is
+-- unsubmitted.
+UPDATE order_drafts SET state = 'CANCELLED'
+WHERE service_session_id = $1 AND state IN ('EDITABLE', 'COMMITTED');
+
+-- name: AbandonSessionChecks :many
+-- MERGED Checks keep their state; they already carry no charge.
+UPDATE checks SET state = 'ABANDONED'
+WHERE service_session_id = $1 AND state IN ('OPEN', 'SETTLED')
+RETURNING id;
+
+-- name: AbandonServiceSession :exec
+UPDATE service_sessions SET state = 'ABANDONED' WHERE id = $1;

@@ -12,10 +12,16 @@ import (
 )
 
 type Querier interface {
+	AbandonServiceSession(ctx context.Context, id uuid.UUID) error
+	// MERGED Checks keep their state; they already carry no charge.
+	AbandonSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]uuid.UUID, error)
 	// Fills the acknowledgment tuple together; the all-or-nothing check
 	// constraint rejects any partial write.
 	AcknowledgePreparationAlert(ctx context.Context, arg AcknowledgePreparationAlertParams) (AcknowledgePreparationAlertRow, error)
 	AddStaffRole(ctx context.Context, arg AddStaffRoleParams) error
+	// Only a Session with no Order is abandoned, so every COMMITTED draft here is
+	// unsubmitted.
+	CancelSessionDrafts(ctx context.Context, serviceSessionID uuid.UUID) error
 	// -- Advisory Lock --
 	CatalogAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogRequestParams) (CatalogMutationRequest, error)
@@ -193,6 +199,10 @@ type Querier interface {
 	GetSalesShiftStateByID(ctx context.Context, id uuid.UUID) (string, error)
 	GetServiceSession(ctx context.Context, id uuid.UUID) (GetServiceSessionRow, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
+	// Phase 08: the money an Abandon must see returned. Valid Payments exclude
+	// voided ones; a Refund counts only once completed; a pending Refund is
+	// counted separately because it has not moved money.
+	GetSessionHeldMoney(ctx context.Context, serviceSessionID uuid.UUID) (GetSessionHeldMoneyRow, error)
 	// -- Phase 6C: Payment Void, Refund & correction reconciliation --
 	// Every Phase 6C reconciliation term for one Shift in one read (ADR-046).
 	// Cash and Manual QR Payment terms count original applied amounts; a Payment
@@ -235,6 +245,7 @@ type Querier interface {
 	// -- Authority --
 	GetTablesSessionAuthority(ctx context.Context, arg GetTablesSessionAuthorityParams) (GetTablesSessionAuthorityRow, error)
 	GetTablesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	InsertAbandonedCheckout(ctx context.Context, arg InsertAbandonedCheckoutParams) (uuid.UUID, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
 	// Batches a per-entry audit-insert loop into one round trip for callers
 	// (Sales table-assignment audits) that write several events of the same type,

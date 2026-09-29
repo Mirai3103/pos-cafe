@@ -220,3 +220,107 @@ func (h *CancelAwaitingSubmissionHandler) Handle(ctx context.Context, actor Acto
 			}, nil
 		})
 }
+
+// AbandonCheckoutHandler ends a Session that has no Order and holds no money
+// as an Abandoned Checkout (spec §5.2). It creates no Order, Preparation Unit,
+// or Completed Sale.
+type AbandonCheckoutHandler struct{ runner *Runner }
+
+// NewAbandonCheckoutHandler creates an AbandonCheckoutHandler.
+func NewAbandonCheckoutHandler(runner *Runner) *AbandonCheckoutHandler {
+	return &AbandonCheckoutHandler{runner: runner}
+}
+
+// Handle executes Abandon Checkout.
+func (h *AbandonCheckoutHandler) Handle(ctx context.Context, actor Actor,
+	cmd CheckoutRecoveryCommand,
+) (int, ServiceSessionResponse, error) {
+	note := normalizeCorrectionNote(cmd.Note)
+	if err := ValidateCheckoutRecoveryCommand(cmd, note); err != nil {
+		return 0, ServiceSessionResponse{}, err
+	}
+	spec := MutationSpec{
+		RequestID:   cmd.RequestID,
+		Operation:   OpAbandonCheckout,
+		Fingerprint: checkoutRecoveryFingerprint{cmd.ServiceSessionID, cmd.Reason, note},
+		Required:    []string{CapSalesOperate},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec,
+		func(mc MutationContext) (int, ServiceSessionResponse, AuditRecord, error) {
+			var zero ServiceSessionResponse
+			q := mc.Queries
+
+			shiftID, err := lockOpenShiftForRecovery(ctx, q)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			if err := lockRecoverableSession(ctx, q, cmd.ServiceSessionID); err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			// The Check locks make the money read below final: a Payment or
+			// Refund that commits first is seen, and one that comes later
+			// waits and then finds the Session ABANDONED.
+			if _, err := q.LockSessionChecksForRecovery(ctx, cmd.ServiceSessionID); err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("lock session checks: %w", err)
+			}
+			money, err := q.GetSessionHeldMoney(ctx, cmd.ServiceSessionID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("read session money: %w", err)
+			}
+			if money.PendingRefundCount > 0 || money.ValidPaymentVnd != money.CompletedRefundVnd {
+				return 0, zero, AuditRecord{}, fmt.Errorf(
+					"%w: received %d, returned %d, %d refund(s) pending",
+					ErrPaymentRequiresRefund, money.ValidPaymentVnd,
+					money.CompletedRefundVnd, money.PendingRefundCount)
+			}
+
+			occurredAt, err := q.GetSalesOccurredAt(ctx)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("read occurrence time: %w", err)
+			}
+			abandonedID, err := q.InsertAbandonedCheckout(ctx, sqlc.InsertAbandonedCheckoutParams{
+				ServiceSessionID:     cmd.ServiceSessionID,
+				SalesShiftID:         shiftID,
+				Reason:               cmd.Reason,
+				Note:                 nullString(note),
+				ActorStaffIdentityID: actor.StaffID,
+				StaffAccessSessionID: actor.SessionID,
+				OccurredAt:           occurredAt,
+			})
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("insert abandoned checkout: %w", err)
+			}
+			if err := q.CancelSessionDrafts(ctx, cmd.ServiceSessionID); err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("cancel session drafts: %w", err)
+			}
+			checkIDs, err := q.AbandonSessionChecks(ctx, cmd.ServiceSessionID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("abandon session checks: %w", err)
+			}
+			releasedTableIDs, err := releaseHeldTableAssignments(ctx, q, actor,
+				cmd.ServiceSessionID, occurredAt)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			if err := q.AbandonServiceSession(ctx, cmd.ServiceSessionID); err != nil {
+				return 0, zero, AuditRecord{}, fmt.Errorf("abandon service session: %w", err)
+			}
+
+			out, err := LoadServiceSession(ctx, q, cmd.ServiceSessionID)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
+			}
+			return http.StatusOK, out, AuditRecord{
+				EventType: EventCheckoutAbandoned,
+				Details: map[string]any{
+					"service_session_id":    cmd.ServiceSessionID,
+					"abandoned_checkout_id": abandonedID,
+					"check_ids":             checkIDs,
+					"released_table_ids":    releasedTableIDs,
+					"reason":                cmd.Reason,
+					"note":                  note,
+				},
+			}, nil
+		})
+}
