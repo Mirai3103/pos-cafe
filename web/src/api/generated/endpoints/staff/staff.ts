@@ -29,8 +29,10 @@ import type {
   AuthReplaceStaffRolesRequest,
   AuthResetStaffPinRequest,
   AuthSetStaffEnabledRequest,
+  AuthUpdateStaffRequest,
   GetStaff200,
   GetStaffMe200,
+  PatchStaffId200,
   PatchStaffIdEnabled200,
   PostStaff201,
   PostStaffIdResetPin200,
@@ -220,6 +222,75 @@ export const usePostStaff = <TError = ResponseAPIResponse,
         TContext
       > => {
       return useMutation(getPostStaffMutationOptions(options), queryClient);
+    }
+    /**
+ * Đổi tên hiển thị, mã đăng nhập và toàn bộ vai trò trong một lệnh (ADR-063)
+ * @summary Cập nhật thông tin và vai trò nhân viên
+ */
+export const patchStaffId = (
+    id: string,
+    authUpdateStaffRequest: AuthUpdateStaffRequest,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PatchStaffId200>(
+      {url: `/staff/${id}`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: authUpdateStaffRequest, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPatchStaffIdMutationKey = () => ['patchStaffId'] as const;
+
+export const getPatchStaffIdMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchStaffId>>, TError,PatchStaffIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchStaffId>>, TError,PatchStaffIdMutationVariables, TContext> => {
+
+const mutationKey = getPatchStaffIdMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchStaffId>>, PatchStaffIdMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchStaffId(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchStaffIdMutationResult = NonNullable<Awaited<ReturnType<typeof patchStaffId>>>
+    export type PatchStaffIdMutationBody = AuthUpdateStaffRequest
+    export type PatchStaffIdMutationError = ResponseAPIResponse
+    export type PatchStaffIdMutationVariables = {id: string;data: AuthUpdateStaffRequest}
+
+    /**
+ * @summary Cập nhật thông tin và vai trò nhân viên
+ */
+export const usePatchStaffId = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchStaffId>>, TError,PatchStaffIdMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchStaffId>>,
+        TError,
+        PatchStaffIdMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPatchStaffIdMutationOptions(options), queryClient);
     }
     /**
  * Kích hoạt hoặc ngưng kích hoạt tài khoản nhân viên
