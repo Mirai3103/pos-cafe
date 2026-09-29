@@ -110,6 +110,8 @@ var (
 	ErrFinancialInvariantViolated = errors.New("check financials do not satisfy their invariant")
 
 	ErrNothingToSubmit                  = errors.New("no committed order draft awaits submission")
+	ErrNothingAwaitingSubmission        = errors.New("the service session is not awaiting submission")
+	ErrSessionHasOrder                  = errors.New("the service session already has a submitted order")
 	ErrCheckNotSettledForSubmission     = errors.New("every check must be settled before a takeaway order is submitted")
 	ErrCheckNotSettledForClosure        = errors.New("every check must be settled before the service session closes")
 	ErrAwaitingSubmissionForClosure     = errors.New("paid committed items must be submitted or cancelled before the service session closes")
@@ -344,6 +346,10 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusUnprocessableEntity, "CHECK_CHARGE_OUT_OF_RANGE", ErrCheckChargeOutOfRange)
 	case errors.Is(err, ErrInvalidCheckTarget):
 		return coded(http.StatusUnprocessableEntity, "INVALID_CHECK_TARGET", ErrInvalidCheckTarget)
+	case errors.Is(err, ErrNothingAwaitingSubmission):
+		return coded(http.StatusConflict, "NOTHING_AWAITING_SUBMISSION", ErrNothingAwaitingSubmission)
+	case errors.Is(err, ErrSessionHasOrder):
+		return coded(http.StatusConflict, "SESSION_HAS_ORDER", ErrSessionHasOrder)
 	case errors.Is(err, ErrNothingToSubmit):
 		return coded(http.StatusConflict, "NOTHING_TO_SUBMIT", ErrNothingToSubmit)
 	case errors.Is(err, ErrCheckNotSettledForSubmission):

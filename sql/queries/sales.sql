@@ -1237,3 +1237,31 @@ WHERE check_id = ANY(sqlc.arg(check_ids)::uuid[])
 SELECT id, reason, note, actor_staff_identity_id, occurred_at
 FROM abandoned_checkouts
 WHERE service_session_id = $1;
+
+-- name: SessionHasOrder :one
+-- Phase 08: recovery applies only to a Session with no Order (ADR-066).
+SELECT EXISTS (SELECT 1 FROM orders WHERE service_session_id = $1) AS has_order;
+
+-- name: LockSessionChecksForRecovery :many
+-- Phase 08: every Check of one Session, after the caller holds the Session
+-- lock, in the ascending (created_at, id) order Submit and 5C use. Like
+-- Submit, this runs Session-then-Checks against Payment's Check-then-Session,
+-- so it inherits ADR-031's AB-BA window (ADR-066).
+SELECT id, state, charge_vnd
+FROM checks
+WHERE service_session_id = $1
+ORDER BY created_at ASC, id ASC
+FOR UPDATE;
+
+-- name: ListWithdrawableAllocations :many
+-- Phase 08: the committed draft's Charge Allocations with their frozen charge,
+-- computed the way GetGlobalShiftClosureBlockers computes base charge.
+SELECT ca.id, ca.check_id,
+       (ca.quantity::BIGINT * ci.unit_price_vnd)::BIGINT AS amount_vnd
+FROM charge_allocations AS ca
+JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+WHERE ci.order_draft_id = $1
+ORDER BY ca.check_id, ca.id;
+
+-- name: MarkOrderDraftCancelled :exec
+UPDATE order_drafts SET state = 'CANCELLED' WHERE id = $1;

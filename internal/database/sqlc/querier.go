@@ -517,6 +517,9 @@ type Querier interface {
 	// fall out of step with the Order that defines it.
 	ListSubmittedCommittedItems(ctx context.Context, committedItemIds []uuid.UUID) ([]uuid.UUID, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	// Phase 08: the committed draft's Charge Allocations with their frozen charge,
+	// computed the way GetGlobalShiftClosureBlockers computes base charge.
+	ListWithdrawableAllocations(ctx context.Context, orderDraftID uuid.UUID) ([]ListWithdrawableAllocationsRow, error)
 	// Step 4: the selected Charge Adjustments FOR UPDATE, each ascending UUID,
 	// after the Payments so both refundable capacities are held in one order.
 	LockChargeAdjustmentsForRefund(ctx context.Context, chargeAdjustmentIds []uuid.UUID) ([]LockChargeAdjustmentsForRefundRow, error)
@@ -689,6 +692,11 @@ type Querier interface {
 	// errors instead of collapsing into ErrNothingToSubmit, per spec §9.3.
 	LockServiceSessionForSubmission(ctx context.Context, id uuid.UUID) (LockServiceSessionForSubmissionRow, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
+	// Phase 08: every Check of one Session, after the caller holds the Session
+	// lock, in the ascending (created_at, id) order Submit and 5C use. Like
+	// Submit, this runs Session-then-Checks against Payment's Check-then-Session,
+	// so it inherits ADR-031's AB-BA window (ADR-066).
+	LockSessionChecksForRecovery(ctx context.Context, serviceSessionID uuid.UUID) ([]LockSessionChecksForRecoveryRow, error)
 	// The committed-but-unsubmitted Order Draft of the Session the caller has
 	// already locked with LockServiceSessionForSubmission. Only the draft is
 	// locked here: the Session lock is its own query so a missing or closed
@@ -716,6 +724,7 @@ type Querier interface {
 	// The absorbed Check keeps no charge and points at the survivor, which is
 	// what the MERGED branch of check_settlement_evidence_valid requires.
 	MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error
+	MarkOrderDraftCancelled(ctx context.Context, id uuid.UUID) error
 	MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error
 	MoveAllocationsToCheck(ctx context.Context, arg MoveAllocationsToCheckParams) error
 	// -- Structure (BA-1) --
@@ -778,6 +787,8 @@ type Querier interface {
 	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
 	SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	// Phase 08: recovery applies only to a Session with no Order (ADR-066).
+	SessionHasOrder(ctx context.Context, serviceSessionID uuid.UUID) (bool, error)
 	// A whole set of quantity rewrites in one statement. Split and Merge compute
 	// the new quantities in Go and hand the batch over, so the work done while the
 	// Checks are locked is a fixed number of round trips rather than one per

@@ -2957,6 +2957,46 @@ func (q *Queries) ListSubmittedCommittedItems(ctx context.Context, committedItem
 	return items, nil
 }
 
+const listWithdrawableAllocations = `-- name: ListWithdrawableAllocations :many
+SELECT ca.id, ca.check_id,
+       (ca.quantity::BIGINT * ci.unit_price_vnd)::BIGINT AS amount_vnd
+FROM charge_allocations AS ca
+JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+WHERE ci.order_draft_id = $1
+ORDER BY ca.check_id, ca.id
+`
+
+type ListWithdrawableAllocationsRow struct {
+	ID        uuid.UUID `json:"id"`
+	CheckID   uuid.UUID `json:"check_id"`
+	AmountVnd int64     `json:"amount_vnd"`
+}
+
+// Phase 08: the committed draft's Charge Allocations with their frozen charge,
+// computed the way GetGlobalShiftClosureBlockers computes base charge.
+func (q *Queries) ListWithdrawableAllocations(ctx context.Context, orderDraftID uuid.UUID) ([]ListWithdrawableAllocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWithdrawableAllocations, orderDraftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWithdrawableAllocationsRow{}
+	for rows.Next() {
+		var i ListWithdrawableAllocationsRow
+		if err := rows.Scan(&i.ID, &i.CheckID, &i.AmountVnd); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockChargeAdjustmentsForRefund = `-- name: LockChargeAdjustmentsForRefund :many
 SELECT ca.id, ca.scope, ca.check_id, ca.completed_sale_id, ca.amount_vnd
 FROM charge_adjustments AS ca
@@ -3708,6 +3748,47 @@ func (q *Queries) LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID)
 	return i, err
 }
 
+const lockSessionChecksForRecovery = `-- name: LockSessionChecksForRecovery :many
+SELECT id, state, charge_vnd
+FROM checks
+WHERE service_session_id = $1
+ORDER BY created_at ASC, id ASC
+FOR UPDATE
+`
+
+type LockSessionChecksForRecoveryRow struct {
+	ID        uuid.UUID `json:"id"`
+	State     string    `json:"state"`
+	ChargeVnd int64     `json:"charge_vnd"`
+}
+
+// Phase 08: every Check of one Session, after the caller holds the Session
+// lock, in the ascending (created_at, id) order Submit and 5C use. Like
+// Submit, this runs Session-then-Checks against Payment's Check-then-Session,
+// so it inherits ADR-031's AB-BA window (ADR-066).
+func (q *Queries) LockSessionChecksForRecovery(ctx context.Context, serviceSessionID uuid.UUID) ([]LockSessionChecksForRecoveryRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockSessionChecksForRecovery, serviceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockSessionChecksForRecoveryRow{}
+	for rows.Next() {
+		var i LockSessionChecksForRecoveryRow
+		if err := rows.Scan(&i.ID, &i.State, &i.ChargeVnd); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockSubmittableDraft = `-- name: LockSubmittableDraft :one
 SELECT od.id AS order_draft_id
 FROM order_drafts od
@@ -3843,6 +3924,15 @@ type MarkCheckMergedParams struct {
 // what the MERGED branch of check_settlement_evidence_valid requires.
 func (q *Queries) MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error {
 	_, err := q.db.ExecContext(ctx, markCheckMerged, arg.ID, arg.MergedIntoCheckID)
+	return err
+}
+
+const markOrderDraftCancelled = `-- name: MarkOrderDraftCancelled :exec
+UPDATE order_drafts SET state = 'CANCELLED' WHERE id = $1
+`
+
+func (q *Queries) MarkOrderDraftCancelled(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, markOrderDraftCancelled, id)
 	return err
 }
 
@@ -4024,6 +4114,18 @@ SELECT pg_advisory_xact_lock($1)
 func (q *Queries) SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error {
 	_, err := q.db.ExecContext(ctx, salesAdvisoryLock, pgAdvisoryXactLock)
 	return err
+}
+
+const sessionHasOrder = `-- name: SessionHasOrder :one
+SELECT EXISTS (SELECT 1 FROM orders WHERE service_session_id = $1) AS has_order
+`
+
+// Phase 08: recovery applies only to a Session with no Order (ADR-066).
+func (q *Queries) SessionHasOrder(ctx context.Context, serviceSessionID uuid.UUID) (bool, error) {
+	row := q.db.QueryRowContext(ctx, sessionHasOrder, serviceSessionID)
+	var has_order bool
+	err := row.Scan(&has_order)
+	return has_order, err
 }
 
 const setAllocationQuantities = `-- name: SetAllocationQuantities :exec

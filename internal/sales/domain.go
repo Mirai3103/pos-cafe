@@ -818,3 +818,42 @@ func ValidateVoidPaymentCommand(cmd VoidPaymentCommand, note *string) error {
 	}
 	return ValidateManagerApprovalInput(cmd.ManagerApproval)
 }
+
+// --- Phase 08: checkout recovery ---
+
+// Idempotency action names (idempotency_keys.action is VARCHAR(50)).
+const (
+	OpCancelAwaitingSubmission = "sales.cancel_awaiting_submission"
+	OpAbandonCheckout          = "sales.abandon_checkout"
+)
+
+// Phase 08 audit event types (spec §11).
+const (
+	EventAwaitingSubmissionCancelled = "AWAITING_SUBMISSION_CANCELLED"
+	EventCheckoutAbandoned           = "CHECKOUT_ABANDONED"
+)
+
+// Abandoned Checkout reason catalog (domain-rationale 08), shared by Cancel
+// Awaiting Submission. migration 000017 enforces the same set.
+const (
+	RecoveryReasonCustomerLeft    = "CUSTOMER_LEFT"
+	RecoveryReasonCustomerRequest = "CUSTOMER_REQUEST"
+	RecoveryReasonSystemFailure   = "SYSTEM_FAILURE"
+	RecoveryReasonOther           = "OTHER"
+)
+
+// ValidateCheckoutRecoveryCommand checks an already-normalized command before
+// the mutation claims its idempotency key.
+func ValidateCheckoutRecoveryCommand(cmd CheckoutRecoveryCommand, note *string) error {
+	if cmd.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
+	}
+	switch cmd.Reason {
+	case RecoveryReasonCustomerLeft, RecoveryReasonCustomerRequest,
+		RecoveryReasonSystemFailure, RecoveryReasonOther:
+	default:
+		return fmt.Errorf("%w: %q is not a valid checkout recovery reason",
+			response.ErrInvalid, cmd.Reason)
+	}
+	return validateCorrectionNote(cmd.Reason, RecoveryReasonOther, note)
+}

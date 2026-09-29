@@ -77,3 +77,100 @@ func TestAwaitingSubmissionRetryCreatesOneOrder(t *testing.T) {
 	require.Equal(t, 1, orders)
 	require.Equal(t, 2, units, "quantity 2 is two Preparation Units")
 }
+
+func (e *recoveryEnv) cancelWithRequestID(t *testing.T, requestID, sessionID uuid.UUID,
+	reason string, note *string,
+) (sales.ServiceSessionResponse, int, error) {
+	t.Helper()
+	status, resp, err := sales.NewCancelAwaitingSubmissionHandler(e.Runner).
+		Handle(context.Background(), e.Actor, sales.CheckoutRecoveryCommand{
+			RequestID: requestID, ServiceSessionID: sessionID, Reason: reason, Note: note,
+		})
+	if err != nil {
+		status, err = mapErrorStatus(err)
+	}
+	return resp, status, err
+}
+
+func (e *recoveryEnv) cancel(t *testing.T, sessionID uuid.UUID) (
+	sales.ServiceSessionResponse, int, error,
+) {
+	t.Helper()
+	return e.cancelWithRequestID(t, uuid.New(), sessionID, sales.RecoveryReasonCustomerLeft, nil)
+}
+
+func TestCancelAwaitingSubmissionWithdrawsTheCharge(t *testing.T) {
+	env := newRecoveryEnv(t)
+	session, checkID := env.paidTakeaway(t)
+
+	got, status, err := env.cancel(t, session.ID)
+	require.NoError(t, err)
+	require.Equal(t, 200, status)
+
+	require.False(t, got.AwaitingSubmission)
+	check := env.findCheck(t, got, checkID)
+	require.Equal(t, int64(0), check.ChargeVND)
+	require.Equal(t, int64(50000), check.PendingRefundVND)
+	require.Equal(t, sales.CheckStateSettled, check.State)
+	require.Len(t, check.ChargeAdjustments, 1)
+	require.Equal(t, sales.ChargeAdjustmentKindWithdrawal, check.ChargeAdjustments[0].Kind)
+	require.Nil(t, check.ChargeAdjustments[0].PreparationUnitID)
+	require.True(t, check.Allocations[0].Withdrawn)
+	env.RequireDraftState(t, session.ID, sales.DraftStateCancelled)
+	require.Equal(t, 1, env.countAuditEvents(t, sales.EventAwaitingSubmissionCancelled))
+
+	_, _, err = env.TrySubmit(t, session.ID)
+	require.ErrorIs(t, err, sales.ErrNothingToSubmit, "a cancelled draft is never submitted")
+}
+
+func TestCancelAwaitingSubmissionSettlesAPartiallyPaidCheck(t *testing.T) {
+	env := newRecoveryEnv(t)
+	session := env.commitDineInDraft(t, 1) // 50,000 VND, dine-in allows partial payment
+	checkID := env.soleCheckID(t, session.ID)
+	_, _, err := env.payCash(t, checkID, 20000, 20000)
+	require.NoError(t, err)
+
+	got, _, err := env.cancel(t, session.ID)
+	require.NoError(t, err)
+	check := env.findCheck(t, got, checkID)
+	require.Equal(t, sales.CheckStateSettled, check.State)
+	require.Equal(t, int64(20000), check.PendingRefundVND)
+	require.Equal(t, 1, env.countAuditEventsForCheck(t, sales.EventCheckSettled, checkID))
+}
+
+func TestCancelAwaitingSubmissionRejections(t *testing.T) {
+	env := newRecoveryEnv(t)
+
+	unpaid := env.commitTakeawayDraft(t, 1)
+	_, _, err := env.cancel(t, unpaid.ID)
+	require.ErrorIs(t, err, sales.ErrNothingAwaitingSubmission)
+
+	submitted, _ := env.paidTakeaway(t)
+	env.Submit(t, submitted.ID)
+	_, _, err = env.cancel(t, submitted.ID)
+	require.ErrorIs(t, err, sales.ErrSessionHasOrder)
+
+	_, _, err = env.cancel(t, uuid.New())
+	require.ErrorIs(t, err, sales.ErrServiceSessionNotFound)
+
+	paid, _ := env.paidTakeaway(t)
+	_, status, err := env.cancelWithRequestID(t, uuid.New(), paid.ID, sales.RecoveryReasonOther, nil)
+	require.Error(t, err)
+	require.Equal(t, 400, status)
+}
+
+func TestCancelAwaitingSubmissionReplays(t *testing.T) {
+	env := newRecoveryEnv(t)
+	session, _ := env.paidTakeaway(t)
+
+	requestID := uuid.New()
+	first, _, err := env.cancelWithRequestID(t, requestID, session.ID, sales.RecoveryReasonCustomerLeft, nil)
+	require.NoError(t, err)
+	replay, _, err := env.cancelWithRequestID(t, requestID, session.ID, sales.RecoveryReasonCustomerLeft, nil)
+	require.NoError(t, err)
+	require.Equal(t, first.Checks[0].ChargeAdjustments[0].ID, replay.Checks[0].ChargeAdjustments[0].ID)
+
+	_, _, err = env.cancel(t, session.ID)
+	require.ErrorIs(t, err, sales.ErrNothingAwaitingSubmission)
+	require.Equal(t, 1, env.countAuditEvents(t, sales.EventAwaitingSubmissionCancelled))
+}

@@ -208,6 +208,8 @@ func TestPhase5DErrorMapping(t *testing.T) {
 		{ErrUnfulfilledPreparationForClosure, http.StatusConflict, "UNFULFILLED_PREPARATION_FOR_CLOSURE"},
 		{ErrCompletedSaleNotFound, http.StatusNotFound, "COMPLETED_SALE_NOT_FOUND"},
 		{ErrNothingToSubmit, http.StatusConflict, "NOTHING_TO_SUBMIT"},
+		{ErrNothingAwaitingSubmission, http.StatusConflict, "NOTHING_AWAITING_SUBMISSION"},
+		{ErrSessionHasOrder, http.StatusConflict, "SESSION_HAS_ORDER"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.code, func(t *testing.T) {

@@ -675,3 +675,12 @@ type AbandonedCheckoutResponse struct {
 	ActorStaffIdentityID uuid.UUID `json:"actor_staff_identity_id"`
 	OccurredAt           time.Time `json:"occurred_at"`
 }
+
+// CheckoutRecoveryCommand is the body of both Phase 08 commands, Cancel
+// Awaiting Submission and Abandon Checkout.
+type CheckoutRecoveryCommand struct {
+	RequestID        uuid.UUID `json:"request_id"`
+	ServiceSessionID uuid.UUID `json:"-"`
+	Reason           string    `json:"reason"`
+	Note             *string   `json:"note"`
+}
