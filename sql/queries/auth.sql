@@ -48,6 +48,13 @@ UPDATE staff_identities
 SET pin_hash = $2
 WHERE id = $1;
 
+-- name: UpdateStaffProfile :one
+UPDATE staff_identities
+SET display_name = sqlc.arg(display_name),
+    login_code = upper(btrim(sqlc.arg(login_code)::text))
+WHERE id = sqlc.arg(id)
+RETURNING id, display_name, login_code, enabled, created_at;
+
 -- name: AddStaffRole :exec
 INSERT INTO staff_operational_roles (staff_identity_id, role)
 VALUES ($1, $2)

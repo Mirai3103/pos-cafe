@@ -211,6 +211,34 @@ definitions:
     required:
     - pin
     type: object
+  auth.UpdateStaffRequest:
+    properties:
+      display_name:
+        maxLength: 120
+        minLength: 1
+        type: string
+      login_code:
+        maxLength: 24
+        minLength: 1
+        type: string
+      manager_pin:
+        maxLength: 8
+        minLength: 4
+        type: string
+      request_id:
+        type: string
+      roles:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - display_name
+    - login_code
+    - manager_pin
+    - request_id
+    - roles
+    type: object
   catalog.AddModifierOptionRequest:
     properties:
       manager_pin:
@@ -7653,6 +7681,65 @@ paths:
       security:
       - BearerAuth: []
       summary: Tạo tài khoản nhân viên mới
+      tags:
+      - Staff
+  /staff/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: Đổi tên hiển thị, mã đăng nhập và toàn bộ vai trò trong một lệnh
+        (ADR-063)
+      parameters:
+      - description: Staff ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Thông tin mới
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.UpdateStaffRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.StaffDetailResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật thông tin và vai trò nhân viên
       tags:
       - Staff
   /staff/{id}/enabled:

@@ -81,6 +81,14 @@ type ReplaceStaffRolesRequest struct {
 	ManagerPin string    `json:"manager_pin" validate:"required,min=4,max=8,numeric"`
 }
 
+type UpdateStaffRequest struct {
+	RequestID   uuid.UUID `json:"request_id" validate:"required"`
+	DisplayName string    `json:"display_name" validate:"required,min=1,max=120"`
+	LoginCode   string    `json:"login_code" validate:"required,min=1,max=24"`
+	Roles       []string  `json:"roles" validate:"required,min=1,dive,oneof=MANAGER CASHIER BARISTA"`
+	ManagerPin  string    `json:"manager_pin" validate:"required,min=4,max=8,numeric"`
+}
+
 type ResetStaffPinRequest struct {
 	RequestID  uuid.UUID `json:"request_id" validate:"required"`
 	Pin        string    `json:"pin" validate:"required,min=4,max=8,numeric"`

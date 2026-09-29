@@ -1,6 +1,6 @@
 # Backend alignment: close the gaps the web slices recorded
 
-**Status:** in-progress (BA-1 done; BA-2–BA-5 ready-for-design)
+**Status:** in-progress (BA-1 done; BA-2–BA-6 ready-for-design)
 **Blocked by:** none
 **Source:** Operator decision (2026-09-25), before web slice 9b: align the backend with the
 prototype in `design-system/pos-cafe/` before the next screens are built, instead of
@@ -41,6 +41,7 @@ gets its own design spec, pull request, and UAT gate.
 | **BA-3** | Preparation station | A category can name the station that prepares it (bar, bakery), and the Preparation Queue can be read per station. KDS "Báo thiếu" reuses the slice 9a availability batch and needs no new backend. | KDS station filter |
 | **BA-4** | Tables and floor | Tables can be grouped into zones or floors; a dine-in Session can record a guest count; a Table can carry a "needs cleaning" status. | Tables screen |
 | **BA-5** | Service Session operations | Staff can discard an Order Draft in one action ("Hủy đơn"), merge two Tables' Sessions ("Gộp bàn"), and move Committed Items to another Table's Session ("Tách món"). These touch Checks and money, so this sub-project needs the most domain design. | POS "Hủy đơn"; Tables "Gộp bàn" and "Tách món" |
+| **BA-6** | Staff administration audit | Every `/staff/*` command (create, update, enable/disable, replace roles, reset PIN) persists an Audit Event in its own transaction, as ADR-048 requires. Found while designing web slice 9c. | ADR-048 compliance for `internal/auth` |
 
 The order puts what unblocks the most, at the lowest domain risk, first. BA-1 blocks
 web slice 9b directly. BA-5 goes last because it needs the most domain work.
@@ -49,7 +50,7 @@ BA-1 done: UAT passed 2026-09-26; implemented on branch backend-alignment-ba1 an
 
 ## Acceptance criteria
 
-- [ ] BA-1 through BA-5 each have an approved design spec, a merged pull request, and a
+- [ ] BA-1 through BA-6 each have an approved design spec, a merged pull request, and a
       passed UAT gate.
 - [ ] Every web cut that a sub-project resolves is removed from the web (disabled
       buttons enabled, mocks deleted).
