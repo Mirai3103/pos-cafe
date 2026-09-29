@@ -26,6 +26,7 @@ func TestNewSlices(t *testing.T) {
 	assert.NotNil(t, slices.StaffMe)
 	assert.NotNil(t, slices.StaffList)
 	assert.NotNil(t, slices.StaffCreate)
+	assert.NotNil(t, slices.StaffUpdate)
 	assert.NotNil(t, slices.StaffSetEnabled)
 	assert.NotNil(t, slices.StaffReplaceRole)
 	assert.NotNil(t, slices.StaffResetPin)
@@ -51,6 +52,7 @@ func TestRegisterRoutes(t *testing.T) {
 		"GET /api/v1/staff/me":             "StaffMe",
 		"GET /api/v1/staff":                "StaffList",
 		"POST /api/v1/staff":               "StaffCreate",
+		"PATCH /api/v1/staff/:id":          "StaffUpdate",
 		"PATCH /api/v1/staff/:id/enabled":  "StaffSetEnabled",
 		"PUT /api/v1/staff/:id/roles":      "StaffReplaceRole",
 		"POST /api/v1/staff/:id/reset-pin": "StaffResetPin",

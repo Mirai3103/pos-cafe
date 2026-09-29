@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
@@ -184,5 +185,38 @@ func TestResetStaffPinRequestValidation(t *testing.T) {
 		Pin:        "56",
 		ManagerPin: "1234",
 	}
+	assert.Error(t, v.Validate(&shortPin))
+}
+
+func TestUpdateStaffRequestValidation(t *testing.T) {
+	v := httpvalidator.New()
+
+	valid := UpdateStaffRequest{
+		RequestID:   uuid.New(),
+		DisplayName: "Nguyễn Văn Minh",
+		LoginCode:   "MINH",
+		Roles:       []string{RoleCashier, RoleBarista},
+		ManagerPin:  "1234",
+	}
+	assert.NoError(t, v.Validate(&valid))
+
+	noRoles := valid
+	noRoles.Roles = []string{}
+	assert.Error(t, v.Validate(&noRoles))
+
+	badRole := valid
+	badRole.Roles = []string{"OWNER"}
+	assert.Error(t, v.Validate(&badRole))
+
+	longCode := valid
+	longCode.LoginCode = strings.Repeat("A", 25)
+	assert.Error(t, v.Validate(&longCode))
+
+	noName := valid
+	noName.DisplayName = ""
+	assert.Error(t, v.Validate(&noName))
+
+	shortPin := valid
+	shortPin.ManagerPin = "12"
 	assert.Error(t, v.Validate(&shortPin))
 }
