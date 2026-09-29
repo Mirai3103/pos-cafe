@@ -91,6 +91,20 @@ const (
 	DraftStateCommitted = "COMMITTED"
 )
 
+// Phase 08 terminal states (spec §6). A Session with no Order that the
+// customer left ends ABANDONED; its drafts end CANCELLED and its live Checks
+// end ABANDONED.
+const (
+	StateAbandoned      = "ABANDONED"
+	CheckStateAbandoned = "ABANDONED"
+	DraftStateCancelled = "CANCELLED"
+)
+
+// ChargeAdjustmentKindWithdrawal removes an unsubmitted Committed Item's
+// charge from its Check (ADR-065). It names a Charge Allocation and no
+// Preparation Unit.
+const ChargeAdjustmentKindWithdrawal = "WITHDRAWAL"
+
 // Service modes.
 const (
 	ModeTakeaway = "TAKEAWAY"

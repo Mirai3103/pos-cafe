@@ -440,7 +440,7 @@ func loadCheckAdjustments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 			ID:                     row.ID,
 			Kind:                   row.Kind,
 			Scope:                  row.Scope,
-			PreparationUnitID:      row.PreparationUnitID,
+			PreparationUnitID:      nullUUIDPtr(row.PreparationUnitID),
 			PreparationWasteID:     nullUUIDPtr(row.PreparationWasteID),
 			ChargeAllocationID:     row.ChargeAllocationID,
 			CompletedSaleID:        nullUUIDPtr(row.CompletedSaleID),

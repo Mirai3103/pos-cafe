@@ -238,7 +238,7 @@ RETURNING id, kind, scope, preparation_unit_id, preparation_waste_id,
 type InsertChargeAdjustmentParams struct {
 	Kind               string        `json:"kind"`
 	Scope              string        `json:"scope"`
-	PreparationUnitID  uuid.UUID     `json:"preparation_unit_id"`
+	PreparationUnitID  uuid.NullUUID `json:"preparation_unit_id"`
 	PreparationWasteID uuid.NullUUID `json:"preparation_waste_id"`
 	ChargeAllocationID uuid.UUID     `json:"charge_allocation_id"`
 	CheckID            uuid.UUID     `json:"check_id"`

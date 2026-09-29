@@ -329,7 +329,7 @@ type ChargeAdjustmentResponse struct {
 	ID                     uuid.UUID  `json:"id"`
 	Kind                   string     `json:"kind"`
 	Scope                  string     `json:"scope"`
-	PreparationUnitID      uuid.UUID  `json:"preparation_unit_id"`
+	PreparationUnitID      *uuid.UUID `json:"preparation_unit_id"`
 	PreparationWasteID     *uuid.UUID `json:"preparation_waste_id"`
 	ChargeAllocationID     uuid.UUID  `json:"charge_allocation_id"`
 	CompletedSaleID        *uuid.UUID `json:"completed_sale_id,omitempty"`
