@@ -1,7 +1,7 @@
 # Design Specification: Recover a Failed or Abandoned Checkout (`internal/sales`, Phase 08)
 
 - **Date:** 2026-10-02
-- **Status:** In review
+- **Status:** Approved
 - **Phase:** Phase 08, [recover a failed or abandoned checkout](../../backlog/phase-08-recover-failed-or-abandoned-checkout.md)
 - **Predecessors:** [5D submission and closure](2026-09-15-sales-submission-closure-design.md), [6C financial corrections](2026-09-18-preparation-financial-corrections-design.md), [07 Shift closure](2026-09-18-shift-closure-reconciliation-design.md)
 
