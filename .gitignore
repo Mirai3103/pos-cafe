@@ -6,7 +6,7 @@ build/
 *.dll
 *.so
 *.dylib
-
+.playwright-mcp
 # SQLite databases
 *.db
 *.db-shm
