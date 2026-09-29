@@ -62,6 +62,9 @@ adds table sessions and dine-in ordering to the POS terminal.
 splits slice 9 into 9a (availability), 9b (catalog structure), and 9c (staff), and
 ships the "Món tạm hết" tab with an atomic batch availability command (ADR-055)
 and per-tab settings guards (ADR-056).
+[Slice 9b, catalog structure](docs/superpowers/specs/2026-09-30-web-slice-9b-catalog-structure-design.md)
+ships the "Quản lý Thực đơn & Topping" tab on the BA-1 commands, with a planned,
+re-plannable multi-command form save (ADR-062).
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
 `preparation`. Sixty-one architecture decisions are recorded.

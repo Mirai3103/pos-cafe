@@ -7,6 +7,6 @@ import { requireAnyCapability } from "@/lib/guards";
 export const Route = createFileRoute("/_app/settings")({
   beforeLoad: () => requireAnyCapability(SETTINGS_CAPABILITIES),
   component: () => (
-    <SettingsLayout counters={{ "/settings/availability": <AvailabilityCounter />, catalog: <CatalogItemCounter /> }} />
+    <SettingsLayout counters={{ "/settings/availability": <AvailabilityCounter />, "/settings/catalog": <CatalogItemCounter /> }} />
   ),
 });
