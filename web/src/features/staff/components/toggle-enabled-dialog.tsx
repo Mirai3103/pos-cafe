@@ -14,7 +14,7 @@ export const BTN_DANGER =
 
 export function ModalShell({ labelledBy, children }: { labelledBy: string; children: React.ReactNode }): ReactElement {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
       <div
         role="dialog"
         aria-modal="true"
