@@ -4,6 +4,8 @@ package sales_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/sales"
@@ -385,4 +387,95 @@ func TestShiftBlockersTrackAwaitingSubmission(t *testing.T) {
 	require.Zero(t, blockers.UnresolvedCorrectionVnd)
 	require.Zero(t, blockers.AwaitingSubmissionCount)
 	require.Zero(t, blockers.ActiveServiceSessionCount, "the Shift may now close")
+}
+
+func TestCancelAgainstConcurrentSubmit(t *testing.T) {
+	env := newRecoveryEnv(t)
+	ctx := context.Background()
+	session, _ := env.paidTakeaway(t)
+
+	var wg sync.WaitGroup
+	var cancelErr, submitErr error
+	wg.Add(2)
+	go func() { defer wg.Done(); _, _, cancelErr = env.cancel(t, session.ID) }()
+	go func() { defer wg.Done(); _, _, submitErr = env.TrySubmit(t, session.ID) }()
+	wg.Wait()
+
+	require.True(t, (cancelErr == nil) != (submitErr == nil),
+		"exactly one wins: cancel=%v submit=%v", cancelErr, submitErr)
+	var orders int
+	require.NoError(t, env.DB.QueryRowContext(ctx,
+		`SELECT count(*) FROM orders WHERE service_session_id = $1`, session.ID).Scan(&orders))
+	if cancelErr == nil {
+		require.ErrorIs(t, submitErr, sales.ErrNothingToSubmit)
+		require.Zero(t, orders)
+	} else {
+		require.ErrorIs(t, cancelErr, sales.ErrSessionHasOrder)
+		require.Equal(t, 1, orders)
+	}
+}
+
+func TestAbandonAgainstConcurrentCommit(t *testing.T) {
+	env := newRecoveryEnv(t)
+	session := env.StartTakeaway(t)
+	env.AddDraftItem(t, session.ID, env.CoffeeID, nil)
+
+	var wg sync.WaitGroup
+	var abandonErr, commitErr error
+	wg.Add(2)
+	go func() { defer wg.Done(); _, _, abandonErr = env.abandon(t, session.ID) }()
+	go func() { defer wg.Done(); _, commitErr = env.TryCommit(t, session.ID) }()
+	wg.Wait()
+
+	// Commit locks draft and Session in one statement, whose tuple-lock order
+	// PostgreSQL does not fix, while Abandon locks the Session then writes the
+	// draft: a 40P01 on either side is the recorded window (ADR-066).
+	if abandonErr != nil {
+		require.True(t, correctionRaceDeadlock(abandonErr), "abandon failed outside the window: %v", abandonErr)
+	}
+	if commitErr != nil {
+		require.True(t, correctionRaceDeadlock(commitErr) || errors.Is(commitErr, sales.ErrEditableDraftNotFound),
+			"commit failed unexpectedly: %v", commitErr)
+	}
+	require.True(t, abandonErr == nil || commitErr == nil,
+		"at least one side stands: abandon=%v commit=%v", abandonErr, commitErr)
+	if abandonErr == nil {
+		require.Equal(t, sales.StateAbandoned, env.GetSessionOK(t, session.ID).State,
+			"an unpaid commit never stops an abandon")
+	}
+}
+
+func TestCancelAgainstConcurrentPayment(t *testing.T) {
+	// ADR-066 inherits ADR-031's window: either side may abort with 40P01,
+	// never both, and nothing half-written survives.
+	env := newRecoveryEnv(t)
+	session := env.commitDineInDraft(t, 1)
+	checkID := env.soleCheckID(t, session.ID)
+	_, _, err := env.payCash(t, checkID, 20000, 20000)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	var cancelErr, payErr error
+	wg.Add(2)
+	go func() { defer wg.Done(); _, _, cancelErr = env.cancel(t, session.ID) }()
+	go func() { defer wg.Done(); _, _, payErr = env.payCash(t, checkID, 30000, 30000) }()
+	wg.Wait()
+
+	if cancelErr != nil {
+		require.True(t, correctionRaceDeadlock(cancelErr), "cancel failed outside the window: %v", cancelErr)
+	}
+	// payErr is not constrained on its own: a Payment serialized after the
+	// withdrawal meets a zero-charge, settled Check and is rejected by the
+	// existing Payment rules, which is correct. The invariants below are what
+	// must hold either way.
+	require.True(t, cancelErr == nil || payErr == nil,
+		"at least one side stands: cancel=%v pay=%v", cancelErr, payErr)
+
+	got := env.GetSessionOK(t, session.ID)
+	check := env.findCheck(t, got, checkID)
+	if cancelErr == nil {
+		require.Equal(t, int64(0), check.ChargeVND)
+		require.Equal(t, check.EffectiveReceivedVND, check.PendingRefundVND,
+			"every unit of money held is owed back")
+	}
 }
