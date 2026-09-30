@@ -55,7 +55,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Verify Build
-        run: go build -v ./cmd/api
+        run: go build -v -o bin/api ./cmd/api
 
   integration:
     name: Integration Tests

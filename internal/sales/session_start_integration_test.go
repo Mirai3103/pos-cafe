@@ -544,10 +544,12 @@ func TestSalesShiftConcurrentReconciliationRaces(t *testing.T) {
 		// always trips a blocker (see the test's structural note). If the
 		// start's blocker read ran before the Payment landed, the still-OPEN
 		// Check is the unsettled-Check blocker; after the Payment landed, the
-		// settled Check leaves the ACTIVE Session as the blocker.
+		// paid but unsubmitted Session is Awaiting Submission, which outranks
+		// the ACTIVE Session blocker.
 		require.NoError(t, payErr)
 		require.True(t,
 			errors.Is(startErr, shift.ErrUnsettledCheck) ||
+				errors.Is(startErr, shift.ErrAwaitingSubmission) ||
 				errors.Is(startErr, shift.ErrActiveServiceSession),
 			"the start must be rejected by a blocker the committed state presents, got %v", startErr)
 		assert.Equal(t, 1, countPayments(t, env.DB, checkID))
@@ -641,10 +643,12 @@ func TestSalesShiftConcurrentReconciliationRaces(t *testing.T) {
 
 		// The Void commits whenever it runs. If it committed before the
 		// start's blocker read, the reopened Check is the unsettled-Check
-		// blocker (spec 8's precedence); otherwise the committed Session is.
+		// blocker (spec 8's precedence); otherwise the paid but unsubmitted
+		// Session is Awaiting Submission, which outranks the ACTIVE Session.
 		require.NoError(t, voidErr)
 		require.True(t,
 			errors.Is(startErr, shift.ErrUnsettledCheck) ||
+				errors.Is(startErr, shift.ErrAwaitingSubmission) ||
 				errors.Is(startErr, shift.ErrActiveServiceSession),
 			"the start must be rejected by a blocker the Void's side of the race made visible, got %v", startErr)
 		assert.Equal(t, 1, countVoids(t, env.DB, paymentID))
