@@ -273,8 +273,7 @@ func NewSetDraftItemSizeHandler(runner *Runner) *SetDraftItemSizeHandler {
 // the two compositions identical.
 //
 // A nil SizeID clears the Size and is permitted: the draft tolerates an
-// incomplete configuration, and Commit in 5B is where a required Size is
-// enforced.
+// incomplete configuration, and Commit is where a required Size is enforced.
 func (h *SetDraftItemSizeHandler) Handle(ctx context.Context, actor Actor,
 	cmd SetDraftItemSizeCommand,
 ) (int, ServiceSessionResponse, error) {

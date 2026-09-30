@@ -1,56 +1,15 @@
 package sales
 
 import (
-	"fmt"
 	"net/http"
 
-	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/response"
-	"github.com/google/uuid"
+	"github.com/Mirai3103/pos-cafe/internal/platform/httpx"
 	"github.com/labstack/echo/v4"
 )
 
-func getActor(c echo.Context) (Actor, error) {
-	claims := auth.GetStaff(c)
-	if claims == nil {
-		return Actor{}, fmt.Errorf("%w: unauthorized", response.ErrUnauthorized)
-	}
-	return Actor{StaffID: claims.StaffID, SessionID: claims.SessionID}, nil
-}
-
-func parseUUIDParam(c echo.Context, name string) (uuid.UUID, error) {
-	val := c.Param(name)
-	id, err := uuid.Parse(val)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("%w: invalid %s UUID: %s", response.ErrInvalid, name, val)
-	}
-	return id, nil
-}
-
-func bindBody[T any](c echo.Context) (T, error) {
-	var body T
-	if err := c.Bind(&body); err != nil {
-		return body, fmt.Errorf("%w: invalid request body: %s", response.ErrInvalid, err.Error())
-	}
-	return body, nil
-}
-
-func checkRequestID(id uuid.UUID) error {
-	if id == uuid.Nil {
-		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
-	}
-	return nil
-}
-
-func sendResult[T any](c echo.Context, status int, data T) error {
-	if status == http.StatusCreated {
-		return response.Created(c, data)
-	}
-	return response.OK(c, data)
-}
-
+// sendError writes err through the Sales error mapping.
 func sendError(c echo.Context, err error) error {
-	return response.Error(c, MapHTTPError(err))
+	return httpx.SendError(c, err, MapHTTPError)
 }
 
 // handleGetServiceSession returns one Service Session.
@@ -67,11 +26,11 @@ func sendError(c echo.Context, err error) error {
 //	@Failure		404	{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id} [get]
 func (s *Slices) handleGetServiceSession(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -79,7 +38,7 @@ func (s *Slices) handleGetServiceSession(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, http.StatusOK, result)
+	return httpx.SendResult(c, http.StatusOK, result)
 }
 
 // handleListActiveSessions returns every ACTIVE Service Session.
@@ -94,7 +53,7 @@ func (s *Slices) handleGetServiceSession(c echo.Context) error {
 //	@Failure		403	{object}	response.APIResponse
 //	@Router			/sales/service-sessions [get]
 func (s *Slices) handleListActiveSessions(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -102,7 +61,7 @@ func (s *Slices) handleListActiveSessions(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, http.StatusOK, result)
+	return httpx.SendResult(c, http.StatusOK, result)
 }
 
 // handleStartTakeaway opens a Takeaway Service Session.
@@ -121,22 +80,22 @@ func (s *Slices) handleListActiveSessions(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/takeaway [post]
 func (s *Slices) handleStartTakeaway(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[StartTakeawaySessionCommand](c)
+	cmd, err := httpx.BindBody[StartTakeawaySessionCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	status, result, err := s.StartTakeaway.Handle(c.Request().Context(), actor, cmd)
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleStartDineIn opens a Dine-in Service Session.
@@ -156,22 +115,22 @@ func (s *Slices) handleStartTakeaway(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/dine-in [post]
 func (s *Slices) handleStartDineIn(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[StartDineInSessionCommand](c)
+	cmd, err := httpx.BindBody[StartDineInSessionCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	status, result, err := s.StartDineIn.Handle(c.Request().Context(), actor, cmd)
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleSetSessionTables sets a Service Session's Tables.
@@ -192,19 +151,19 @@ func (s *Slices) handleStartDineIn(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/tables [put]
 func (s *Slices) handleSetSessionTables(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[SetSessionTablesCommand](c)
+	cmd, err := httpx.BindBody[SetSessionTablesCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// ServiceSessionID is json:"-": it comes from the path, never the body.
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -213,7 +172,7 @@ func (s *Slices) handleSetSessionTables(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleAddDraftItem adds one unit of a configured Menu Item to the draft.
@@ -234,19 +193,19 @@ func (s *Slices) handleSetSessionTables(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft/items [post]
 func (s *Slices) handleAddDraftItem(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[AddDraftItemCommand](c)
+	cmd, err := httpx.BindBody[AddDraftItemCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// ServiceSessionID is json:"-": it comes from the path, never the body.
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -255,7 +214,7 @@ func (s *Slices) handleAddDraftItem(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleSetDraftItemQuantity sets an absolute quantity on one draft item.
@@ -277,24 +236,24 @@ func (s *Slices) handleAddDraftItem(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft/items/{item_id}/quantity [patch]
 func (s *Slices) handleSetDraftItemQuantity(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[SetDraftItemQuantityCommand](c)
+	cmd, err := httpx.BindBody[SetDraftItemQuantityCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
 	// never the body.
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	itemID, err := parseUUIDParam(c, "item_id")
+	itemID, err := httpx.UUIDParam(c, "item_id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -304,7 +263,7 @@ func (s *Slices) handleSetDraftItemQuantity(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleSetDraftItemSize sets or clears one draft item's Size.
@@ -326,24 +285,24 @@ func (s *Slices) handleSetDraftItemQuantity(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft/items/{item_id}/size [patch]
 func (s *Slices) handleSetDraftItemSize(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[SetDraftItemSizeCommand](c)
+	cmd, err := httpx.BindBody[SetDraftItemSizeCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
 	// never the body.
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	itemID, err := parseUUIDParam(c, "item_id")
+	itemID, err := httpx.UUIDParam(c, "item_id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -353,7 +312,7 @@ func (s *Slices) handleSetDraftItemSize(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleSetDraftItemNote sets or clears one draft item's Preparation Note.
@@ -375,24 +334,24 @@ func (s *Slices) handleSetDraftItemSize(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft/items/{item_id}/preparation-note [patch]
 func (s *Slices) handleSetDraftItemNote(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[SetDraftItemNoteCommand](c)
+	cmd, err := httpx.BindBody[SetDraftItemNoteCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
 	// never the body.
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	itemID, err := parseUUIDParam(c, "item_id")
+	itemID, err := httpx.UUIDParam(c, "item_id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -402,7 +361,7 @@ func (s *Slices) handleSetDraftItemNote(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleSetDraftItemModifiers replaces one draft item's selected options.
@@ -424,24 +383,24 @@ func (s *Slices) handleSetDraftItemNote(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft/items/{item_id}/modifiers [patch]
 func (s *Slices) handleSetDraftItemModifiers(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[SetDraftItemModifiersCommand](c)
+	cmd, err := httpx.BindBody[SetDraftItemModifiersCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
 	// never the body.
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	itemID, err := parseUUIDParam(c, "item_id")
+	itemID, err := httpx.UUIDParam(c, "item_id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -451,7 +410,7 @@ func (s *Slices) handleSetDraftItemModifiers(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleRemoveDraftItem removes one draft item outright.
@@ -474,24 +433,24 @@ func (s *Slices) handleSetDraftItemModifiers(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft/items/{item_id} [delete]
 func (s *Slices) handleRemoveDraftItem(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[RemoveDraftItemCommand](c)
+	cmd, err := httpx.BindBody[RemoveDraftItemCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// ServiceSessionID and DraftItemID are json:"-": they come from the path,
 	// never the body.
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	itemID, err := parseUUIDParam(c, "item_id")
+	itemID, err := httpx.UUIDParam(c, "item_id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -501,7 +460,7 @@ func (s *Slices) handleRemoveDraftItem(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleCommitDraft godoc
@@ -521,19 +480,19 @@ func (s *Slices) handleRemoveDraftItem(c echo.Context) error {
 //	@Failure		422		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft/commit [post]
 func (s *Slices) handleCommitDraft(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[CommitOrderDraftCommand](c)
+	body, err := httpx.BindBody[CommitOrderDraftCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.ServiceSessionID = sessionID
@@ -542,7 +501,7 @@ func (s *Slices) handleCommitDraft(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleStartNewDraft godoc
@@ -562,19 +521,19 @@ func (s *Slices) handleCommitDraft(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft [post]
 func (s *Slices) handleStartNewDraft(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[StartNewOrderDraftCommand](c)
+	body, err := httpx.BindBody[StartNewOrderDraftCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.ServiceSessionID = sessionID
@@ -583,7 +542,7 @@ func (s *Slices) handleStartNewDraft(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleSetCheckTarget godoc
@@ -603,19 +562,19 @@ func (s *Slices) handleStartNewDraft(c echo.Context) error {
 //	@Failure		422		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/draft/check-target [put]
 func (s *Slices) handleSetCheckTarget(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[SetCheckTargetCommand](c)
+	body, err := httpx.BindBody[SetCheckTargetCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.ServiceSessionID = sessionID
@@ -624,7 +583,7 @@ func (s *Slices) handleSetCheckTarget(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleSubmitOrder godoc
@@ -644,19 +603,19 @@ func (s *Slices) handleSetCheckTarget(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/submit [post]
 func (s *Slices) handleSubmitOrder(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[SubmitOrderCommand](c)
+	body, err := httpx.BindBody[SubmitOrderCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.ServiceSessionID = sessionID
@@ -665,7 +624,7 @@ func (s *Slices) handleSubmitOrder(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleCloseSession godoc
@@ -685,19 +644,19 @@ func (s *Slices) handleSubmitOrder(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/close [post]
 func (s *Slices) handleCloseSession(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[CloseServiceSessionCommand](c)
+	body, err := httpx.BindBody[CloseServiceSessionCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.ServiceSessionID = sessionID
@@ -706,7 +665,7 @@ func (s *Slices) handleCloseSession(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleGetCompletedSale returns one Completed Sale by id.
@@ -723,11 +682,11 @@ func (s *Slices) handleCloseSession(c echo.Context) error {
 //	@Failure		404	{object}	response.APIResponse
 //	@Router			/sales/completed-sales/{id} [get]
 func (s *Slices) handleGetCompletedSale(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	saleID, err := parseUUIDParam(c, "id")
+	saleID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -735,7 +694,7 @@ func (s *Slices) handleGetCompletedSale(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleGetCompletedSaleBySession returns the Completed Sale of one Service Session.
@@ -752,11 +711,11 @@ func (s *Slices) handleGetCompletedSale(c echo.Context) error {
 //	@Failure		404	{object}	response.APIResponse
 //	@Router			/sales/service-sessions/{id}/completed-sale [get]
 func (s *Slices) handleGetCompletedSaleBySession(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	sessionID, err := parseUUIDParam(c, "id")
+	sessionID, err := httpx.UUIDParam(c, "id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -764,7 +723,7 @@ func (s *Slices) handleGetCompletedSaleBySession(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handlePayCash godoc
@@ -785,19 +744,19 @@ func (s *Slices) handleGetCompletedSaleBySession(c echo.Context) error {
 //	@Failure		409			{object}	response.APIResponse
 //	@Router			/sales/checks/{check_id}/payments/cash [post]
 func (s *Slices) handlePayCash(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	checkID, err := parseUUIDParam(c, "check_id")
+	checkID, err := httpx.UUIDParam(c, "check_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[PayCashCommand](c)
+	body, err := httpx.BindBody[PayCashCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.CheckID = checkID
@@ -806,7 +765,7 @@ func (s *Slices) handlePayCash(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handlePayManualQR godoc
@@ -827,19 +786,19 @@ func (s *Slices) handlePayCash(c echo.Context) error {
 //	@Failure		409			{object}	response.APIResponse
 //	@Router			/sales/checks/{check_id}/payments/manual-qr [post]
 func (s *Slices) handlePayManualQR(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	checkID, err := parseUUIDParam(c, "check_id")
+	checkID, err := httpx.UUIDParam(c, "check_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[PayManualQRCommand](c)
+	body, err := httpx.BindBody[PayManualQRCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.CheckID = checkID
@@ -848,7 +807,7 @@ func (s *Slices) handlePayManualQR(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleSplitCheck godoc
@@ -869,19 +828,19 @@ func (s *Slices) handlePayManualQR(c echo.Context) error {
 //	@Failure		409			{object}	response.APIResponse
 //	@Router			/sales/checks/{check_id}/split [post]
 func (s *Slices) handleSplitCheck(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	checkID, err := parseUUIDParam(c, "check_id")
+	checkID, err := httpx.UUIDParam(c, "check_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[SplitCheckCommand](c)
+	body, err := httpx.BindBody[SplitCheckCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.SourceCheckID = checkID
@@ -890,7 +849,7 @@ func (s *Slices) handleSplitCheck(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleMergeChecks godoc
@@ -910,15 +869,15 @@ func (s *Slices) handleSplitCheck(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/sales/checks/merge [post]
 func (s *Slices) handleMergeChecks(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[MergeChecksCommand](c)
+	body, err := httpx.BindBody[MergeChecksCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 
@@ -926,7 +885,7 @@ func (s *Slices) handleMergeChecks(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleCompWaste godoc
@@ -949,19 +908,19 @@ func (s *Slices) handleMergeChecks(c echo.Context) error {
 //	@Failure		500			{object}	response.APIResponse
 //	@Router			/sales/wastes/{waste_id}/comp [post]
 func (s *Slices) handleCompWaste(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	wasteID, err := parseUUIDParam(c, "waste_id")
+	wasteID, err := httpx.UUIDParam(c, "waste_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[CompWasteCommand](c)
+	body, err := httpx.BindBody[CompWasteCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// WasteID is json:"-": it comes from the path, never the body.
@@ -971,7 +930,7 @@ func (s *Slices) handleCompWaste(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleRecordRefund godoc
@@ -993,15 +952,15 @@ func (s *Slices) handleCompWaste(c echo.Context) error {
 //	@Failure		500		{object}	response.APIResponse
 //	@Router			/sales/refunds [post]
 func (s *Slices) handleRecordRefund(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[RecordRefundCommand](c)
+	body, err := httpx.BindBody[RecordRefundCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 
@@ -1009,7 +968,7 @@ func (s *Slices) handleRecordRefund(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleConfirmManualQRRefund godoc
@@ -1031,19 +990,19 @@ func (s *Slices) handleRecordRefund(c echo.Context) error {
 //	@Failure		500			{object}	response.APIResponse
 //	@Router			/sales/refunds/{refund_id}/confirm [post]
 func (s *Slices) handleConfirmManualQRRefund(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	refundID, err := parseUUIDParam(c, "refund_id")
+	refundID, err := httpx.UUIDParam(c, "refund_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[ConfirmManualQRRefundCommand](c)
+	body, err := httpx.BindBody[ConfirmManualQRRefundCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// RefundID is json:"-": it comes from the path, never the body.
@@ -1053,7 +1012,7 @@ func (s *Slices) handleConfirmManualQRRefund(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleVoidPayment godoc
@@ -1075,19 +1034,19 @@ func (s *Slices) handleConfirmManualQRRefund(c echo.Context) error {
 //	@Failure		500			{object}	response.APIResponse
 //	@Router			/sales/payments/{payment_id}/void [post]
 func (s *Slices) handleVoidPayment(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	paymentID, err := parseUUIDParam(c, "payment_id")
+	paymentID, err := httpx.UUIDParam(c, "payment_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[VoidPaymentCommand](c)
+	body, err := httpx.BindBody[VoidPaymentCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// PaymentID is json:"-": it comes from the path, never the body.
@@ -1097,5 +1056,5 @@ func (s *Slices) handleVoidPayment(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }

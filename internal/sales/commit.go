@@ -12,7 +12,7 @@ import (
 )
 
 // EffectiveGroup is one Modifier Group that applies to a Menu Item, with the
-// selection rules Commit enforces. 5A's draft validation deliberately ignores
+// selection rules Commit enforces. Draft validation deliberately ignores
 // these counts: a draft is a proposal and tolerates incompleteness. Commit is
 // where completeness matters, because it is where price is fixed.
 type EffectiveGroup struct {
@@ -85,7 +85,7 @@ type ItemSnapshot struct {
 // the offending item, since a cashier told only that "an item is unavailable"
 // cannot act on it.
 //
-// The canonical duplicate-option check is not migrated: 5A's
+// The canonical duplicate-option check is not migrated: the
 // order_draft_item_modifier_options primary key on (draft item, option) makes
 // a duplicate unrepresentable, and a check that cannot fire is noise.
 func BuildSnapshot(c CommitCandidate) (ItemSnapshot, error) {
@@ -247,85 +247,105 @@ func (h *CommitOrderDraftHandler) Handle(ctx context.Context, actor Actor,
 
 	return ExecuteMutation(ctx, h.runner, actor, spec,
 		func(mc MutationContext) (int, ServiceSessionResponse, AuditRecord, error) {
-			var zero ServiceSessionResponse
-			q := mc.Queries
-
-			draft, err := lockEditableDraft(ctx, q, cmd.ServiceSessionID)
+			result, audit, err := applyCommitOrderDraft(ctx, mc.Queries, cmd.ServiceSessionID)
 			if err != nil {
-				return 0, zero, AuditRecord{}, err
+				return 0, ServiceSessionResponse{}, AuditRecord{}, err
 			}
-
-			candidates, err := loadCommitCandidates(ctx, q, draft.OrderDraftID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			committedAt := time.Now()
-			snapshots := make([]ItemSnapshot, 0, len(candidates))
-			var committedAmountVND int64
-			for _, candidate := range candidates {
-				snapshot, err := BuildSnapshot(candidate)
-				if err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
-				committedAmountVND, err = AddCharge(committedAmountVND, snapshot.TotalVND)
-				if err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
-				snapshots = append(snapshots, snapshot)
-			}
-
-			target, err := q.GetOrderDraftCheckTarget(ctx, draft.OrderDraftID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("load draft check target: %w", err)
-			}
-			checkID, chargeVND, err := resolveTargetCheck(ctx, q,
-				cmd.ServiceSessionID, target, committedAt)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-			chargeVND, err = AddCharge(chargeVND, committedAmountVND)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			if err := persistSnapshots(ctx, q, draft.OrderDraftID, checkID,
-				snapshots, committedAt); err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-			if err := q.RaiseCheckCharge(ctx, sqlc.RaiseCheckChargeParams{
-				ID: checkID, ChargeVnd: chargeVND,
-			}); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("raise check charge: %w", err)
-			}
-			if err := q.MarkOrderDraftCommitted(ctx, draft.OrderDraftID); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("mark draft committed: %w", err)
-			}
-
-			result, err := LoadServiceSession(ctx, q, cmd.ServiceSessionID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			return 200, result, AuditRecord{
-				EventType: EventOrderDraftCommitted,
-				Details: commitAudit{
-					ServiceSessionID:   cmd.ServiceSessionID,
-					OrderDraftID:       draft.OrderDraftID,
-					CheckID:            checkID,
-					CommittedAmountVND: committedAmountVND,
-					CommittedItemCount: len(snapshots),
-				},
-			}, nil
+			return 200, result, audit, nil
 		})
+}
+
+// applyCommitOrderDraft is the Commit mutation body. It locks the editable
+// draft, freezes every item into a priced snapshot, and charges the total to
+// the draft's target Check.
+func applyCommitOrderDraft(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
+	ServiceSessionResponse, AuditRecord, error,
+) {
+	var zero ServiceSessionResponse
+	draft, err := lockEditableDraft(ctx, q, sessionID)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+
+	candidates, err := loadCommitCandidates(ctx, q, draft.OrderDraftID)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+
+	committedAt := time.Now()
+	snapshots, committedAmountVND, err := buildCommitSnapshots(candidates)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+
+	target, err := q.GetOrderDraftCheckTarget(ctx, draft.OrderDraftID)
+	if err != nil {
+		return zero, AuditRecord{}, fmt.Errorf("load draft check target: %w", err)
+	}
+	checkID, chargeVND, err := resolveTargetCheck(ctx, q, sessionID, target, committedAt)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+	chargeVND, err = AddCharge(chargeVND, committedAmountVND)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+
+	if err := persistSnapshots(ctx, q, draft.OrderDraftID, checkID,
+		snapshots, committedAt); err != nil {
+		return zero, AuditRecord{}, err
+	}
+	if err := q.RaiseCheckCharge(ctx, sqlc.RaiseCheckChargeParams{
+		ID: checkID, ChargeVnd: chargeVND,
+	}); err != nil {
+		return zero, AuditRecord{}, fmt.Errorf("raise check charge: %w", err)
+	}
+	if err := q.MarkOrderDraftCommitted(ctx, draft.OrderDraftID); err != nil {
+		return zero, AuditRecord{}, fmt.Errorf("mark draft committed: %w", err)
+	}
+
+	result, err := LoadServiceSession(ctx, q, sessionID)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+	return result, AuditRecord{
+		EventType: EventOrderDraftCommitted,
+		Details: commitAudit{
+			ServiceSessionID:   sessionID,
+			OrderDraftID:       draft.OrderDraftID,
+			CheckID:            checkID,
+			CommittedAmountVND: committedAmountVND,
+			CommittedItemCount: len(snapshots),
+		},
+	}, nil
+}
+
+// buildCommitSnapshots freezes every candidate into its priced snapshot and
+// returns the snapshots with their total.
+func buildCommitSnapshots(candidates []CommitCandidate) ([]ItemSnapshot, int64, error) {
+	snapshots := make([]ItemSnapshot, 0, len(candidates))
+	var committedAmountVND int64
+	for _, candidate := range candidates {
+		snapshot, err := BuildSnapshot(candidate)
+		if err != nil {
+			return nil, 0, err
+		}
+		committedAmountVND, err = AddCharge(committedAmountVND, snapshot.TotalVND)
+		if err != nil {
+			return nil, 0, err
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, committedAmountVND, nil
 }
 
 // loadCommitCandidates reads and locks everything Commit revalidates against.
 //
-// Lock order is Sales rows before Catalog rows, as 5A established. The draft
-// items are locked FOR UPDATE by the query; the Catalog rows are locked FOR
-// SHARE, which blocks internal/catalog's FOR UPDATE mutations without
-// serializing two concurrent Commits that share a menu item. See ADR-015.
+// Lock order is Sales rows before Catalog rows, as every draft command takes
+// them. The draft items are locked FOR UPDATE by the query; the Catalog rows
+// are locked FOR SHARE, which blocks internal/catalog's FOR UPDATE mutations
+// without serializing two concurrent Commits that share a menu item. See
+// ADR-015.
 func loadCommitCandidates(ctx context.Context, q *sqlc.Queries, draftID uuid.UUID) (
 	[]CommitCandidate, error,
 ) {
@@ -337,32 +357,8 @@ func loadCommitCandidates(ctx context.Context, q *sqlc.Queries, draftID uuid.UUI
 		return nil, fmt.Errorf("%w: draft %s", ErrEmptyDraft, draftID)
 	}
 
-	// sqlc types the query's `(retired_at IS NOT NULL)` expression as
-	// interface{}; see sqlBool. The flags are converted up front so the two
-	// whole-draft passes below stay boolean-straight.
-	itemRetired := make([]bool, len(itemRows))
-	for i, row := range itemRows {
-		retired, err := sqlBool(row.ItemRetired, "menu item retirement")
-		if err != nil {
-			return nil, err
-		}
-		itemRetired[i] = retired
-	}
-
-	// Whole-draft checks run before any per-item rule, and retirement is
-	// reported before unavailability across the entire draft. The precedence
-	// is observable — a draft holding one of each reports the retired item
-	// regardless of draft order — so it is reproduced rather than tidied into
-	// per-item ordering.
-	for i, row := range itemRows {
-		if itemRetired[i] {
-			return nil, fmt.Errorf("%w: %s", ErrCommitMenuItemRetired, row.ItemName)
-		}
-	}
-	for _, row := range itemRows {
-		if !row.ItemAvailable {
-			return nil, fmt.Errorf("%w: %s", ErrCommitMenuItemUnavailable, row.ItemName)
-		}
+	if err := assertCommitMenuItemsSellable(itemRows); err != nil {
+		return nil, err
 	}
 
 	draftItemIDs := make([]uuid.UUID, 0, len(itemRows))
@@ -415,6 +411,38 @@ func loadCommitCandidates(ctx context.Context, q *sqlc.Queries, draftID uuid.UUI
 		out = append(out, candidate)
 	}
 	return out, nil
+}
+
+// assertCommitMenuItemsSellable runs the whole-draft Menu Item checks.
+//
+// Whole-draft checks run before any per-item rule, and retirement is reported
+// before unavailability across the entire draft. The precedence is observable
+// — a draft holding one of each reports the retired item regardless of draft
+// order — so it is reproduced rather than tidied into per-item ordering.
+func assertCommitMenuItemsSellable(itemRows []sqlc.LockDraftItemsForCommitRow) error {
+	// sqlc types the query's `(retired_at IS NOT NULL)` expression as
+	// interface{}; see sqlBool. The flags are converted up front so the two
+	// whole-draft passes below stay boolean-straight.
+	itemRetired := make([]bool, len(itemRows))
+	for i, row := range itemRows {
+		retired, err := sqlBool(row.ItemRetired, "menu item retirement")
+		if err != nil {
+			return err
+		}
+		itemRetired[i] = retired
+	}
+
+	for i, row := range itemRows {
+		if itemRetired[i] {
+			return fmt.Errorf("%w: %s", ErrCommitMenuItemRetired, row.ItemName)
+		}
+	}
+	for _, row := range itemRows {
+		if !row.ItemAvailable {
+			return fmt.Errorf("%w: %s", ErrCommitMenuItemUnavailable, row.ItemName)
+		}
+	}
+	return nil
 }
 
 func loadCommitSizes(ctx context.Context, q *sqlc.Queries, sizeIDs []uuid.UUID) (
@@ -537,7 +565,7 @@ func persistSnapshots(ctx context.Context, q *sqlc.Queries, draftID, checkID uui
 			}
 		}
 
-		// 5B always allocates the full committed quantity to one Check. 5C's
+		// Commit always allocates the full committed quantity to one Check.
 		// Split is what makes a partial allocation possible.
 		if err := q.InsertChargeAllocation(ctx, sqlc.InsertChargeAllocationParams{
 			CommittedItemID: itemID,
@@ -578,10 +606,9 @@ func nullString(v *string) sql.NullString {
 // when needed, and its current charge.
 //
 // CURRENT_UNPAID reuses the Session's most recent OPEN Check; NEW_CHECK always
-// opens one. The name is canonical and "unpaid" is vacuous in 5B, where no
-// Check can be paid — the state = 'OPEN' filter is what gives it meaning from
-// 5C, when it must skip settled Checks and reuse only one still awaiting
-// money.
+// opens one. The name is canonical; the state = 'OPEN' filter is what gives
+// "unpaid" its meaning, skipping settled Checks and reusing only one still
+// awaiting money.
 func resolveTargetCheck(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID,
 	target string, at time.Time,
 ) (uuid.UUID, int64, error) {

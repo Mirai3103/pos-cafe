@@ -129,7 +129,7 @@ func NewSetCheckTargetHandler(runner *Runner) *SetCheckTargetHandler {
 
 // Handle writes the draft's Check target.
 //
-// It acquires the draft through the same lock the six 5A draft commands use,
+// It acquires the draft through the same lock the six draft commands use,
 // so it carries the same preconditions: ACTIVE Session, EDITABLE draft, OPEN
 // Shift. Setting a target on a committed draft is not a thing that can happen.
 func (h *SetCheckTargetHandler) Handle(ctx context.Context, actor Actor,

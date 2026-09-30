@@ -22,8 +22,8 @@ type ClosureReadiness struct {
 
 // EvaluateClosureReadiness is the one closure policy boundary, so the API's
 // answer and any client's preview cannot drift apart. It is pure: every input
-// it needs already travels in the Service Session projection, which is why 5D
-// exposes no readiness endpoint.
+// it needs already travels in the Service Session projection, which is why
+// Sales exposes no readiness endpoint.
 //
 // A Check carrying a positive PendingRefundVND is settled debt plus money the
 // system still owes back. Check state records only the debt side (ADR-044), so
