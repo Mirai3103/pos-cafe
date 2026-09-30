@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -17,7 +17,7 @@ import (
 // compWasteFingerprint is the normalized, credential-free business input a
 // Comp stands for: the Waste, the reason from the Comp catalog, and the
 // normalized note. The approver login code and PIN are deliberately absent, so
-// rotating credentials cannot change the idempotency key (spec §13).
+// rotating credentials cannot change the idempotency key.
 type compWasteFingerprint struct {
 	WasteID uuid.UUID `json:"waste_id"`
 	Reason  string    `json:"reason"`
@@ -147,7 +147,7 @@ func NewCompWasteHandler(runner *Runner) *CompWasteHandler {
 // requires the initiator's sales.operate plus one inline Manager Approval for
 // sales.operate; self-approval is permitted and the approver is recorded
 // separately. Success answers 201; the route layer maps domain errors through
-// ErrorResponse.
+// MapHTTPError.
 func (h *CompWasteHandler) Handle(ctx context.Context, actor Actor,
 	cmd CompWasteCommand,
 ) (int, CompResult, error) {
@@ -185,7 +185,7 @@ func (h *CompWasteHandler) Handle(ctx context.Context, actor Actor,
 //  1. resolve the Waste and its charge mapping WITHOUT locks, rejecting
 //     missing ids, non-WASTED units, and uncharged Remakes before any lock;
 //  2. lock the source Check, then its Session, then the current open Sales
-//     Shift, then the Waste and its unit (spec §11.1 lock order);
+//     Shift, then the Waste and its unit (the Sales correction lock order);
 //  3. revalidate the locked Waste and re-resolve the mapping under the locks,
 //     refusing if a concurrent restructuring moved the allocation;
 //  4. a still-active Session takes the live path, a closed one the post-sale
@@ -207,53 +207,120 @@ func applyCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 
 	// 2. Lock order: Check, Service Session, current Shift, source Waste/unit.
-	lockedCheck, err := q.LockCheckForPayment(ctx, pre.CheckID.UUID)
+	locks, err := lockCompSource(ctx, q, pre, cmd.WasteID)
+	if err != nil {
+		return CompResult{}, AuditRecord{}, err
+	}
+
+	// 3. Revalidate the locked source and its mapping.
+	post, err := revalidateCompSource(ctx, q, pre, locks, cmd.WasteID)
+	if err != nil {
+		return CompResult{}, AuditRecord{}, err
+	}
+
+	occurredAt, err := q.GetSalesOccurredAt(ctx)
+	if err != nil {
+		return CompResult{}, AuditRecord{}, fmt.Errorf("read comp time: %w", err)
+	}
+	req := compRequest{
+		actor:      actor,
+		approverID: approver.ID,
+		cmd:        cmd,
+		note:       note,
+		shiftID:    locks.shiftID,
+		occurredAt: occurredAt,
+	}
+
+	// 4. Take the path the locked Session state selects.
+	sessionState := locks.session.State
+	if sessionState == StateActive {
+		if post.CompletedSaleID.Valid {
+			return CompResult{}, AuditRecord{}, fmt.Errorf(
+				"%w: active session %s carries completed sale %s",
+				ErrChargeInvariantViolated, post.ServiceSessionID, post.CompletedSaleID.UUID)
+		}
+		return applyLiveCompWaste(ctx, q, req, post, locks.check)
+	}
+	if sessionState != StateClosed {
+		return CompResult{}, AuditRecord{}, fmt.Errorf(
+			"%w: session %s is %s", ErrChargeInvariantViolated, post.ServiceSessionID, sessionState)
+	}
+	if !post.CompletedSaleID.Valid {
+		return CompResult{}, AuditRecord{}, fmt.Errorf(
+			"%w: closed session %s carries no completed sale",
+			ErrChargeInvariantViolated, post.ServiceSessionID)
+	}
+	return applyPostSaleCompWaste(ctx, q, req, post)
+}
+
+// compLocks is a Comp's locked rows: the source Check, its Service Session,
+// the currently open Shift, and the Waste with its unit.
+type compLocks struct {
+	check   sqlc.LockCheckForPaymentRow
+	session sqlc.LockServiceSessionForUpdateRow
+	shiftID uuid.UUID
+	waste   sqlc.LockWasteForCompRow
+}
+
+// lockCompSource takes the Comp's locks in order — Check, Service Session,
+// current Shift, Waste and unit — for the pre-resolved source. A Check or
+// Session that vanished after resolution is a stored defect.
+func lockCompSource(ctx context.Context, q *sqlc.Queries, pre compWasteSource, wasteID uuid.UUID) (
+	compLocks, error,
+) {
+	checkRow, err := q.LockCheckForPayment(ctx, pre.CheckID.UUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return CompResult{}, AuditRecord{}, fmt.Errorf(
+			return compLocks{}, fmt.Errorf(
 				"%w: check %s vanished", ErrChargeInvariantViolated, pre.CheckID.UUID)
 		}
-		return CompResult{}, AuditRecord{}, fmt.Errorf("lock comp check: %w", err)
+		return compLocks{}, fmt.Errorf("lock comp check: %w", err)
 	}
 	sessionRow, err := q.LockServiceSessionForUpdate(ctx, pre.ServiceSessionID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return CompResult{}, AuditRecord{}, fmt.Errorf(
+			return compLocks{}, fmt.Errorf(
 				"%w: session %s vanished", ErrChargeInvariantViolated, pre.ServiceSessionID)
 		}
-		return CompResult{}, AuditRecord{}, fmt.Errorf("lock comp service session: %w", err)
+		return compLocks{}, fmt.Errorf("lock comp service session: %w", err)
 	}
 	shiftID, err := lockOpenSalesShift(ctx, q)
 	if err != nil {
-		return CompResult{}, AuditRecord{}, err
+		return compLocks{}, err
 	}
 	if shiftID == uuid.Nil {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("%w: no sales shift is open",
-			ErrOpenShiftRequired)
+		return compLocks{}, fmt.Errorf("%w: no sales shift is open", ErrOpenShiftRequired)
 	}
-	lockedWaste, err := q.LockWasteForComp(ctx, cmd.WasteID)
+	wasteRow, err := q.LockWasteForComp(ctx, wasteID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return CompResult{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrWasteNotFound, cmd.WasteID)
+			return compLocks{}, fmt.Errorf("%w: %s", ErrWasteNotFound, wasteID)
 		}
-		return CompResult{}, AuditRecord{}, fmt.Errorf("lock comp waste: %w", err)
+		return compLocks{}, fmt.Errorf("lock comp waste: %w", err)
 	}
+	return compLocks{check: checkRow, session: sessionRow, shiftID: shiftID, waste: wasteRow}, nil
+}
 
-	// 3. Revalidate the locked source and its mapping. A Split or Merge that
-	// committed between the pre-resolution and the Check lock changed the
-	// established attribution, and building an adjustment on a stale mapping
-	// would strand it. The loser refuses whole rather than repair.
+// revalidateCompSource revalidates the locked Waste and re-resolves its charge
+// mapping under the locks, returning the re-resolved source. A Split or Merge
+// that committed between the pre-resolution and the Check lock changed the
+// established attribution, and building an adjustment on a stale mapping
+// would strand it. The loser refuses whole rather than repair.
+func revalidateCompSource(ctx context.Context, q *sqlc.Queries, pre compWasteSource,
+	locks compLocks, wasteID uuid.UUID,
+) (compWasteSource, error) {
+	lockedWaste := locks.waste
 	if lockedWaste.UnitState != UnitStateWasted {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("%w: unit %s is %s",
+		return compWasteSource{}, fmt.Errorf("%w: unit %s is %s",
 			ErrWasteNotFound, lockedWaste.PreparationUnitID, lockedWaste.UnitState)
 	}
 	if lockedWaste.Priority != unitPriorityStandard {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("%w: unit %s has priority %s",
+		return compWasteSource{}, fmt.Errorf("%w: unit %s has priority %s",
 			ErrCompSourceNotCharged, lockedWaste.PreparationUnitID, lockedWaste.Priority)
 	}
-	post, err := resolveCompWasteSource(ctx, q, cmd.WasteID)
+	post, err := resolveCompWasteSource(ctx, q, wasteID)
 	if err != nil {
-		return CompResult{}, AuditRecord{}, err
+		return compWasteSource{}, err
 	}
 	if pre.PreparationUnitID != post.PreparationUnitID ||
 		pre.ServiceSessionID != post.ServiceSessionID ||
@@ -261,39 +328,28 @@ func applyCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 		pre.CheckID != post.CheckID ||
 		pre.AmountVND != post.AmountVND ||
 		pre.Priority != post.Priority {
-		return CompResult{}, AuditRecord{}, fmt.Errorf(
+		return compWasteSource{}, fmt.Errorf(
 			"%w: the charge mapping of unit %s changed concurrently",
 			ErrChargeAdjustmentConflict, post.PreparationUnitID)
 	}
-	if lockedCheck.ID != post.CheckID.UUID {
-		return CompResult{}, AuditRecord{}, fmt.Errorf(
+	if locks.check.ID != post.CheckID.UUID {
+		return compWasteSource{}, fmt.Errorf(
 			"%w: check %s resolved after locking %s",
-			ErrChargeInvariantViolated, post.CheckID.UUID, lockedCheck.ID)
+			ErrChargeInvariantViolated, post.CheckID.UUID, locks.check.ID)
 	}
+	return post, nil
+}
 
-	occurredAt, err := q.GetSalesOccurredAt(ctx)
-	if err != nil {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("read comp time: %w", err)
-	}
-	if sessionRow.State == StateActive {
-		if post.CompletedSaleID.Valid {
-			return CompResult{}, AuditRecord{}, fmt.Errorf(
-				"%w: active session %s carries completed sale %s",
-				ErrChargeInvariantViolated, post.ServiceSessionID, post.CompletedSaleID.UUID)
-		}
-		return applyLiveCompWaste(ctx, q, actor, approver, cmd, note, post,
-			lockedCheck, shiftID, occurredAt)
-	}
-	if sessionRow.State != StateClosed {
-		return CompResult{}, AuditRecord{}, fmt.Errorf(
-			"%w: session %s is %s", ErrChargeInvariantViolated, post.ServiceSessionID, sessionRow.State)
-	}
-	if !post.CompletedSaleID.Valid {
-		return CompResult{}, AuditRecord{}, fmt.Errorf(
-			"%w: closed session %s carries no completed sale",
-			ErrChargeInvariantViolated, post.ServiceSessionID)
-	}
-	return applyPostSaleCompWaste(ctx, q, actor, approver, cmd, note, post, shiftID, occurredAt)
+// compRequest is what both Comp write paths need beyond the source: who acts,
+// who approved, the validated command and note, the Shift the correction is
+// recorded in, and the time it is recorded at.
+type compRequest struct {
+	actor      Actor
+	approverID uuid.UUID
+	cmd        CompWasteCommand
+	note       *string
+	shiftID    uuid.UUID
+	occurredAt time.Time
 }
 
 // applyLiveCompWaste corrects an active Session: one LIVE_CHECK adjustment,
@@ -301,121 +357,51 @@ func applyCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 // balance reaches zero, the Comp fact, the audits, and the updated Service
 // Session. A Check already SETTLED keeps its original evidence; a pending
 // Refund is a separate obligation that closure, not state, enforces.
-func applyLiveCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
-	approver *auth.ApproverSummary, cmd CompWasteCommand, note *string,
+func applyLiveCompWaste(ctx context.Context, q *sqlc.Queries, req compRequest,
 	source compWasteSource, lockedCheck sqlc.LockCheckForPaymentRow,
-	shiftID uuid.UUID, occurredAt time.Time,
 ) (CompResult, AuditRecord, error) {
 	checkID := source.CheckID.UUID
 
-	if lockedCheck.State != CheckStateOpen && lockedCheck.State != CheckStateSettled {
-		return CompResult{}, AuditRecord{}, fmt.Errorf(
-			"%w: check %s is %s", ErrChargeInvariantViolated, checkID, lockedCheck.State)
-	}
-	if err := assertChargeMatchesAllocations(ctx, q, checkID, lockedCheck.ChargeVnd); err != nil {
-		return CompResult{}, AuditRecord{}, err
-	}
-
-	// One Waste admits one Comp. The Check lock serializes concurrent Comps of
-	// the same source, so a COMMITTED adjustment for this unit seen here is a
-	// duplicate rather than a race; the unique constraints remain the backstop.
-	existingAdjustments, err := q.ListCheckChargeAdjustments(ctx, checkID)
-	if err != nil {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("list check charge adjustments: %w", err)
-	}
-	for _, existing := range existingAdjustments {
-		if existing.Kind == ChargeAdjustmentKindComp &&
-			existing.PreparationUnitID == source.PreparationUnitID {
-			return CompResult{}, AuditRecord{}, fmt.Errorf(
-				"%w: unit %s already carries a comp", ErrWasteAlreadyComped, source.PreparationUnitID)
-		}
-	}
-
-	if source.AmountVND > lockedCheck.ChargeVnd {
-		return CompResult{}, AuditRecord{}, fmt.Errorf(
-			"%w: comp %d exceeds stored charge %d of check %s",
-			ErrChargeInvariantViolated, source.AmountVND, lockedCheck.ChargeVnd, checkID)
-	}
-	newChargeVND := lockedCheck.ChargeVnd - source.AmountVND
-
-	adjustment, err := q.InsertChargeAdjustment(ctx, sqlc.InsertChargeAdjustmentParams{
-		Kind:               ChargeAdjustmentKindComp,
-		Scope:              CompScopeLiveCheck,
-		PreparationUnitID:  source.PreparationUnitID,
-		PreparationWasteID: uuid.NullUUID{UUID: source.WasteID, Valid: true},
-		ChargeAllocationID: source.ChargeAllocationID.UUID,
-		CheckID:            checkID,
-		CompletedSaleID:    uuid.NullUUID{},
-		SalesShiftID:       shiftID,
-		AmountVnd:          source.AmountVND,
-		CreatedAt:          occurredAt,
-	})
-	if err != nil {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("insert comp charge adjustment: %w",
-			mapCompDBError(err))
-	}
-	if err := q.UpdateAdjustedCheckCharge(ctx, sqlc.UpdateAdjustedCheckChargeParams{
-		ChargeVnd: newChargeVND,
-		ID:        checkID,
-	}); err != nil {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("update adjusted check charge: %w", err)
-	}
-
-	// The balance derivation re-verifies the corrected charge against the
-	// allocations and adjustments just written, then derives the receipt side.
-	balanceVND, err := checkBalance(ctx, q, checkID, newChargeVND)
+	newChargeVND, err := assertLiveCompAdmissible(ctx, q, source, lockedCheck)
 	if err != nil {
 		return CompResult{}, AuditRecord{}, err
 	}
-	settled := false
-	if lockedCheck.State == CheckStateOpen && SettlesCheck(balanceVND) {
-		if err := q.SettleCheck(ctx, sqlc.SettleCheckParams{
-			ID:                          checkID,
-			SettledAt:                   sql.NullTime{Time: occurredAt, Valid: true},
-			SettledByStaffIdentityID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-			SettledDuringSalesShiftID:   uuid.NullUUID{UUID: shiftID, Valid: true},
-			SettledStaffAccessSessionID: uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-		}); err != nil {
-			return CompResult{}, AuditRecord{}, fmt.Errorf("settle adjusted check: %w", err)
-		}
-		settled = true
-	}
 
-	comp, err := q.InsertSalesComp(ctx, sqlc.InsertSalesCompParams{
-		PreparationWasteID:        source.WasteID,
-		ChargeAdjustmentID:        adjustment.ID,
-		Reason:                    cmd.Reason,
-		Note:                      nullString(note),
-		ActorStaffIdentityID:      actor.StaffID,
-		StaffAccessSessionID:      actor.SessionID,
-		ApprovedByStaffIdentityID: approver.ID,
-		OccurredAt:                occurredAt,
-	})
+	adjustment, err := insertCompChargeAdjustment(ctx, q, req, source, CompScopeLiveCheck,
+		uuid.NullUUID{})
 	if err != nil {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("insert sales comp: %w", mapCompDBError(err))
+		return CompResult{}, AuditRecord{}, err
+	}
+	settled, err := applyLiveCompCharge(ctx, q, req, checkID, lockedCheck.State, newChargeVND)
+	if err != nil {
+		return CompResult{}, AuditRecord{}, err
+	}
+	comp, err := insertSalesComp(ctx, q, req, source, adjustment.ID)
+	if err != nil {
+		return CompResult{}, AuditRecord{}, err
 	}
 
 	chargeBeforeVND, chargeAfterVND := lockedCheck.ChargeVnd, newChargeVND
-	if err := writeSalesAudit(ctx, q, actor, occurredAt, EventCheckChargeAdjusted,
+	if err := writeSalesAudit(ctx, q, req.actor, req.occurredAt, EventCheckChargeAdjusted,
 		compChargeAdjustedAudit{
 			CheckID:            checkID,
 			ChargeAdjustmentID: adjustment.ID,
 			PreparationWasteID: source.WasteID,
 			PreparationUnitID:  source.PreparationUnitID,
 			Scope:              CompScopeLiveCheck,
-			SalesShiftID:       shiftID,
+			SalesShiftID:       req.shiftID,
 			AmountVND:          source.AmountVND,
 			ChargeBeforeVND:    &chargeBeforeVND,
 			ChargeAfterVND:     &chargeAfterVND,
-			Reason:             cmd.Reason,
+			Reason:             req.cmd.Reason,
 		}); err != nil {
 		return CompResult{}, AuditRecord{}, err
 	}
 	if settled {
-		if err := writeSalesAudit(ctx, q, actor, occurredAt, EventCheckSettled,
+		if err := writeSalesAudit(ctx, q, req.actor, req.occurredAt, EventCheckSettled,
 			compSettledAudit{
 				CheckID:            checkID,
-				SalesShiftID:       shiftID,
+				SalesShiftID:       req.shiftID,
 				ChargeBeforeVND:    lockedCheck.ChargeVnd,
 				ChargeAfterVND:     newChargeVND,
 				ChargeAdjustmentID: adjustment.ID,
@@ -428,70 +414,103 @@ func applyLiveCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	if err != nil {
 		return CompResult{}, AuditRecord{}, err
 	}
-
 	return CompResult{
 		Scope:          CompScopeLiveCheck,
 		Comp:           compResponseFromFact(comp, source),
 		ServiceSession: &session,
-	}, AuditRecord{
-		EventType: EventSalesCompRecorded,
-		Details: compRecordedAudit{
-			CompID:                    comp.ID,
-			PreparationWasteID:        source.WasteID,
-			PreparationUnitID:         source.PreparationUnitID,
-			ChargeAdjustmentID:        adjustment.ID,
-			Scope:                     CompScopeLiveCheck,
-			AmountVND:                 source.AmountVND,
-			Reason:                    cmd.Reason,
-			Note:                      note,
-			ActorStaffIdentityID:      actor.StaffID,
-			ApprovedByStaffIdentityID: approver.ID,
-		},
-	}, nil
+	}, newCompRecordedAudit(req, comp.ID, source, adjustment.ID, CompScopeLiveCheck, nil), nil
+}
+
+// assertLiveCompAdmissible checks the locked Check can take a live Comp of
+// source and returns the corrected stored charge. One Waste admits one Comp:
+// the Check lock serializes concurrent Comps of the same source, so a
+// COMMITTED adjustment for this unit seen here is a duplicate rather than a
+// race; the unique constraints remain the backstop.
+func assertLiveCompAdmissible(ctx context.Context, q *sqlc.Queries, source compWasteSource,
+	lockedCheck sqlc.LockCheckForPaymentRow,
+) (int64, error) {
+	checkID := source.CheckID.UUID
+	if lockedCheck.State != CheckStateOpen && lockedCheck.State != CheckStateSettled {
+		return 0, fmt.Errorf(
+			"%w: check %s is %s", ErrChargeInvariantViolated, checkID, lockedCheck.State)
+	}
+	if err := assertChargeMatchesAllocations(ctx, q, checkID, lockedCheck.ChargeVnd); err != nil {
+		return 0, err
+	}
+
+	existingAdjustments, err := q.ListCheckChargeAdjustments(ctx, checkID)
+	if err != nil {
+		return 0, fmt.Errorf("list check charge adjustments: %w", err)
+	}
+	for _, existing := range existingAdjustments {
+		if existing.Kind == ChargeAdjustmentKindComp &&
+			existing.PreparationUnitID.Valid && existing.PreparationUnitID.UUID == source.PreparationUnitID {
+			return 0, fmt.Errorf(
+				"%w: unit %s already carries a comp", ErrWasteAlreadyComped, source.PreparationUnitID)
+		}
+	}
+
+	if source.AmountVND > lockedCheck.ChargeVnd {
+		return 0, fmt.Errorf(
+			"%w: comp %d exceeds stored charge %d of check %s",
+			ErrChargeInvariantViolated, source.AmountVND, lockedCheck.ChargeVnd, checkID)
+	}
+	return lockedCheck.ChargeVnd - source.AmountVND, nil
+}
+
+// applyLiveCompCharge stores the corrected charge and settles an OPEN Check
+// whose corrected balance reaches zero. It reports whether it settled the
+// Check. The balance derivation re-verifies the corrected charge against the
+// allocations and adjustments just written, then derives the receipt side.
+func applyLiveCompCharge(ctx context.Context, q *sqlc.Queries, req compRequest, checkID uuid.UUID,
+	checkState string, newChargeVND int64,
+) (bool, error) {
+	if err := q.UpdateAdjustedCheckCharge(ctx, sqlc.UpdateAdjustedCheckChargeParams{
+		ChargeVnd: newChargeVND,
+		ID:        checkID,
+	}); err != nil {
+		return false, fmt.Errorf("update adjusted check charge: %w", err)
+	}
+
+	balanceVND, err := checkBalance(ctx, q, checkID, newChargeVND)
+	if err != nil {
+		return false, err
+	}
+	if checkState != CheckStateOpen || !SettlesCheck(balanceVND) {
+		return false, nil
+	}
+	if err := q.SettleCheck(ctx, sqlc.SettleCheckParams{
+		ID:                          checkID,
+		SettledAt:                   sql.NullTime{Time: req.occurredAt, Valid: true},
+		SettledByStaffIdentityID:    uuid.NullUUID{UUID: req.actor.StaffID, Valid: true},
+		SettledDuringSalesShiftID:   uuid.NullUUID{UUID: req.shiftID, Valid: true},
+		SettledStaffAccessSessionID: uuid.NullUUID{UUID: req.actor.SessionID, Valid: true},
+	}); err != nil {
+		return false, fmt.Errorf("settle adjusted check: %w", err)
+	}
+	return true, nil
 }
 
 // applyPostSaleCompWaste corrects a closed sale: one POST_SALE adjustment
 // linked to its Completed Sale, the Comp fact, the audits, and the
 // outstanding post-sale correction amount. It writes no Check, allocation,
-// settlement, Preparation Unit, or Completed Sale core row (spec §8.3).
-func applyPostSaleCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
-	approver *auth.ApproverSummary, cmd CompWasteCommand, note *string,
-	source compWasteSource, shiftID uuid.UUID, occurredAt time.Time,
+// settlement, Preparation Unit, or Completed Sale core row.
+func applyPostSaleCompWaste(ctx context.Context, q *sqlc.Queries, req compRequest,
+	source compWasteSource,
 ) (CompResult, AuditRecord, error) {
 	saleID := source.CompletedSaleID.UUID
 
-	adjustment, err := q.InsertChargeAdjustment(ctx, sqlc.InsertChargeAdjustmentParams{
-		Kind:               ChargeAdjustmentKindComp,
-		Scope:              CompScopePostSale,
-		PreparationUnitID:  source.PreparationUnitID,
-		PreparationWasteID: uuid.NullUUID{UUID: source.WasteID, Valid: true},
-		ChargeAllocationID: source.ChargeAllocationID.UUID,
-		CheckID:            source.CheckID.UUID,
-		CompletedSaleID:    uuid.NullUUID{UUID: saleID, Valid: true},
-		SalesShiftID:       shiftID,
-		AmountVnd:          source.AmountVND,
-		CreatedAt:          occurredAt,
-	})
+	adjustment, err := insertCompChargeAdjustment(ctx, q, req, source, CompScopePostSale,
+		uuid.NullUUID{UUID: saleID, Valid: true})
 	if err != nil {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("insert comp charge adjustment: %w",
-			mapCompDBError(err))
+		return CompResult{}, AuditRecord{}, err
+	}
+	comp, err := insertSalesComp(ctx, q, req, source, adjustment.ID)
+	if err != nil {
+		return CompResult{}, AuditRecord{}, err
 	}
 
-	comp, err := q.InsertSalesComp(ctx, sqlc.InsertSalesCompParams{
-		PreparationWasteID:        source.WasteID,
-		ChargeAdjustmentID:        adjustment.ID,
-		Reason:                    cmd.Reason,
-		Note:                      nullString(note),
-		ActorStaffIdentityID:      actor.StaffID,
-		StaffAccessSessionID:      actor.SessionID,
-		ApprovedByStaffIdentityID: approver.ID,
-		OccurredAt:                occurredAt,
-	})
-	if err != nil {
-		return CompResult{}, AuditRecord{}, fmt.Errorf("insert sales comp: %w", mapCompDBError(err))
-	}
-
-	if err := writeSalesAudit(ctx, q, actor, occurredAt, EventCheckChargeAdjusted,
+	if err := writeSalesAudit(ctx, q, req.actor, req.occurredAt, EventCheckChargeAdjusted,
 		compChargeAdjustedAudit{
 			CheckID:            source.CheckID.UUID,
 			ChargeAdjustmentID: adjustment.ID,
@@ -499,9 +518,9 @@ func applyPostSaleCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 			PreparationUnitID:  source.PreparationUnitID,
 			Scope:              CompScopePostSale,
 			CompletedSaleID:    &saleID,
-			SalesShiftID:       shiftID,
+			SalesShiftID:       req.shiftID,
 			AmountVND:          source.AmountVND,
-			Reason:             cmd.Reason,
+			Reason:             req.cmd.Reason,
 		}); err != nil {
 		return CompResult{}, AuditRecord{}, err
 	}
@@ -512,7 +531,7 @@ func applyPostSaleCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 
 	// The mutation projects the sale's whole additive history, so a later
-	// correction never hides an earlier one (spec §12.3).
+	// correction never hides an earlier one.
 	history, err := loadCompletedSalePostSaleCorrections(ctx, q, saleID)
 	if err != nil {
 		return CompResult{}, AuditRecord{}, err
@@ -523,29 +542,81 @@ func applyPostSaleCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 		CompletedSaleID:              &saleID,
 		OutstandingPostSaleRefundVND: &outstandingVND,
 		PostSaleCorrections:          history,
-	}, AuditRecord{
+	}, newCompRecordedAudit(req, comp.ID, source, adjustment.ID, CompScopePostSale, &saleID), nil
+}
+
+// insertCompChargeAdjustment appends the Comp's charge adjustment in scope,
+// linked to completedSaleID for a post-sale correction.
+func insertCompChargeAdjustment(ctx context.Context, q *sqlc.Queries, req compRequest,
+	source compWasteSource, scope string, completedSaleID uuid.NullUUID,
+) (sqlc.ChargeAdjustment, error) {
+	adjustment, err := q.InsertChargeAdjustment(ctx, sqlc.InsertChargeAdjustmentParams{
+		Kind:               ChargeAdjustmentKindComp,
+		Scope:              scope,
+		PreparationUnitID:  uuid.NullUUID{UUID: source.PreparationUnitID, Valid: true},
+		PreparationWasteID: uuid.NullUUID{UUID: source.WasteID, Valid: true},
+		ChargeAllocationID: source.ChargeAllocationID.UUID,
+		CheckID:            source.CheckID.UUID,
+		CompletedSaleID:    completedSaleID,
+		SalesShiftID:       req.shiftID,
+		AmountVnd:          source.AmountVND,
+		CreatedAt:          req.occurredAt,
+	})
+	if err != nil {
+		return sqlc.ChargeAdjustment{}, fmt.Errorf("insert comp charge adjustment: %w",
+			mapCompDBError(err))
+	}
+	return adjustment, nil
+}
+
+// insertSalesComp appends the Comp fact naming its Waste and adjustment.
+func insertSalesComp(ctx context.Context, q *sqlc.Queries, req compRequest,
+	source compWasteSource, adjustmentID uuid.UUID,
+) (sqlc.SalesComp, error) {
+	comp, err := q.InsertSalesComp(ctx, sqlc.InsertSalesCompParams{
+		PreparationWasteID:        source.WasteID,
+		ChargeAdjustmentID:        adjustmentID,
+		Reason:                    req.cmd.Reason,
+		Note:                      nullString(req.note),
+		ActorStaffIdentityID:      req.actor.StaffID,
+		StaffAccessSessionID:      req.actor.SessionID,
+		ApprovedByStaffIdentityID: req.approverID,
+		OccurredAt:                req.occurredAt,
+	})
+	if err != nil {
+		return sqlc.SalesComp{}, fmt.Errorf("insert sales comp: %w", mapCompDBError(err))
+	}
+	return comp, nil
+}
+
+// newCompRecordedAudit is the business audit record of a Comp. completedSaleID
+// is nil for a live Comp.
+func newCompRecordedAudit(req compRequest, compID uuid.UUID, source compWasteSource,
+	adjustmentID uuid.UUID, scope string, completedSaleID *uuid.UUID,
+) AuditRecord {
+	return AuditRecord{
 		EventType: EventSalesCompRecorded,
 		Details: compRecordedAudit{
-			CompID:                    comp.ID,
+			CompID:                    compID,
 			PreparationWasteID:        source.WasteID,
 			PreparationUnitID:         source.PreparationUnitID,
-			ChargeAdjustmentID:        adjustment.ID,
-			Scope:                     CompScopePostSale,
-			CompletedSaleID:           &saleID,
+			ChargeAdjustmentID:        adjustmentID,
+			Scope:                     scope,
+			CompletedSaleID:           completedSaleID,
 			AmountVND:                 source.AmountVND,
-			Reason:                    cmd.Reason,
-			Note:                      note,
-			ActorStaffIdentityID:      actor.StaffID,
-			ApprovedByStaffIdentityID: approver.ID,
+			Reason:                    req.cmd.Reason,
+			Note:                      req.note,
+			ActorStaffIdentityID:      req.actor.StaffID,
+			ApprovedByStaffIdentityID: req.approverID,
 		},
-	}, nil
+	}
 }
 
 // loadOutstandingPostSaleRefundVND derives the uncompleted post-sale
 // correction amount of one Completed Sale: every POST_SALE adjustment less
 // the completed post-sale Refunds allocated against them. A pending Manual QR
 // Refund reserves capacity but has not moved money, so it does not reduce the
-// amount owed (spec §6.3, §12.5).
+// amount owed.
 func loadOutstandingPostSaleRefundVND(ctx context.Context, q *sqlc.Queries,
 	saleID uuid.UUID,
 ) (int64, error) {
@@ -601,7 +672,7 @@ func compResponseFromFact(comp sqlc.SalesComp, source compWasteSource) CompRespo
 }
 
 // audit detail shapes. Each carries stable business ids and financial meaning
-// and never a Manager PIN, PIN hash, or login credential (spec §15).
+// and never a Manager PIN, PIN hash, or login credential.
 
 type compChargeAdjustedAudit struct {
 	CheckID            uuid.UUID  `json:"check_id"`

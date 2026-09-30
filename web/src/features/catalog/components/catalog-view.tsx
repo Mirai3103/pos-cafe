@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type ReactElement } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Button } from "@/components/ui/button";
-import { StockToast, type StockToastMessage } from "@/features/settings/components/stock-toast";
+import { StockToast, type StockToastMessage } from "@/components/feedback/stock-toast";
 import { messageForError } from "@/lib/error-messages";
 import { useCatalogModel } from "../api/use-catalog-admin";
 import type { CatalogViewKey } from "../lib/views";

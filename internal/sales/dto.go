@@ -223,11 +223,10 @@ type OrderDraftResponse struct {
 
 // ServiceSessionResponse is the one projection every Sales operation returns.
 //
-// It ships in its final shape from 5A. Checks, Orders, and PreparationUnits
-// are always present, so the contract never breaks: a Session starts with all
-// three empty, and they fill as Checks are committed and Orders are submitted.
-// Preparation alerts and corrections are Phase 6 concerns and are
-// omitted entirely rather than stubbed.
+// Checks, Orders, and PreparationUnits are always present, so the contract
+// never breaks: a Session starts with all three empty, and they fill as Checks
+// are committed and Orders are submitted. Preparation alerts are not part of
+// this projection.
 //
 // CustomerIdentityID is a constant null: every opening-day Service Session is
 // anonymous, and the field exists so a future Loyalty Program does not reshape
@@ -253,6 +252,12 @@ type ServiceSessionResponse struct {
 	Orders []OrderResponse `json:"orders"`
 	// Filled from 5D.
 	PreparationUnits []PreparationUnitResponse `json:"preparation_units"`
+	// Phase 08: paid Committed Items that have not entered an Order (spec §4),
+	// derived, never stored.
+	AwaitingSubmission                 bool        `json:"awaiting_submission"`
+	AwaitingSubmissionCommittedItemIDs []uuid.UUID `json:"awaiting_submission_committed_item_ids"`
+	// Phase 08: the terminal record, present only on an ABANDONED Session.
+	AbandonedCheckout *AbandonedCheckoutResponse `json:"abandoned_checkout"`
 }
 
 // CommittedModifierResponse is one frozen Modifier Option on a Committed Item.
@@ -286,6 +291,9 @@ type ChargeAllocationResponse struct {
 	AmountVND         int64                       `json:"amount_vnd"`
 	CreatedAt         time.Time                   `json:"created_at"`
 	Submitted         bool                        `json:"submitted"`
+	// Withdrawn is true once a WITHDRAWAL Charge Adjustment removed this
+	// allocation's charge (Phase 08).
+	Withdrawn bool `json:"withdrawn"`
 }
 
 // PaymentResponse is one confirmed receipt of money applied to a Check.
@@ -329,7 +337,7 @@ type ChargeAdjustmentResponse struct {
 	ID                     uuid.UUID  `json:"id"`
 	Kind                   string     `json:"kind"`
 	Scope                  string     `json:"scope"`
-	PreparationUnitID      uuid.UUID  `json:"preparation_unit_id"`
+	PreparationUnitID      *uuid.UUID `json:"preparation_unit_id"`
 	PreparationWasteID     *uuid.UUID `json:"preparation_waste_id"`
 	ChargeAllocationID     uuid.UUID  `json:"charge_allocation_id"`
 	CompletedSaleID        *uuid.UUID `json:"completed_sale_id,omitempty"`
@@ -422,7 +430,7 @@ type OrderResponse struct {
 // OrderItemResponse is a Committed Item after submission.
 //
 // It carries the commercial snapshot by reference rather than by copy
-// (ADR-025): committed_items is immutable by 5B's rule, so the identifier is
+// (ADR-025): committed_items is immutable once committed, so the identifier is
 // the snapshot. The names and amounts a client needs are already on the
 // Check's Charge Allocations, keyed by the same CommittedItemID.
 type OrderItemResponse struct {
@@ -440,10 +448,10 @@ type UnitModifierResponse struct {
 // PreparationUnitResponse is one individually prepared unit of an ordered
 // item. A Committed Item of quantity three becomes three of these.
 //
-// Priority and RemakeOfPreparationUnitID are the Phase 6B Remake metadata the
+// Priority and RemakeOfPreparationUnitID are the Remake metadata the
 // read projects for both the live Service Session and the Completed Sale:
 // originals are STANDARD with a constant null link, and only a linked
-// replacement is REMAKE pointing at the exact wasted source unit (spec §5.1).
+// replacement is REMAKE pointing at the exact wasted source unit.
 // No alert or correction-history fields ride on the unit object.
 type PreparationUnitResponse struct {
 	ID              uuid.UUID              `json:"id"`
@@ -478,7 +486,7 @@ type CloseServiceSessionCommand struct {
 // CompletedSaleCheckResponse is one Check as it stood at closure: settled,
 // with a zero balance, carrying its Payments, Charge Allocations, the live
 // Charge Adjustments and Refunds that existed before closure, and the complete
-// Phase 6C financial equation. It is the immutable core: post-sale corrections
+// financial equation. It is the immutable core: post-sale corrections
 // appear only in CompletedSaleResponse.PostSaleCorrections.
 type CompletedSaleCheckResponse struct {
 	ID                   uuid.UUID                  `json:"id"`
@@ -539,13 +547,13 @@ type CompletedSaleResponse struct {
 // on a Check's or a Session's state.
 const CompletedSaleStateCompleted = "COMPLETED"
 
-// ---------- Phase 6C: Comp ----------
+// ---------- Comp ----------
 
 // CompWasteCommand waives the charge of one charged Wasted unit. WasteID is
 // json:"-": it comes from the path, never the body. ManagerApproval carries
 // request-only credentials; the executor verifies them inline, and no
 // credential ever reaches a fingerprint, stored result, business fact, audit
-// detail, or log (spec §8.1).
+// detail, or log.
 type CompWasteCommand struct {
 	RequestID       uuid.UUID            `json:"request_id"`
 	WasteID         uuid.UUID            `json:"-"`
@@ -586,8 +594,7 @@ type PostSaleCorrectionResponse struct {
 // CompResult is the discriminated Comp result. Exactly one branch is present:
 // a live Comp carries the updated Service Session, while a post-sale Comp
 // carries the Completed Sale id, the outstanding post-sale correction amount,
-// and the additive correction history, and no mutable Session projection
-// (spec §8.3, §12.3).
+// and the additive correction history, and no mutable Session projection.
 type CompResult struct {
 	Scope                        string                       `json:"scope"`
 	Comp                         CompResponse                 `json:"comp"`
@@ -597,7 +604,7 @@ type CompResult struct {
 	PostSaleCorrections          []PostSaleCorrectionResponse `json:"post_sale_corrections,omitempty"`
 }
 
-// ---------- Phase 6C: Refund ----------
+// ---------- Refund ----------
 
 // RefundPaymentAllocationInput names one Payment the refunded value came in
 // through and the amount allocated against it.
@@ -618,8 +625,7 @@ type RefundAdjustmentAllocationInput struct {
 // refundable capacity. Both allocation collections are required and must sum
 // to the same positive amount. ManagerApproval carries request-only
 // credentials; the executor verifies them inline, and no credential ever
-// reaches a fingerprint, stored result, business fact, audit detail, or log
-// (spec §9.1).
+// reaches a fingerprint, stored result, business fact, audit detail, or log.
 type RecordRefundCommand struct {
 	RequestID             uuid.UUID                         `json:"request_id"`
 	CheckID               uuid.UUID                         `json:"check_id"`
@@ -634,7 +640,7 @@ type RecordRefundCommand struct {
 // RefundResult is the discriminated Refund result. Exactly one branch is
 // present: a live Refund carries the updated Service Session, while a
 // post-sale Refund carries the Completed Sale id and its additive correction
-// history and no mutable Session projection (spec §9.1, §12.3).
+// history and no mutable Session projection.
 type RefundResult struct {
 	Scope               string                       `json:"scope"`
 	Refund              RefundResponse               `json:"refund"`
@@ -643,17 +649,35 @@ type RefundResult struct {
 	PostSaleCorrections []PostSaleCorrectionResponse `json:"post_sale_corrections,omitempty"`
 }
 
-// ---------- Phase 6C: Payment Void ----------
+// ---------- Payment Void ----------
 
 // VoidPaymentCommand declares one whole Payment incorrect. PaymentID is
 // json:"-": it comes from the path, never the body. ManagerApproval carries
 // request-only credentials; the executor verifies them inline, and no
 // credential ever reaches a fingerprint, stored result, business fact, audit
-// detail, or log (spec §10).
+// detail, or log.
 type VoidPaymentCommand struct {
 	RequestID       uuid.UUID            `json:"request_id"`
 	PaymentID       uuid.UUID            `json:"-"`
 	Reason          string               `json:"reason"`
 	Note            *string              `json:"note"`
 	ManagerApproval ManagerApprovalInput `json:"manager_approval"`
+}
+
+// AbandonedCheckoutResponse is the terminal record of an Abandoned Checkout.
+type AbandonedCheckoutResponse struct {
+	ID                   uuid.UUID `json:"id"`
+	Reason               string    `json:"reason"`
+	Note                 *string   `json:"note"`
+	ActorStaffIdentityID uuid.UUID `json:"actor_staff_identity_id"`
+	OccurredAt           time.Time `json:"occurred_at"`
+}
+
+// CheckoutRecoveryCommand is the body of both Phase 08 commands, Cancel
+// Awaiting Submission and Abandon Checkout.
+type CheckoutRecoveryCommand struct {
+	RequestID        uuid.UUID `json:"request_id"`
+	ServiceSessionID uuid.UUID `json:"-"`
+	Reason           string    `json:"reason"`
+	Note             *string   `json:"note"`
 }

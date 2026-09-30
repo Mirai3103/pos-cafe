@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
 
 type MutationName = "advance" | "advanceMany" | "waste" | "remake" | "correct" | "acknowledge";
 
@@ -42,21 +41,30 @@ function mutation(name: MutationName) {
   };
 }
 
-// Bun's `mock.module` permanently binds the *function identity* of each named export
-// it defines to the "@tanstack/react-query" specifier for the rest of the test process
-// (confirmed empirically: neither `mock.restore()` nor re-registering `mock.module`
-// with the real module afterwards can un-stub a previously-stubbed export — later
-// re-registrations only add exports that were never stubbed in the first place). Any
-// later test file's real `useMutation` internally re-resolves `useQueryClient` off this
-// same stubbed binding, so once `useQueryClient` is stubbed here it stays stubbed.
+// Bun's `mock.module` replaces the named exports it defines for the rest of
+// the test process: neither `mock.restore()` nor re-registering the real module
+// can undo it, so every other test file that imports these modules (in
+// whatever order `bun test` runs them) would otherwise get this file's stubs —
+// e.g. src/lib/command.test.ts would see a `withRequestId` minting
+// "request-N" ids, and later renders a `useQueryClient` that ignores the
+// QueryClientProvider.
 //
-// To avoid leaking a broken stub into later files (e.g. open-table-dialog.test.tsx's
-// real `useStartDineInSession` → `useMutation` chain), the stubbed function itself
-// never changes, but what it *returns* is a mutable indirection cell. Once this file's
-// tests are done, `afterAll` swaps that cell to a real `QueryClient` instance, so any
-// later file that calls the (still-stubbed) `useQueryClient()` gets a fully working
-// client instead of the plain object this file needs for its own assertions.
-let currentQueryClient: { invalidateQueries: (filters: unknown) => Promise<unknown> } = {
+// So each stub is only active while this file's tests run: the real
+// implementations are captured before mocking, and once this file is done
+// `afterAll` flips `isolated` off so every stub delegates to the real one.
+const realReactQuery = { ...(await import("@tanstack/react-query")) };
+const realPreparation = {
+  ...(await import("@/api/generated/endpoints/preparation/preparation")),
+};
+const realCommand = { ...(await import("@/lib/command")) };
+const realSound = { ...(await import("@/lib/sound")) };
+
+let isolated = true;
+afterAll(() => {
+  isolated = false;
+});
+
+const queryClient = {
   invalidateQueries: (filters: unknown) => {
     invalidations.push(filters);
     return Promise.resolve();
@@ -64,25 +72,35 @@ let currentQueryClient: { invalidateQueries: (filters: unknown) => Promise<unkno
 };
 
 mock.module("@tanstack/react-query", () => ({
-  useQueryClient: () => currentQueryClient,
+  useQueryClient: (...args: Parameters<typeof realReactQuery.useQueryClient>) =>
+    isolated ? queryClient : realReactQuery.useQueryClient(...args),
 }));
 
-afterAll(() => {
-  currentQueryClient = new QueryClient() as unknown as typeof currentQueryClient;
-});
+type PreparationEndpoints = typeof realPreparation;
+function stubMutation<K extends keyof PreparationEndpoints>(key: K, name: MutationName) {
+  return ((...args: unknown[]) =>
+    isolated
+      ? mutation(name)
+      : (realPreparation[key] as (...a: unknown[]) => unknown)(...args)) as PreparationEndpoints[K];
+}
 
 mock.module("@/api/generated/endpoints/preparation/preparation", () => ({
-  usePostPreparationUnitsUnitIdAdvance: () => mutation("advance"),
-  usePostPreparationUnitsAdvanceMany: () => mutation("advanceMany"),
-  usePostPreparationUnitsUnitIdWaste: () => mutation("waste"),
-  usePostPreparationWastesWasteIdRemake: () => mutation("remake"),
-  usePostPreparationUnitsCorrectState: () => mutation("correct"),
-  usePostPreparationAlertsAlertIdAcknowledge: () => mutation("acknowledge"),
-  getGetPreparationQueueQueryKey: () => ["/preparation/queue"],
+  usePostPreparationUnitsUnitIdAdvance: stubMutation("usePostPreparationUnitsUnitIdAdvance", "advance"),
+  usePostPreparationUnitsAdvanceMany: stubMutation("usePostPreparationUnitsAdvanceMany", "advanceMany"),
+  usePostPreparationUnitsUnitIdWaste: stubMutation("usePostPreparationUnitsUnitIdWaste", "waste"),
+  usePostPreparationWastesWasteIdRemake: stubMutation("usePostPreparationWastesWasteIdRemake", "remake"),
+  usePostPreparationUnitsCorrectState: stubMutation("usePostPreparationUnitsCorrectState", "correct"),
+  usePostPreparationAlertsAlertIdAcknowledge: stubMutation(
+    "usePostPreparationAlertsAlertIdAcknowledge",
+    "acknowledge",
+  ),
+  getGetPreparationQueueQueryKey: () =>
+    isolated ? ["/preparation/queue"] : realPreparation.getGetPreparationQueueQueryKey(),
 }));
 
 mock.module("@/lib/command", () => ({
-  withRequestId: (payload: Record<string, unknown>) => {
+  withRequestId: <T extends Record<string, unknown>>(payload: T, requestId?: string) => {
+    if (!isolated) return realCommand.withRequestId(payload, requestId);
     requestPayloads.push(payload);
     return { ...payload, request_id: `request-${requestPayloads.length}` };
   },
@@ -90,9 +108,11 @@ mock.module("@/lib/command", () => ({
 
 mock.module("@/lib/sound", () => ({
   playSuccessChirp: () => {
+    if (!isolated) return realSound.playSuccessChirp();
     successChirps += 1;
   },
   playErrorBuzz: () => {
+    if (!isolated) return realSound.playErrorBuzz();
     errorBuzzes += 1;
   },
 }));

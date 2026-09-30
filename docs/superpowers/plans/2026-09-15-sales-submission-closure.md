@@ -72,7 +72,7 @@ Every task's requirements implicitly include this section.
 | `sql/queries/sales.sql` | Submit, closure, projection, and read queries; `FindBlockingDraft` relaxed |
 | `cmd/api/main.go` | Mount `preparation.Slices` |
 | `spec/decisions.md` | Append ADR-023 through ADR-029 |
-| `MIGRATE_PLAN.md` | Mark 5D and the Phase 5 tracker row complete |
+| `docs/history/MIGRATE_PLAN.md` | Mark 5D and the Phase 5 tracker row complete |
 
 ---
 
@@ -3008,7 +3008,7 @@ git commit -m "feat(sales): read a Completed Sale by id and by Service Session"
 
 **Files:**
 - Create: `internal/sales/submission_concurrency_integration_test.go`
-- Modify: `internal/preparation/advance_integration_test.go`, `docs/docs.go` (generated), `spec/decisions.md`, `MIGRATE_PLAN.md`
+- Modify: `internal/preparation/advance_integration_test.go`, `docs/docs.go` (generated), `spec/decisions.md`, `docs/history/MIGRATE_PLAN.md`
 
 **Interfaces:**
 - Consumes: everything above.
@@ -3164,7 +3164,7 @@ Verify the generated `docs/docs.go` now documents twenty-two Sales operations an
 
 - [ ] **Step 4: Update the roadmap**
 
-In `MIGRATE_PLAN.md`, set the 5D row to:
+In `docs/history/MIGRATE_PLAN.md`, set the 5D row to:
 
 ```markdown
 | **5D** — Submit, Orders, Preparation Units, Service Session closure, Completed Sale | [spec](docs/superpowers/specs/2026-09-15-sales-submission-closure-design.md) / [plan](docs/superpowers/plans/2026-09-15-sales-submission-closure.md) | ✅ COMPLETED (2026-09-15) |
@@ -3193,7 +3193,7 @@ Expected: no output. `internal/preparation` must not import `internal/sales`.
 
 ```bash
 make fmt
-git add internal/sales/submission_concurrency_integration_test.go internal/preparation/advance_integration_test.go docs spec/decisions.md MIGRATE_PLAN.md
+git add internal/sales/submission_concurrency_integration_test.go internal/preparation/advance_integration_test.go docs spec/decisions.md docs/history/MIGRATE_PLAN.md
 git commit -m "test(sales): cover Phase 5D concurrency, record its decisions, and complete the roadmap"
 ```
 

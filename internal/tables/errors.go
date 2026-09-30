@@ -6,20 +6,24 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Mirai3103/pos-cafe/internal/platform/command"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
-	ErrTableNotFound       = errors.New("table not found")
-	ErrNameConflict        = errors.New("table name conflict")
-	ErrRequestConflict     = errors.New("request conflict")
-	ErrForbidden           = errors.New("forbidden")
-	ErrUnauthorized        = errors.New("unauthorized")
-	ErrInvalidStoredResult = errors.New("invalid stored result")
+	ErrTableNotFound = errors.New("table not found")
+	ErrNameConflict  = errors.New("table name conflict")
+
+	ErrRequestConflict     = command.ErrRequestConflict
+	ErrForbidden           = command.ErrForbidden
+	ErrUnauthorized        = command.ErrUnauthorized
+	ErrInvalidStoredResult = command.ErrInvalidStoredResult
 )
 
 // MapDBError maps PostgreSQL driver and database errors to domain sentinels.
+// The wrapped text keeps the driver's detail for diagnostics; httpErrors
+// replaces it with a stable message before anything reaches a client.
 func MapDBError(err error) error {
 	if err == nil {
 		return nil
@@ -43,33 +47,27 @@ func MapDBError(err error) error {
 	return err
 }
 
+// httpErrors is the Tables HTTP error mapping. Not-found and name-conflict
+// errors come from MapDBError and carry PostgreSQL detail such as the
+// conflicting key value, so they answer with their sentinel's fixed text.
+var httpErrors = response.ErrorMapper{
+	{Target: ErrTableNotFound, Spec: response.ErrorSpec{
+		Status: http.StatusNotFound, Code: "TABLE_NOT_FOUND", Message: ErrTableNotFound.Error(),
+	}},
+	{Target: ErrNameConflict, Spec: response.ErrorSpec{
+		Status: http.StatusConflict, Code: "TABLE_NAME_CONFLICT", Message: ErrNameConflict.Error(),
+	}},
+	{Target: ErrRequestConflict, Spec: response.ErrorSpec{Status: http.StatusConflict, Code: "REQUEST_CONFLICT"}},
+	{Target: ErrForbidden, Spec: response.ErrorSpec{Status: http.StatusForbidden, Code: "FORBIDDEN"}},
+	{Target: ErrUnauthorized, Spec: response.ErrorSpec{Status: http.StatusUnauthorized, Code: "UNAUTHORIZED"}},
+	{Target: ErrInvalidStoredResult, Spec: response.ErrorSpec{
+		Status: http.StatusInternalServerError, Code: "INVALID_STORED_RESULT", Message: "an unexpected error occurred",
+	}},
+	{Target: response.ErrInvalid, Spec: response.ErrorSpec{Status: http.StatusBadRequest, Code: "INVALID_INPUT"}},
+}
+
 // MapHTTPError maps tables domain errors and input validation errors to
 // *response.CodedError.
 func MapHTTPError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var codedErr *response.CodedError
-	if errors.As(err, &codedErr) {
-		return err
-	}
-	switch {
-	case errors.Is(err, ErrTableNotFound):
-		return response.NewCodedError(http.StatusNotFound, "TABLE_NOT_FOUND", err.Error(), err)
-	case errors.Is(err, ErrNameConflict):
-		return response.NewCodedError(http.StatusConflict, "TABLE_NAME_CONFLICT", err.Error(), err)
-	case errors.Is(err, ErrRequestConflict):
-		return response.NewCodedError(http.StatusConflict, "REQUEST_CONFLICT", err.Error(), err)
-	case errors.Is(err, ErrForbidden):
-		return response.NewCodedError(http.StatusForbidden, "FORBIDDEN", err.Error(), err)
-	case errors.Is(err, ErrUnauthorized):
-		return response.NewCodedError(http.StatusUnauthorized, "UNAUTHORIZED", err.Error(), err)
-	case errors.Is(err, ErrInvalidStoredResult):
-		return response.NewCodedError(http.StatusInternalServerError, "INVALID_STORED_RESULT",
-			"an unexpected error occurred", err)
-	case errors.Is(err, response.ErrInvalid):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_INPUT", err.Error(), err)
-	default:
-		return err
-	}
+	return httpErrors.Map(err)
 }

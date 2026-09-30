@@ -4,7 +4,7 @@ import (
 	"database/sql"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/labstack/echo/v4"
 )
 
@@ -28,6 +28,8 @@ type Slices struct {
 	SetCheckTarget            *SetCheckTargetHandler
 	SubmitOrder               *SubmitOrderHandler
 	CloseSession              *CloseServiceSessionHandler
+	CancelAwaitingSubmission  *CancelAwaitingSubmissionHandler
+	AbandonCheckout           *AbandonCheckoutHandler
 	GetCompletedSale          *GetCompletedSaleHandler
 	GetCompletedSaleBySession *GetCompletedSaleBySessionHandler
 	PayCash                   *PayCashHandler
@@ -61,6 +63,8 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		SetCheckTarget:            NewSetCheckTargetHandler(runner),
 		SubmitOrder:               NewSubmitOrderHandler(runner),
 		CloseSession:              NewCloseServiceSessionHandler(runner),
+		CancelAwaitingSubmission:  NewCancelAwaitingSubmissionHandler(runner),
+		AbandonCheckout:           NewAbandonCheckoutHandler(runner),
 		GetCompletedSale:          NewGetCompletedSaleHandler(runner),
 		GetCompletedSaleBySession: NewGetCompletedSaleBySessionHandler(runner),
 		PayCash:                   NewPayCashHandler(runner),
@@ -113,6 +117,10 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 	v1.POST("/sales/service-sessions/:id/submit", s.handleSubmitOrder,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/sales/service-sessions/:id/close", s.handleCloseSession,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/service-sessions/:id/cancel-awaiting-submission", s.handleCancelAwaitingSubmission,
+		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
+	v1.POST("/sales/service-sessions/:id/abandon", s.handleAbandonCheckout,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.GET("/sales/completed-sales/:id", s.handleGetCompletedSale,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))

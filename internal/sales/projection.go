@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 )
 
@@ -20,6 +20,8 @@ func newServiceSessionResponse() ServiceSessionResponse {
 		Checks:           make([]CheckResponse, 0),
 		Orders:           make([]OrderResponse, 0),
 		PreparationUnits: make([]PreparationUnitResponse, 0),
+
+		AwaitingSubmissionCommittedItemIDs: make([]uuid.UUID, 0),
 	}
 }
 
@@ -72,6 +74,8 @@ func LoadServiceSession(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUI
 		return out, err
 	}
 	out.Checks = checks
+	out.AwaitingSubmissionCommittedItemIDs = DeriveAwaitingSubmission(checks)
+	out.AwaitingSubmission = len(out.AwaitingSubmissionCommittedItemIDs) > 0
 
 	orders, err := loadOrders(ctx, q, sessionID)
 	if err != nil {
@@ -85,11 +89,25 @@ func LoadServiceSession(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUI
 	}
 	out.PreparationUnits = units
 
+	abandoned, err := q.GetAbandonedCheckoutBySession(ctx, sessionID)
+	switch {
+	case err == nil:
+		out.AbandonedCheckout = &AbandonedCheckoutResponse{
+			ID:                   abandoned.ID,
+			Reason:               abandoned.Reason,
+			Note:                 nullStringPtr(abandoned.Note),
+			ActorStaffIdentityID: abandoned.ActorStaffIdentityID,
+			OccurredAt:           abandoned.OccurredAt,
+		}
+	case !errors.Is(err, sql.ErrNoRows):
+		return out, fmt.Errorf("load abandoned checkout: %w", err)
+	}
+
 	draft, err := q.GetEditableDraft(ctx, sessionID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			// 5A always creates a draft with its Session, so this is only
-			// reachable once 5B can commit one without a successor.
+			// Opening always creates a draft with its Session, so this is
+			// only reachable once a draft is committed without a successor.
 			return out, nil
 		}
 		return out, fmt.Errorf("load editable draft: %w", err)
@@ -190,10 +208,10 @@ func loadChecks(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 // Charge Allocations, Charge Adjustments, Payments, and Refunds.
 //
 // The Check's stored charge_vnd is a denormalization of base allocations less
-// live adjustments, in the same spirit as 5A's modifier_key: derived, never
-// authoritative. Every read recomputes the full live financial equation and
-// compares the resulting charge, and a mismatch fails the read rather than
-// serving a wrong total. See the design, sections 6.1 and 12.3.
+// live adjustments, in the same spirit as a draft item's modifier_key:
+// derived, never authoritative. Every read recomputes the full live financial
+// equation and compares the resulting charge, and a mismatch fails the read
+// rather than serving a wrong total.
 func loadChecksForSnapshot(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID,
 	mode SnapshotMode,
 ) ([]CheckResponse, error) {
@@ -232,6 +250,16 @@ func loadCheckForSnapshot(ctx context.Context, q *sqlc.Queries, row sqlc.ListSes
 		return CheckResponse{}, err
 	}
 
+	withdrawn := make(map[uuid.UUID]bool)
+	for _, adjustment := range adjustments {
+		if adjustment.Kind == ChargeAdjustmentKindWithdrawal {
+			withdrawn[adjustment.ChargeAllocationID] = true
+		}
+	}
+	for i := range allocations {
+		allocations[i].Withdrawn = withdrawn[allocations[i].ID]
+	}
+
 	payments, originalPaymentVND, voidedPaymentVND, err := loadCheckPayments(ctx, q, row.ID, mode)
 	if err != nil {
 		return CheckResponse{}, err
@@ -268,7 +296,7 @@ func loadCheckForSnapshot(ctx context.Context, q *sqlc.Queries, row sqlc.ListSes
 	// guarantees that a SETTLED Check carries complete evidence; this
 	// guarantees that its state matches the money. A SETTLED Check carrying a
 	// pending Refund still has a zero balance, so it stays settled.
-	if row.State != CheckStateMerged &&
+	if row.State != CheckStateMerged && row.State != CheckStateAbandoned &&
 		(row.State == CheckStateSettled) != SettlesCheck(financials.BalanceVND) {
 		slog.Error("check state does not match its balance",
 			"check_id", row.ID, "state", row.State, "balance_vnd", financials.BalanceVND)
@@ -440,7 +468,7 @@ func loadCheckAdjustments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 			ID:                     row.ID,
 			Kind:                   row.Kind,
 			Scope:                  row.Scope,
-			PreparationUnitID:      row.PreparationUnitID,
+			PreparationUnitID:      nullUUIDPtr(row.PreparationUnitID),
 			PreparationWasteID:     nullUUIDPtr(row.PreparationWasteID),
 			ChargeAllocationID:     row.ChargeAllocationID,
 			CompletedSaleID:        nullUUIDPtr(row.CompletedSaleID),
@@ -721,7 +749,7 @@ func loadCheckAllocations(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 // loadCommittedModifiers groups frozen modifier snapshots by Committed Item.
 // The query orders by (group name, option name), so presentation order comes
 // from the read rather than from insert order — the table carries no ordering
-// column, exactly as 5A's selected options do not.
+// column, exactly as a draft item's selected options do not.
 func loadCommittedModifiers(ctx context.Context, q *sqlc.Queries, itemIDs []uuid.UUID) (
 	map[uuid.UUID][]CommittedModifierResponse, error,
 ) {
@@ -796,7 +824,7 @@ func loadOrders(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
 // internal/sales reads unit state here and creates units at Submit; every
 // state transition belongs to internal/preparation (ADR-024). The read is the
 // one query feeding both the live Service Session and the Completed Sale unit
-// projections, so the Phase 6B Remake metadata maps once: originals are
+// projections, so the Remake metadata maps once: originals are
 // STANDARD with a null link, a linked replacement is REMAKE pointing at its
 // wasted source.
 func loadPreparationUnits(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (

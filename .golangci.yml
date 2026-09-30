@@ -21,8 +21,8 @@ linters:
           - gosec
         path: _test\.go
     paths:
-      - docs
-      - internal/database/sqlc
+      - api/openapi
+      - internal/platform/database/sqlc
       - third_party$
       - builtin$
       - examples$

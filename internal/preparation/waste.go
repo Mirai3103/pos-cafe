@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -25,7 +26,7 @@ type wasteFingerprint struct {
 
 // WasteUnitHandler records one Waste: the terminal Waste fact, the unit's
 // WASTED state and its typed transition, the unacknowledged WASTE alert, and
-// the two business audits, all inside the executor's single mutation
+// the two business audits, all inside the pipeline's single mutation
 // transaction.
 type WasteUnitHandler struct{ runner *Runner }
 
@@ -68,7 +69,7 @@ func (h *WasteUnitHandler) Handle(ctx context.Context, actor Actor,
 				return 0, WasteResponse{}, AuditRecord{}, err
 			}
 			// Both business audits were written inside the mutation through
-			// writePreparationAudits, so the executor's single-audit step is
+			// writePreparationAudits, so the pipeline's single-audit step is
 			// deliberately given a zero record.
 			return http.StatusCreated, response, AuditRecord{}, nil
 		})
@@ -95,7 +96,7 @@ func mapWasteDBError(err error) error {
 }
 
 // applyWaste is the mutation body, ordered so each step's failure leaves the
-// transaction — claim included — to the executor's rollback:
+// transaction — claim included — to the pipeline's rollback:
 //
 //  1. lock the unit, mapping a miss to ErrUnitNotFound;
 //  2. require IN_PREPARATION or READY, else ErrInvalidTransition;
@@ -107,24 +108,14 @@ func mapWasteDBError(err error) error {
 //  7. insert the unacknowledged WASTE alert;
 //  8. write both business audits through writePreparationAudits;
 //  9. return the complete Waste and alert result from the RETURNING rows,
-//     leaving the executor's AuditRecord at zero.
+//     leaving the pipeline's AuditRecord at zero.
 func applyWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	unitID uuid.UUID, reason string, note *string,
 ) (WasteResponse, error) {
-	// 1. The row lock serializes concurrent lifecycles on this unit: every
-	// loser of the race re-reads the winner's committed state here.
-	unit, err := q.LockPreparationUnit(ctx, unitID)
+	// 1–2. Lock and require a wasteable state.
+	unit, err := lockWasteableUnit(ctx, q, unitID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return WasteResponse{}, fmt.Errorf("%w: %s", ErrUnitNotFound, unitID)
-		}
-		return WasteResponse{}, fmt.Errorf("lock preparation unit: %w", err)
-	}
-
-	// 2. Waste admits exactly two prior states; everything else — queued,
-	// fulfilled, cancelled, already wasted — is a lifecycle conflict.
-	if unit.State != StateInPreparation && unit.State != StateReady {
-		return WasteResponse{}, fmt.Errorf("%w: %s cannot be wasted", ErrInvalidTransition, unit.State)
+		return WasteResponse{}, err
 	}
 
 	// 3. One database clock reading, shared by every write below.
@@ -133,10 +124,7 @@ func applyWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return WasteResponse{}, fmt.Errorf("read preparation occurrence time: %w", err)
 	}
 
-	var noteValue sql.NullString
-	if note != nil {
-		noteValue = sql.NullString{String: *note, Valid: true}
-	}
+	noteValue := nullString(note)
 
 	// 4. The Waste fact — one per unit, forever.
 	waste, err := q.InsertPreparationWaste(ctx, sqlc.InsertPreparationWasteParams{
@@ -152,27 +140,9 @@ func applyWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return WasteResponse{}, fmt.Errorf("insert preparation waste: %w", mapWasteDBError(err))
 	}
 
-	// 5. SetPreparationUnitState only overwrites in_preparation_at when the
-	// target is IN_PREPARATION, so the unit's preparation start survives the
-	// WASTED write.
-	if err := q.SetPreparationUnitState(ctx, sqlc.SetPreparationUnitStateParams{
-		ID: unit.ID, State: StateWasted, OccurredAt: occurredAt,
-	}); err != nil {
-		return WasteResponse{}, fmt.Errorf("set preparation unit state: %w", err)
-	}
-
-	// 6. The transition row is business data a Completed Sale is made of
-	// (ADR-027); the audits below record the same moment for a different
-	// purpose.
-	if err := q.InsertPreparationUnitTransition(ctx, sqlc.InsertPreparationUnitTransitionParams{
-		PreparationUnitID:    unit.ID,
-		PriorState:           unit.State,
-		ResultingState:       StateWasted,
-		ActorStaffIdentityID: actor.StaffID,
-		StaffAccessSessionID: actor.SessionID,
-		OccurredAt:           occurredAt,
-	}); err != nil {
-		return WasteResponse{}, fmt.Errorf("insert preparation unit transition: %w", err)
+	// 5–6. The WASTED state and its transition.
+	if err := markUnitWasted(ctx, q, actor, unit, occurredAt); err != nil {
+		return WasteResponse{}, err
 	}
 
 	// 7. The WASTE alert is born unacknowledged; only the acknowledgment
@@ -192,27 +162,8 @@ func applyWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 
 	// 8. Both business events of this mutation, one batch, one actor, one
 	// session, one occurrence time.
-	if err := writePreparationAudits(ctx, q, actor, occurredAt, []AuditRecord{
-		{
-			EventType: EventPreparationUnitWasted,
-			Details: map[string]any{
-				"preparation_unit_id": unit.ID,
-				"prior_state":         unit.State,
-				"resulting_state":     StateWasted,
-				"waste_id":            waste.ID,
-				"reason":              reason,
-			},
-		},
-		{
-			EventType: EventPreparationAlertCreated,
-			Details: map[string]any{
-				"preparation_unit_id": unit.ID,
-				"alert_id":            alert.ID,
-				"kind":                AlertKindWaste,
-				"reason":              reason,
-			},
-		},
-	}); err != nil {
+	if err := writePreparationAudits(ctx, q, actor, occurredAt,
+		wasteAudits(unit, waste.ID, alert.ID, reason)); err != nil {
 		return WasteResponse{}, err
 	}
 
@@ -220,6 +171,80 @@ func applyWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	// ResultingState is the handler's constant and a fresh alert carries no
 	// acknowledgment.
 	return buildWasteResponse(waste, alert), nil
+}
+
+// lockWasteableUnit locks the unit and requires a state Waste admits. The row
+// lock serializes concurrent lifecycles on this unit: every loser of the race
+// re-reads the winner's committed state here.
+func lockWasteableUnit(ctx context.Context, q *sqlc.Queries, unitID uuid.UUID) (sqlc.PreparationUnit, error) {
+	unit, err := q.LockPreparationUnit(ctx, unitID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sqlc.PreparationUnit{}, fmt.Errorf("%w: %s", ErrUnitNotFound, unitID)
+		}
+		return sqlc.PreparationUnit{}, fmt.Errorf("lock preparation unit: %w", err)
+	}
+
+	// Waste admits exactly two prior states; everything else — queued,
+	// fulfilled, cancelled, already wasted — is a lifecycle conflict.
+	if unit.State != StateInPreparation && unit.State != StateReady {
+		return sqlc.PreparationUnit{}, fmt.Errorf("%w: %s cannot be wasted", ErrInvalidTransition, unit.State)
+	}
+	return unit, nil
+}
+
+// markUnitWasted sets the unit WASTED and inserts its typed transition.
+func markUnitWasted(ctx context.Context, q *sqlc.Queries, actor Actor,
+	unit sqlc.PreparationUnit, occurredAt time.Time,
+) error {
+	// SetPreparationUnitState only overwrites in_preparation_at when the
+	// target is IN_PREPARATION, so the unit's preparation start survives the
+	// WASTED write.
+	if err := q.SetPreparationUnitState(ctx, sqlc.SetPreparationUnitStateParams{
+		ID: unit.ID, State: StateWasted, OccurredAt: occurredAt,
+	}); err != nil {
+		return fmt.Errorf("set preparation unit state: %w", err)
+	}
+
+	// The transition row is business data a Completed Sale is made of
+	// (ADR-027); the audits record the same moment for a different purpose.
+	if err := q.InsertPreparationUnitTransition(ctx, sqlc.InsertPreparationUnitTransitionParams{
+		PreparationUnitID:    unit.ID,
+		PriorState:           unit.State,
+		ResultingState:       StateWasted,
+		ActorStaffIdentityID: actor.StaffID,
+		StaffAccessSessionID: actor.SessionID,
+		OccurredAt:           occurredAt,
+	}); err != nil {
+		return fmt.Errorf("insert preparation unit transition: %w", err)
+	}
+	return nil
+}
+
+// wasteAudits builds the Waste's two business events: the unit's
+// PREPARATION_UNIT_WASTED and the alert's PREPARATION_ALERT_CREATED.
+func wasteAudits(unit sqlc.PreparationUnit, wasteID, alertID uuid.UUID, reason string) []AuditRecord {
+	return []AuditRecord{
+		{
+			EventType: EventPreparationUnitWasted,
+			Details: map[string]any{
+				"preparation_unit_id": unit.ID,
+				"prior_state":         unit.State,
+				"resulting_state":     StateWasted,
+				"waste_id":            wasteID,
+				"reason":              reason,
+			},
+		},
+		{
+			EventType: EventPreparationAlertCreated,
+			Details: map[string]any{
+				"preparation_unit_id": unit.ID,
+				"alert_id":            alertID,
+				"kind":                AlertKindWaste,
+				"reason":              reason,
+			},
+		},
+	}
 }
 
 // buildWasteResponse assembles the response from the stored fact rows, so the

@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/preparation"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/Mirai3103/pos-cafe/internal/shift"

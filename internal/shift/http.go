@@ -2,47 +2,15 @@ package shift
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
+	"github.com/Mirai3103/pos-cafe/internal/platform/httpx"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
-
-func getActor(c echo.Context) (Actor, error) {
-	claims := auth.GetStaff(c)
-	if claims == nil {
-		return Actor{}, fmt.Errorf("%w: unauthorized", response.ErrUnauthorized)
-	}
-	return Actor{StaffID: claims.StaffID, SessionID: claims.SessionID}, nil
-}
-
-func parseUUIDParam(c echo.Context, name string) (uuid.UUID, error) {
-	val := c.Param(name)
-	id, err := uuid.Parse(val)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("%w: invalid %s UUID: %s", response.ErrInvalid, name, val)
-	}
-	return id, nil
-}
-
-func bindBody[T any](c echo.Context) (T, error) {
-	var body T
-	if err := c.Bind(&body); err != nil {
-		return body, fmt.Errorf("%w: invalid request body: %s", response.ErrInvalid, err.Error())
-	}
-	return body, nil
-}
-
-func checkRequestID(id uuid.UUID) error {
-	if id == uuid.Nil {
-		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
-	}
-	return nil
-}
 
 // checkMoney rejects a missing numeric field rather than defaulting it. Zero is
 // a meaningful Opening Float, so a nil pointer must not silently become one.
@@ -74,15 +42,9 @@ func checkRequiredString(v, field string) error {
 	return nil
 }
 
-func sendResult[T any](c echo.Context, status int, data T) error {
-	if status == http.StatusCreated {
-		return response.Created(c, data)
-	}
-	return response.OK(c, data)
-}
-
+// sendError writes err through the Shift error mapping.
 func sendError(c echo.Context, err error) error {
-	return response.Error(c, MapHTTPError(err))
+	return httpx.SendError(c, err, MapHTTPError)
 }
 
 // handleGetCurrent returns the active Sales Shift, or null when none is open.
@@ -97,7 +59,7 @@ func sendError(c echo.Context, err error) error {
 //	@Failure		403	{object}	response.APIResponse	"Requires sales_shift.operate"
 //	@Router			/shifts/current [get]
 func (s *Slices) handleGetCurrent(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -126,15 +88,15 @@ func (s *Slices) handleGetCurrent(c echo.Context) error {
 //	@Failure		409		{object}	response.APIResponse
 //	@Router			/shifts [post]
 func (s *Slices) handleOpenShift(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[OpenShiftCommand](c)
+	cmd, err := httpx.BindBody[OpenShiftCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	if err := checkMoney(cmd.OpeningFloatVND, "opening_float_vnd"); err != nil {
@@ -145,7 +107,7 @@ func (s *Slices) handleOpenShift(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, res)
+	return httpx.SendResult(c, status, res)
 }
 
 // handleRecordCashMovement records a Pay In or Pay Out.
@@ -165,19 +127,19 @@ func (s *Slices) handleOpenShift(c echo.Context) error {
 //	@Failure		409			{object}	response.APIResponse
 //	@Router			/shifts/{shift_id}/cash-movements [post]
 func (s *Slices) handleRecordCashMovement(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	shiftID, err := parseUUIDParam(c, "shift_id")
+	shiftID, err := httpx.UUIDParam(c, "shift_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[RecordCashMovementCommand](c)
+	cmd, err := httpx.BindBody[RecordCashMovementCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	if err := checkMoney(cmd.AmountVND, "amount_vnd"); err != nil {
@@ -203,7 +165,7 @@ func (s *Slices) handleRecordCashMovement(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, res)
+	return httpx.SendResult(c, status, res)
 }
 
 // handleStartReconciliation starts a Sales Shift's blind reconciliation.
@@ -224,19 +186,19 @@ func (s *Slices) handleRecordCashMovement(c echo.Context) error {
 //	@Failure		409			{object}	response.APIResponse	"SALES_SHIFT_ALREADY_CLOSING, SHIFT_UNSETTLED_CHECK, SHIFT_PENDING_REFUND, SHIFT_UNRESOLVED_CORRECTION, or SHIFT_ACTIVE_SERVICE_SESSION, in that precedence order"
 //	@Router			/shifts/{shift_id}/reconciliation [post]
 func (s *Slices) handleStartReconciliation(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	shiftID, err := parseUUIDParam(c, "shift_id")
+	shiftID, err := httpx.UUIDParam(c, "shift_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[StartReconciliationCommand](c)
+	cmd, err := httpx.BindBody[StartReconciliationCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	if err := checkNonNegativeMoney(cmd.CountedCashVND, "counted_cash_vnd"); err != nil {
@@ -248,7 +210,7 @@ func (s *Slices) handleStartReconciliation(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, res)
+	return httpx.SendResult(c, status, res)
 }
 
 // handleRecordCashCount appends a Cash Count attempt to a CLOSING Shift.
@@ -269,19 +231,19 @@ func (s *Slices) handleStartReconciliation(c echo.Context) error {
 //	@Failure		409			{object}	response.APIResponse	"SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT"
 //	@Router			/shifts/{shift_id}/reconciliation/cash-counts [post]
 func (s *Slices) handleRecordCashCount(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	shiftID, err := parseUUIDParam(c, "shift_id")
+	shiftID, err := httpx.UUIDParam(c, "shift_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[RecordCashCountCommand](c)
+	cmd, err := httpx.BindBody[RecordCashCountCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// An omitted or negative amount is rejected before any domain
@@ -295,7 +257,7 @@ func (s *Slices) handleRecordCashCount(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, res)
+	return httpx.SendResult(c, status, res)
 }
 
 // handleRecordQRObservation appends a Manual QR observation attempt to a
@@ -317,24 +279,24 @@ func (s *Slices) handleRecordCashCount(c echo.Context) error {
 //	@Failure		409			{object}	response.APIResponse	"SHIFT_RECONCILIATION_NOT_STARTED, SALES_SHIFT_ALREADY_CLOSED, or REQUEST_CONFLICT"
 //	@Router			/shifts/{shift_id}/reconciliation/qr-observations [post]
 func (s *Slices) handleRecordQRObservation(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	shiftID, err := parseUUIDParam(c, "shift_id")
+	shiftID, err := httpx.UUIDParam(c, "shift_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[RecordQRObservationCommand](c)
+	cmd, err := httpx.BindBody[RecordQRObservationCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	// Both values are mandatory together and non-negative: one without the
 	// other, or a negative one, is rejected before any domain transaction,
-	// while explicit zeroes are valid observations (spec 14.3).
+	// while explicit zeroes are valid observations.
 	if err := checkNonNegativeMoney(cmd.ObservedReceivedVND, "observed_received_vnd"); err != nil {
 		return sendError(c, err)
 	}
@@ -347,11 +309,11 @@ func (s *Slices) handleRecordQRObservation(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, res)
+	return httpx.SendResult(c, status, res)
 }
 
 // parseClosedShiftListQuery parses and validates the history list query
-// parameters (spec 9.5): both window bounds are required RFC 3339 instants,
+// parameters: both window bounds are required RFC 3339 instants,
 // the window spans at most 31 days, and the limit is a positive integer. The
 // cursor is passed through opaquely; its decode and range match are the
 // handler's job, where the normalized window is authoritative.
@@ -411,7 +373,7 @@ func parseClosedShiftListQuery(c echo.Context) (ListClosedShiftsQuery, error) {
 //	@Failure		403			{object}	response.APIResponse	"Requires audit.inspect"
 //	@Router			/shifts [get]
 func (s *Slices) handleListClosedShifts(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -442,11 +404,11 @@ func (s *Slices) handleListClosedShifts(c echo.Context) error {
 //	@Failure		404			{object}	response.APIResponse	"Unknown Shift, or the Shift is not closed"
 //	@Router			/shifts/{shift_id} [get]
 func (s *Slices) handleGetClosedShift(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	shiftID, err := parseUUIDParam(c, "shift_id")
+	shiftID, err := httpx.UUIDParam(c, "shift_id")
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -456,6 +418,56 @@ func (s *Slices) handleGetClosedShift(c echo.Context) error {
 		return sendError(c, err)
 	}
 	return response.OK(c, res)
+}
+
+// checkCloseShiftCommand shape-checks a Final Close body before dispatch.
+func checkCloseShiftCommand(cmd CloseShiftCommand) error {
+	// Both final evidence ids are required: a zero UUID cannot name an attempt.
+	if cmd.FinalCashCountID == uuid.Nil {
+		return fmt.Errorf("%w: final_cash_count_id is required", response.ErrInvalid)
+	}
+	if cmd.FinalQRObservationID == uuid.Nil {
+		return fmt.Errorf("%w: final_qr_observation_id is required", response.ErrInvalid)
+	}
+	// discrepancies must be a non-null array: JSON null and an omitted field
+	// both leave the slice nil, and only an explicit [] closes exactly.
+	if cmd.Discrepancies == nil {
+		return fmt.Errorf("%w: discrepancies is required and must be a non-null array", response.ErrInvalid)
+	}
+	// Each reason entry is shape-checked before dispatch: the dimension and
+	// reason allowlists and the note rules. A reason-to-dimension pairing that
+	// does not match the server-derived differences is a 409 conflict raised
+	// inside the transaction instead, where those differences are known.
+	seenDimensions := make(map[DiscrepancyDimension]struct{}, len(cmd.Discrepancies))
+	for _, entry := range cmd.Discrepancies {
+		note := NormalizeNote(entry.Note)
+		if err := validateDiscrepancyReasonShape(string(entry.Dimension), string(entry.Reason), note); err != nil {
+			return fmt.Errorf("%w: discrepancies: %s", response.ErrInvalid, err.Error())
+		}
+		if _, duplicate := seenDimensions[entry.Dimension]; duplicate {
+			return fmt.Errorf("%w: discrepancies: duplicate dimension %s",
+				response.ErrInvalid, entry.Dimension)
+		}
+		seenDimensions[entry.Dimension] = struct{}{}
+	}
+	// The approval pair belongs to the discrepant close only and is required
+	// together there: the non-empty discrepancy list selects that operation,
+	// so an omitted field is a malformed request, exactly like the cash
+	// movement boundary's missing approver_login_code. A wrong pair stays an
+	// approval denial: it is dispatched so the transaction's verification
+	// denies it and collapses to the one 403 code without naming which
+	// condition failed.
+	if len(cmd.Discrepancies) > 0 {
+		if cmd.ApproverLoginCode == "" || cmd.ManagerPIN == "" {
+			return fmt.Errorf("%w: approver_login_code and manager_pin are required together for a discrepant close",
+				response.ErrInvalid)
+		}
+		// A non-empty but malformed PIN is rejected on shape alone.
+		if err := auth.ValidatePinFormat(cmd.ManagerPIN); err != nil {
+			return fmt.Errorf("%w: manager_pin: %s", response.ErrInvalid, err.Error())
+		}
+	}
+	return nil
 }
 
 // handleFinalClose closes a reconciled Sales Shift.
@@ -476,66 +488,23 @@ func (s *Slices) handleGetClosedShift(c echo.Context) error {
 //	@Failure		409			{object}	response.APIResponse	"Lifecycle, blocker, stale evidence, source mismatch, recount/recheck, or discrepancy reason conflicts"
 //	@Router			/shifts/{shift_id}/close [post]
 func (s *Slices) handleFinalClose(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	shiftID, err := parseUUIDParam(c, "shift_id")
+	shiftID, err := httpx.UUIDParam(c, "shift_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	cmd, err := bindBody[CloseShiftCommand](c)
+	cmd, err := httpx.BindBody[CloseShiftCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(cmd.RequestID); err != nil {
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
 		return sendError(c, err)
 	}
-	// Both final evidence ids are required: a zero UUID cannot name an attempt.
-	if cmd.FinalCashCountID == uuid.Nil {
-		return sendError(c, fmt.Errorf("%w: final_cash_count_id is required", response.ErrInvalid))
-	}
-	if cmd.FinalQRObservationID == uuid.Nil {
-		return sendError(c, fmt.Errorf("%w: final_qr_observation_id is required", response.ErrInvalid))
-	}
-	// discrepancies must be a non-null array: JSON null and an omitted field
-	// both leave the slice nil, and only an explicit [] closes exactly (spec
-	// 9.4).
-	if cmd.Discrepancies == nil {
-		return sendError(c, fmt.Errorf("%w: discrepancies is required and must be a non-null array", response.ErrInvalid))
-	}
-	// Each reason entry is shape-checked before dispatch: the dimension and
-	// reason allowlists and the note rules. A reason-to-dimension pairing that
-	// does not match the server-derived differences is a 409 conflict raised
-	// inside the transaction instead, where those differences are known.
-	seenDimensions := make(map[DiscrepancyDimension]struct{}, len(cmd.Discrepancies))
-	for _, entry := range cmd.Discrepancies {
-		note := NormalizeNote(entry.Note)
-		if err := validateDiscrepancyReasonShape(string(entry.Dimension), string(entry.Reason), note); err != nil {
-			return sendError(c, fmt.Errorf("%w: discrepancies: %s", response.ErrInvalid, err.Error()))
-		}
-		if _, duplicate := seenDimensions[entry.Dimension]; duplicate {
-			return sendError(c, fmt.Errorf("%w: discrepancies: duplicate dimension %s",
-				response.ErrInvalid, entry.Dimension))
-		}
-		seenDimensions[entry.Dimension] = struct{}{}
-	}
-	// The approval pair belongs to the discrepant close only and is required
-	// together there (spec 9.4): the non-empty discrepancy list selects that
-	// operation, so an omitted field is a malformed request, exactly like the
-	// cash movement boundary's missing approver_login_code (spec 12). A wrong
-	// pair stays an approval denial: it is dispatched so the transaction's
-	// verification denies it and collapses to the one 403 code without naming
-	// which condition failed (spec 10, 12).
-	if len(cmd.Discrepancies) > 0 {
-		if cmd.ApproverLoginCode == "" || cmd.ManagerPIN == "" {
-			return sendError(c, fmt.Errorf("%w: approver_login_code and manager_pin are required together for a discrepant close",
-				response.ErrInvalid))
-		}
-		// A non-empty but malformed PIN is rejected on shape alone.
-		if err := auth.ValidatePinFormat(cmd.ManagerPIN); err != nil {
-			return sendError(c, fmt.Errorf("%w: manager_pin: %s", response.ErrInvalid, err.Error()))
-		}
+	if err := checkCloseShiftCommand(cmd); err != nil {
+		return sendError(c, err)
 	}
 	cmd.ShiftID = shiftID
 
@@ -543,5 +512,5 @@ func (s *Slices) handleFinalClose(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, res)
+	return httpx.SendResult(c, status, res)
 }

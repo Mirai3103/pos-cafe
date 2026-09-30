@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
@@ -106,31 +106,9 @@ func (h *RenameItemHandler) Handle(ctx context.Context, actor Actor, cmd RenameI
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		res := ItemResponse{
-			ID:         item.ID,
-			CategoryID: item.CategoryID,
-			Name:       item.Name,
-			Available:  item.Available,
-		}
-		if item.PriceVnd.Valid {
-			v := item.PriceVnd.Int64
-			res.PriceVND = &v
-		}
-
-		sizes, err := q.ListMenuItemSizesByItem(ctx, item.ID)
+		res, err := loadItemResponse(ctx, q, item)
 		if err != nil {
-			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		if len(sizes) > 0 {
-			res.Sizes = make([]SizeResponse, len(sizes))
-			for i, s := range sizes {
-				res.Sizes[i] = SizeResponse{
-					ID:        s.ID,
-					Name:      s.Name,
-					PriceVND:  s.PriceVnd,
-					Available: s.Available,
-				}
-			}
+			return 0, ItemResponse{}, AuditRecord{}, err
 		}
 
 		audit := AuditRecord{
@@ -259,35 +237,9 @@ func (h *RenameModifierGroupHandler) Handle(ctx context.Context, actor Actor, cm
 			return 0, ModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		options, err := q.ListModifierOptionsByGroup(ctx, group.ID)
+		res, err := loadModifierGroupResponse(ctx, q, group)
 		if err != nil {
-			return 0, ModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		defaultRows, err := q.ListModifierGroupDefaultOptionsByGroup(ctx, group.ID)
-		if err != nil {
-			return 0, ModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		defaultIDs := make([]uuid.UUID, len(defaultRows))
-		for i, d := range defaultRows {
-			defaultIDs[i] = d.ModifierOptionID
-		}
-
-		res := ModifierGroupResponse{
-			ID:               group.ID,
-			Name:             group.Name,
-			MinSelections:    group.MinSelections,
-			MaxSelections:    group.MaxSelections,
-			Options:          make([]ModifierOptionResponse, len(options)),
-			DefaultOptionIDs: defaultIDs,
-		}
-		for i, o := range options {
-			res.Options[i] = ModifierOptionResponse{
-				ID:              o.ID,
-				ModifierGroupID: o.ModifierGroupID,
-				Name:            o.Name,
-				SurchargeVND:    o.SurchargeVnd,
-				Available:       o.Available,
-			}
+			return 0, ModifierGroupResponse{}, AuditRecord{}, err
 		}
 
 		audit := AuditRecord{

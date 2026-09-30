@@ -1,6 +1,6 @@
 import { Minus, Plus, Trash2, AlertCircle } from "lucide-react";
 import type { SalesDraftItemResponse } from "@/api/generated/models";
-import { calculateItemUnitPrice, calculateLineTotal } from "../utils/pricing";
+import { calculateItemUnitPrice, calculateLineTotal } from "../lib/pricing";
 import { formatVND } from "@/lib/utils";
 import { playTapChirp } from "@/lib/sound";
 

@@ -282,3 +282,22 @@ func TestModeRequiresSettlementBeforeSubmit(t *testing.T) {
 	require.True(t, sales.ModeRequiresSettlementBeforeSubmit(sales.ModeTakeaway))
 	require.False(t, sales.ModeRequiresSettlementBeforeSubmit(sales.ModeDineIn))
 }
+
+func TestValidateCheckoutRecoveryCommand(t *testing.T) {
+	note := "khách đổi ý"
+	valid := sales.CheckoutRecoveryCommand{RequestID: uuid.New(), Reason: sales.RecoveryReasonCustomerLeft}
+	require.NoError(t, sales.ValidateCheckoutRecoveryCommand(valid, nil))
+
+	other := valid
+	other.Reason = sales.RecoveryReasonOther
+	require.ErrorIs(t, sales.ValidateCheckoutRecoveryCommand(other, nil), response.ErrInvalid)
+	require.NoError(t, sales.ValidateCheckoutRecoveryCommand(other, &note))
+
+	unknown := valid
+	unknown.Reason = "ITEM_UNAVAILABLE"
+	require.ErrorIs(t, sales.ValidateCheckoutRecoveryCommand(unknown, nil), response.ErrInvalid)
+
+	noID := valid
+	noID.RequestID = uuid.Nil
+	require.ErrorIs(t, sales.ValidateCheckoutRecoveryCommand(noID, nil), response.ErrInvalid)
+}

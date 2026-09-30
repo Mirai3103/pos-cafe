@@ -592,7 +592,7 @@ Implementation records these accepted decisions in `spec/decisions.md`:
 - **ADR-038: State Correction is an atomic one-step reverse command with Manager self re-authentication.** It accepts 1 through 50 unique units, requires the actor's current Manager role and PIN, and is not second-party approval.
 - **ADR-039: Alert acknowledgment controls terminal-unit queue visibility only.** Unacknowledged exceptional units remain prominent; acknowledgment records who saw them and has no closure, commercial, or financial effect.
 
-These ADRs and the Phase 6B completion status in `MIGRATE_PLAN.md` land with implementation and passing tests, not with this design document alone.
+These ADRs and the Phase 6B completion status in `docs/history/MIGRATE_PLAN.md` land with implementation and passing tests, not with this design document alone.
 
 ---
 

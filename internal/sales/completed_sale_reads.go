@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 )
 
@@ -63,9 +63,41 @@ func LoadCompletedSale(ctx context.Context, q *sqlc.Queries, saleID uuid.UUID) (
 	if err != nil {
 		return out, err
 	}
-	out.Checks = make([]CompletedSaleCheckResponse, 0, len(checks))
+	out.Checks = completedSaleChecks(checks)
+
+	orders, err := loadOrders(ctx, q, sale.ServiceSessionID)
+	if err != nil {
+		return out, err
+	}
+	out.Orders = orders
+
+	units, err := loadPreparationUnits(ctx, q, sale.ServiceSessionID)
+	if err != nil {
+		return out, err
+	}
+	out.PreparationUnits = units
+
+	history, err := loadPreparationHistory(ctx, q, sale.ServiceSessionID)
+	if err != nil {
+		return out, err
+	}
+	out.PreparationHistory = history
+
+	corrections, err := loadCompletedSalePostSaleCorrections(ctx, q, sale.ID)
+	if err != nil {
+		return out, err
+	}
+	out.PostSaleCorrections = corrections
+
+	return out, nil
+}
+
+// completedSaleChecks projects the Session's Checks into the Completed Sale's
+// Check shape.
+func completedSaleChecks(checks []CheckResponse) []CompletedSaleCheckResponse {
+	out := make([]CompletedSaleCheckResponse, 0, len(checks))
 	for _, check := range checks {
-		out.Checks = append(out.Checks, CompletedSaleCheckResponse{
+		out = append(out, CompletedSaleCheckResponse{
 			ID:                   check.ID,
 			State:                check.State,
 			BaseChargeVND:        check.BaseChargeVND,
@@ -82,25 +114,21 @@ func LoadCompletedSale(ctx context.Context, q *sqlc.Queries, saleID uuid.UUID) (
 			Refunds:              check.Refunds,
 		})
 	}
+	return out
+}
 
-	orders, err := loadOrders(ctx, q, sale.ServiceSessionID)
+// loadPreparationHistory loads every Preparation Unit transition of the
+// Session. It is never nil.
+func loadPreparationHistory(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) (
+	[]PreparationTransitionResponse, error,
+) {
+	transitions, err := q.ListSessionPreparationTransitions(ctx, sessionID)
 	if err != nil {
-		return out, err
+		return nil, fmt.Errorf("load preparation transitions: %w", err)
 	}
-	out.Orders = orders
-
-	units, err := loadPreparationUnits(ctx, q, sale.ServiceSessionID)
-	if err != nil {
-		return out, err
-	}
-	out.PreparationUnits = units
-
-	transitions, err := q.ListSessionPreparationTransitions(ctx, sale.ServiceSessionID)
-	if err != nil {
-		return out, fmt.Errorf("load preparation transitions: %w", err)
-	}
+	out := make([]PreparationTransitionResponse, 0, len(transitions))
 	for _, row := range transitions {
-		out.PreparationHistory = append(out.PreparationHistory, PreparationTransitionResponse{
+		out = append(out, PreparationTransitionResponse{
 			ID:             row.ID,
 			UnitID:         row.PreparationUnitID,
 			PriorState:     row.PriorState,
@@ -110,13 +138,6 @@ func LoadCompletedSale(ctx context.Context, q *sqlc.Queries, saleID uuid.UUID) (
 			OccurredAt:     row.OccurredAt,
 		})
 	}
-
-	corrections, err := loadCompletedSalePostSaleCorrections(ctx, q, sale.ID)
-	if err != nil {
-		return out, err
-	}
-	out.PostSaleCorrections = corrections
-
 	return out, nil
 }
 
@@ -134,13 +155,45 @@ func loadCompletedSalePostSaleCorrections(ctx context.Context, q *sqlc.Queries,
 		return nil, fmt.Errorf("load post-sale corrections: %w", err)
 	}
 
-	// Hydrate every post-sale Refund once, in the query's occurrence order,
-	// and index it under each Comp adjustment it allocated against. The two
-	// capacity sums are derived from those same allocations: allocated counts
-	// pending Manual QR intents, completed counts only money that has left.
-	refundsByAdjustment := make(map[uuid.UUID][]RefundResponse)
-	allocated := make(map[uuid.UUID]int64)
-	completed := make(map[uuid.UUID]int64)
+	refunds, err := indexPostSaleRefunds(ctx, q, rows)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]PostSaleCorrectionResponse, 0, len(rows))
+	for _, row := range rows {
+		if !row.EntryKind.Valid || row.EntryKind.String != postSaleEntryKindComp {
+			continue
+		}
+		correction, err := postSaleCorrectionFromRow(row, saleID, refunds)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, correction)
+	}
+	return out, nil
+}
+
+// postSaleRefundIndex is every post-sale Refund of one Completed Sale indexed
+// under each Comp adjustment it allocated against, with the two capacity sums
+// derived from those same allocations: allocated counts pending Manual QR
+// intents, completed counts only money that has left.
+type postSaleRefundIndex struct {
+	byAdjustment map[uuid.UUID][]RefundResponse
+	allocated    map[uuid.UUID]int64
+	completed    map[uuid.UUID]int64
+}
+
+// indexPostSaleRefunds hydrates every post-sale Refund once, in the query's
+// occurrence order, and indexes it under each adjustment it allocated against.
+func indexPostSaleRefunds(ctx context.Context, q *sqlc.Queries,
+	rows []sqlc.ListCompletedSalePostSaleCorrectionsRow,
+) (postSaleRefundIndex, error) {
+	index := postSaleRefundIndex{
+		byAdjustment: make(map[uuid.UUID][]RefundResponse),
+		allocated:    make(map[uuid.UUID]int64),
+		completed:    make(map[uuid.UUID]int64),
+	}
 	seenRefunds := make(map[uuid.UUID]struct{})
 	for _, row := range rows {
 		if !row.EntryKind.Valid || row.EntryKind.String != postSaleEntryKindRefund ||
@@ -154,83 +207,83 @@ func loadCompletedSalePostSaleCorrections(ctx context.Context, q *sqlc.Queries,
 
 		refund, err := loadPostSaleRefundForHistory(ctx, q, row)
 		if err != nil {
-			return nil, err
+			return postSaleRefundIndex{}, err
 		}
 		for _, allocation := range refund.AdjustmentAllocations {
-			refundsByAdjustment[allocation.ID] = append(refundsByAdjustment[allocation.ID], refund)
-			next, err := AddCharge(allocated[allocation.ID], allocation.AmountVND)
+			index.byAdjustment[allocation.ID] = append(index.byAdjustment[allocation.ID], refund)
+			next, err := AddCharge(index.allocated[allocation.ID], allocation.AmountVND)
 			if err != nil {
-				return nil, fmt.Errorf("%w: post-sale refund allocations: %v",
+				return postSaleRefundIndex{}, fmt.Errorf("%w: post-sale refund allocations: %v",
 					ErrFinancialInvariantViolated, err)
 			}
-			allocated[allocation.ID] = next
+			index.allocated[allocation.ID] = next
 			if refund.State != RefundStateCompleted {
 				continue
 			}
-			next, err = AddCharge(completed[allocation.ID], allocation.AmountVND)
+			next, err = AddCharge(index.completed[allocation.ID], allocation.AmountVND)
 			if err != nil {
-				return nil, fmt.Errorf("%w: completed post-sale refunds: %v",
+				return postSaleRefundIndex{}, fmt.Errorf("%w: completed post-sale refunds: %v",
 					ErrFinancialInvariantViolated, err)
 			}
-			completed[allocation.ID] = next
+			index.completed[allocation.ID] = next
 		}
 	}
+	return index, nil
+}
 
-	out := make([]PostSaleCorrectionResponse, 0, len(rows))
-	for _, row := range rows {
-		if !row.EntryKind.Valid || row.EntryKind.String != postSaleEntryKindComp {
-			continue
-		}
-		if !row.ChargeAdjustmentID.Valid || !row.AmountVnd.Valid ||
-			!row.CompletedSaleID.Valid || row.CompletedSaleID.UUID != saleID {
-			return nil, fmt.Errorf(
-				"%w: post-sale comp row of sale %s is missing its adjustment",
-				ErrFinancialInvariantViolated, saleID)
-		}
-		adjustmentID := row.ChargeAdjustmentID.UUID
-		remainingVND := row.AmountVnd.Int64 - allocated[adjustmentID]
-		outstandingVND := row.AmountVnd.Int64 - completed[adjustmentID]
-		if remainingVND < 0 || outstandingVND < 0 {
-			return nil, fmt.Errorf(
-				"%w: post-sale adjustment %s amount %d is below its refund allocations",
-				ErrFinancialInvariantViolated, adjustmentID, row.AmountVnd.Int64)
-		}
-
-		refunds := refundsByAdjustment[adjustmentID]
-		if refunds == nil {
-			refunds = make([]RefundResponse, 0)
-		}
-		out = append(out, PostSaleCorrectionResponse{
-			Adjustment: ChargeAdjustmentResponse{
-				ID:                     adjustmentID,
-				Kind:                   row.AdjustmentKind.String,
-				Scope:                  row.Scope.String,
-				PreparationUnitID:      row.PreparationUnitID.UUID,
-				PreparationWasteID:     nullUUIDPtr(row.PreparationWasteID),
-				ChargeAllocationID:     row.ChargeAllocationID.UUID,
-				CompletedSaleID:        nullUUIDPtr(row.CompletedSaleID),
-				SalesShiftID:           row.SalesShiftID.UUID,
-				AmountVND:              row.AmountVnd.Int64,
-				RemainingRefundableVND: remainingVND,
-				CreatedAt:              row.CreatedAt.Time,
-			},
-			Comp: CompResponse{
-				ID:                        row.SalesCompID.UUID,
-				WasteID:                   row.PreparationWasteID.UUID,
-				PreparationUnitID:         row.PreparationUnitID.UUID,
-				ChargeAdjustmentID:        adjustmentID,
-				AmountVND:                 row.AmountVnd.Int64,
-				Reason:                    row.Reason.String,
-				Note:                      nullStringPtr(row.Note),
-				ActorStaffIdentityID:      row.ActorStaffIdentityID.UUID,
-				ApprovedByStaffIdentityID: row.ApprovedByStaffIdentityID.UUID,
-				OccurredAt:                row.OccurredAt.Time,
-			},
-			Refunds:              refunds,
-			OutstandingRefundVND: outstandingVND,
-		})
+// postSaleCorrectionFromRow projects one POST_SALE Comp row with the Refunds
+// that consumed its capacity and the amounts still refundable and owed back.
+func postSaleCorrectionFromRow(row sqlc.ListCompletedSalePostSaleCorrectionsRow, saleID uuid.UUID,
+	refunds postSaleRefundIndex,
+) (PostSaleCorrectionResponse, error) {
+	if !row.ChargeAdjustmentID.Valid || !row.AmountVnd.Valid ||
+		!row.CompletedSaleID.Valid || row.CompletedSaleID.UUID != saleID {
+		return PostSaleCorrectionResponse{}, fmt.Errorf(
+			"%w: post-sale comp row of sale %s is missing its adjustment",
+			ErrFinancialInvariantViolated, saleID)
 	}
-	return out, nil
+	adjustmentID := row.ChargeAdjustmentID.UUID
+	remainingVND := row.AmountVnd.Int64 - refunds.allocated[adjustmentID]
+	outstandingVND := row.AmountVnd.Int64 - refunds.completed[adjustmentID]
+	if remainingVND < 0 || outstandingVND < 0 {
+		return PostSaleCorrectionResponse{}, fmt.Errorf(
+			"%w: post-sale adjustment %s amount %d is below its refund allocations",
+			ErrFinancialInvariantViolated, adjustmentID, row.AmountVnd.Int64)
+	}
+
+	adjustmentRefunds := refunds.byAdjustment[adjustmentID]
+	if adjustmentRefunds == nil {
+		adjustmentRefunds = make([]RefundResponse, 0)
+	}
+	return PostSaleCorrectionResponse{
+		Adjustment: ChargeAdjustmentResponse{
+			ID:                     adjustmentID,
+			Kind:                   row.AdjustmentKind.String,
+			Scope:                  row.Scope.String,
+			PreparationUnitID:      nullUUIDPtr(row.PreparationUnitID),
+			PreparationWasteID:     nullUUIDPtr(row.PreparationWasteID),
+			ChargeAllocationID:     row.ChargeAllocationID.UUID,
+			CompletedSaleID:        nullUUIDPtr(row.CompletedSaleID),
+			SalesShiftID:           row.SalesShiftID.UUID,
+			AmountVND:              row.AmountVnd.Int64,
+			RemainingRefundableVND: remainingVND,
+			CreatedAt:              row.CreatedAt.Time,
+		},
+		Comp: CompResponse{
+			ID:                        row.SalesCompID.UUID,
+			WasteID:                   row.PreparationWasteID.UUID,
+			PreparationUnitID:         row.PreparationUnitID.UUID,
+			ChargeAdjustmentID:        adjustmentID,
+			AmountVND:                 row.AmountVnd.Int64,
+			Reason:                    row.Reason.String,
+			Note:                      nullStringPtr(row.Note),
+			ActorStaffIdentityID:      row.ActorStaffIdentityID.UUID,
+			ApprovedByStaffIdentityID: row.ApprovedByStaffIdentityID.UUID,
+			OccurredAt:                row.OccurredAt.Time,
+		},
+		Refunds:              adjustmentRefunds,
+		OutstandingRefundVND: outstandingVND,
+	}, nil
 }
 
 // loadPostSaleRefundForHistory assembles one post-sale Refund projection from

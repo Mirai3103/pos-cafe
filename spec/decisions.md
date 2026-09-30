@@ -94,7 +94,7 @@ CREATE TABLE idempotency_keys (
 - **Quyết định:**
   - Migration `000006` của Phase 3 tạo luôn `service_sessions` và `table_assignments`, kèm `COMMENT ON TABLE` ghi rõ quyền sở hữu thuộc `internal/sales` (Phase 5).
   - `service_sessions` lược bỏ **duy nhất** cột `sales_shift_id` vì `sales_shifts` là bảng của Phase 4. Phase 5 bổ sung bằng `ALTER TABLE service_sessions ADD COLUMN sales_shift_id UUID NOT NULL REFERENCES sales_shifts(id)`.
-  - `internal/tables` **không** import `internal/sales`. Nó đọc occupancy qua query sqlc của riêng nó (`ListCurrentTableOccupants`), đúng nguyên tắc "dùng queries hoặc interface, đừng import struct" của MIGRATE_PLAN §4.1.
+  - `internal/tables` **không** import `internal/sales`. Nó đọc occupancy qua query sqlc của riêng nó (`ListCurrentTableOccupants`), đúng nguyên tắc "dùng queries hoặc interface, đừng import struct" của `docs/history/MIGRATE_PLAN.md` §4.1.
   - Phase 3 chỉ **đọc** hai bảng này, không ghi qua API. Test integration seed trực tiếp bằng SQL.
 - **Hệ quả:**
   - Contract công khai của Tables hoàn chỉnh và ổn định ngay từ Phase 3; frontend không phải chịu breaking change khi Phase 5 lên.
@@ -180,7 +180,7 @@ CREATE TABLE idempotency_keys (
 
 * **Decision Date:** 2026-09-13
 * **Status:** Accepted
-* **Context:** Draft item validation needs each Menu Item's effective Modifier Groups, which `internal/catalog` already computes in the exported pure function `EffectiveGroupIDs`; MIGRATE_PLAN §4.1 forbids importing another slice, and ADR-006 established reading another slice's tables through one's own sqlc query.
+* **Context:** Draft item validation needs each Menu Item's effective Modifier Groups, which `internal/catalog` already computes in the exported pure function `EffectiveGroupIDs`; `docs/history/MIGRATE_PLAN.md` §4.1 forbids importing another slice, and ADR-006 established reading another slice's tables through one's own sqlc query.
 * **Decision:**
 * `internal/sales` expresses the resolution once, in SQL, in `sql/queries/sales.sql`, rather than importing the function or reimplementing it in Go; an integration test importing both packages pins the SQL result to `catalog.EffectiveGroupIDs` over shared fixtures including the inherited-and-excluded and excluded-and-direct cases.
 * **Consequences:**
@@ -654,7 +654,7 @@ CREATE TABLE idempotency_keys (
 * **Decision:**
 * `CONTEXT.md` is copied verbatim into this repository and is the binding domain authority. The fifteen citations are rewritten to the local path.
 * References to `cafe-pos/src` and `cafe-pos/.scratch` inside Phase 0-6C specifications are historical provenance and carry no live authority. They are left exactly as written; rewriting them would falsify an approved record.
-* Work from Phase 07 onward is designed from `CONTEXT.md`, not ported. `ROADMAP.md` supersedes `MIGRATE_PLAN.md`, which is frozen as the migration's historical record.
+* Work from Phase 07 onward is designed from `CONTEXT.md`, not ported. `ROADMAP.md` supersedes `docs/history/MIGRATE_PLAN.md`, which is frozen as the migration's historical record.
 * The domain glossary is not annotated with Go deviations. Every deviation is recorded here, as this document has recorded forty-six of them.
 * **Consequences:**
 * Every authority citation in the repository resolves locally; the project has no documentation dependency on `cafe-pos`.
@@ -865,3 +865,34 @@ CREATE TABLE idempotency_keys (
 * `PUT /staff/{id}/roles` is kept for API compatibility; the web no longer calls it.
 * **Rejected:** a name-and-code-only endpoint run with the 9b plan runner. A partial save could apply a rename without its role change or the reverse, and the role change is the step most likely to fail (the invariant).
 * **Consequences:** Two endpoints can change roles. Staff commands still write no Audit Event; backlog BA-6 owns that gap.
+
+
+## ADR-064: Awaiting Submission is derived, not stored
+
+* **Decision Date:** 2026-10-02
+* **Status:** Accepted
+* **Context:** The backlog asked for the persisted "failure meaning" of a Submit that could not finish. A failed Submit rolls back completely, so recording it would need a second transaction and a table used only as a log.
+* **Decision:**
+* Awaiting Submission is derived from durable facts: a Payment is present and the Order is absent. Those facts already say everything staff act on.
+* **Rejected:** a `submit_failures` table.
+* **Consequences:** No failure reason is stored; the state cannot drift from the Payment and Order rows it is read from.
+
+## ADR-065: Unsubmitted charges leave a Check through a `WITHDRAWAL` Charge Adjustment, and paid recovery is Cancel, Refund, Abandon
+
+* **Decision Date:** 2026-10-02
+* **Status:** Accepted
+* **Context:** Refund returns money only against a corrected charge, and every existing adjustment needs a Preparation Unit that unsubmitted work never has.
+* **Decision:**
+* Unsubmitted charges leave a Check through a `WITHDRAWAL` Charge Adjustment. Paid recovery is three commands: Cancel Awaiting Submission, Refund, then Abandon. Each keeps one intent per Audit Event and lets a Manual QR Refund stay pending between steps.
+* **Rejected:** one composite "cancel and refund" command, which cannot finish a pending QR Refund and merges three audited intents.
+* **Consequences:** Paid recovery takes three steps, and the web must present them as one flow.
+
+## ADR-066: Abandonment ends only a Session with no Order, and its commands inherit ADR-031's lock window
+
+* **Decision Date:** 2026-10-02
+* **Status:** Accepted
+* **Context:** A Session with a submitted Order closes as a Completed Sale, as `CONTEXT.md` states. Abandonment must not offer a second way to end such a Session.
+* **Decision:**
+* Abandonment ends only a Session with no Order. Its commands inherit ADR-031's lock window.
+* Awaiting Submission is first in Session closure precedence and fourth, before active Sessions, in Shift closure precedence.
+* **Consequences:** Service Session closure reports `AWAITING_SUBMISSION_FOR_CLOSURE` first; Shift closure reports `SHIFT_AWAITING_SUBMISSION` fourth, before `SHIFT_ACTIVE_SERVICE_SESSION`. Abandon can also meet a draft command (Commit, draft edits) in a Session/draft AB-BA, because those lock draft and Session in one statement; the outcome is the same 40P01-and-clean-retry contract.

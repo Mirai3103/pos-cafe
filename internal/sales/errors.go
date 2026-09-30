@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Mirai3103/pos-cafe/internal/platform/command"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -42,10 +43,10 @@ var (
 	ErrTableUnavailable           = errors.New("table is unavailable")
 	ErrTakeawayTablesNotAvailable = errors.New("a takeaway session cannot be assigned tables")
 
-	ErrRequestConflict     = errors.New("request conflict")
-	ErrInvalidStoredResult = errors.New("invalid stored result")
-	ErrForbidden           = errors.New("forbidden")
-	ErrUnauthorized        = errors.New("unauthorized")
+	ErrRequestConflict     = command.ErrRequestConflict
+	ErrInvalidStoredResult = command.ErrInvalidStoredResult
+	ErrForbidden           = command.ErrForbidden
+	ErrUnauthorized        = command.ErrUnauthorized
 
 	// ErrServiceSequenceExhausted cannot occur in normal operation: a Shift
 	// would need 99,999 Service Sessions. It exists so FormatServiceNumber has
@@ -110,15 +111,19 @@ var (
 	ErrFinancialInvariantViolated = errors.New("check financials do not satisfy their invariant")
 
 	ErrNothingToSubmit                  = errors.New("no committed order draft awaits submission")
+	ErrNothingAwaitingSubmission        = errors.New("the service session is not awaiting submission")
+	ErrSessionHasOrder                  = errors.New("the service session already has a submitted order")
+	ErrPaymentRequiresRefund            = errors.New("every payment must be fully refunded before the checkout is abandoned")
 	ErrCheckNotSettledForSubmission     = errors.New("every check must be settled before a takeaway order is submitted")
 	ErrCheckNotSettledForClosure        = errors.New("every check must be settled before the service session closes")
+	ErrAwaitingSubmissionForClosure     = errors.New("paid committed items must be submitted or cancelled before the service session closes")
 	ErrPendingRefundForClosure          = errors.New("every pending refund must be resolved before the service session closes")
 	ErrUnsubmittedWorkForClosure        = errors.New("every committed item must be submitted before the service session closes")
 	ErrOrderRequiredForClosure          = errors.New("a service session with no order cannot close")
 	ErrUnfulfilledPreparationForClosure = errors.New("every preparation unit must be terminal before the service session closes")
 	ErrCompletedSaleNotFound            = errors.New("completed sale not found")
 
-	// Phase 6C Comp conditions. A missing Waste is a not-found answer; a
+	// Comp conditions. A missing Waste is a not-found answer; a
 	// Wasted Remake is an uncharged source; a second Comp of one Waste is
 	// a lifecycle conflict the unique facts reject; and a source mapping
 	// that moved under a concurrent restructuring refuses whole.
@@ -127,7 +132,7 @@ var (
 	ErrWasteAlreadyComped       = errors.New("the waste already carries a comp")
 	ErrChargeAdjustmentConflict = errors.New("the charge mapping changed concurrently")
 
-	// Phase 6C Refund conditions. A selected source id that resolves to no
+	// Refund conditions. A selected source id that resolves to no
 	// row is a not-found answer, so it stays distinguishable from a source
 	// that exists but belongs to another Check, carries the wrong scope, or is
 	// otherwise unusable — that is an invalid allocation. An allocation that
@@ -142,7 +147,7 @@ var (
 	ErrRefundMethodMismatch            = errors.New("refund method does not match the payment method")
 	ErrRefundAlreadyCompleted          = errors.New("refund is already completed")
 
-	// Phase 6C Payment Void conditions. A missing Payment is a not-found
+	// Payment Void conditions. A missing Payment is a not-found
 	// answer; one whole Void per Payment makes a second attempt a lifecycle
 	// conflict; any Refund allocation — pending or completed — locks the
 	// Payment for good; and the original Shift must still be the currently
@@ -190,211 +195,139 @@ func MapDBError(err error) error {
 	return err
 }
 
-// MapHTTPError maps Sales domain errors and input validation errors to
-// *response.CodedError.
+// httpErrors is the Sales HTTP error mapping. Rules are tried in order and
+// the first match wins.
 //
-// Note that sql.ErrNoRows is not mapped here. Unlike Shift, where a missing
-// row has exactly one meaning, Sales reads several different rows and each
-// caller decides which sentinel a miss means. A bare sql.ErrNoRows reaching
-// this function is a defect in the caller.
-func MapHTTPError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var codedErr *response.CodedError
-	if errors.As(err, &codedErr) {
-		return err
-	}
+// Most rules answer with their sentinel's fixed text rather than the wrapped
+// error, because the wrapped text may carry PostgreSQL detail that must stay
+// server-side. The few rules that answer with the full error text wrap only
+// client-safe detail.
+//
+// sql.ErrNoRows is deliberately not mapped. Sales reads several different rows
+// and each caller decides which sentinel a miss means, so a bare sql.ErrNoRows
+// reaching the mapper is a defect in the caller and surfaces as a 500.
+var httpErrors = response.ErrorMapper{
+	sentinelMessage(ErrOpenShiftRequired, http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED"),
+	sentinelMessage(ErrServiceSessionNotFound, http.StatusNotFound, "SERVICE_SESSION_NOT_FOUND"),
+	sentinelMessage(ErrServiceSessionClosed, http.StatusConflict, "SERVICE_SESSION_ALREADY_CLOSED"),
+	sentinelMessage(ErrEditableDraftNotFound, http.StatusConflict, "EDITABLE_DRAFT_NOT_FOUND"),
+	sentinelMessage(ErrDraftItemNotFound, http.StatusNotFound, "DRAFT_ITEM_NOT_FOUND"),
 
-	// The client message is always the stable sentinel text, never the wrapped
-	// PostgreSQL detail, which must stay server-side only.
-	coded := func(status int, code string, sentinel error) error {
-		return response.NewCodedError(status, code, sentinel.Error(), err)
-	}
+	sentinelMessage(ErrMenuItemNotFound, http.StatusNotFound, "MENU_ITEM_NOT_FOUND"),
+	sentinelMessage(ErrMenuItemUnavailable, http.StatusConflict, "MENU_ITEM_UNAVAILABLE"),
+	sentinelMessage(ErrMenuItemRetired, http.StatusConflict, "MENU_ITEM_RETIRED"),
 
-	switch {
-	case errors.Is(err, ErrOpenShiftRequired):
-		return coded(http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED", ErrOpenShiftRequired)
-	case errors.Is(err, ErrServiceSessionNotFound):
-		return coded(http.StatusNotFound, "SERVICE_SESSION_NOT_FOUND", ErrServiceSessionNotFound)
-	case errors.Is(err, ErrServiceSessionClosed):
-		return coded(http.StatusConflict, "SERVICE_SESSION_ALREADY_CLOSED", ErrServiceSessionClosed)
-	case errors.Is(err, ErrEditableDraftNotFound):
-		return coded(http.StatusConflict, "EDITABLE_DRAFT_NOT_FOUND", ErrEditableDraftNotFound)
-	case errors.Is(err, ErrDraftItemNotFound):
-		return coded(http.StatusNotFound, "DRAFT_ITEM_NOT_FOUND", ErrDraftItemNotFound)
+	sentinelMessage(ErrSizeNotFound, http.StatusNotFound, "SIZE_NOT_FOUND"),
+	sentinelMessage(ErrSizeUnavailable, http.StatusConflict, "SIZE_UNAVAILABLE"),
+	sentinelMessage(ErrSizeRetired, http.StatusConflict, "SIZE_RETIRED"),
 
-	case errors.Is(err, ErrMenuItemNotFound):
-		return coded(http.StatusNotFound, "MENU_ITEM_NOT_FOUND", ErrMenuItemNotFound)
-	case errors.Is(err, ErrMenuItemUnavailable):
-		return coded(http.StatusConflict, "MENU_ITEM_UNAVAILABLE", ErrMenuItemUnavailable)
-	case errors.Is(err, ErrMenuItemRetired):
-		return coded(http.StatusConflict, "MENU_ITEM_RETIRED", ErrMenuItemRetired)
+	sentinelMessage(ErrModifierOptionNotFound, http.StatusNotFound, "MODIFIER_OPTION_NOT_FOUND"),
+	sentinelMessage(ErrModifierOptionUnavailable, http.StatusConflict, "MODIFIER_OPTION_UNAVAILABLE"),
+	sentinelMessage(ErrModifierOptionRetired, http.StatusConflict, "MODIFIER_OPTION_RETIRED"),
 
-	case errors.Is(err, ErrSizeNotFound):
-		return coded(http.StatusNotFound, "SIZE_NOT_FOUND", ErrSizeNotFound)
-	case errors.Is(err, ErrSizeUnavailable):
-		return coded(http.StatusConflict, "SIZE_UNAVAILABLE", ErrSizeUnavailable)
-	case errors.Is(err, ErrSizeRetired):
-		return coded(http.StatusConflict, "SIZE_RETIRED", ErrSizeRetired)
+	errorMessage(ErrInvalidPreparationNote, http.StatusBadRequest, "INVALID_PREPARATION_NOTE"),
 
-	case errors.Is(err, ErrModifierOptionNotFound):
-		return coded(http.StatusNotFound, "MODIFIER_OPTION_NOT_FOUND", ErrModifierOptionNotFound)
-	case errors.Is(err, ErrModifierOptionUnavailable):
-		return coded(http.StatusConflict, "MODIFIER_OPTION_UNAVAILABLE", ErrModifierOptionUnavailable)
-	case errors.Is(err, ErrModifierOptionRetired):
-		return coded(http.StatusConflict, "MODIFIER_OPTION_RETIRED", ErrModifierOptionRetired)
+	sentinelMessage(ErrTableSelectionRequired, http.StatusBadRequest, "DINE_IN_TABLE_SELECTION_REQUIRED"),
+	sentinelMessage(ErrTableSelectionDuplicate, http.StatusBadRequest, "DINE_IN_TABLE_SELECTION_DUPLICATE"),
+	sentinelMessage(ErrTableNotFound, http.StatusNotFound, "DINE_IN_TABLE_NOT_FOUND"),
+	// The wrapped message names the Table so staff know which one to free;
+	// it contains no data the caller could not already see.
+	errorMessage(ErrTableUnavailable, http.StatusConflict, "DINE_IN_TABLE_UNAVAILABLE"),
+	sentinelMessage(ErrTakeawayTablesNotAvailable, http.StatusConflict, "TAKEAWAY_TABLE_ASSIGNMENT_NOT_AVAILABLE"),
 
-	case errors.Is(err, ErrInvalidPreparationNote):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_PREPARATION_NOTE", err.Error(), err)
-
-	case errors.Is(err, ErrTableSelectionRequired):
-		return coded(http.StatusBadRequest, "DINE_IN_TABLE_SELECTION_REQUIRED", ErrTableSelectionRequired)
-	case errors.Is(err, ErrTableSelectionDuplicate):
-		return coded(http.StatusBadRequest, "DINE_IN_TABLE_SELECTION_DUPLICATE", ErrTableSelectionDuplicate)
-	case errors.Is(err, ErrTableNotFound):
-		return coded(http.StatusNotFound, "DINE_IN_TABLE_NOT_FOUND", ErrTableNotFound)
-	case errors.Is(err, ErrTableUnavailable):
-		// The wrapped message names the Table so staff know which one to free;
-		// it contains no data the caller could not already see.
-		return response.NewCodedError(http.StatusConflict, "DINE_IN_TABLE_UNAVAILABLE", err.Error(), err)
-	case errors.Is(err, ErrTakeawayTablesNotAvailable):
-		return coded(http.StatusConflict, "TAKEAWAY_TABLE_ASSIGNMENT_NOT_AVAILABLE", ErrTakeawayTablesNotAvailable)
-
-	case errors.Is(err, ErrRequestConflict):
-		return response.NewCodedError(http.StatusConflict, "REQUEST_CONFLICT", err.Error(), err)
-	case errors.Is(err, ErrInvalidStoredResult):
-		return response.NewCodedError(http.StatusInternalServerError, "INVALID_STORED_RESULT",
-			"an unexpected error occurred", err)
-	case errors.Is(err, ErrServiceSequenceExhausted):
-		return response.NewCodedError(http.StatusInternalServerError, "SERVICE_SEQUENCE_EXHAUSTED",
-			"an unexpected error occurred", err)
+	errorMessage(ErrRequestConflict, http.StatusConflict, "REQUEST_CONFLICT"),
+	{Target: ErrInvalidStoredResult, Spec: response.ErrorSpec{Status: http.StatusInternalServerError, Code: "INVALID_STORED_RESULT", Message: "an unexpected error occurred"}},
+	{Target: ErrServiceSequenceExhausted, Spec: response.ErrorSpec{Status: http.StatusInternalServerError, Code: "SERVICE_SEQUENCE_EXHAUSTED", Message: "an unexpected error occurred"}},
 
 	// Both denial sentinels collapse to one code so the API never discloses
 	// which condition failed. The reason is in the server log and the audit
 	// event.
-	case errors.Is(err, ErrForbidden):
-		return response.NewCodedError(http.StatusForbidden, "NOT_AUTHORIZED", "not authorized", err)
-	case errors.Is(err, ErrUnauthorized):
-		return response.NewCodedError(http.StatusUnauthorized, "NOT_AUTHORIZED", "not authorized", err)
+	{Target: ErrForbidden, Spec: response.ErrorSpec{Status: http.StatusForbidden, Code: "NOT_AUTHORIZED", Message: "not authorized"}},
+	{Target: ErrUnauthorized, Spec: response.ErrorSpec{Status: http.StatusUnauthorized, Code: "NOT_AUTHORIZED", Message: "not authorized"}},
 
 	// ErrInvalidQuantity is wrapped in response.ErrInvalid by its caller, so
 	// it lands on the generic validation code alongside every other bad field.
-	case errors.Is(err, response.ErrInvalid), errors.Is(err, ErrInvalidQuantity):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_INPUT", err.Error(), err)
+	errorMessage(response.ErrInvalid, http.StatusBadRequest, "INVALID_INPUT"),
+	errorMessage(ErrInvalidQuantity, http.StatusBadRequest, "INVALID_INPUT"),
 
-	case errors.Is(err, ErrEmptyDraft):
-		return coded(http.StatusConflict, "EMPTY_DRAFT", ErrEmptyDraft)
-	case errors.Is(err, ErrCommitMenuItemRetired):
-		return coded(http.StatusConflict, "COMMIT_MENU_ITEM_RETIRED", ErrCommitMenuItemRetired)
-	case errors.Is(err, ErrCommitMenuItemUnavailable):
-		return coded(http.StatusConflict, "COMMIT_MENU_ITEM_UNAVAILABLE", ErrCommitMenuItemUnavailable)
-	case errors.Is(err, ErrCommitSizeRequired):
-		return coded(http.StatusConflict, "COMMIT_SIZE_REQUIRED", ErrCommitSizeRequired)
-	case errors.Is(err, ErrCommitSizeInvalid):
-		return coded(http.StatusConflict, "COMMIT_SIZE_INVALID", ErrCommitSizeInvalid)
-	case errors.Is(err, ErrCommitSizeRetired):
-		return coded(http.StatusConflict, "COMMIT_SIZE_RETIRED", ErrCommitSizeRetired)
-	case errors.Is(err, ErrCommitSizeUnavailable):
-		return coded(http.StatusConflict, "COMMIT_SIZE_UNAVAILABLE", ErrCommitSizeUnavailable)
-	case errors.Is(err, ErrCommitModifierOptionInvalid):
-		return coded(http.StatusConflict, "COMMIT_MODIFIER_OPTION_INVALID", ErrCommitModifierOptionInvalid)
-	case errors.Is(err, ErrCommitModifierOptionRetired):
-		return coded(http.StatusConflict, "COMMIT_MODIFIER_OPTION_RETIRED", ErrCommitModifierOptionRetired)
-	case errors.Is(err, ErrCommitModifierOptionUnavailable):
-		return coded(http.StatusConflict, "COMMIT_MODIFIER_OPTION_UNAVAILABLE", ErrCommitModifierOptionUnavailable)
-	case errors.Is(err, ErrCommitModifierGroupRetired):
-		return coded(http.StatusConflict, "COMMIT_MODIFIER_GROUP_RETIRED", ErrCommitModifierGroupRetired)
-	case errors.Is(err, ErrCommitModifierGroupInvalid):
-		return coded(http.StatusConflict, "COMMIT_MODIFIER_GROUP_INVALID", ErrCommitModifierGroupInvalid)
-	case errors.Is(err, ErrNewOrderDraftNotAvailable):
-		return coded(http.StatusConflict, "NEW_ORDER_DRAFT_NOT_AVAILABLE", ErrNewOrderDraftNotAvailable)
-	case errors.Is(err, ErrCheckNotFound):
-		return coded(http.StatusNotFound, "CHECK_NOT_FOUND", ErrCheckNotFound)
-	case errors.Is(err, ErrCheckNotOpen):
-		return coded(http.StatusConflict, "CHECK_NOT_OPEN", ErrCheckNotOpen)
-	case errors.Is(err, ErrCheckHasPayment):
-		return coded(http.StatusConflict, "CHECK_HAS_PAYMENT", ErrCheckHasPayment)
-	case errors.Is(err, ErrCheckHasChargeAdjustment):
-		return coded(http.StatusConflict, "CHECK_HAS_CHARGE_ADJUSTMENT", ErrCheckHasChargeAdjustment)
-	case errors.Is(err, ErrChecksDifferentSession):
-		return coded(http.StatusConflict, "CHECKS_DIFFERENT_SERVICE_SESSION", ErrChecksDifferentSession)
-	case errors.Is(err, ErrPaymentExceedsBalance):
-		return coded(http.StatusConflict, "PAYMENT_EXCEEDS_CHECK_BALANCE", ErrPaymentExceedsBalance)
-	case errors.Is(err, ErrInsufficientCashTendered):
-		return coded(http.StatusConflict, "INSUFFICIENT_CASH_TENDERED", ErrInsufficientCashTendered)
-	case errors.Is(err, ErrManualQRReceiptRequired):
-		return coded(http.StatusConflict, "MANUAL_QR_RECEIPT_CONFIRMATION_REQUIRED", ErrManualQRReceiptRequired)
-	case errors.Is(err, ErrInvalidCheckSplit):
-		return coded(http.StatusConflict, "INVALID_CHECK_SPLIT", ErrInvalidCheckSplit)
-	case errors.Is(err, ErrSplitAllocationNotFound):
-		return coded(http.StatusConflict, "SPLIT_ALLOCATION_NOT_FOUND", ErrSplitAllocationNotFound)
-	case errors.Is(err, ErrSplitQuantityExceedsAllocation):
-		return coded(http.StatusConflict, "SPLIT_QUANTITY_EXCEEDS_ALLOCATION", ErrSplitQuantityExceedsAllocation)
-	case errors.Is(err, ErrSplitSourceWouldBeEmpty):
-		return coded(http.StatusConflict, "SPLIT_SOURCE_WOULD_BE_EMPTY", ErrSplitSourceWouldBeEmpty)
-	case errors.Is(err, ErrSplitDestinationWouldBeEmpty):
-		return coded(http.StatusConflict, "SPLIT_DESTINATION_WOULD_BE_EMPTY", ErrSplitDestinationWouldBeEmpty)
-	case errors.Is(err, ErrInvalidCheckMerge):
-		return coded(http.StatusConflict, "INVALID_CHECK_MERGE", ErrInvalidCheckMerge)
-	case errors.Is(err, ErrLineTotalOutOfRange):
-		return coded(http.StatusUnprocessableEntity, "LINE_TOTAL_OUT_OF_RANGE", ErrLineTotalOutOfRange)
-	case errors.Is(err, ErrCheckChargeOutOfRange):
-		return coded(http.StatusUnprocessableEntity, "CHECK_CHARGE_OUT_OF_RANGE", ErrCheckChargeOutOfRange)
-	case errors.Is(err, ErrInvalidCheckTarget):
-		return coded(http.StatusUnprocessableEntity, "INVALID_CHECK_TARGET", ErrInvalidCheckTarget)
-	case errors.Is(err, ErrNothingToSubmit):
-		return coded(http.StatusConflict, "NOTHING_TO_SUBMIT", ErrNothingToSubmit)
-	case errors.Is(err, ErrCheckNotSettledForSubmission):
-		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_SUBMISSION", ErrCheckNotSettledForSubmission)
-	case errors.Is(err, ErrCheckNotSettledForClosure):
-		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_CLOSURE", ErrCheckNotSettledForClosure)
-	case errors.Is(err, ErrPendingRefundForClosure):
-		return coded(http.StatusConflict, "PENDING_REFUND_FOR_CLOSURE", ErrPendingRefundForClosure)
-	case errors.Is(err, ErrUnsubmittedWorkForClosure):
-		return coded(http.StatusConflict, "UNSUBMITTED_WORK_FOR_CLOSURE", ErrUnsubmittedWorkForClosure)
-	case errors.Is(err, ErrOrderRequiredForClosure):
-		return coded(http.StatusConflict, "ORDER_REQUIRED_FOR_CLOSURE", ErrOrderRequiredForClosure)
-	case errors.Is(err, ErrUnfulfilledPreparationForClosure):
-		return coded(http.StatusConflict, "UNFULFILLED_PREPARATION_FOR_CLOSURE", ErrUnfulfilledPreparationForClosure)
-	case errors.Is(err, ErrCompletedSaleNotFound):
-		return coded(http.StatusNotFound, "COMPLETED_SALE_NOT_FOUND", ErrCompletedSaleNotFound)
-	case errors.Is(err, ErrWasteNotFound):
-		return coded(http.StatusNotFound, "WASTE_NOT_FOUND", ErrWasteNotFound)
-	case errors.Is(err, ErrCompSourceNotCharged):
-		return coded(http.StatusConflict, "COMP_SOURCE_NOT_CHARGED", ErrCompSourceNotCharged)
-	case errors.Is(err, ErrWasteAlreadyComped):
-		return coded(http.StatusConflict, "WASTE_ALREADY_COMPED", ErrWasteAlreadyComped)
-	case errors.Is(err, ErrChargeAdjustmentConflict):
-		return coded(http.StatusConflict, "CHARGE_ADJUSTMENT_CONFLICT", ErrChargeAdjustmentConflict)
-	case errors.Is(err, ErrRefundNotFound):
-		return coded(http.StatusNotFound, "REFUND_NOT_FOUND", ErrRefundNotFound)
-	case errors.Is(err, ErrRefundSourceNotFound):
-		return coded(http.StatusNotFound, "REFUND_SOURCE_NOT_FOUND", ErrRefundSourceNotFound)
-	case errors.Is(err, ErrRefundAllocationInvalid):
-		return coded(http.StatusBadRequest, "REFUND_ALLOCATION_INVALID", ErrRefundAllocationInvalid)
-	case errors.Is(err, ErrRefundExceedsAdjustmentCapacity):
-		return coded(http.StatusConflict, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY",
-			ErrRefundExceedsAdjustmentCapacity)
-	case errors.Is(err, ErrRefundExceedsPaymentCapacity):
-		return coded(http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY",
-			ErrRefundExceedsPaymentCapacity)
-	case errors.Is(err, ErrRefundExceedsPendingRefund):
-		return coded(http.StatusConflict, "REFUND_EXCEEDS_PENDING_REFUND",
-			ErrRefundExceedsPendingRefund)
-	case errors.Is(err, ErrRefundMethodMismatch):
-		return coded(http.StatusConflict, "REFUND_METHOD_MISMATCH", ErrRefundMethodMismatch)
-	case errors.Is(err, ErrRefundAlreadyCompleted):
-		return coded(http.StatusConflict, "REFUND_ALREADY_COMPLETED", ErrRefundAlreadyCompleted)
-	case errors.Is(err, ErrPaymentNotFound):
-		return coded(http.StatusNotFound, "PAYMENT_NOT_FOUND", ErrPaymentNotFound)
-	case errors.Is(err, ErrPaymentAlreadyVoided):
-		return coded(http.StatusConflict, "PAYMENT_ALREADY_VOIDED", ErrPaymentAlreadyVoided)
-	case errors.Is(err, ErrPaymentHasRefund):
-		return coded(http.StatusConflict, "PAYMENT_HAS_REFUND", ErrPaymentHasRefund)
-	case errors.Is(err, ErrPaymentVoidShiftClosed):
-		return coded(http.StatusConflict, "PAYMENT_VOID_SHIFT_CLOSED", ErrPaymentVoidShiftClosed)
-	default:
-		return err
+	sentinelMessage(ErrEmptyDraft, http.StatusConflict, "EMPTY_DRAFT"),
+	sentinelMessage(ErrCommitMenuItemRetired, http.StatusConflict, "COMMIT_MENU_ITEM_RETIRED"),
+	sentinelMessage(ErrCommitMenuItemUnavailable, http.StatusConflict, "COMMIT_MENU_ITEM_UNAVAILABLE"),
+	sentinelMessage(ErrCommitSizeRequired, http.StatusConflict, "COMMIT_SIZE_REQUIRED"),
+	sentinelMessage(ErrCommitSizeInvalid, http.StatusConflict, "COMMIT_SIZE_INVALID"),
+	sentinelMessage(ErrCommitSizeRetired, http.StatusConflict, "COMMIT_SIZE_RETIRED"),
+	sentinelMessage(ErrCommitSizeUnavailable, http.StatusConflict, "COMMIT_SIZE_UNAVAILABLE"),
+	sentinelMessage(ErrCommitModifierOptionInvalid, http.StatusConflict, "COMMIT_MODIFIER_OPTION_INVALID"),
+	sentinelMessage(ErrCommitModifierOptionRetired, http.StatusConflict, "COMMIT_MODIFIER_OPTION_RETIRED"),
+	sentinelMessage(ErrCommitModifierOptionUnavailable, http.StatusConflict, "COMMIT_MODIFIER_OPTION_UNAVAILABLE"),
+	sentinelMessage(ErrCommitModifierGroupRetired, http.StatusConflict, "COMMIT_MODIFIER_GROUP_RETIRED"),
+	sentinelMessage(ErrCommitModifierGroupInvalid, http.StatusConflict, "COMMIT_MODIFIER_GROUP_INVALID"),
+	sentinelMessage(ErrNewOrderDraftNotAvailable, http.StatusConflict, "NEW_ORDER_DRAFT_NOT_AVAILABLE"),
+	sentinelMessage(ErrCheckNotFound, http.StatusNotFound, "CHECK_NOT_FOUND"),
+	sentinelMessage(ErrCheckNotOpen, http.StatusConflict, "CHECK_NOT_OPEN"),
+	sentinelMessage(ErrCheckHasPayment, http.StatusConflict, "CHECK_HAS_PAYMENT"),
+	sentinelMessage(ErrCheckHasChargeAdjustment, http.StatusConflict, "CHECK_HAS_CHARGE_ADJUSTMENT"),
+	sentinelMessage(ErrChecksDifferentSession, http.StatusConflict, "CHECKS_DIFFERENT_SERVICE_SESSION"),
+	sentinelMessage(ErrPaymentExceedsBalance, http.StatusConflict, "PAYMENT_EXCEEDS_CHECK_BALANCE"),
+	sentinelMessage(ErrInsufficientCashTendered, http.StatusConflict, "INSUFFICIENT_CASH_TENDERED"),
+	sentinelMessage(ErrManualQRReceiptRequired, http.StatusConflict, "MANUAL_QR_RECEIPT_CONFIRMATION_REQUIRED"),
+	sentinelMessage(ErrInvalidCheckSplit, http.StatusConflict, "INVALID_CHECK_SPLIT"),
+	sentinelMessage(ErrSplitAllocationNotFound, http.StatusConflict, "SPLIT_ALLOCATION_NOT_FOUND"),
+	sentinelMessage(ErrSplitQuantityExceedsAllocation, http.StatusConflict, "SPLIT_QUANTITY_EXCEEDS_ALLOCATION"),
+	sentinelMessage(ErrSplitSourceWouldBeEmpty, http.StatusConflict, "SPLIT_SOURCE_WOULD_BE_EMPTY"),
+	sentinelMessage(ErrSplitDestinationWouldBeEmpty, http.StatusConflict, "SPLIT_DESTINATION_WOULD_BE_EMPTY"),
+	sentinelMessage(ErrInvalidCheckMerge, http.StatusConflict, "INVALID_CHECK_MERGE"),
+	sentinelMessage(ErrLineTotalOutOfRange, http.StatusUnprocessableEntity, "LINE_TOTAL_OUT_OF_RANGE"),
+	sentinelMessage(ErrCheckChargeOutOfRange, http.StatusUnprocessableEntity, "CHECK_CHARGE_OUT_OF_RANGE"),
+	sentinelMessage(ErrInvalidCheckTarget, http.StatusUnprocessableEntity, "INVALID_CHECK_TARGET"),
+	sentinelMessage(ErrNothingAwaitingSubmission, http.StatusConflict, "NOTHING_AWAITING_SUBMISSION"),
+	sentinelMessage(ErrPaymentRequiresRefund, http.StatusConflict, "PAYMENT_REQUIRES_REFUND"),
+	sentinelMessage(ErrSessionHasOrder, http.StatusConflict, "SESSION_HAS_ORDER"),
+	sentinelMessage(ErrNothingToSubmit, http.StatusConflict, "NOTHING_TO_SUBMIT"),
+	sentinelMessage(ErrCheckNotSettledForSubmission, http.StatusConflict, "CHECK_NOT_SETTLED_FOR_SUBMISSION"),
+	sentinelMessage(ErrCheckNotSettledForClosure, http.StatusConflict, "CHECK_NOT_SETTLED_FOR_CLOSURE"),
+	sentinelMessage(ErrAwaitingSubmissionForClosure, http.StatusConflict, "AWAITING_SUBMISSION_FOR_CLOSURE"),
+	sentinelMessage(ErrPendingRefundForClosure, http.StatusConflict, "PENDING_REFUND_FOR_CLOSURE"),
+	sentinelMessage(ErrUnsubmittedWorkForClosure, http.StatusConflict, "UNSUBMITTED_WORK_FOR_CLOSURE"),
+	sentinelMessage(ErrOrderRequiredForClosure, http.StatusConflict, "ORDER_REQUIRED_FOR_CLOSURE"),
+	sentinelMessage(ErrUnfulfilledPreparationForClosure, http.StatusConflict, "UNFULFILLED_PREPARATION_FOR_CLOSURE"),
+	sentinelMessage(ErrCompletedSaleNotFound, http.StatusNotFound, "COMPLETED_SALE_NOT_FOUND"),
+	sentinelMessage(ErrWasteNotFound, http.StatusNotFound, "WASTE_NOT_FOUND"),
+	sentinelMessage(ErrCompSourceNotCharged, http.StatusConflict, "COMP_SOURCE_NOT_CHARGED"),
+	sentinelMessage(ErrWasteAlreadyComped, http.StatusConflict, "WASTE_ALREADY_COMPED"),
+	sentinelMessage(ErrChargeAdjustmentConflict, http.StatusConflict, "CHARGE_ADJUSTMENT_CONFLICT"),
+	sentinelMessage(ErrRefundNotFound, http.StatusNotFound, "REFUND_NOT_FOUND"),
+	sentinelMessage(ErrRefundSourceNotFound, http.StatusNotFound, "REFUND_SOURCE_NOT_FOUND"),
+	sentinelMessage(ErrRefundAllocationInvalid, http.StatusBadRequest, "REFUND_ALLOCATION_INVALID"),
+	sentinelMessage(ErrRefundExceedsAdjustmentCapacity, http.StatusConflict, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY"),
+	sentinelMessage(ErrRefundExceedsPaymentCapacity, http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY"),
+	sentinelMessage(ErrRefundExceedsPendingRefund, http.StatusConflict, "REFUND_EXCEEDS_PENDING_REFUND"),
+	sentinelMessage(ErrRefundMethodMismatch, http.StatusConflict, "REFUND_METHOD_MISMATCH"),
+	sentinelMessage(ErrRefundAlreadyCompleted, http.StatusConflict, "REFUND_ALREADY_COMPLETED"),
+	sentinelMessage(ErrPaymentNotFound, http.StatusNotFound, "PAYMENT_NOT_FOUND"),
+	sentinelMessage(ErrPaymentAlreadyVoided, http.StatusConflict, "PAYMENT_ALREADY_VOIDED"),
+	sentinelMessage(ErrPaymentHasRefund, http.StatusConflict, "PAYMENT_HAS_REFUND"),
+	sentinelMessage(ErrPaymentVoidShiftClosed, http.StatusConflict, "PAYMENT_VOID_SHIFT_CLOSED"),
+}
+
+// sentinelMessage maps target to a client message of the sentinel's own text,
+// never the wrapped detail.
+func sentinelMessage(target error, status int, code string) response.ErrorRule {
+	return response.ErrorRule{
+		Target: target,
+		Spec:   response.ErrorSpec{Status: status, Code: code, Message: target.Error()},
 	}
+}
+
+// errorMessage maps target to a client message of the full error text, for
+// sentinels whose wrapped detail is safe and useful to the caller.
+func errorMessage(target error, status int, code string) response.ErrorRule {
+	return response.ErrorRule{Target: target, Spec: response.ErrorSpec{Status: status, Code: code}}
+}
+
+// MapHTTPError maps Sales domain errors and input validation errors to
+// *response.CodedError. A nil error, an error already carrying a
+// *response.CodedError, and an unmatched error are returned unchanged.
+func MapHTTPError(err error) error {
+	return httpErrors.Map(err)
 }

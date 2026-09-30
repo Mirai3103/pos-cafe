@@ -2,9 +2,10 @@
 	docker-up docker-down docker-logs db-wait
 
 # Single source of truth for the integration-test database.
-TEST_DATABASE_URL ?= postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
-GOLANGCI_VERSION  ?= v2.13.2
-OUTPUT_BINARY     ?= build/app.exe
+TEST_DATABASE_URL   ?= postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
+GOLANGCI_VERSION    ?= v2.13.2
+GOVULNCHECK_VERSION ?= v1.8.0
+OUTPUT_BINARY       ?= build/app.exe
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -54,7 +55,7 @@ lint: ## Run golangci-lint (installs it on demand)
 	golangci-lint run ./...
 
 vuln: ## Scan dependencies for known vulnerabilities
-	@command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+	@command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 	govulncheck ./...
 
 test: ## Run unit tests with the race detector
@@ -85,7 +86,7 @@ sqlc: ## Regenerate type-safe SQL bindings
 	sqlc generate
 
 swagger: ## Regenerate Swagger/OpenAPI docs
-	swag init -g cmd/api/main.go -o docs
+	swag init -g cmd/api/main.go -o api/openapi
 
 tidy: ## Tidy go.mod / go.sum
 	go mod tidy

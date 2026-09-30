@@ -1,10 +1,10 @@
 import * as React from "react";
 import { X, Banknote, AlertCircle, CheckCircle2, ChefHat, Loader2 } from "lucide-react";
-import { changeDue, isTenderSufficient, suggestTenders } from "../utils/payment";
+import { changeDue, isTenderSufficient, suggestTenders } from "../lib/payment";
 import { formatVND } from "@/lib/utils";
 import { useKeypadHotkeys } from "@/hooks/use-keypad-hotkeys";
 import { playTapChirp, playSuccessChirp } from "@/lib/sound";
-import type { SubmitStatus } from "../utils/phase";
+import type { SubmitStatus } from "../lib/phase";
 
 export interface PaymentDialogProps {
   isOpen: boolean;

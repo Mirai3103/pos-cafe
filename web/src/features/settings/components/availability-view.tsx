@@ -5,7 +5,7 @@ import { playErrorBuzz, playTapChirp } from "@/lib/sound";
 import { useAvailabilityMenu, useSetAvailability } from "../api/use-availability";
 import { AvailabilityBoard } from "./availability-board";
 import { RestoreAvailabilityDialog } from "./restore-availability-dialog";
-import { StockToast, type StockToastMessage } from "./stock-toast";
+import { StockToast, type StockToastMessage } from "@/components/feedback/stock-toast";
 import { EMPTY_FILTER, toAvailabilityView, type AvailabilityKind } from "../lib/availability";
 import { RESTORE_SUCCESS_MESSAGE, toggleSuccessMessage } from "../lib/stock-messages";
 

@@ -1,24 +1,7 @@
 -- Queries for internal/sales (Phase 5A).
 --
--- Authority, role, and advisory-lock queries are slice-local by ADR-007: the
--- shared table is shared, the helper logic is not.
-
--- name: GetSalesSessionAuthority :one
-SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
-       s.last_human_activity_at, s.expires_at, s.revoked_at,
-       i.enabled AS identity_enabled, i.display_name, i.login_code
-FROM staff_access_sessions s
-JOIN staff_identities i ON i.id = s.staff_identity_id
-WHERE s.id = $1 AND s.staff_identity_id = $2;
-
--- name: GetSalesSessionRoles :many
-SELECT role
-FROM staff_operational_roles
-WHERE staff_identity_id = $1
-ORDER BY role ASC;
-
--- name: SalesAdvisoryLock :exec
-SELECT pg_advisory_xact_lock($1);
+-- Session authority, roles, and advisory locks come from the shared command
+-- pipeline (internal/platform/command) and sql/queries/platform.sql.
 
 -- name: GetSalesOccurredAt :one
 SELECT clock_timestamp()::timestamptz AS occurred_at;
@@ -451,8 +434,14 @@ UPDATE order_drafts SET check_target = $2 WHERE id = $1;
 SELECT check_target FROM order_drafts WHERE id = $1;
 
 -- name: FindBlockingDraft :one
--- A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
--- corresponding Order.
+-- A draft that prevents a new one opening: EDITABLE, CANCELLED, or COMMITTED
+-- without a corresponding Order.
+--
+-- CANCELLED blocks because Cancel Awaiting Submission withdrew the draft's
+-- charge: an orderless cancelled draft's Session must be abandoned (Refund,
+-- then Abandon), not re-ordered. A new round that got submitted would leave
+-- the withdrawn allocations unsubmitted for closure forever and strand the
+-- Session ACTIVE (ADR-066).
 --
 -- 5D added the orders table and completed the second clause as 5B's comment
 -- promised. The rule stops staff stacking rounds ahead of the kitchen; it does
@@ -467,7 +456,7 @@ SELECT id
 FROM order_drafts
 WHERE order_drafts.service_session_id = $1
   AND (
-        state = 'EDITABLE'
+        state IN ('EDITABLE', 'CANCELLED')
      OR (state = 'COMMITTED'
          AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = order_drafts.id))
   )
@@ -1231,3 +1220,86 @@ SELECT count(*)::BIGINT AS live_adjustment_count
 FROM charge_adjustments
 WHERE check_id = ANY(sqlc.arg(check_ids)::uuid[])
   AND scope = 'LIVE_CHECK';
+
+-- name: GetAbandonedCheckoutBySession :one
+-- Phase 08: the terminal record the Service Session projection reads.
+SELECT id, reason, note, actor_staff_identity_id, occurred_at
+FROM abandoned_checkouts
+WHERE service_session_id = $1;
+
+-- name: SessionHasOrder :one
+-- Phase 08: recovery applies only to a Session with no Order (ADR-066).
+SELECT EXISTS (SELECT 1 FROM orders WHERE service_session_id = $1) AS has_order;
+
+-- name: LockSessionChecksForRecovery :many
+-- Phase 08: every Check of one Session, after the caller holds the Session
+-- lock, in the ascending (created_at, id) order Submit and 5C use. Like
+-- Submit, this runs Session-then-Checks against Payment's Check-then-Session,
+-- so it inherits ADR-031's AB-BA window (ADR-066).
+SELECT id, state, charge_vnd
+FROM checks
+WHERE service_session_id = $1
+ORDER BY created_at ASC, id ASC
+FOR UPDATE;
+
+-- name: ListWithdrawableAllocations :many
+-- Phase 08: the committed draft's Charge Allocations with their frozen charge,
+-- computed the way GetGlobalShiftClosureBlockers computes base charge.
+SELECT ca.id, ca.check_id,
+       (ca.quantity::BIGINT * ci.unit_price_vnd)::BIGINT AS amount_vnd
+FROM charge_allocations AS ca
+JOIN committed_items AS ci ON ci.id = ca.committed_item_id
+WHERE ci.order_draft_id = $1
+ORDER BY ca.check_id, ca.id;
+
+-- name: MarkOrderDraftCancelled :exec
+UPDATE order_drafts SET state = 'CANCELLED' WHERE id = $1;
+
+-- name: GetSessionHeldMoney :one
+-- Phase 08: the money an Abandon must see returned. Valid Payments exclude
+-- voided ones; a Refund counts only once completed; a pending Refund is
+-- counted separately because it has not moved money.
+SELECT
+    COALESCE((SELECT SUM(p.applied_amount_vnd)
+              FROM payments AS p
+              JOIN checks AS c ON c.id = p.check_id
+              WHERE c.service_session_id = sqlc.arg(service_session_id)::uuid
+                AND NOT EXISTS (SELECT 1 FROM payment_voids AS pv
+                                WHERE pv.payment_id = p.id)), 0)::BIGINT
+        AS valid_payment_vnd,
+    COALESCE((SELECT SUM(r.amount_vnd)
+              FROM refunds AS r
+              JOIN refund_completions AS rc ON rc.refund_id = r.id
+              JOIN checks AS c ON c.id = r.check_id
+              WHERE c.service_session_id = sqlc.arg(service_session_id)::uuid
+                AND r.completed_sale_id IS NULL), 0)::BIGINT
+        AS completed_refund_vnd,
+    (SELECT count(*)
+     FROM refunds AS r
+     JOIN checks AS c ON c.id = r.check_id
+     WHERE c.service_session_id = sqlc.arg(service_session_id)::uuid
+       AND NOT EXISTS (SELECT 1 FROM refund_completions AS rc
+                       WHERE rc.refund_id = r.id))::BIGINT
+        AS pending_refund_count;
+
+-- name: InsertAbandonedCheckout :one
+INSERT INTO abandoned_checkouts (
+    service_session_id, sales_shift_id, reason, note,
+    actor_staff_identity_id, staff_access_session_id, occurred_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id;
+
+-- name: CancelSessionDrafts :exec
+-- Only a Session with no Order is abandoned, so every COMMITTED draft here is
+-- unsubmitted.
+UPDATE order_drafts SET state = 'CANCELLED'
+WHERE service_session_id = $1 AND state IN ('EDITABLE', 'COMMITTED');
+
+-- name: AbandonSessionChecks :many
+-- MERGED Checks keep their state; they already carry no charge.
+UPDATE checks SET state = 'ABANDONED'
+WHERE service_session_id = $1 AND state IN ('OPEN', 'SETTLED')
+RETURNING id;
+
+-- name: AbandonServiceSession :exec
+UPDATE service_sessions SET state = 'ABANDONED' WHERE id = $1;

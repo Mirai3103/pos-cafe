@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { DineInPanel } from "./dine-in-panel";
-import { deriveDineInStatus } from "../utils/dine-in";
+import { deriveDineInStatus } from "../lib/dine-in";
 import type { SalesServiceSessionResponse } from "@/api/generated/models";
 
 const session = {

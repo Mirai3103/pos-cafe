@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -65,7 +66,7 @@ type remakeSource struct {
 // Unit — a fresh QUEUED unit with the source's immutable preparation snapshot
 // under the Order Item's next unit number, at REMAKE priority, linked back to
 // its source — plus the Remake fact and the one PREPARATION_REMAKE_CREATED
-// audit, all inside the executor's single mutation transaction. It changes no
+// audit, all inside the pipeline's single mutation transaction. It changes no
 // Order Item, allocation, Check charge, Payment, Refund, or Comp.
 type RemakeUnitHandler struct{ runner *Runner }
 
@@ -100,7 +101,7 @@ func (h *RemakeUnitHandler) Handle(ctx context.Context, actor Actor,
 	// runs on the pool in autocommit: the row locks its name carries are held
 	// only for the statement and are released before the mutation begins —
 	// the mutation itself takes every lock again, in the session-first order.
-	waste, err := h.runner.queries.LockPreparationWaste(ctx, cmd.WasteID)
+	waste, err := h.runner.Queries().LockPreparationWaste(ctx, cmd.WasteID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, RemakeResponse{}, fmt.Errorf("%w: %s", ErrWasteNotFound, cmd.WasteID)
@@ -133,14 +134,14 @@ func (h *RemakeUnitHandler) Handle(ctx context.Context, actor Actor,
 			}
 			// The one business audit was written inside the mutation through
 			// writePreparationAudits, sharing the evidence's timestamp, so the
-			// executor's single-audit step is deliberately given a zero
+			// pipeline's single-audit step is deliberately given a zero
 			// record.
 			return http.StatusCreated, response, AuditRecord{}, nil
 		})
 }
 
 // applyRemake is the mutation body, ordered so each step's failure leaves the
-// transaction — claim included — to the executor's rollback:
+// transaction — claim included — to the pipeline's rollback:
 //
 //  1. lock the owning Service Session first — the global lock contract that
 //     serializes Remake with closure, which locks the same row first too —
@@ -159,54 +160,22 @@ func (h *RemakeUnitHandler) Handle(ctx context.Context, actor Actor,
 //     constraint to ErrWasteAlreadyRemade;
 //  8. write the one business audit through writePreparationAudits;
 //  9. load the replacement unit and return the complete result, leaving the
-//     executor's AuditRecord at zero.
+//     pipeline's AuditRecord at zero.
 func applyRemake(ctx context.Context, q *sqlc.Queries, actor Actor,
 	source remakeSource, reason string, note *string,
 ) (RemakeResponse, error) {
-	// 1. Session-first locking. The row lock serializes this Remake against
-	// Service Session closure.
-	sessions, err := q.LockPreparationServiceSessions(ctx, []uuid.UUID{source.ServiceSessionID})
-	if err != nil {
-		return RemakeResponse{}, fmt.Errorf("lock preparation service session: %w", err)
+	// 1–2. Session-first locking, then the Order Item.
+	if err := lockRemakeSession(ctx, q, source.ServiceSessionID); err != nil {
+		return RemakeResponse{}, err
 	}
-	if len(sessions) != 1 {
-		return RemakeResponse{}, fmt.Errorf(
-			"lock preparation service session: expected exactly 1 row for %s, got %d",
-			source.ServiceSessionID, len(sessions))
-	}
-	if sessions[0].State != stateServiceSessionActive {
-		return RemakeResponse{}, fmt.Errorf("%w: %s is %s",
-			ErrServiceSessionClosed, source.ServiceSessionID, sessions[0].State)
+	if err := lockRemakeOrderItem(ctx, q, source); err != nil {
+		return RemakeResponse{}, err
 	}
 
-	// 2. The Order Item lock guards the unit-number allocation in step 5.
-	orderItem, err := q.LockPreparationOrderItem(ctx, source.OrderItemID)
+	// 3. The Waste and its still-WASTED source unit.
+	waste, sourceUnit, err := lockRemakeSource(ctx, q, source.WasteID)
 	if err != nil {
-		return RemakeResponse{}, fmt.Errorf("lock preparation order item: %w", err)
-	}
-	if orderItem.ServiceSessionID != source.ServiceSessionID {
-		return RemakeResponse{}, fmt.Errorf(
-			"lock preparation order item: %s belongs to session %s, expected %s",
-			orderItem.ID, orderItem.ServiceSessionID, source.ServiceSessionID)
-	}
-
-	// 3. The Waste and its source unit are locked together and revalidated
-	// after the locks, so the loser of a concurrent remake re-reads the
-	// winner's committed evidence here and loses on the fact insert below.
-	waste, err := q.LockPreparationWaste(ctx, source.WasteID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return RemakeResponse{}, fmt.Errorf("%w: %s", ErrWasteNotFound, source.WasteID)
-		}
-		return RemakeResponse{}, fmt.Errorf("lock preparation waste: %w", err)
-	}
-	sourceUnit, err := q.LockPreparationUnit(ctx, waste.PreparationUnitID)
-	if err != nil {
-		return RemakeResponse{}, fmt.Errorf("lock remake source unit: %w", err)
-	}
-	if sourceUnit.State != StateWasted {
-		return RemakeResponse{}, fmt.Errorf("%w: the remake source unit is %s, not wasted",
-			ErrInvalidTransition, sourceUnit.State)
+		return RemakeResponse{}, err
 	}
 
 	// 4. One database clock reading, shared by the queue time, the fact, and
@@ -216,45 +185,21 @@ func applyRemake(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return RemakeResponse{}, fmt.Errorf("read preparation occurrence time: %w", err)
 	}
 
-	// 5. max(unit_number)+1 runs under the Order Item lock taken in step 2,
-	// so concurrent Remakes of different Wastes of one item cannot collide.
-	unitNumber, err := q.GetNextPreparationUnitNumber(ctx, waste.OrderItemID)
+	// 5–6. The replacement unit.
+	replacement, err := insertRemakeUnit(ctx, q, waste.OrderItemID, sourceUnit, occurredAt)
 	if err != nil {
-		return RemakeResponse{}, fmt.Errorf("allocate preparation unit number: %w", err)
-	}
-
-	// 6. The copied replacement: the source's immutable preparation snapshot
-	// under a fresh id and queue time, REMAKE priority, and the remake_of
-	// link. Nothing customer-facing is charged or allocated for it.
-	replacement, err := q.InsertPreparationRemakeUnit(ctx, sqlc.InsertPreparationRemakeUnitParams{
-		OrderItemID:               waste.OrderItemID,
-		UnitNumber:                unitNumber,
-		ServiceNumber:             sourceUnit.ServiceNumber,
-		CategoryName:              sourceUnit.CategoryName,
-		ItemName:                  sourceUnit.ItemName,
-		SizeName:                  sourceUnit.SizeName,
-		Modifiers:                 sourceUnit.Modifiers,
-		PreparationNote:           sourceUnit.PreparationNote,
-		QueuedAt:                  occurredAt,
-		RemakeOfPreparationUnitID: uuid.NullUUID{UUID: sourceUnit.ID, Valid: true},
-	})
-	if err != nil {
-		return RemakeResponse{}, fmt.Errorf("insert preparation remake unit: %w", err)
+		return RemakeResponse{}, err
 	}
 
 	// 7. The Remake fact — one per Waste, forever. A concurrent remake of the
 	// same Waste committed while this transaction waited on the locks fails
 	// here on the named constraint, and the whole mutation rolls back with
 	// it, replacement unit included.
-	var noteValue sql.NullString
-	if note != nil {
-		noteValue = sql.NullString{String: *note, Valid: true}
-	}
 	fact, err := q.InsertPreparationRemake(ctx, sqlc.InsertPreparationRemakeParams{
 		WasteID:              waste.ID,
 		PreparationUnitID:    replacement.ID,
 		Reason:               reason,
-		Note:                 noteValue,
+		Note:                 nullString(note),
 		ActorStaffIdentityID: actor.StaffID,
 		StaffAccessSessionID: actor.SessionID,
 		CreatedAt:            occurredAt,
@@ -285,6 +230,102 @@ func applyRemake(ctx context.Context, q *sqlc.Queries, actor Actor,
 	if err != nil {
 		return RemakeResponse{}, err
 	}
+	return buildRemakeResponse(fact, waste.PreparationUnitID, unit), nil
+}
+
+// lockRemakeSession locks the owning Service Session and requires it ACTIVE.
+// The row lock serializes this Remake against Service Session closure.
+func lockRemakeSession(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) error {
+	sessions, err := q.LockPreparationServiceSessions(ctx, []uuid.UUID{sessionID})
+	if err != nil {
+		return fmt.Errorf("lock preparation service session: %w", err)
+	}
+	if len(sessions) != 1 {
+		return fmt.Errorf(
+			"lock preparation service session: expected exactly 1 row for %s, got %d",
+			sessionID, len(sessions))
+	}
+	if sessions[0].State != stateServiceSessionActive {
+		return fmt.Errorf("%w: %s is %s",
+			ErrServiceSessionClosed, sessionID, sessions[0].State)
+	}
+	return nil
+}
+
+// lockRemakeOrderItem locks the Order Item, which guards the unit-number
+// allocation, and confirms it still belongs to the locked Session.
+func lockRemakeOrderItem(ctx context.Context, q *sqlc.Queries, source remakeSource) error {
+	orderItem, err := q.LockPreparationOrderItem(ctx, source.OrderItemID)
+	if err != nil {
+		return fmt.Errorf("lock preparation order item: %w", err)
+	}
+	if orderItem.ServiceSessionID != source.ServiceSessionID {
+		return fmt.Errorf(
+			"lock preparation order item: %s belongs to session %s, expected %s",
+			orderItem.ID, orderItem.ServiceSessionID, source.ServiceSessionID)
+	}
+	return nil
+}
+
+// lockRemakeSource locks the Waste and its source unit together and
+// revalidates both after the locks, so the loser of a concurrent remake
+// re-reads the winner's committed evidence here and loses on the fact insert.
+func lockRemakeSource(ctx context.Context, q *sqlc.Queries, wasteID uuid.UUID,
+) (sqlc.LockPreparationWasteRow, sqlc.PreparationUnit, error) {
+	waste, err := q.LockPreparationWaste(ctx, wasteID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return waste, sqlc.PreparationUnit{}, fmt.Errorf("%w: %s", ErrWasteNotFound, wasteID)
+		}
+		return waste, sqlc.PreparationUnit{}, fmt.Errorf("lock preparation waste: %w", err)
+	}
+	sourceUnit, err := q.LockPreparationUnit(ctx, waste.PreparationUnitID)
+	if err != nil {
+		return waste, sourceUnit, fmt.Errorf("lock remake source unit: %w", err)
+	}
+	if sourceUnit.State != StateWasted {
+		return waste, sourceUnit, fmt.Errorf("%w: the remake source unit is %s, not wasted",
+			ErrInvalidTransition, sourceUnit.State)
+	}
+	return waste, sourceUnit, nil
+}
+
+// insertRemakeUnit allocates the Order Item's next unit number and inserts
+// the copied replacement: the source's immutable preparation snapshot under a
+// fresh id and queue time, REMAKE priority, and the remake_of link. Nothing
+// customer-facing is charged or allocated for it.
+func insertRemakeUnit(ctx context.Context, q *sqlc.Queries, orderItemID uuid.UUID,
+	sourceUnit sqlc.PreparationUnit, occurredAt time.Time,
+) (sqlc.PreparationUnit, error) {
+	// max(unit_number)+1 runs under the Order Item lock, so concurrent
+	// Remakes of different Wastes of one item cannot collide.
+	unitNumber, err := q.GetNextPreparationUnitNumber(ctx, orderItemID)
+	if err != nil {
+		return sqlc.PreparationUnit{}, fmt.Errorf("allocate preparation unit number: %w", err)
+	}
+	replacement, err := q.InsertPreparationRemakeUnit(ctx, sqlc.InsertPreparationRemakeUnitParams{
+		OrderItemID:               orderItemID,
+		UnitNumber:                unitNumber,
+		ServiceNumber:             sourceUnit.ServiceNumber,
+		CategoryName:              sourceUnit.CategoryName,
+		ItemName:                  sourceUnit.ItemName,
+		SizeName:                  sourceUnit.SizeName,
+		Modifiers:                 sourceUnit.Modifiers,
+		PreparationNote:           sourceUnit.PreparationNote,
+		QueuedAt:                  occurredAt,
+		RemakeOfPreparationUnitID: uuid.NullUUID{UUID: sourceUnit.ID, Valid: true},
+	})
+	if err != nil {
+		return sqlc.PreparationUnit{}, fmt.Errorf("insert preparation remake unit: %w", err)
+	}
+	return replacement, nil
+}
+
+// buildRemakeResponse assembles the response from the stored fact and the
+// reloaded replacement unit.
+func buildRemakeResponse(fact sqlc.PreparationRemake, sourceUnitID uuid.UUID,
+	unit UnitResponse,
+) RemakeResponse {
 	var factNote *string
 	if fact.Note.Valid {
 		factNote = &fact.Note.String
@@ -292,10 +333,10 @@ func applyRemake(ctx context.Context, q *sqlc.Queries, actor Actor,
 	return RemakeResponse{
 		ID:                      fact.ID,
 		WasteID:                 fact.WasteID,
-		SourcePreparationUnitID: waste.PreparationUnitID,
+		SourcePreparationUnitID: sourceUnitID,
 		Reason:                  fact.Reason,
 		Note:                    factNote,
 		CreatedAt:               fact.CreatedAt,
 		Unit:                    unit,
-	}, nil
+	}
 }

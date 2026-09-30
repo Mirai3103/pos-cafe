@@ -1,7 +1,7 @@
 // web/src/features/catalog/components/categories-view.tsx
 import { useRef, useState, type ReactElement } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import type { StockToastMessage } from "@/features/settings/components/stock-toast";
+import type { StockToastMessage } from "@/components/feedback/stock-toast";
 import { useRetireEntity } from "../api/use-catalog-admin";
 import type { CatalogModel, CatCategory } from "../lib/catalog-model";
 import { categoryIcon } from "../lib/category-icons";

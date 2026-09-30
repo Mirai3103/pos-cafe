@@ -55,7 +55,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Verify Build
-        run: go build -v ./cmd/api
+        run: go build -v -o bin/api ./cmd/api
 
   integration:
     name: Integration Tests
@@ -123,5 +123,5 @@ jobs:
 
       - name: Vulnerability Scan (govulncheck)
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           govulncheck ./...

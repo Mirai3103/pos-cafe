@@ -3,11 +3,9 @@ package catalog
 import (
 	"context"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 )
-
-// Fingerprints and audit details
 
 type setItemAvailabilityFingerprint struct {
 	ItemID    uuid.UUID `json:"item_id"`
@@ -72,48 +70,24 @@ func (h *SetItemAvailabilityHandler) Handle(ctx context.Context, actor Actor, cm
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, ItemResponse, AuditRecord, error) {
-		// 1. Lock item row
 		existing, err := q.GetMenuItemForUpdate(ctx, cmd.ItemID)
 		if err != nil {
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 		}
-
-		// 2. Check retirement
 		if existing.RetiredAt.Valid {
 			return 0, ItemResponse{}, AuditRecord{}, ErrEntityRetired
 		}
 
-		// 3. Same-state no-op: returns current state, does not update timestamps, does not emit audit event
+		// Same-state no-op: return the current state without touching timestamps
+		// or emitting an audit event.
 		if existing.Available == cmd.Available {
-			res := ItemResponse{
-				ID:         existing.ID,
-				CategoryID: existing.CategoryID,
-				Name:       existing.Name,
-				Available:  existing.Available,
-			}
-			if existing.PriceVnd.Valid {
-				v := existing.PriceVnd.Int64
-				res.PriceVND = &v
-			}
-			sizes, err := q.ListMenuItemSizesByItem(ctx, existing.ID)
+			res, err := loadItemResponse(ctx, q, existing)
 			if err != nil {
-				return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
-			}
-			if len(sizes) > 0 {
-				res.Sizes = make([]SizeResponse, len(sizes))
-				for i, s := range sizes {
-					res.Sizes[i] = SizeResponse{
-						ID:        s.ID,
-						Name:      s.Name,
-						PriceVND:  s.PriceVnd,
-						Available: s.Available,
-					}
-				}
+				return 0, ItemResponse{}, AuditRecord{}, err
 			}
 			return 200, res, AuditRecord{}, nil
 		}
 
-		// 4. Update availability in database
 		item, err := q.SetMenuItemAvailability(ctx, sqlc.SetMenuItemAvailabilityParams{
 			ID:        cmd.ItemID,
 			Available: cmd.Available,
@@ -121,35 +95,11 @@ func (h *SetItemAvailabilityHandler) Handle(ctx context.Context, actor Actor, cm
 		if err != nil {
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 		}
-
-		// 5. Build response
-		res := ItemResponse{
-			ID:         item.ID,
-			CategoryID: item.CategoryID,
-			Name:       item.Name,
-			Available:  item.Available,
-		}
-		if item.PriceVnd.Valid {
-			v := item.PriceVnd.Int64
-			res.PriceVND = &v
-		}
-		sizes, err := q.ListMenuItemSizesByItem(ctx, item.ID)
+		res, err := loadItemResponse(ctx, q, item)
 		if err != nil {
-			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		if len(sizes) > 0 {
-			res.Sizes = make([]SizeResponse, len(sizes))
-			for i, s := range sizes {
-				res.Sizes[i] = SizeResponse{
-					ID:        s.ID,
-					Name:      s.Name,
-					PriceVND:  s.PriceVnd,
-					Available: s.Available,
-				}
-			}
+			return 0, ItemResponse{}, AuditRecord{}, err
 		}
 
-		// 6. Audit event
 		audit := AuditRecord{
 			EventType: EventItemAvailabilityChanged,
 			Details: itemAvailabilityChangedAuditDetails{
@@ -196,7 +146,7 @@ func (h *SetSizeAvailabilityHandler) Handle(ctx context.Context, actor Actor, cm
 			return 0, SizeResponse{}, AuditRecord{}, err
 		}
 
-		// 4. Same-state no-op
+		// Same-state no-op: no update, no audit event.
 		if existing.Available == cmd.Available {
 			res := SizeResponse{
 				ID:        existing.ID,
@@ -207,7 +157,6 @@ func (h *SetSizeAvailabilityHandler) Handle(ctx context.Context, actor Actor, cm
 			return 200, res, AuditRecord{}, nil
 		}
 
-		// 5. Update availability in database
 		size, err := q.SetMenuItemSizeAvailability(ctx, sqlc.SetMenuItemSizeAvailabilityParams{
 			ID:        cmd.SizeID,
 			Available: cmd.Available,
@@ -216,7 +165,6 @@ func (h *SetSizeAvailabilityHandler) Handle(ctx context.Context, actor Actor, cm
 			return 0, SizeResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 6. Build response
 		res := SizeResponse{
 			ID:        size.ID,
 			Name:      size.Name,
@@ -224,7 +172,6 @@ func (h *SetSizeAvailabilityHandler) Handle(ctx context.Context, actor Actor, cm
 			Available: size.Available,
 		}
 
-		// 7. Audit event
 		audit := AuditRecord{
 			EventType: EventSizeAvailabilityChanged,
 			Details: sizeAvailabilityChangedAuditDetails{
@@ -272,7 +219,7 @@ func (h *SetModifierOptionAvailabilityHandler) Handle(ctx context.Context, actor
 			return 0, ModifierOptionResponse{}, AuditRecord{}, err
 		}
 
-		// 4. Same-state no-op
+		// Same-state no-op: no update, no audit event.
 		if existing.Available == cmd.Available {
 			res := ModifierOptionResponse{
 				ID:              existing.ID,
@@ -284,7 +231,6 @@ func (h *SetModifierOptionAvailabilityHandler) Handle(ctx context.Context, actor
 			return 200, res, AuditRecord{}, nil
 		}
 
-		// 5. Update availability in database
 		opt, err := q.SetModifierOptionAvailability(ctx, sqlc.SetModifierOptionAvailabilityParams{
 			ID:        cmd.OptionID,
 			Available: cmd.Available,
@@ -293,7 +239,6 @@ func (h *SetModifierOptionAvailabilityHandler) Handle(ctx context.Context, actor
 			return 0, ModifierOptionResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 6. Build response
 		res := ModifierOptionResponse{
 			ID:              opt.ID,
 			ModifierGroupID: opt.ModifierGroupID,
@@ -302,7 +247,6 @@ func (h *SetModifierOptionAvailabilityHandler) Handle(ctx context.Context, actor
 			Available:       opt.Available,
 		}
 
-		// 7. Audit event
 		audit := AuditRecord{
 			EventType: EventModifierOptionAvailabilityChanged,
 			Details: modifierOptionAvailabilityChangedAuditDetails{

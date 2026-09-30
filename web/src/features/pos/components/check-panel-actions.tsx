@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { CheckCircle2, ChefHat } from "lucide-react";
-import type { PosPhase } from "../utils/phase";
+import type { PosPhase } from "../lib/phase";
 
 export interface CheckPanelActionsProps {
   phase: PosPhase;

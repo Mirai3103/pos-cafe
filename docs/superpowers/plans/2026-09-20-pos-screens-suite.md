@@ -27,7 +27,7 @@
 **Files:**
 - Create: `design-system/pos-cafe/shared/pos-bus.js`
 - Modify: `design-system/pos-cafe/index.html`
-- Test: `tests/test-bus.js` or node verification script
+- Test: `design-system/pos-cafe/tests/test-bus.js` or node verification script
 
 **Interfaces:**
 - Produces: `window.POS_BUS` helper with `publish(event, payload)`, `subscribe(event, callback)`, `getOrders()`, `saveOrder(order)`, `getActiveShift()`, `saveActiveShift(shift)`.
@@ -200,7 +200,7 @@ Run automated checks.
 ### Task 8: Comprehensive End-to-End Integration Verification
 
 **Files:**
-- Test: `tests/e2e-suite-test.js`
+- Test: `design-system/pos-cafe/tests/e2e-suite-test.js`
 
 **Verification Criteria:**
 - Cross-tab ordering: Placing order on `index.html` immediately renders ticket on `kds.html` and adds row in `history.html`.

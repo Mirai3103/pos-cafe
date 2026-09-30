@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { ChangeTablesChoices, ChangeTablesDialog } from "./change-tables-dialog";
-import type { FloorTable } from "@/features/tables/lib/floor";
+import type { FloorTable } from "@/features/tables";
 
 const tables: FloorTable[] = [
   { id: "t1", name: "Bàn 1", available: true, occupants: [{ sessionId: "s1", serviceNumber: "012" }], state: "OCCUPIED" },

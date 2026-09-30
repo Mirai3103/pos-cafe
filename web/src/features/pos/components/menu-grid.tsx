@@ -5,7 +5,7 @@ import type {
   CatalogSellableItemResponse,
 } from "@/api/generated/models";
 import { MenuItemCard } from "./menu-item-card";
-import { filterSellableItems } from "../utils/search";
+import { filterSellableItems } from "../lib/search";
 import { playTapChirp } from "@/lib/sound";
 
 export interface MenuGridProps {

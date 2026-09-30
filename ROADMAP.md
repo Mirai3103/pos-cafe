@@ -4,7 +4,7 @@ Phases 0 through 6C are complete. The TypeScript-to-Go migration is **closed**
 (ADR-047): this repository has passed its source, and every phase from 07 onward is
 designed from [`CONTEXT.md`](CONTEXT.md) rather than ported from TypeScript code.
 
-Phase **08** is unblocked and is the next backend work to pick up. Phase **11**'s UI
+Phase **09** is unblocked and is the next backend work to pick up. Phase **11**'s UI
 half is now in design and is being delivered as nine reviewable slices; see
 [the slice sequence](docs/superpowers/specs/2026-09-21-web-frontend-slice-sequence-design.md).
 
@@ -20,7 +20,7 @@ half is now in design and is being delivered as nine reviewable slices; see
 | [`docs/backlog/`](docs/backlog/) | Work not yet designed. Superseded by a spec when its phase begins. |
 | [`docs/domain-rationale/`](docs/domain-rationale/) | Why `CONTEXT.md` says what it says. Historical reasoning, not authority. |
 | `ROADMAP.md` | This file. Current status. The only one updated as work lands. |
-| [`MIGRATE_PLAN.md`](MIGRATE_PLAN.md) | Historical record of the migration. Frozen. |
+| [`docs/history/MIGRATE_PLAN.md`](docs/history/MIGRATE_PLAN.md) | Historical record of the migration. Frozen. |
 
 When `CONTEXT.md` and an implementation disagree, `CONTEXT.md` states the intent and
 `spec/decisions.md` states why Go differs. An unrecorded divergence is a defect.
@@ -44,6 +44,7 @@ When `CONTEXT.md` and an implementation disagree, `CONTEXT.md` states the intent
 | **6B** | Alerts, Waste, Remake, priority, state correction | [spec](docs/superpowers/specs/2026-09-17-preparation-corrections-design.md) |
 | **6C** | Cancellation, Comp, Refund, Payment Void, Shift reconciliation terms | [spec](docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md) |
 | **07** | Close and reconcile a Sales Shift | [spec](docs/superpowers/specs/2026-09-18-shift-closure-reconciliation-design.md) |
+| **08** | Recover a failed or abandoned checkout | [spec](docs/superpowers/specs/2026-10-02-phase-08-checkout-recovery-design.md) |
 
 Supporting: [PostgreSQL template integration tests](docs/superpowers/specs/2026-09-15-postgres-template-integration-tests-design.md),
 [roadmap migration and closure](docs/superpowers/specs/2026-09-18-roadmap-migration-design.md).
@@ -71,7 +72,7 @@ Staff Identity's name, login code, and roles atomically (ADR-063). It records th
 missing staff Audit Events as backlog BA-6.
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
-`preparation`. Sixty-three architecture decisions are recorded.
+`preparation`. Sixty-six architecture decisions are recorded.
 
 ---
 
@@ -83,8 +84,7 @@ criteria live in the ticket, not here.
 
 | Phase | Scope | Blocked by | Ticket |
 | :--- | :--- | :--- | :--- |
-| **08** | Recover a failed or abandoned checkout | none | [ticket](docs/backlog/phase-08-recover-failed-or-abandoned-checkout.md) |
-| **09** | Post-Shift corrections and Audit history | 07, 08 | [ticket](docs/backlog/phase-09-post-shift-corrections-and-audit.md) |
+| **09** | Post-Shift corrections and Audit history | none | [ticket](docs/backlog/phase-09-post-shift-corrections-and-audit.md) |
 | **10** | Recover numbered-paper outage Sales | 09 | [ticket](docs/backlog/phase-10-recover-numbered-paper-outage-sales.md) |
 | **11** | Serve clients over LAN, single-binary packaging, frontend | none | [ticket](docs/backlog/phase-11-clients-over-lan-and-single-binary.md) |
 | **12** | Back up, restore, update, verify readiness | 10, 11 | [ticket](docs/backlog/phase-12-backup-restore-update-readiness.md) |

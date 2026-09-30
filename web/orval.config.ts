@@ -3,7 +3,7 @@ import { defineConfig } from "orval";
 export default defineConfig({
   posCafe: {
     input: {
-      target: "../docs/swagger.yaml",
+      target: "../api/openapi/swagger.yaml",
     },
     output: {
       mode: "tags-split",

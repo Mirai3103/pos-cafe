@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Coffee, Layers } from "lucide-react";
 import type { CatalogSellableItemResponse } from "@/api/generated/models";
-import { getStartingPrice } from "../utils/pricing";
+import { getStartingPrice } from "../lib/pricing";
 import { formatVND } from "@/lib/utils";
 import { playTapChirp } from "@/lib/sound";
 

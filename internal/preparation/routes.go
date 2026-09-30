@@ -4,7 +4,7 @@ import (
 	"database/sql"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/labstack/echo/v4"
 )
 
@@ -16,13 +16,13 @@ type Slices struct {
 	AdvanceUnit *AdvanceUnitHandler
 	BulkAdvance *BulkAdvanceHandler
 
-	// Phase 6B: Corrections & Recovery.
+	// Corrections & Recovery.
 	WasteUnit        *WasteUnitHandler
 	RemakeUnit       *RemakeUnitHandler
 	AcknowledgeAlert *AcknowledgeAlertHandler
 	CorrectState     *CorrectStateHandler
 
-	// Phase 6C: Cancellation & Change.
+	// Cancellation & Change.
 	CancelUnits *CancelUnitsHandler
 }
 
@@ -53,14 +53,14 @@ func (s *Slices) RegisterRoutes(v1 *echo.Group, authn *auth.Middleware) {
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
 	v1.POST("/preparation/units/advance-many", s.handleBulkAdvance,
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
-	// Phase 6C registers its static path before the parameterized unit routes,
+	// The static cancel path registers before the parameterized unit routes,
 	// so /units/cancel can never be read as a unit id.
 	v1.POST("/preparation/units/cancel", s.handleCancelUnits,
 		authn.RequireAuth(), authn.RequireCapability(CapSalesOperate))
 	v1.POST("/preparation/units/:unit_id/advance", s.handleAdvanceUnit,
 		authn.RequireAuth(), authn.RequireCapability(CapPreparationOperate))
 
-	// Phase 6B: Corrections & Recovery. Every mutation carries the same
+	// Corrections & Recovery. Every mutation carries the same
 	// capability middleware; State Correction's Manager role and PIN checks
 	// live inside the mutation transaction, not in a middleware-only gate.
 	v1.POST("/preparation/alerts/:alert_id/acknowledge", s.handleAcknowledgeAlert,

@@ -11,14 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/config"
-	_ "github.com/Mirai3103/pos-cafe/docs"
+	_ "github.com/Mirai3103/pos-cafe/api/openapi"
 	"github.com/Mirai3103/pos-cafe/internal/auth"
 	"github.com/Mirai3103/pos-cafe/internal/catalog"
-	"github.com/Mirai3103/pos-cafe/internal/database"
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
-	"github.com/Mirai3103/pos-cafe/internal/eventbus"
 	"github.com/Mirai3103/pos-cafe/internal/httpvalidator"
+	"github.com/Mirai3103/pos-cafe/internal/platform/config"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/preparation"
 	"github.com/Mirai3103/pos-cafe/internal/sales"
 	"github.com/Mirai3103/pos-cafe/internal/shift"
@@ -50,13 +49,13 @@ func main() {
 	defer stop()
 
 	// 3. Run application with graceful lifecycle handling
-	if err := run(ctx, logger); err != nil {
+	if err := run(ctx); err != nil {
 		slog.Error("application terminated unexpectedly", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, logger *slog.Logger) error {
+func run(ctx context.Context) error {
 	// 1. Load and validate configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -81,15 +80,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	// 3. Initialize Data Access Layer (sqlc)
 	queries := sqlc.New(db)
 
-	// 4. Initialize EventBus (Watermill In-Memory Pub/Sub)
-	bus := eventbus.New(logger)
-	defer func() {
-		if closeErr := bus.Close(); closeErr != nil {
-			slog.Error("failed to close eventbus", "error", closeErr)
-		}
-	}()
-
-	// 5. Setup Echo Web Server & HTTP Timeouts
+	// 4. Setup Echo Web Server & HTTP Timeouts
 	e := echo.New()
 	e.HideBanner = true
 	e.Validator = httpvalidator.New()
@@ -143,11 +134,14 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 		dbStatus := "up"
 		if pingErr := db.PingContext(pingCtx); pingErr != nil {
+			// The ping error can name the database host, user, and driver
+			// internals, so it is logged rather than returned on this
+			// unauthenticated endpoint.
+			slog.Error("health check database ping failed", "error", pingErr)
 			dbStatus = "down"
 			return c.JSON(http.StatusServiceUnavailable, map[string]any{
 				"status":   "unhealthy",
 				"database": dbStatus,
-				"error":    pingErr.Error(),
 				"time":     time.Now().UTC().Format(time.RFC3339),
 			})
 		}
@@ -169,9 +163,10 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	mediaStore.RegisterRoutes(e)
 
-	// 6. Register Vertical Slices
+	// 5. Register Vertical Slices
 	v1 := e.Group("/api/v1")
 	authSlices := auth.NewSlices(db, queries)
+	defer authSlices.Close()
 	authSlices.RegisterRoutes(v1)
 
 	catalogSlices := catalog.NewSlices(db, queries, mediaStore)
@@ -189,12 +184,12 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	preparationSlices := preparation.NewSlices(db, queries)
 	preparationSlices.RegisterRoutes(v1, authSlices.Middleware)
 
-	// 7. Register Embedded Web SPA & Static Assets
+	// 6. Register Embedded Web SPA & Static Assets
 	if err := web.RegisterHandlers(e); err != nil {
 		return fmt.Errorf("register web static handlers: %w", err)
 	}
 
-	// 8. Start Server with Graceful Shutdown error propagation
+	// 7. Start Server with Graceful Shutdown error propagation
 	serverErrChan := make(chan error, 1)
 	go func() {
 		addr := fmt.Sprintf(":%s", cfg.Port)

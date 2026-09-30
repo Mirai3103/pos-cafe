@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 )
 
@@ -66,8 +66,8 @@ func allocateServiceNumber(ctx context.Context, r *Runner, q *sqlc.Queries, shif
 }
 
 // insertSessionWithDraft creates a Service Session and its editable Order
-// Draft. Opening a Session always creates its draft, so the projection's draft
-// is never null in 5A.
+// Draft. Opening a Session always creates its draft, so a newly opened
+// Session's projected draft is never null.
 func insertSessionWithDraft(ctx context.Context, q *sqlc.Queries, actor Actor,
 	mode string, shiftID uuid.UUID, sequence int32, number string,
 ) (uuid.UUID, error) {

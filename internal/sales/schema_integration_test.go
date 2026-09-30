@@ -760,3 +760,42 @@ func TestSalesFinancialCorrectionsSchema(t *testing.T) {
 		require.NoError(t, err, "a reference of exactly 100 characters is accepted")
 	})
 }
+
+// TestCheckoutRecoverySchema pins migration 000017 (Phase 08, spec §6).
+func TestCheckoutRecoverySchema(t *testing.T) {
+	db, _ := openSalesTestDB(t)
+	ctx := context.Background()
+
+	def := func(name string) string {
+		var clause string
+		require.NoError(t, db.QueryRowContext(ctx, `
+			SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = $1`,
+			name).Scan(&clause))
+		return clause
+	}
+	assert.Contains(t, def("service_session_state_valid"), "ABANDONED")
+	assert.Contains(t, def("check_state_valid"), "ABANDONED")
+	assert.Contains(t, def("check_settlement_evidence_valid"), "ABANDONED")
+	assert.Contains(t, def("order_draft_state_valid"), "CANCELLED")
+	assert.Contains(t, def("charge_adjustment_kind_source_valid"), "WITHDRAWAL")
+
+	var nullable string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT is_nullable FROM information_schema.columns
+		WHERE table_name = 'charge_adjustments' AND column_name = 'preparation_unit_id'`).
+		Scan(&nullable))
+	assert.Equal(t, "YES", nullable)
+
+	var index string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT indexdef FROM pg_indexes
+		WHERE indexname = 'charge_adjustment_withdrawal_allocation_unique'`).Scan(&index))
+	assert.Contains(t, index, "charge_allocation_id")
+	assert.Contains(t, index, "WITHDRAWAL")
+
+	var table int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT count(*) FROM information_schema.tables
+		WHERE table_name = 'abandoned_checkouts'`).Scan(&table))
+	assert.Equal(t, 1, table)
+}

@@ -3171,7 +3171,7 @@ through the real Echo stack."
 
 **Files:**
 - Modify: `spec/decisions.md` (append after ADR-005)
-- Modify: `MIGRATE_PLAN.md` (Phase 3 status line and tracker row only)
+- Modify: `docs/history/MIGRATE_PLAN.md` (Phase 3 status line and tracker row only)
 - Modify: `docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml` (regenerated, do not hand-edit)
 
 **Interfaces:**
@@ -3191,7 +3191,7 @@ Append to `spec/decisions.md`:
 - **Quyết định:**
   - Migration `000006` của Phase 3 tạo luôn `service_sessions` và `table_assignments`, kèm `COMMENT ON TABLE` ghi rõ quyền sở hữu thuộc `internal/sales` (Phase 5).
   - `service_sessions` lược bỏ **duy nhất** cột `sales_shift_id` vì `sales_shifts` là bảng của Phase 4. Phase 5 bổ sung bằng `ALTER TABLE service_sessions ADD COLUMN sales_shift_id UUID NOT NULL REFERENCES sales_shifts(id)`.
-  - `internal/tables` **không** import `internal/sales`. Nó đọc occupancy qua query sqlc của riêng nó (`ListCurrentTableOccupants`), đúng nguyên tắc "dùng queries hoặc interface, đừng import struct" của MIGRATE_PLAN §4.1.
+  - `internal/tables` **không** import `internal/sales`. Nó đọc occupancy qua query sqlc của riêng nó (`ListCurrentTableOccupants`), đúng nguyên tắc "dùng queries hoặc interface, đừng import struct" của `docs/history/MIGRATE_PLAN.md` §4.1.
   - Phase 3 chỉ **đọc** hai bảng này, không ghi qua API. Test integration seed trực tiếp bằng SQL.
 - **Hệ quả:**
   - Contract công khai của Tables hoàn chỉnh và ổn định ngay từ Phase 3; frontend không phải chịu breaking change khi Phase 5 lên.
@@ -3216,7 +3216,7 @@ Append to `spec/decisions.md`:
 
 - [ ] **Step 2: Update the roadmap status only**
 
-In `MIGRATE_PLAN.md`, change the Phase 3 heading from:
+In `docs/history/MIGRATE_PLAN.md`, change the Phase 3 heading from:
 
 ```markdown
 ### Phase 3: Tables & Floor Layout (`internal/tables`)
@@ -3276,7 +3276,7 @@ If `make lint` flags the `internal/tables` package for duplicated helpers shared
 - [ ] **Step 6: Commit**
 
 ```bash
-git add spec/decisions.md MIGRATE_PLAN.md docs/
+git add spec/decisions.md docs/history/MIGRATE_PLAN.md docs/
 git commit -m "docs(tables): add ADR-006 and ADR-007, regenerate Swagger
 
 ADR-006 records early provisioning of the Sales schema for the overview

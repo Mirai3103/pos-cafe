@@ -868,7 +868,7 @@ Implementation records these accepted decisions in `spec/decisions.md`:
 - **ADR-045: Payment Void is whole, append-only, and open-original-Shift only.** It may reopen a Check but never edits the Payment; a closed Shift requires the deferred Post-Shift Payment Correction.
 - **ADR-046: Expected Cash uses valid Cash Payments less completed Cash Refunds.** Cash Payment Voids remove their source term, pending Refunds do not move money, and `internal/shift` derives all terms through its own SQL.
 
-These ADRs and Phase 6C completion status in `MIGRATE_PLAN.md` land with implementation and passing tests, not with this design document alone.
+These ADRs and Phase 6C completion status in `docs/history/MIGRATE_PLAN.md` land with implementation and passing tests, not with this design document alone.
 
 ---
 

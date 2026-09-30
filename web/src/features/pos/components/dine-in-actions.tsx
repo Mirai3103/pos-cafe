@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowLeft, Banknote, CheckCircle2, ChefHat } from "lucide-react";
-import { canCollect, planSendToBar, resolveDineInF9, type DineInStatus } from "../utils/dine-in";
+import { canCollect, planSendToBar, resolveDineInF9, type DineInStatus } from "../lib/dine-in";
 
 export interface DineInActionsProps {
   status: DineInStatus;

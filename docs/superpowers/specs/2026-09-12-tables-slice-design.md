@@ -13,7 +13,7 @@ This specification defines the Go implementation of the existing TypeScript Tabl
 
 When TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated.
 
-The Phase 3 section of `MIGRATE_PLAN.md` was written before the canonical source was examined and describes a different entity (`capacity`, `display_order`, `is_active`, no occupancy). That sketch is superseded by this specification. `MIGRATE_PLAN.md` remains a phase-status tracker and is not rewritten; this document is the design authority for Phase 3.
+The Phase 3 section of `docs/history/MIGRATE_PLAN.md` was written before the canonical source was examined and describes a different entity (`capacity`, `display_order`, `is_active`, no occupancy). That sketch is superseded by this specification. `docs/history/MIGRATE_PLAN.md` remains a phase-status tracker and is not rewritten; this document is the design authority for Phase 3.
 
 ### Goals
 
@@ -401,7 +401,7 @@ Integration packages run with `-p 1`.
 
 ## 12. Decision Record Updates
 
-`MIGRATE_PLAN.md` is a phase-status tracker, not a design document. This specification supersedes its Phase 3 sketch, but the roadmap file is not rewritten to match; only its Phase 3 status and tracker row are marked complete when the phase lands. Design detail lives here.
+`docs/history/MIGRATE_PLAN.md` is a phase-status tracker, not a design document. This specification supersedes its Phase 3 sketch, but the roadmap file is not rewritten to match; only its Phase 3 status and tracker row are marked complete when the phase lands. Design detail lives here.
 
 `spec/decisions.md`: two records are added.
 
@@ -424,4 +424,4 @@ Integration packages run with `-p 1`.
 10. Expected database constraint failures map to stable API errors, with no accidental generic 500 responses.
 11. Unit, PostgreSQL integration, HTTP, and concurrency tests pass. Existing Auth and Catalog suites remain passing.
 12. Swagger documentation reflects all four Tables operations.
-13. `spec/decisions.md` records ADR-006 and ADR-007. `MIGRATE_PLAN.md` has its Phase 3 status and tracker row marked complete, with no rewrite of its Phase 3 detail.
+13. `spec/decisions.md` records ADR-006 and ADR-007. `docs/history/MIGRATE_PLAN.md` has its Phase 3 status and tracker row marked complete, with no rewrite of its Phase 3 detail.

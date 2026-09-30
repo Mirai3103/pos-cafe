@@ -7,15 +7,16 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 )
 
 // correctStateFingerprint is the normalized, credential-free business input a
 // State Correction stands for. ManagerPIN is deliberately absent — a PIN must
 // never enter a fingerprint, so replays stay comparable without ever hashing
-// a secret (spec §7.5). The correction command builds it from the normalized
+// a secret. The correction command builds it from the normalized
 // command, preserving request order.
 type correctStateFingerprint struct {
 	PreparationUnitIDs []uuid.UUID `json:"preparation_unit_ids"`
@@ -52,6 +53,15 @@ func uuidSortedCopy(ids []uuid.UUID) []uuid.UUID {
 	return sorted
 }
 
+// nullString converts an optional, already-normalized note into its nullable
+// column value.
+func nullString(note *string) sql.NullString {
+	if note == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: *note, Valid: true}
+}
+
 // CorrectStateHandler reverses 1 through MaxCorrectionUnits Preparation Units
 // one step along the chain — IN_PREPARATION to QUEUED, READY to
 // IN_PREPARATION, FULFILLED to READY — as one all-or-nothing Manager command:
@@ -69,7 +79,7 @@ func NewCorrectStateHandler(runner *Runner) *CorrectStateHandler {
 //
 // The command is validated and its note normalized BEFORE the mutation
 // begins, so a malformed request never claims its idempotency key. The
-// executor's Manager self-PIN gate verifies the actor's own current PIN
+// pipeline's Manager self-PIN gate verifies the actor's own current PIN
 // inside the mutation transaction, before the fingerprint is hashed and
 // before any replay — this handler never re-verifies it and never lets it
 // reach the fingerprint, the stored result, a fact, an audit, or a log.
@@ -100,14 +110,14 @@ func (h *CorrectStateHandler) Handle(ctx context.Context, actor Actor,
 			}
 			// The per-unit business audits were written inside the mutation
 			// through writePreparationAudits, sharing the correction's
-			// timestamp, so the executor's single-audit step is deliberately
+			// timestamp, so the pipeline's single-audit step is deliberately
 			// given a zero record.
 			return http.StatusOK, response, AuditRecord{}, nil
 		})
 }
 
 // applyCorrection is the mutation body, ordered so each step's failure leaves
-// the transaction — claim included — to the executor's rollback. There are no
+// the transaction — claim included — to the pipeline's rollback. There are no
 // savepoints: one missing id, one stale state, or one closed Session rejects
 // the complete batch, because a half-reversed selection is exactly the
 // inconsistency the command exists to prevent.
@@ -125,7 +135,7 @@ func (h *CorrectStateHandler) Handle(ctx context.Context, actor Actor,
 //  7. for each unit in request order, set the corrected state, insert the
 //     reverse transition, insert the correction fact, and queue the audit;
 //  8. batch-write all audits through writePreparationAudits;
-//  9. return the outcomes in original request order, leaving the executor's
+//  9. return the outcomes in original request order, leaving the pipeline's
 //     AuditRecord at zero.
 func applyCorrection(ctx context.Context, q *sqlc.Queries, actor Actor,
 	cmd CorrectStateCommand, note *string,
@@ -141,74 +151,21 @@ func applyCorrection(ctx context.Context, q *sqlc.Queries, actor Actor,
 	// 1. The lock-free resolution runs on the mutation's own transaction: the
 	// reads take no row locks, so the batch rejects its missing ids before
 	// serializing on anything.
-	resolved, err := q.ListPreparationUnitsForCorrection(ctx, cmd.PreparationUnitIDs)
+	sessionIDs, err := resolveCorrectionSessions(ctx, q, cmd.PreparationUnitIDs)
 	if err != nil {
-		return CorrectStateResponse{}, fmt.Errorf("resolve preparation units for correction: %w", err)
-	}
-	byID := make(map[uuid.UUID]sqlc.ListPreparationUnitsForCorrectionRow, len(resolved))
-	for _, row := range resolved {
-		byID[row.ID] = row
-	}
-	for _, id := range cmd.PreparationUnitIDs {
-		if _, found := byID[id]; !found {
-			return CorrectStateResponse{}, fmt.Errorf("%w: %s", ErrUnitNotFound, id)
-		}
+		return CorrectStateResponse{}, err
 	}
 
-	// 2. Session-first locking in byte order, deduplicated so a batch spread
-	// over one Session still takes exactly one lock.
-	sessionIDs := make([]uuid.UUID, 0, len(resolved))
-	seenSessions := make(map[uuid.UUID]struct{}, len(resolved))
-	for _, row := range resolved {
-		if _, dup := seenSessions[row.ServiceSessionID]; dup {
-			continue
-		}
-		seenSessions[row.ServiceSessionID] = struct{}{}
-		sessionIDs = append(sessionIDs, row.ServiceSessionID)
+	// 2–3. Session-first locking, every owning Session still ACTIVE.
+	if err := lockCorrectionSessions(ctx, q, sessionIDs); err != nil {
+		return CorrectStateResponse{}, err
 	}
-	sessions, err := q.LockPreparationServiceSessions(ctx, uuidSortedCopy(sessionIDs))
+
+	// 4–5. The units lock in byte order after their Sessions and must each
+	// sit exactly one step ahead of the target.
+	currentState, err := lockCorrectionUnits(ctx, q, cmd, prior)
 	if err != nil {
-		return CorrectStateResponse{}, fmt.Errorf("lock preparation service sessions: %w", err)
-	}
-	if len(sessions) != len(sessionIDs) {
-		return CorrectStateResponse{}, fmt.Errorf(
-			"lock preparation service sessions: expected %d rows, got %d",
-			len(sessionIDs), len(sessions))
-	}
-
-	// 3. Every owning Session must still be ACTIVE: one closed Session
-	// refuses the whole batch before any unit is touched.
-	for _, session := range sessions {
-		if session.State != stateServiceSessionActive {
-			return CorrectStateResponse{}, fmt.Errorf("%w: %s is %s",
-				ErrServiceSessionClosed, session.ID, session.State)
-		}
-	}
-
-	// 4. The units lock in byte order after their Sessions.
-	locked, err := q.LockPreparationUnitsForCorrection(ctx, uuidSortedCopy(cmd.PreparationUnitIDs))
-	if err != nil {
-		return CorrectStateResponse{}, fmt.Errorf("lock preparation units for correction: %w", err)
-	}
-	if len(locked) != len(cmd.PreparationUnitIDs) {
-		return CorrectStateResponse{}, fmt.Errorf(
-			"lock preparation units for correction: expected %d rows, got %d",
-			len(cmd.PreparationUnitIDs), len(locked))
-	}
-	currentState := make(map[uuid.UUID]string, len(locked))
-	for _, row := range locked {
-		currentState[row.ID] = row.State
-	}
-
-	// 5. Every unit must sit exactly one step ahead of the target. This is
-	// the revalidation the whole design hangs on: whoever holds the locks
-	// last reads the winner's committed state and refuses.
-	for _, id := range cmd.PreparationUnitIDs {
-		if state := currentState[id]; state != prior {
-			return CorrectStateResponse{}, fmt.Errorf(
-				"%w: %s is %s, a correction to %s requires %s",
-				ErrInvalidTransition, id, state, cmd.TargetState, prior)
-		}
+		return CorrectStateResponse{}, err
 	}
 
 	// 6. One database clock reading, shared by every write below.
@@ -217,64 +174,23 @@ func applyCorrection(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return CorrectStateResponse{}, fmt.Errorf("read preparation occurrence time: %w", err)
 	}
 
-	var noteValue sql.NullString
-	if note != nil {
-		noteValue = sql.NullString{String: *note, Valid: true}
-	}
-
 	// 7. Per unit, in request order so the writes, the outcomes, and the
 	// audit batch all follow the selection the client sent.
 	outcomes := make([]CorrectStateOutcome, 0, len(cmd.PreparationUnitIDs))
 	audits := make([]AuditRecord, 0, len(cmd.PreparationUnitIDs))
+	noteValue := nullString(note)
 	for _, id := range cmd.PreparationUnitIDs {
-		// SetPreparationUnitCorrectedState clears in_preparation_at only
-		// when the target is QUEUED; the later targets keep the recorded
-		// preparation start.
-		if err := q.SetPreparationUnitCorrectedState(ctx, sqlc.SetPreparationUnitCorrectedStateParams{
-			ResultingState: cmd.TargetState,
-			ID:             id,
-		}); err != nil {
-			return CorrectStateResponse{}, fmt.Errorf("set preparation unit corrected state: %w", err)
-		}
-
-		if err := q.InsertPreparationUnitTransition(ctx, sqlc.InsertPreparationUnitTransitionParams{
-			PreparationUnitID:    id,
-			PriorState:           currentState[id],
-			ResultingState:       cmd.TargetState,
-			ActorStaffIdentityID: actor.StaffID,
-			StaffAccessSessionID: actor.SessionID,
-			OccurredAt:           occurredAt,
-		}); err != nil {
-			return CorrectStateResponse{}, fmt.Errorf("insert preparation unit transition: %w", err)
-		}
-
-		fact, err := q.InsertPreparationStateCorrection(ctx, sqlc.InsertPreparationStateCorrectionParams{
-			PreparationUnitID:    id,
-			PriorState:           currentState[id],
-			ResultingState:       cmd.TargetState,
-			Reason:               cmd.Reason,
-			Note:                 noteValue,
-			ActorStaffIdentityID: actor.StaffID,
-			StaffAccessSessionID: actor.SessionID,
-			OccurredAt:           occurredAt,
-		})
+		outcome, err := correctUnit(ctx, q, actor, cmd, id, currentState[id], noteValue, occurredAt)
 		if err != nil {
-			return CorrectStateResponse{}, fmt.Errorf("insert preparation state correction: %w", err)
+			return CorrectStateResponse{}, err
 		}
-
-		outcomes = append(outcomes, CorrectStateOutcome{
-			CorrectionID:      fact.ID,
-			PreparationUnitID: id,
-			PriorState:        currentState[id],
-			ResultingState:    cmd.TargetState,
-			CorrectedAt:       fact.OccurredAt,
-		})
+		outcomes = append(outcomes, outcome)
 		audits = append(audits, AuditRecord{
 			EventType: EventPreparationStateCorrected,
 			Details: map[string]any{
 				"preparation_unit_id": id,
-				"correction_id":       fact.ID,
-				"prior_state":         currentState[id],
+				"correction_id":       outcome.CorrectionID,
+				"prior_state":         outcome.PriorState,
 				"resulting_state":     cmd.TargetState,
 				"reason":              cmd.Reason,
 			},
@@ -287,7 +203,142 @@ func applyCorrection(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return CorrectStateResponse{}, err
 	}
 
-	// 9. The outcomes follow the original request order; the executor's own
+	// 9. The outcomes follow the original request order; the pipeline's own
 	// audit record stays at zero.
 	return CorrectStateResponse{Outcomes: outcomes}, nil
+}
+
+// resolveCorrectionSessions resolves every selected unit without a row lock,
+// rejects any id the query did not return, and returns the owning Sessions
+// deduplicated, so a batch spread over one Session still takes exactly one
+// lock.
+func resolveCorrectionSessions(ctx context.Context, q *sqlc.Queries,
+	ids []uuid.UUID,
+) ([]uuid.UUID, error) {
+	resolved, err := q.ListPreparationUnitsForCorrection(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("resolve preparation units for correction: %w", err)
+	}
+	byID := make(map[uuid.UUID]sqlc.ListPreparationUnitsForCorrectionRow, len(resolved))
+	for _, row := range resolved {
+		byID[row.ID] = row
+	}
+	for _, id := range ids {
+		if _, found := byID[id]; !found {
+			return nil, fmt.Errorf("%w: %s", ErrUnitNotFound, id)
+		}
+	}
+
+	sessionIDs := make([]uuid.UUID, 0, len(resolved))
+	seenSessions := make(map[uuid.UUID]struct{}, len(resolved))
+	for _, row := range resolved {
+		if _, dup := seenSessions[row.ServiceSessionID]; dup {
+			continue
+		}
+		seenSessions[row.ServiceSessionID] = struct{}{}
+		sessionIDs = append(sessionIDs, row.ServiceSessionID)
+	}
+	return sessionIDs, nil
+}
+
+// lockCorrectionSessions locks the owning Sessions in UUID byte order and
+// requires every one ACTIVE: one closed Session refuses the whole batch
+// before any unit is touched.
+func lockCorrectionSessions(ctx context.Context, q *sqlc.Queries, sessionIDs []uuid.UUID) error {
+	sessions, err := q.LockPreparationServiceSessions(ctx, uuidSortedCopy(sessionIDs))
+	if err != nil {
+		return fmt.Errorf("lock preparation service sessions: %w", err)
+	}
+	if len(sessions) != len(sessionIDs) {
+		return fmt.Errorf(
+			"lock preparation service sessions: expected %d rows, got %d",
+			len(sessionIDs), len(sessions))
+	}
+	for _, session := range sessions {
+		if session.State != stateServiceSessionActive {
+			return fmt.Errorf("%w: %s is %s",
+				ErrServiceSessionClosed, session.ID, session.State)
+		}
+	}
+	return nil
+}
+
+// lockCorrectionUnits locks the selected units in UUID byte order and returns
+// each one's current state, requiring every unit to sit exactly one step
+// ahead of the target. This is the revalidation the whole design hangs on:
+// whoever holds the locks last reads the winner's committed state and
+// refuses.
+func lockCorrectionUnits(ctx context.Context, q *sqlc.Queries,
+	cmd CorrectStateCommand, prior string,
+) (map[uuid.UUID]string, error) {
+	locked, err := q.LockPreparationUnitsForCorrection(ctx, uuidSortedCopy(cmd.PreparationUnitIDs))
+	if err != nil {
+		return nil, fmt.Errorf("lock preparation units for correction: %w", err)
+	}
+	if len(locked) != len(cmd.PreparationUnitIDs) {
+		return nil, fmt.Errorf(
+			"lock preparation units for correction: expected %d rows, got %d",
+			len(cmd.PreparationUnitIDs), len(locked))
+	}
+	currentState := make(map[uuid.UUID]string, len(locked))
+	for _, row := range locked {
+		currentState[row.ID] = row.State
+	}
+	for _, id := range cmd.PreparationUnitIDs {
+		if state := currentState[id]; state != prior {
+			return nil, fmt.Errorf(
+				"%w: %s is %s, a correction to %s requires %s",
+				ErrInvalidTransition, id, state, cmd.TargetState, prior)
+		}
+	}
+	return currentState, nil
+}
+
+// correctUnit reverses one unit to the target state: the corrected state, the
+// reverse transition, and the correction fact.
+func correctUnit(ctx context.Context, q *sqlc.Queries, actor Actor,
+	cmd CorrectStateCommand, id uuid.UUID, priorState string,
+	note sql.NullString, occurredAt time.Time,
+) (CorrectStateOutcome, error) {
+	// SetPreparationUnitCorrectedState clears in_preparation_at only when the
+	// target is QUEUED; the later targets keep the recorded preparation start.
+	if err := q.SetPreparationUnitCorrectedState(ctx, sqlc.SetPreparationUnitCorrectedStateParams{
+		ResultingState: cmd.TargetState,
+		ID:             id,
+	}); err != nil {
+		return CorrectStateOutcome{}, fmt.Errorf("set preparation unit corrected state: %w", err)
+	}
+
+	if err := q.InsertPreparationUnitTransition(ctx, sqlc.InsertPreparationUnitTransitionParams{
+		PreparationUnitID:    id,
+		PriorState:           priorState,
+		ResultingState:       cmd.TargetState,
+		ActorStaffIdentityID: actor.StaffID,
+		StaffAccessSessionID: actor.SessionID,
+		OccurredAt:           occurredAt,
+	}); err != nil {
+		return CorrectStateOutcome{}, fmt.Errorf("insert preparation unit transition: %w", err)
+	}
+
+	fact, err := q.InsertPreparationStateCorrection(ctx, sqlc.InsertPreparationStateCorrectionParams{
+		PreparationUnitID:    id,
+		PriorState:           priorState,
+		ResultingState:       cmd.TargetState,
+		Reason:               cmd.Reason,
+		Note:                 note,
+		ActorStaffIdentityID: actor.StaffID,
+		StaffAccessSessionID: actor.SessionID,
+		OccurredAt:           occurredAt,
+	})
+	if err != nil {
+		return CorrectStateOutcome{}, fmt.Errorf("insert preparation state correction: %w", err)
+	}
+
+	return CorrectStateOutcome{
+		CorrectionID:      fact.ID,
+		PreparationUnitID: id,
+		PriorState:        priorState,
+		ResultingState:    cmd.TargetState,
+		CorrectedAt:       fact.OccurredAt,
+	}, nil
 }

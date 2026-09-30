@@ -68,7 +68,7 @@ Every task's requirements implicitly include this section.
 | --- | --- |
 | `cmd/api/main.go` | Wire `sales.NewSlices(...).RegisterRoutes(v1, authSlices.Middleware)` |
 | `spec/decisions.md` | Append ADR-010, ADR-011, ADR-012 |
-| `MIGRATE_PLAN.md` | Add sub-phase spec links under Phase 5 |
+| `docs/history/MIGRATE_PLAN.md` | Add sub-phase spec links under Phase 5 |
 
 ---
 
@@ -6489,7 +6489,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `internal/sales/routes_test.go`, `internal/sales/sales_integration_test.go`
-- Modify: `spec/decisions.md`, `MIGRATE_PLAN.md`, `docs/` (regenerated)
+- Modify: `spec/decisions.md`, `docs/history/MIGRATE_PLAN.md`, `docs/` (regenerated)
 
 - [ ] **Step 1: Write the route registration test**
 
@@ -6607,7 +6607,7 @@ from section 14 of the spec and matching the formatting of ADR-008 and ADR-009.
 
 - [ ] **Step 6: Update the roadmap**
 
-In `MIGRATE_PLAN.md`, under the Phase 5 heading, add the sub-phase table and a
+In `docs/history/MIGRATE_PLAN.md`, under the Phase 5 heading, add the sub-phase table and a
 link to this spec and plan, matching how Phases 2, 3, and 4 record theirs. Add
 the note that the Phase 5 checklist below it predates the canonical source
 review and is superseded.
@@ -6619,7 +6619,7 @@ complete: that happens when 5D lands.
 
 ```bash
 make fmt
-git add internal/sales/ spec/decisions.md MIGRATE_PLAN.md docs/
+git add internal/sales/ spec/decisions.md docs/history/MIGRATE_PLAN.md docs/
 git commit -m "feat(sales): complete Phase 5A with HTTP suite and decision records
 
 Adds route registration and end-to-end HTTP coverage, records ADR-010

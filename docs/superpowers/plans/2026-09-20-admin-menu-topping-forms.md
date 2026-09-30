@@ -23,7 +23,7 @@
 
 **Files:**
 - Modify: `design-system/pos-cafe/shared/pos-bus.js`
-- Test: `tests/pos-bus-catalog.test.js`
+- Test: `design-system/pos-cafe/tests/pos-bus-catalog.test.js`
 
 **Interfaces:**
 - Consumes: Existing `readStorage()`, `writeStorage()`, `publish()` from `pos-bus.js`.
@@ -41,7 +41,7 @@
 
 - [ ] **Step 1: Write the test verifying catalog bus CRUD and batch assignment**
 
-Create `tests/pos-bus-catalog.test.js`:
+Create `design-system/pos-cafe/tests/pos-bus-catalog.test.js`:
 ```javascript
 const assert = require('assert');
 const fs = require('fs');
@@ -105,7 +105,7 @@ console.log('All Catalog Bus tests passed successfully!');
 
 - [ ] **Step 2: Run test to verify it fails before implementation**
 
-Run: `node tests/pos-bus-catalog.test.js`  
+Run: `node design-system/pos-cafe/tests/pos-bus-catalog.test.js`  
 Expected: FAIL with `bus.getCatalogData is not a function`
 
 - [ ] **Step 3: Implement catalog methods in `pos-bus.js`**
@@ -123,13 +123,13 @@ Add `STORAGE_KEYS.CATALOG_DATA = 'POS_CATALOG_DATA'`, define `DEFAULT_CATALOG_DA
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node tests/pos-bus-catalog.test.js`  
+Run: `node design-system/pos-cafe/tests/pos-bus-catalog.test.js`  
 Expected: `All Catalog Bus tests passed successfully!`
 
 - [ ] **Step 5: Commit changes**
 
 ```bash
-git add design-system/pos-cafe/shared/pos-bus.js tests/pos-bus-catalog.test.js
+git add design-system/pos-cafe/shared/pos-bus.js design-system/pos-cafe/tests/pos-bus-catalog.test.js
 git commit -m "feat(catalog): add catalog data layer and cross-tab bus methods"
 ```
 
@@ -375,7 +375,7 @@ git commit -m "feat(catalog): implement 3-column interactive batch linker matrix
 **Files:**
 - Modify: `design-system/pos-cafe/index.html`
 - Modify: `design-system/pos-cafe/pages/settings.html` (keyboard shortcuts binding)
-- Test: `tests/e2e-catalog-sync.test.js`
+- Test: `design-system/pos-cafe/tests/e2e-catalog-sync.test.js`
 
 **Interfaces:**
 - Consumes: `POS_BUS.getCatalogData()`, `POS_BUS.subscribe('CATALOG_ITEMS_UPDATED')`.
@@ -383,7 +383,7 @@ git commit -m "feat(catalog): implement 3-column interactive batch linker matrix
 
 - [ ] **Step 1: Write E2E test script for catalog sync**
 
-Create `tests/e2e-catalog-sync.test.js`:
+Create `design-system/pos-cafe/tests/e2e-catalog-sync.test.js`:
 ```javascript
 const assert = require('assert');
 const path = require('path');
@@ -450,7 +450,7 @@ In `index.html`:
 
 - [ ] **Step 3: Run E2E test script**
 
-Run: `node tests/e2e-catalog-sync.test.js`  
+Run: `node design-system/pos-cafe/tests/e2e-catalog-sync.test.js`  
 Expected: `✓ E2E Test Passed: Complete catalog lifecycle verified`
 
 - [ ] **Step 4: Bind keyboard shortcuts in `settings.html`**
@@ -462,6 +462,6 @@ Expected: `✓ E2E Test Passed: Complete catalog lifecycle verified`
 - [ ] **Step 5: Commit changes**
 
 ```bash
-git add design-system/pos-cafe/index.html design-system/pos-cafe/pages/settings.html tests/e2e-catalog-sync.test.js
+git add design-system/pos-cafe/index.html design-system/pos-cafe/pages/settings.html design-system/pos-cafe/tests/e2e-catalog-sync.test.js
 git commit -m "feat(pos): integrate dynamic catalog sync between admin settings and cashier terminal"
 ```

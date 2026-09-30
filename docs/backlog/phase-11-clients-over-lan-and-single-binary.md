@@ -3,7 +3,7 @@
 **Status:** ready-for-design
 **Blocked by:** none
 **Source:** cafe-pos `.scratch/opening-day-pos-v0/issues/16-serve-supported-clients-over-lan.md`,
-combined with `MIGRATE_PLAN.md` Phase 7
+combined with `docs/history/MIGRATE_PLAN.md` Phase 7
 
 **What to build:** Package and expose the working Core POS as one authoritative local
 service that the cashier station, Preparation Queue display, and staff phones can
@@ -16,7 +16,7 @@ the UI for now" does not become "lose the UI requirements."
 ## Why two tickets became one
 
 The source ticket describes LAN binding, health, the Local Access QR, and a
-production smoke test. `MIGRATE_PLAN.md` Phase 7 describes OpenAPI client
+production smoke test. `docs/history/MIGRATE_PLAN.md` Phase 7 describes OpenAPI client
 generation, static asset embedding, and hardware verification. Both describe the same
 deliverable: one authoritative local service the cafe's clients can reach. Splitting
 them would put one phase in two trackers.
@@ -82,7 +82,7 @@ last API-changing phase.
 ## Design notes carried from the source
 
 The memory and startup budgets are the migration's original justification, restated
-here so they are measured rather than assumed. `MIGRATE_PLAN.md` states the boot
+here so they are measured rather than assumed. `docs/history/MIGRATE_PLAN.md` states the boot
 target twice and inconsistently — under 20 ms in its header goal, under 50 ms in its
 Phase 7 checklist. The looser figure is used above; the specification for this phase
 should settle on one and say which artifact it measures, since a binary serving
