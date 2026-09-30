@@ -143,11 +143,14 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 		dbStatus := "up"
 		if pingErr := db.PingContext(pingCtx); pingErr != nil {
+			// The ping error can name the database host, user, and driver
+			// internals, so it is logged rather than returned on this
+			// unauthenticated endpoint.
+			slog.Error("health check database ping failed", "error", pingErr)
 			dbStatus = "down"
 			return c.JSON(http.StatusServiceUnavailable, map[string]any{
 				"status":   "unhealthy",
 				"database": dbStatus,
-				"error":    pingErr.Error(),
 				"time":     time.Now().UTC().Format(time.RFC3339),
 			})
 		}

@@ -7,52 +7,9 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
-	"time"
 
 	"github.com/google/uuid"
 )
-
-const claimIdempotencyRecord = `-- name: ClaimIdempotencyRecord :one
-INSERT INTO idempotency_keys (key, actor_id, action, request_hash, response_code, response_body)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (actor_id, key) DO UPDATE
-    SET response_code = idempotency_keys.response_code,
-        response_body = idempotency_keys.response_body
-RETURNING key, actor_id, action, request_hash, response_code, response_body, created_at
-`
-
-type ClaimIdempotencyRecordParams struct {
-	Key          uuid.UUID       `json:"key"`
-	ActorID      uuid.UUID       `json:"actor_id"`
-	Action       string          `json:"action"`
-	RequestHash  string          `json:"request_hash"`
-	ResponseCode int32           `json:"response_code"`
-	ResponseBody json.RawMessage `json:"response_body"`
-}
-
-func (q *Queries) ClaimIdempotencyRecord(ctx context.Context, arg ClaimIdempotencyRecordParams) (IdempotencyKey, error) {
-	row := q.db.QueryRowContext(ctx, claimIdempotencyRecord,
-		arg.Key,
-		arg.ActorID,
-		arg.Action,
-		arg.RequestHash,
-		arg.ResponseCode,
-		arg.ResponseBody,
-	)
-	var i IdempotencyKey
-	err := row.Scan(
-		&i.Key,
-		&i.ActorID,
-		&i.Action,
-		&i.RequestHash,
-		&i.ResponseCode,
-		&i.ResponseBody,
-		&i.CreatedAt,
-	)
-	return i, err
-}
 
 const createTable = `-- name: CreateTable :one
 
@@ -81,35 +38,6 @@ func (q *Queries) CreateTable(ctx context.Context, arg CreateTableParams) (Table
 	return i, err
 }
 
-const getIdempotencyRecord = `-- name: GetIdempotencyRecord :one
-
-SELECT key, actor_id, action, request_hash, response_code, response_body, created_at
-FROM idempotency_keys
-WHERE actor_id = $1 AND key = $2
-LIMIT 1
-`
-
-type GetIdempotencyRecordParams struct {
-	ActorID uuid.UUID `json:"actor_id"`
-	Key     uuid.UUID `json:"key"`
-}
-
-// -- Shared idempotency (ADR-005) --
-func (q *Queries) GetIdempotencyRecord(ctx context.Context, arg GetIdempotencyRecordParams) (IdempotencyKey, error) {
-	row := q.db.QueryRowContext(ctx, getIdempotencyRecord, arg.ActorID, arg.Key)
-	var i IdempotencyKey
-	err := row.Scan(
-		&i.Key,
-		&i.ActorID,
-		&i.Action,
-		&i.RequestHash,
-		&i.ResponseCode,
-		&i.ResponseBody,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getTableForUpdate = `-- name: GetTableForUpdate :one
 SELECT id, name, normalized_name, available, created_at, updated_at
 FROM tables
@@ -129,81 +57,6 @@ func (q *Queries) GetTableForUpdate(ctx context.Context, id uuid.UUID) (Table, e
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getTablesSessionAuthority = `-- name: GetTablesSessionAuthority :one
-
-SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
-       s.last_human_activity_at, s.expires_at, s.revoked_at,
-       i.enabled AS identity_enabled, i.pin_hash
-FROM staff_access_sessions s
-JOIN staff_identities i ON i.id = s.staff_identity_id
-WHERE s.id = $1 AND s.staff_identity_id = $2
-`
-
-type GetTablesSessionAuthorityParams struct {
-	ID              uuid.UUID `json:"id"`
-	StaffIdentityID uuid.UUID `json:"staff_identity_id"`
-}
-
-type GetTablesSessionAuthorityRow struct {
-	SessionID           uuid.UUID      `json:"session_id"`
-	StaffIdentityID     uuid.UUID      `json:"staff_identity_id"`
-	State               string         `json:"state"`
-	ActiveWorkspace     sql.NullString `json:"active_workspace"`
-	LastHumanActivityAt time.Time      `json:"last_human_activity_at"`
-	ExpiresAt           time.Time      `json:"expires_at"`
-	RevokedAt           sql.NullTime   `json:"revoked_at"`
-	IdentityEnabled     bool           `json:"identity_enabled"`
-	PinHash             string         `json:"pin_hash"`
-}
-
-// -- Authority --
-func (q *Queries) GetTablesSessionAuthority(ctx context.Context, arg GetTablesSessionAuthorityParams) (GetTablesSessionAuthorityRow, error) {
-	row := q.db.QueryRowContext(ctx, getTablesSessionAuthority, arg.ID, arg.StaffIdentityID)
-	var i GetTablesSessionAuthorityRow
-	err := row.Scan(
-		&i.SessionID,
-		&i.StaffIdentityID,
-		&i.State,
-		&i.ActiveWorkspace,
-		&i.LastHumanActivityAt,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.IdentityEnabled,
-		&i.PinHash,
-	)
-	return i, err
-}
-
-const getTablesSessionRoles = `-- name: GetTablesSessionRoles :many
-SELECT role
-FROM staff_operational_roles
-WHERE staff_identity_id = $1
-ORDER BY role ASC
-`
-
-func (q *Queries) GetTablesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getTablesSessionRoles, staffIdentityID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var role string
-		if err := rows.Scan(&role); err != nil {
-			return nil, err
-		}
-		items = append(items, role)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listCurrentTableOccupants = `-- name: ListCurrentTableOccupants :many
@@ -332,36 +185,4 @@ func (q *Queries) SetTableAvailability(ctx context.Context, arg SetTableAvailabi
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const storeIdempotencyResult = `-- name: StoreIdempotencyResult :exec
-UPDATE idempotency_keys
-SET response_code = $3, response_body = $4
-WHERE actor_id = $1 AND key = $2
-`
-
-type StoreIdempotencyResultParams struct {
-	ActorID      uuid.UUID       `json:"actor_id"`
-	Key          uuid.UUID       `json:"key"`
-	ResponseCode int32           `json:"response_code"`
-	ResponseBody json.RawMessage `json:"response_body"`
-}
-
-func (q *Queries) StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error {
-	_, err := q.db.ExecContext(ctx, storeIdempotencyResult,
-		arg.ActorID,
-		arg.Key,
-		arg.ResponseCode,
-		arg.ResponseBody,
-	)
-	return err
-}
-
-const tablesAdvisoryLock = `-- name: TablesAdvisoryLock :exec
-SELECT pg_advisory_xact_lock($1)
-`
-
-func (q *Queries) TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error {
-	_, err := q.db.ExecContext(ctx, tablesAdvisoryLock, pgAdvisoryXactLock)
-	return err
 }

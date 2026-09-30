@@ -16,6 +16,7 @@ type Querier interface {
 	// constraint rejects any partial write.
 	AcknowledgePreparationAlert(ctx context.Context, arg AcknowledgePreparationAlertParams) (AcknowledgePreparationAlertRow, error)
 	AddStaffRole(ctx context.Context, arg AddStaffRoleParams) error
+	AdvisoryXactLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	// -- Advisory Lock --
 	CatalogAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogRequestParams) (CatalogMutationRequest, error)
@@ -190,7 +191,14 @@ type Querier interface {
 	GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetSalesShiftStateByID(ctx context.Context, id uuid.UUID) (string, error)
 	GetServiceSession(ctx context.Context, id uuid.UUID) (GetServiceSessionRow, error)
+	// Queries shared by every vertical slice through internal/platform/command.
+	// -- Authority --
+	// Reloads a staff access session and its identity inside the command
+	// transaction. The identity's PIN hash is deliberately not selected: gates that
+	// verify a PIN load and lock the identity row themselves.
+	GetSessionAuthority(ctx context.Context, arg GetSessionAuthorityParams) (GetSessionAuthorityRow, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
+	GetSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	// -- Phase 6C: Payment Void, Refund & correction reconciliation --
 	// Every Phase 6C reconciliation term for one Shift in one read (ADR-046).
 	// Cash and Manual QR Payment terms count original applied amounts; a Payment
@@ -230,9 +238,6 @@ type Querier interface {
 	GetStaffRolesForUpdate(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetStaffSummary(ctx context.Context, id uuid.UUID) (GetStaffSummaryRow, error)
 	GetTableForUpdate(ctx context.Context, id uuid.UUID) (Table, error)
-	// -- Authority --
-	GetTablesSessionAuthority(ctx context.Context, arg GetTablesSessionAuthorityParams) (GetTablesSessionAuthorityRow, error)
-	GetTablesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
 	// Batches a per-entry audit-insert loop into one round trip for callers
 	// (Sales table-assignment audits) that write several events of the same type,
@@ -815,7 +820,6 @@ type Querier interface {
 	// bounds quantity to 1..9999, and PostgreSQL would raise rather than wrap.
 	SumCheckAllocatedCharge(ctx context.Context, checkID uuid.UUID) (int64, error)
 	SumCheckPayments(ctx context.Context, checkID uuid.UUID) (int64, error)
-	TablesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	TransitionSalesShiftToClosed(ctx context.Context, id uuid.UUID) error
 	// The caller locks the Shift with LockSalesShiftForReconciliation and verifies
 	// the OPEN state first, so no guard is repeated here.

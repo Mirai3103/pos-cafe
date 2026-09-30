@@ -46,6 +46,50 @@ func (e *CodedError) Unwrap() error {
 	return e.Cause
 }
 
+// ErrorSpec is the client-facing shape of a mapped error. An empty Message
+// sends the error's own text; set one whenever that text may carry internal
+// detail (database constraint values, stored payloads) a client must not see.
+type ErrorSpec struct {
+	Status  int
+	Code    string
+	Message string
+}
+
+// ErrorRule maps every error matching Target (by errors.Is) to Spec.
+type ErrorRule struct {
+	Target error
+	Spec   ErrorSpec
+}
+
+// ErrorMapper declares a slice's HTTP error mapping as data. Rules are tried
+// in order and the first match wins, so a more specific sentinel must precede
+// any sentinel it also wraps.
+type ErrorMapper []ErrorRule
+
+// Map converts err into a *CodedError using the first matching rule. A nil
+// error, an error already carrying a *CodedError, and an error no rule
+// matches are returned unchanged, the last falling through to Error's shared
+// sentinel handling.
+func (m ErrorMapper) Map(err error) error {
+	if err == nil {
+		return nil
+	}
+	var coded *CodedError
+	if errors.As(err, &coded) {
+		return err
+	}
+	for _, rule := range m {
+		if errors.Is(err, rule.Target) {
+			message := rule.Spec.Message
+			if message == "" {
+				message = err.Error()
+			}
+			return NewCodedError(rule.Spec.Status, rule.Spec.Code, message, err)
+		}
+	}
+	return err
+}
+
 type APIResponse struct {
 	Success bool      `json:"success"`
 	Data    any       `json:"data,omitempty"`

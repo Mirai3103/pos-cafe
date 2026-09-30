@@ -202,3 +202,60 @@ func TestCodedErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestErrorMapper(t *testing.T) {
+	t.Parallel()
+	errMissing := errors.New("thing not found")
+	errLeaky := errors.New("thing conflict")
+	mapper := response.ErrorMapper{
+		{Target: errMissing, Spec: response.ErrorSpec{Status: http.StatusNotFound, Code: "THING_NOT_FOUND"}},
+		{Target: errLeaky, Spec: response.ErrorSpec{
+			Status: http.StatusConflict, Code: "THING_CONFLICT", Message: "thing conflict",
+		}},
+		{Target: response.ErrInvalid, Spec: response.ErrorSpec{Status: http.StatusBadRequest, Code: "INVALID_INPUT"}},
+	}
+
+	t.Run("nil stays nil", func(t *testing.T) {
+		t.Parallel()
+		require.NoError(t, mapper.Map(nil))
+	})
+
+	t.Run("empty message sends the error text", func(t *testing.T) {
+		t.Parallel()
+		in := fmt.Errorf("%w: id 42", errMissing)
+		var coded *response.CodedError
+		require.ErrorAs(t, mapper.Map(in), &coded)
+		assert.Equal(t, http.StatusNotFound, coded.Status)
+		assert.Equal(t, "THING_NOT_FOUND", coded.Code)
+		assert.Equal(t, "thing not found: id 42", coded.Message)
+		assert.ErrorIs(t, coded, errMissing, "the cause stays reachable")
+	})
+
+	t.Run("fixed message hides the wrapped detail", func(t *testing.T) {
+		t.Parallel()
+		detail := "Key (name)=(x) already exists."
+		var coded *response.CodedError
+		require.ErrorAs(t, mapper.Map(fmt.Errorf("%w: %s", errLeaky, detail)), &coded)
+		assert.Equal(t, "thing conflict", coded.Message)
+	})
+
+	t.Run("first matching rule wins", func(t *testing.T) {
+		t.Parallel()
+		both := fmt.Errorf("%w: %w", errLeaky, errMissing)
+		var coded *response.CodedError
+		require.ErrorAs(t, mapper.Map(both), &coded)
+		assert.Equal(t, "THING_NOT_FOUND", coded.Code)
+	})
+
+	t.Run("coded errors pass through", func(t *testing.T) {
+		t.Parallel()
+		in := response.NewCodedError(http.StatusTeapot, "TEAPOT", "short and stout", errMissing)
+		assert.Same(t, in, mapper.Map(in))
+	})
+
+	t.Run("unmatched errors pass through", func(t *testing.T) {
+		t.Parallel()
+		in := errors.New("boom")
+		assert.Same(t, in, mapper.Map(in))
+	})
+}
