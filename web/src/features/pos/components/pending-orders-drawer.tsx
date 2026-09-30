@@ -1,6 +1,6 @@
 import { ClipboardList, RefreshCw, AlertCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import type { PendingOrder } from "../utils/pending-orders";
+import type { PendingOrder } from "../lib/pending-orders";
 import { PendingOrderRow } from "./pending-order-row";
 
 export interface PendingOrdersButtonProps {

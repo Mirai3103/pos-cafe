@@ -1,10 +1,10 @@
-import type { PosPhase } from "../utils/phase";
+import type { PosPhase } from "../lib/phase";
 import {
   PENDING_PHASE_LABELS,
   formatAge,
   minutesSince,
   type PendingOrder,
-} from "../utils/pending-orders";
+} from "../lib/pending-orders";
 import { formatVND } from "@/lib/utils";
 
 const CHIP_TONES: Record<PosPhase, string> = {

@@ -12,9 +12,9 @@ import {
   usePayCash,
   useSubmitOrder,
 } from "./use-checkout";
-import { canCollect, planSendToBar, type DineInStatus } from "../utils/dine-in";
-import { findCheckById } from "../utils/phase";
-import { latestPaymentChangeDue } from "../utils/payment";
+import { canCollect, planSendToBar, type DineInStatus } from "../lib/dine-in";
+import { findCheckById } from "../lib/phase";
+import { latestPaymentChangeDue } from "../lib/payment";
 
 export function classifySendFailure(err: unknown): "draft" | "done" | "retry" {
   if (err instanceof ApiError && COMMIT_FAILURE_CODES.has(err.code)) return "draft";

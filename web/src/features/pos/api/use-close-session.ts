@@ -10,7 +10,7 @@ import { newRequestId } from "@/lib/command";
 import { messageForError } from "@/lib/error-messages";
 import { playSuccessChirp, playErrorBuzz } from "@/lib/sound";
 import { useCompletedSale } from "./use-pos";
-import { derivePosPhase } from "../utils/phase";
+import { derivePosPhase } from "../lib/phase";
 import type {
   SalesCompletedSaleResponse,
   SalesServiceSessionResponse,

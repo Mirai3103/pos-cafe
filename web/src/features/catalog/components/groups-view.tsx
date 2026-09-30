@@ -1,7 +1,7 @@
 // web/src/features/catalog/components/groups-view.tsx
 import { useRef, useState, type ReactElement } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import type { StockToastMessage } from "@/features/settings/components/stock-toast";
+import type { StockToastMessage } from "@/components/feedback/stock-toast";
 import { formatVND } from "@/lib/utils";
 import { useRetireEntity } from "../api/use-catalog-admin";
 import { currentAssignment, ruleLabel, type CatalogModel, type CatGroup } from "../lib/catalog-model";

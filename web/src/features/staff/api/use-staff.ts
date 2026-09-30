@@ -9,7 +9,7 @@ import {
   useGetStaff,
 } from "@/api/generated/endpoints/staff/staff";
 import type { GetStaff200 } from "@/api/generated/models";
-import { fetchSessionState } from "@/features/auth/api/use-auth";
+import { fetchSessionState } from "@/features/auth";
 import { newRequestId } from "@/lib/command";
 import { playErrorBuzz, playSuccessChirp } from "@/lib/sound";
 import { ApiError, unwrap, unwrapNullable } from "@/lib/unwrap";

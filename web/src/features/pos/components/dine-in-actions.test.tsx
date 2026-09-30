@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { DineInActions } from "./dine-in-actions";
-import type { DineInStatus } from "../utils/dine-in";
+import type { DineInStatus } from "../lib/dine-in";
 
 const idle: DineInStatus = {
   draftItemCount: 0,

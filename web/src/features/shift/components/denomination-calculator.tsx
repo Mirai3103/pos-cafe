@@ -3,7 +3,7 @@ import {
   VND_DENOMINATIONS,
   type DenominationCounts,
   formatDenomination,
-} from "@/features/shift/utils/denomination";
+} from "@/features/shift/lib/denomination";
 import { formatVND } from "@/lib/utils";
 import { playClick } from "@/lib/sound";
 

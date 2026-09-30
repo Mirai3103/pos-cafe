@@ -9,7 +9,7 @@ import {
   completedSalePayments,
   summarizePreparation,
   formatCompletedAt,
-} from "../utils/completed-sale";
+} from "../lib/completed-sale";
 
 export interface CompletedSaleDialogProps {
   sale: SalesCompletedSaleResponse | null;

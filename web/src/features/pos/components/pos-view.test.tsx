@@ -59,7 +59,7 @@ let mockSessionState: {
   refetch: () => {},
 };
 
-mock.module("@/features/shift/api/use-shift", () => ({
+mock.module("@/features/shift", () => ({
   useCurrentShift: () => mockShiftState,
 }));
 
@@ -102,23 +102,12 @@ mock.module("../api/use-pos", () => ({
   }),
 }));
 
+// Stub only the hook PosView drives checkout through. Bun's mock.module
+// overrides the named exports for the whole test process, so the module's
+// other exports (the mutation hooks, COMMIT_FAILURE_CODES, ...) must stay real:
+// use-checkout.test.ts and use-dine-in.test.ts assert on them, and
+// useDineInFlow (unmocked inside PosView) builds on them.
 mock.module("../api/use-checkout", () => ({
-  useCommitDraft: () => ({
-    commitDraft: async () => ({}),
-  }),
-  usePayCash: () => ({
-    payCash: async () => ({}),
-  }),
-  // useDineInFlow (Task 7) imports these alongside the checkout hooks above,
-  // and runs unmocked inside PosView, so this module's mock must cover its
-  // full shape too, not just what useCheckoutFlow needs.
-  useSubmitOrder: () => ({
-    submitOrder: async () => ({}),
-  }),
-  SUBMIT_ALREADY_DONE_CODES: new Set(["NOTHING_TO_SUBMIT"]),
-  COMMIT_FAILURE_CODES: new Set(["EMPTY_DRAFT"]),
-  // PosView drives checkout through this hook, so stubbing it is what keeps
-  // the render tests off the real mutation hooks.
   useCheckoutFlow: () => ({
     isPaymentOpen: false,
     isPaying: false,
@@ -145,7 +134,7 @@ mock.module("../api/use-close-session", () => ({
 }));
 
 import { PosView } from "./pos-view";
-import { matchesDraftItemConfig } from "../utils/selection";
+import { matchesDraftItemConfig } from "../lib/selection";
 
 function renderPosView() {
   return renderToString(

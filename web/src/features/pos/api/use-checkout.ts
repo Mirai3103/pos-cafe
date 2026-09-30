@@ -18,8 +18,8 @@ import {
   hasUnsubmittedWork,
   type PosPhase,
   type SubmitStatus,
-} from "../utils/phase";
-import { latestPaymentChangeDue } from "../utils/payment";
+} from "../lib/phase";
+import { latestPaymentChangeDue } from "../lib/payment";
 import type {
   SalesPayCashCommand,
   SalesServiceSessionResponse,

@@ -4,9 +4,9 @@ import { formatVND } from "@/lib/utils";
 import { DraftItemRow } from "./draft-item-row";
 import { DineInHeader } from "./dine-in-header";
 import { DineInActions } from "./dine-in-actions";
-import { listLiveChecks } from "../utils/phase";
-import { calculateDraftSubtotal } from "../utils/pricing";
-import type { DineInStatus } from "../utils/dine-in";
+import { listLiveChecks } from "../lib/phase";
+import { calculateDraftSubtotal } from "../lib/pricing";
+import type { DineInStatus } from "../lib/dine-in";
 
 export interface DineInPanelProps {
   session: SalesServiceSessionResponse;

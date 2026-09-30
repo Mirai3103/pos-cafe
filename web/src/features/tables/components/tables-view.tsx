@@ -11,8 +11,8 @@ import {
   Table2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useCurrentShift } from "@/features/shift/api/use-shift";
-import { selectPosSession } from "@/features/pos/api/use-pos-session";
+import { useCurrentShift } from "@/features/shift";
+import { selectPosSession } from "@/features/pos";
 import { useSessionStore } from "@/stores/use-session-store";
 import { newRequestId } from "@/lib/command";
 import { messageForError } from "@/lib/error-messages";

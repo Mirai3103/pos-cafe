@@ -7,8 +7,8 @@ import {
   isPostPaymentPhase,
   preparationProgress,
   type PosPhase,
-} from "../utils/phase";
-import { latestPaymentChangeDue } from "../utils/payment";
+} from "../lib/phase";
+import { latestPaymentChangeDue } from "../lib/payment";
 import { formatVND } from "@/lib/utils";
 import { CheckPanelActions } from "./check-panel-actions";
 

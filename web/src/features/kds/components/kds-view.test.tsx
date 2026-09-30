@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server";
 import type { PreparationQueueResponse } from "@/api/generated/models";
 
@@ -14,23 +15,23 @@ const queueResult: {
   refetch: () => {},
 };
 
-const actionsResult = {
-  isPending: false,
-  advanceUnit: async () => ({}),
-  advanceMany: async () => [],
-  wasteUnit: async () => ({}),
-  remakeWaste: async () => ({}),
-  correctState: async () => [],
-  acknowledgeAlert: async () => ({}),
-};
-
 mock.module("../api/use-preparation-queue", () => ({
   usePreparationQueue: () => queueResult,
 }));
 
-mock.module("../api/use-preparation-actions", () => ({
-  usePreparationActions: () => actionsResult,
-}));
+// usePreparationActions is deliberately NOT mocked: Bun's mock.module replaces
+// the export for the whole test process, which would hand
+// use-preparation-actions.test.ts this file's stub instead of the real hook.
+// Rendering only builds the (idle) mutations, so a QueryClientProvider is all
+// the real hook needs here.
+
+function renderKdsView(): string {
+  return renderToString(
+    <QueryClientProvider client={new QueryClient()}>
+      <KdsView />
+    </QueryClientProvider>,
+  );
+}
 
 import { KdsView, remakeRequestFor } from "./kds-view";
 
@@ -57,7 +58,7 @@ describe("KdsView", () => {
     queueResult.isError = true;
     queueResult.isLoading = false;
 
-    const html = renderToString(<KdsView />);
+    const html = renderKdsView();
 
     expect(html).toContain("Chờ pha");
     expect(html).toContain("Đang pha");
@@ -72,7 +73,7 @@ describe("KdsView", () => {
     queueResult.isError = true;
     queueResult.isLoading = false;
 
-    expect(renderToString(<KdsView />)).toContain("Không tải được hàng chờ pha chế");
+    expect(renderKdsView()).toContain("Không tải được hàng chờ pha chế");
   });
 });
 

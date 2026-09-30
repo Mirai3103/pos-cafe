@@ -7,8 +7,13 @@ import type { SalesServiceSessionResponse } from "@/api/generated/models";
 import { newRequestId } from "@/lib/command";
 import { messageForError } from "@/lib/error-messages";
 import { isConflictError } from "@/lib/unwrap";
-import { useSetSessionTables, useTablesOverview } from "@/features/tables/api/use-tables";
-import { toFloorTables, toggleSelection, type FloorTable } from "@/features/tables/lib/floor";
+import {
+  toFloorTables,
+  toggleSelection,
+  useSetSessionTables,
+  useTablesOverview,
+  type FloorTable,
+} from "@/features/tables";
 
 export interface ChangeTablesChoicesProps {
   tables: FloorTable[];
