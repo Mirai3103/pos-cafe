@@ -257,7 +257,7 @@ func (h *StartReconciliationHandler) Handle(ctx context.Context, actor Actor, cm
 // loadClosureBlockers evaluates every global closure blocker in one read and
 // returns the first violation in the load-bearing precedence of spec 8:
 // unsettled Checks, pending Refunds, unresolved financial correction
-// obligations, active Service Sessions. Final Close (Task 6) re-evaluates the
+// obligations, Service Sessions Awaiting Submission, active Service Sessions. Final Close (Task 6) re-evaluates the
 // same set through this helper. Blocker reads are MVCC reads; the caller owns
 // whatever row locking its protocol requires.
 func loadClosureBlockers(ctx context.Context, q *sqlc.Queries) error {

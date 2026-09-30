@@ -70,8 +70,14 @@ type Querier interface {
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
-	// A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
-	// corresponding Order.
+	// A draft that prevents a new one opening: EDITABLE, CANCELLED, or COMMITTED
+	// without a corresponding Order.
+	//
+	// CANCELLED blocks because Cancel Awaiting Submission withdrew the draft's
+	// charge: an orderless cancelled draft's Session must be abandoned (Refund,
+	// then Abandon), not re-ordered. A new round that got submitted would leave
+	// the withdrawn allocations unsubmitted for closure forever and strand the
+	// Session ACTIVE (ADR-066).
 	//
 	// 5D added the orders table and completed the second clause as 5B's comment
 	// promised. The rule stops staff stacking rounds ahead of the kitchen; it does

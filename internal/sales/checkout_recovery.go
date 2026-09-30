@@ -20,9 +20,10 @@ type checkoutRecoveryFingerprint struct {
 	Note             *string   `json:"note"`
 }
 
-// lockOpenShiftForRecovery takes the open Sales Shift FOR SHARE first, as
-// every money command does, and requires one: both commands write rows the
-// Shift reconciles.
+// lockOpenShiftForRecovery takes the open Sales Shift FOR SHARE first, and
+// requires one, because both commands write rows the Shift reconciles. Payment,
+// Refund, Void and Comp lock Check, then Session, then Shift; shared locks
+// cannot deadlock against those.
 func lockOpenShiftForRecovery(ctx context.Context, q *sqlc.Queries) (uuid.UUID, error) {
 	shiftID, err := lockOpenSalesShift(ctx, q)
 	if err != nil {

@@ -104,7 +104,7 @@ func TestCommitRoutesRequireSalesOperate(t *testing.T) {
 	}
 }
 
-func TestSalesExposesTwentySixOperations(t *testing.T) {
+func TestSalesExposesTwentyEightOperations(t *testing.T) {
 	require.Len(t, registeredSalesRoutes(t), 28)
 }
 

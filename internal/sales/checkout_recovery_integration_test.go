@@ -479,3 +479,22 @@ func TestCancelAgainstConcurrentPayment(t *testing.T) {
 			"every unit of money held is owed back")
 	}
 }
+
+// A cancelled, orderless draft's Session must be abandoned, not re-ordered
+// (ADR-066): a new round after Cancel would leave the withdrawn allocations
+// unsubmitted forever and the Session stuck ACTIVE.
+func TestCancelledDraftBlocksANewRoundUntilAbandon(t *testing.T) {
+	env := newRecoveryEnv(t)
+	session, checkID := env.paidTakeaway(t)
+
+	_, _, err := env.cancel(t, session.ID)
+	require.NoError(t, err)
+
+	_, err = env.TryStartNewDraft(t, session.ID)
+	require.ErrorIs(t, err, sales.ErrNewOrderDraftNotAvailable)
+
+	env.refundWithdrawal(t, session.ID, checkID, sales.RefundMethodCash)
+	got, _, err := env.abandon(t, session.ID)
+	require.NoError(t, err)
+	require.Equal(t, sales.StateAbandoned, got.State)
+}

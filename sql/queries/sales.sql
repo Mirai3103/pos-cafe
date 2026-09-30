@@ -451,8 +451,14 @@ UPDATE order_drafts SET check_target = $2 WHERE id = $1;
 SELECT check_target FROM order_drafts WHERE id = $1;
 
 -- name: FindBlockingDraft :one
--- A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
--- corresponding Order.
+-- A draft that prevents a new one opening: EDITABLE, CANCELLED, or COMMITTED
+-- without a corresponding Order.
+--
+-- CANCELLED blocks because Cancel Awaiting Submission withdrew the draft's
+-- charge: an orderless cancelled draft's Session must be abandoned (Refund,
+-- then Abandon), not re-ordered. A new round that got submitted would leave
+-- the withdrawn allocations unsubmitted for closure forever and strand the
+-- Session ACTIVE (ADR-066).
 --
 -- 5D added the orders table and completed the second clause as 5B's comment
 -- promised. The rule stops staff stacking rounds ahead of the kitchen; it does
@@ -467,7 +473,7 @@ SELECT id
 FROM order_drafts
 WHERE order_drafts.service_session_id = $1
   AND (
-        state = 'EDITABLE'
+        state IN ('EDITABLE', 'CANCELLED')
      OR (state = 'COMMITTED'
          AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_draft_id = order_drafts.id))
   )
