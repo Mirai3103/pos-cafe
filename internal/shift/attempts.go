@@ -70,11 +70,11 @@ func validateObservedAmount(v int64, field string) error {
 	return nil
 }
 
-// lockClosingShift locks the named Shift FOR UPDATE (spec 11.1) for the
-// attempt commands and returns its row. Every error is narrowed per path
-// before the legacy blanket mapping (spec 12): an unknown Shift is 404, and
-// every non-CLOSING state is its own 409 — attempts are the inverse of the
-// ordinary commands that require OPEN (spec 4.3).
+// lockClosingShift locks the named Shift FOR UPDATE for the attempt commands
+// and Final Close, and returns its row. Every error is narrowed per path
+// before the blanket MapDBError mapping: an unknown Shift is 404, and every
+// non-CLOSING state is its own 409 — these commands are the inverse of the
+// ordinary commands that require OPEN.
 func lockClosingShift(ctx context.Context, q *sqlc.Queries, shiftID uuid.UUID) (sqlc.SalesShift, error) {
 	locked, err := q.LockSalesShiftForReconciliation(ctx, shiftID)
 	if err != nil {
@@ -113,10 +113,10 @@ func loadReconciliationForAppend(ctx context.Context, q *sqlc.Queries, shiftID u
 }
 
 // Handle appends one immutable Cash Count attempt to the named CLOSING Shift's
-// reconciliation (spec 4.3, 7.2): it locks the Shift FOR UPDATE, takes the
-// next Cash sequence through a query under that lock, inserts exactly one
-// append-only row, writes one audit event, and returns the new attempt plus
-// the full preview built from the latest evidence.
+// reconciliation: it locks the Shift FOR UPDATE, takes the next Cash sequence
+// through a query under that lock, inserts exactly one append-only row, writes
+// one audit event, and returns the new attempt plus the full preview built
+// from the latest evidence.
 func (h *RecordCashCountHandler) Handle(ctx context.Context, actor Actor, cmd RecordCashCountCommand) (int, CashCountResult, error) {
 	if cmd.CountedCashVND == nil {
 		return 0, CashCountResult{}, fmt.Errorf("%w: counted_cash_vnd is required", response.ErrInvalid)
@@ -135,79 +135,89 @@ func (h *RecordCashCountHandler) Handle(ctx context.Context, actor Actor, cmd Re
 
 	return ExecuteMutation(ctx, h.runner, actor, spec,
 		func(mc MutationContext) (int, CashCountResult, AuditRecord, error) {
-			var zero CashCountResult
-
-			if err := validateCountedCash(countedCash); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
-			}
-
-			locked, err := lockClosingShift(ctx, mc.Queries, cmd.ShiftID)
+			result, audit, err := appendCashCount(ctx, mc, cmd.ShiftID, countedCash)
 			if err != nil {
-				return 0, zero, AuditRecord{}, err
+				return 0, CashCountResult{}, AuditRecord{}, err
 			}
-			snapshot, err := loadReconciliationForAppend(ctx, mc.Queries, cmd.ShiftID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			// The next sequence is read under the Shift lock every append
-			// holds, so the blind initial count and every recount are
-			// serialized through it and never share a sequence.
-			sequence, err := mc.Queries.GetNextShiftCashCountSequence(ctx, snapshot.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("next cash count sequence: %w", err)
-			}
-			count, err := mc.Queries.InsertShiftCashCount(ctx, sqlc.InsertShiftCashCountParams{
-				ReconciliationID:            snapshot.ID,
-				Sequence:                    sequence,
-				CountedCashVnd:              countedCash,
-				CountedByStaffIdentityID:    actor.StaffID,
-				CountedStaffAccessSessionID: actor.SessionID,
-			})
-			if err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
-			}
-
-			countedBy, err := mc.Queries.GetStaffSummary(ctx, actor.StaffID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("load cash count actor: %w", err)
-			}
-
-			// Reveal: the frozen snapshot is read back through the same load
-			// the CLOSING read uses, so the appended attempt is already inside
-			// the ledgers the preview is built from (spec 4.3).
-			recon, err := loadReconciliationSnapshot(ctx, mc.Queries, locked.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			return 201, CashCountResult{
-				CashCount: CashCountResponse{
-					ID:             count.ID,
-					Sequence:       int(count.Sequence),
-					CountedCashVND: count.CountedCashVnd,
-					CountedBy:      staffSummaryFromRow(countedBy),
-					CountedAt:      count.CountedAt,
-				},
-				Preview: latestPreview(recon),
-			}, AuditRecord{
-				EventType: EventCashCountRecorded,
-				Details: cashCountRecordedAuditDetails{
-					SalesShiftID:     locked.ID,
-					ReconciliationID: snapshot.ID,
-					CashCountID:      count.ID,
-					Sequence:         int(count.Sequence),
-					CountedCashVND:   count.CountedCashVnd,
-				},
-			}, nil
+			return 201, result, audit, nil
 		})
 }
 
+// appendCashCount is the append-cash-count mutation body.
+func appendCashCount(ctx context.Context, mc MutationContext, shiftID uuid.UUID,
+	countedCash int64,
+) (CashCountResult, AuditRecord, error) {
+	if err := validateCountedCash(countedCash); err != nil {
+		return CashCountResult{}, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+
+	locked, err := lockClosingShift(ctx, mc.Queries, shiftID)
+	if err != nil {
+		return CashCountResult{}, AuditRecord{}, err
+	}
+	snapshot, err := loadReconciliationForAppend(ctx, mc.Queries, shiftID)
+	if err != nil {
+		return CashCountResult{}, AuditRecord{}, err
+	}
+
+	// The next sequence is read under the Shift lock every append holds, so
+	// the blind initial count and every recount are serialized through it and
+	// never share a sequence.
+	sequence, err := mc.Queries.GetNextShiftCashCountSequence(ctx, snapshot.ID)
+	if err != nil {
+		return CashCountResult{}, AuditRecord{}, fmt.Errorf("next cash count sequence: %w", err)
+	}
+	count, err := mc.Queries.InsertShiftCashCount(ctx, sqlc.InsertShiftCashCountParams{
+		ReconciliationID:            snapshot.ID,
+		Sequence:                    sequence,
+		CountedCashVnd:              countedCash,
+		CountedByStaffIdentityID:    mc.Actor.StaffID,
+		CountedStaffAccessSessionID: mc.Actor.SessionID,
+	})
+	if err != nil {
+		return CashCountResult{}, AuditRecord{}, MapDBError(err)
+	}
+
+	countedBy, err := mc.Queries.GetStaffSummary(ctx, mc.Actor.StaffID)
+	if err != nil {
+		return CashCountResult{}, AuditRecord{}, fmt.Errorf("load cash count actor: %w", err)
+	}
+
+	// Reveal: the frozen snapshot is read back through the same load the
+	// CLOSING read uses, so the appended attempt is already inside the
+	// ledgers the preview is built from.
+	recon, err := loadReconciliationSnapshot(ctx, mc.Queries, locked.ID)
+	if err != nil {
+		return CashCountResult{}, AuditRecord{}, err
+	}
+
+	result := CashCountResult{
+		CashCount: CashCountResponse{
+			ID:             count.ID,
+			Sequence:       int(count.Sequence),
+			CountedCashVND: count.CountedCashVnd,
+			CountedBy:      staffSummaryFromRow(countedBy),
+			CountedAt:      count.CountedAt,
+		},
+		Preview: latestPreview(recon),
+	}
+	return result, AuditRecord{
+		EventType: EventCashCountRecorded,
+		Details: cashCountRecordedAuditDetails{
+			SalesShiftID:     locked.ID,
+			ReconciliationID: snapshot.ID,
+			CashCountID:      count.ID,
+			Sequence:         int(count.Sequence),
+			CountedCashVND:   count.CountedCashVnd,
+		},
+	}, nil
+}
+
 // Handle appends one immutable Manual QR observation attempt to the named
-// CLOSING Shift's reconciliation (spec 4.3, 7.3): both observed values are
-// explicit and stored together, the sequence counts independently of the Cash
-// ledger, and the response is the new attempt plus the full preview built from
-// the latest evidence.
+// CLOSING Shift's reconciliation: both observed values are explicit and
+// stored together, the sequence counts independently of the Cash ledger, and
+// the response is the new attempt plus the full preview built from the latest
+// evidence.
 func (h *RecordQRObservationHandler) Handle(ctx context.Context, actor Actor, cmd RecordQRObservationCommand) (int, QRObservationResult, error) {
 	if cmd.ObservedReceivedVND == nil {
 		return 0, QRObservationResult{}, fmt.Errorf("%w: observed_received_vnd is required", response.ErrInvalid)
@@ -231,80 +241,89 @@ func (h *RecordQRObservationHandler) Handle(ctx context.Context, actor Actor, cm
 
 	return ExecuteMutation(ctx, h.runner, actor, spec,
 		func(mc MutationContext) (int, QRObservationResult, AuditRecord, error) {
-			var zero QRObservationResult
-
-			if err := validateObservedAmount(received, "observed_received_vnd"); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
-			}
-			if err := validateObservedAmount(refunded, "observed_refunded_vnd"); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
-			}
-
-			locked, err := lockClosingShift(ctx, mc.Queries, cmd.ShiftID)
+			result, audit, err := appendQRObservation(ctx, mc, cmd.ShiftID, received, refunded)
 			if err != nil {
-				return 0, zero, AuditRecord{}, err
+				return 0, QRObservationResult{}, AuditRecord{}, err
 			}
-			snapshot, err := loadReconciliationForAppend(ctx, mc.Queries, cmd.ShiftID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			sequence, err := mc.Queries.GetNextShiftQRObservationSequence(ctx, snapshot.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("next QR observation sequence: %w", err)
-			}
-			observation, err := mc.Queries.InsertShiftQRObservation(ctx, sqlc.InsertShiftQRObservationParams{
-				ReconciliationID:             snapshot.ID,
-				Sequence:                     sequence,
-				ObservedReceivedVnd:          received,
-				ObservedRefundedVnd:          refunded,
-				ObservedByStaffIdentityID:    actor.StaffID,
-				ObservedStaffAccessSessionID: actor.SessionID,
-			})
-			if err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
-			}
-
-			observedBy, err := mc.Queries.GetStaffSummary(ctx, actor.StaffID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("load QR observation actor: %w", err)
-			}
-
-			recon, err := loadReconciliationSnapshot(ctx, mc.Queries, locked.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			return 201, QRObservationResult{
-				QRObservation: QRObservationResponse{
-					ID:                  observation.ID,
-					Sequence:            int(observation.Sequence),
-					ObservedReceivedVND: observation.ObservedReceivedVnd,
-					ObservedRefundedVND: observation.ObservedRefundedVnd,
-					ObservedBy:          staffSummaryFromRow(observedBy),
-					ObservedAt:          observation.ObservedAt,
-				},
-				Preview: latestPreview(recon),
-			}, AuditRecord{
-				EventType: EventQRObservationRecorded,
-				Details: qrObservationRecordedAuditDetails{
-					SalesShiftID:        locked.ID,
-					ReconciliationID:    snapshot.ID,
-					QRObservationID:     observation.ID,
-					Sequence:            int(observation.Sequence),
-					ObservedReceivedVND: observation.ObservedReceivedVnd,
-					ObservedRefundedVND: observation.ObservedRefundedVnd,
-				},
-			}, nil
+			return 201, result, audit, nil
 		})
 }
 
+// appendQRObservation is the append-qr-observation mutation body.
+func appendQRObservation(ctx context.Context, mc MutationContext, shiftID uuid.UUID,
+	received, refunded int64,
+) (QRObservationResult, AuditRecord, error) {
+	if err := validateObservedAmount(received, "observed_received_vnd"); err != nil {
+		return QRObservationResult{}, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+	if err := validateObservedAmount(refunded, "observed_refunded_vnd"); err != nil {
+		return QRObservationResult{}, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+
+	locked, err := lockClosingShift(ctx, mc.Queries, shiftID)
+	if err != nil {
+		return QRObservationResult{}, AuditRecord{}, err
+	}
+	snapshot, err := loadReconciliationForAppend(ctx, mc.Queries, shiftID)
+	if err != nil {
+		return QRObservationResult{}, AuditRecord{}, err
+	}
+
+	sequence, err := mc.Queries.GetNextShiftQRObservationSequence(ctx, snapshot.ID)
+	if err != nil {
+		return QRObservationResult{}, AuditRecord{}, fmt.Errorf("next QR observation sequence: %w", err)
+	}
+	observation, err := mc.Queries.InsertShiftQRObservation(ctx, sqlc.InsertShiftQRObservationParams{
+		ReconciliationID:             snapshot.ID,
+		Sequence:                     sequence,
+		ObservedReceivedVnd:          received,
+		ObservedRefundedVnd:          refunded,
+		ObservedByStaffIdentityID:    mc.Actor.StaffID,
+		ObservedStaffAccessSessionID: mc.Actor.SessionID,
+	})
+	if err != nil {
+		return QRObservationResult{}, AuditRecord{}, MapDBError(err)
+	}
+
+	observedBy, err := mc.Queries.GetStaffSummary(ctx, mc.Actor.StaffID)
+	if err != nil {
+		return QRObservationResult{}, AuditRecord{}, fmt.Errorf("load QR observation actor: %w", err)
+	}
+
+	recon, err := loadReconciliationSnapshot(ctx, mc.Queries, locked.ID)
+	if err != nil {
+		return QRObservationResult{}, AuditRecord{}, err
+	}
+
+	result := QRObservationResult{
+		QRObservation: QRObservationResponse{
+			ID:                  observation.ID,
+			Sequence:            int(observation.Sequence),
+			ObservedReceivedVND: observation.ObservedReceivedVnd,
+			ObservedRefundedVND: observation.ObservedRefundedVnd,
+			ObservedBy:          staffSummaryFromRow(observedBy),
+			ObservedAt:          observation.ObservedAt,
+		},
+		Preview: latestPreview(recon),
+	}
+	return result, AuditRecord{
+		EventType: EventQRObservationRecorded,
+		Details: qrObservationRecordedAuditDetails{
+			SalesShiftID:        locked.ID,
+			ReconciliationID:    snapshot.ID,
+			QRObservationID:     observation.ID,
+			Sequence:            int(observation.Sequence),
+			ObservedReceivedVND: observation.ObservedReceivedVnd,
+			ObservedRefundedVND: observation.ObservedRefundedVnd,
+		},
+	}, nil
+}
+
 // latestPreview exposes the preview of an already-loaded reconciliation
-// snapshot as a pure function over that data (spec 9.6). The preview inside
+// snapshot as a pure function over that data. The preview inside
 // ReconciliationResponse is built by the shared loading path from the latest
-// attempt of each ledger; the append commands, Final Close (Task 6), and the
-// CLOSING current read (Task 7) consume it through this seam so no consumer
-// re-derives or re-queries the preview from live data.
+// attempt of each ledger; the append commands consume it through this seam so
+// no consumer re-derives or re-queries the preview from live data.
 func latestPreview(snapshot ReconciliationResponse) ReconciliationPreview {
 	return snapshot.Preview
 }

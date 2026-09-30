@@ -21,8 +21,7 @@ type closeDiscrepancyFingerprint struct {
 // closeShiftFingerprint is the idempotency fingerprint for a Final Close: the
 // Shift, the final evidence ids, and the normalized discrepancy tuples.
 //
-// The approver login and the PIN are deliberately absent (spec 9.4): the PIN
-// is a secret and the approver identity is verification input, not business
+// The approver login and the PIN are deliberately absent: the PIN is a secret and the approver identity is verification input, not business
 // input, so neither may make an otherwise identical close conflict — or store
 // a PIN-derived value at rest.
 type closeShiftFingerprint struct {
@@ -38,8 +37,7 @@ type closedDiscrepancyAuditDetails struct {
 	Reason    DiscrepancyReason    `json:"reason"`
 }
 
-// closedShiftAuditDetails carries the closure facts (spec 13): the snapshot
-// ids, the final evidence ids, all three differences, the discrepancy reasons,
+// closedShiftAuditDetails carries the closure facts: the snapshot ids, the final evidence ids, all three differences, the discrepancy reasons,
 // and the approver identity when present. No approval secret appears here.
 type closedShiftAuditDetails struct {
 	SalesShiftID                  uuid.UUID                       `json:"sales_shift_id"`
@@ -85,11 +83,11 @@ func NewCloseShiftHandler(runner *Runner) *CloseShiftHandler {
 	return &CloseShiftHandler{runner: runner}
 }
 
-// Handle performs the Final Close of the named CLOSING Shift (spec 4.4): the
-// Shift locks FOR UPDATE, global blockers re-evaluate, the live source totals
-// re-verify against the frozen snapshot, the submitted final attempt ids must
-// be the latest evidence, and the three signed differences derive server-side
-// from that evidence — never from the request.
+// Handle performs the Final Close of the named CLOSING Shift: the Shift locks
+// FOR UPDATE, global blockers re-evaluate, the live source totals re-verify
+// against the frozen snapshot, the submitted final attempt ids must be the
+// latest evidence, and the three signed differences derive server-side from
+// that evidence — never from the request.
 //
 // The command's discrepancy list selects the operation: a non-null empty list
 // closes exactly and any entry closes with a fresh Manager Approval, verified
@@ -97,21 +95,35 @@ func NewCloseShiftHandler(runner *Runner) *CloseShiftHandler {
 // approval: an exact command meeting a server-derived nonzero difference fails
 // on the recount, recheck, or reason rules instead of closing. Exact and
 // discrepant closes both return the immutable ClosedShiftDetailResponse,
-// including when the initiator is a Cashier (spec 9.6).
+// including when the initiator is a Cashier.
 func (h *CloseShiftHandler) Handle(ctx context.Context, actor Actor, cmd CloseShiftCommand) (int, ClosedShiftDetailResponse, error) {
 	// The HTTP boundary rejects a nil (JSON null or omitted) list; a domain
 	// caller passing nil closes exactly, which is what an empty list means.
 	discrepancies := normalizeCloseDiscrepancies(cmd.Discrepancies)
+	spec := closeShiftSpec(cmd, discrepancies)
 
+	return ExecuteMutation(ctx, h.runner, actor, spec,
+		func(mc MutationContext) (int, ClosedShiftDetailResponse, AuditRecord, error) {
+			detail, audit, err := closeShift(ctx, mc, cmd, spec.Operation, discrepancies)
+			if err != nil {
+				return 0, ClosedShiftDetailResponse{}, AuditRecord{}, err
+			}
+			return 200, detail, audit, nil
+		})
+}
+
+// closeShiftSpec selects the exact or discrepant close operation and builds
+// its mutation spec. The discrepant close requires a Manager approval.
+func closeShiftSpec(cmd CloseShiftCommand, discrepancies []normalizedCloseDiscrepancy) MutationSpec {
 	operation := OpCloseExact
 	var approval *ApprovalSpec
 	if len(discrepancies) > 0 {
 		operation = OpCloseWithDiscrepancy
 		// The approver pair is verification input. The HTTP boundary rejects a
-		// pair missing either field with 400 (spec 9.4, 12); a provided but
-		// wrong pair is denied by auth.VerifyManagerApproval inside the
-		// transaction and collapses to the one 403 code (spec 10, ADR-048). The
-		// approver must hold the MANAGER role and sales_shift.operate.
+		// pair missing either field with 400; a provided but wrong pair is
+		// denied by auth.VerifyManagerApproval inside the transaction and
+		// collapses to the one 403 code. The approver must hold the MANAGER
+		// role and sales_shift.operate.
 		approval = &ApprovalSpec{
 			ApproverLoginCode:  auth.NormalizeLoginCode(cmd.ApproverLoginCode),
 			ManagerPIN:         cmd.ManagerPIN,
@@ -126,7 +138,7 @@ func (h *CloseShiftHandler) Handle(ctx context.Context, actor Actor, cmd CloseSh
 		tuples = append(tuples, closeDiscrepancyFingerprint(d))
 	}
 
-	spec := MutationSpec{
+	return MutationSpec{
 		RequestID: cmd.RequestID,
 		Operation: operation,
 		Fingerprint: closeShiftFingerprint{
@@ -138,366 +150,445 @@ func (h *CloseShiftHandler) Handle(ctx context.Context, actor Actor, cmd CloseSh
 		Required: []string{CapSalesShiftOperate},
 		Approval: approval,
 	}
+}
 
-	return ExecuteMutation(ctx, h.runner, actor, spec,
-		func(mc MutationContext) (int, ClosedShiftDetailResponse, AuditRecord, error) {
-			var zero ClosedShiftDetailResponse
+// closureDifferences are the three signed differences of a Final Close, each
+// derived server-side from the final evidence and the frozen expectations.
+type closureDifferences struct {
+	cash       int64
+	qrReceived int64
+	qrRefunded int64
+}
 
-			// Step 2: lock the named Shift FOR UPDATE (spec 11.1). The state
-			// branches map an unknown Shift to 404, a CLOSED one to the
-			// second-close conflict, and an OPEN one to not-started.
-			locked, err := lockClosingShift(ctx, mc.Queries, cmd.ShiftID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
+func (d closureDifferences) nonzero() bool {
+	return d.cash != 0 || d.qrReceived != 0 || d.qrRefunded != 0
+}
 
-			// Step 3: re-evaluate every global blocker in one MVCC read,
-			// rejected in spec 8's precedence. No Check or Session row lock is
-			// taken while the Shift lock is held (spec 11.1).
-			if err := loadClosureBlockers(ctx, mc.Queries); err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
+// verifiedClose is the Final Close state established under the Shift lock:
+// the locked Shift, its source-verified frozen snapshot, the final evidence,
+// and the differences derived from them.
+type verifiedClose struct {
+	shift            sqlc.SalesShift
+	recon            ReconciliationResponse
+	finalCount       CashCountResponse
+	finalObservation QRObservationResponse
+	diffs            closureDifferences
+}
 
-			// Step 4: reload every source total and require exact equality
-			// with the frozen snapshot (spec 11.3). Expected values are
-			// derived from the source terms, so comparing the sources covers
-			// them. A mismatch means an uncoordinated writer or corrupt state,
-			// never a closure from unexplained numbers.
-			recon, err := loadReconciliationSnapshot(ctx, mc.Queries, locked.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-			totals, err := mc.Queries.GetShiftReconciliationTotals(ctx, locked.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("reload reconciliation totals: %w", err)
-			}
-			movements, err := mc.Queries.SumCashMovements(ctx, locked.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("reload cash movement sums: %w", err)
-			}
-			if movements.PayInVnd != recon.PayInVND ||
-				movements.PayOutVnd != recon.PayOutVND ||
-				totals.CashPaymentVnd != recon.CashPaymentVND ||
-				totals.CashPaymentVoidVnd != recon.CashPaymentVoidVND ||
-				totals.CashRefundVnd != recon.CashRefundVND ||
-				totals.ManualQrPaymentVnd != recon.ManualQRPaymentVND ||
-				totals.ManualQrPaymentVoidVnd != recon.ManualQRPaymentVoidVND ||
-				totals.ManualQrRefundVnd != recon.ManualQRRefundVND {
-				return 0, zero, AuditRecord{}, ErrReconciliationSourceChanged
-			}
+// closeShift is the Final Close mutation body. It runs inside the mutation
+// transaction after the idempotency claim; the pipeline writes the returned
+// audit record just before the commit.
+func closeShift(ctx context.Context, mc MutationContext, cmd CloseShiftCommand,
+	operation string, discrepancies []normalizedCloseDiscrepancy,
+) (ClosedShiftDetailResponse, AuditRecord, error) {
+	vc, err := verifyClose(ctx, mc.Queries, cmd, discrepancies)
+	if err != nil {
+		return ClosedShiftDetailResponse{}, AuditRecord{}, err
+	}
 
-			// Step 5: the submitted final attempt ids must be the latest rows
-			// of their ledgers (spec 7.4). An id absent from the ledger is an
-			// unknown attempt id (404, spec 12); a present but superseded one
-			// is stale (spec 7.11). The append ledgers order by sequence, so
-			// the last row is the latest.
-			var finalCount CashCountResponse
-			countFound := false
-			for _, row := range recon.CashCounts {
-				if row.ID == cmd.FinalCashCountID {
-					finalCount, countFound = row, true
-				}
-			}
-			if !countFound {
-				return 0, zero, AuditRecord{},
-					fmt.Errorf("%w: final_cash_count_id", ErrReconciliationAttemptNotFound)
-			}
-			if finalCount.ID != recon.CashCounts[len(recon.CashCounts)-1].ID {
-				return 0, zero, AuditRecord{}, ErrReconciliationStale
-			}
+	// A nonzero difference can only reach this point through the discrepant
+	// operation, whose fresh Manager Approval the pipeline verified before
+	// replay. The approver is therefore absent exactly when all three
+	// differences are zero.
+	var approverID uuid.NullUUID
+	var approver *StaffSummary
+	if mc.Approver != nil {
+		approverID = uuid.NullUUID{UUID: mc.Approver.ID, Valid: true}
+		summary := staffSummaryFromApprover(*mc.Approver)
+		approver = &summary
+	}
 
-			var finalObservation QRObservationResponse
-			observationFound := false
-			for _, row := range recon.QRObservations {
-				if row.ID == cmd.FinalQRObservationID {
-					finalObservation, observationFound = row, true
-				}
-			}
-			if !observationFound {
-				return 0, zero, AuditRecord{},
-					fmt.Errorf("%w: final_qr_observation_id", ErrReconciliationAttemptNotFound)
-			}
-			if finalObservation.ID != recon.QRObservations[len(recon.QRObservations)-1].ID {
-				return 0, zero, AuditRecord{}, ErrReconciliationStale
-			}
+	// The immutable closure aggregate, then exactly the nonzero discrepancy
+	// rows, then the one-way state transition, all in this one transaction.
+	closure, err := insertClosure(ctx, mc.Queries, mc.Actor, vc, approverID)
+	if err != nil {
+		return ClosedShiftDetailResponse{}, AuditRecord{}, err
+	}
+	if err := insertClosureDiscrepancies(ctx, mc.Queries, closure.ID, vc, discrepancies); err != nil {
+		return ClosedShiftDetailResponse{}, AuditRecord{}, err
+	}
+	// There is no reopen.
+	if err := mc.Queries.TransitionSalesShiftToClosed(ctx, vc.shift.ID); err != nil {
+		return ClosedShiftDetailResponse{}, AuditRecord{}, fmt.Errorf("transition sales shift to closed: %w", err)
+	}
 
-			// Step 6: derive the three signed differences from the final
-			// evidence and the frozen expectations through the guarded
-			// arithmetic (spec 6). No amount crosses the boundary from the
-			// request, so a wrap is corrupt data, not client input (spec 12).
-			cashDifference, err := ComputeDifference(finalCount.CountedCashVND, recon.ExpectedCashVND)
-			if err != nil {
-				return 0, zero, AuditRecord{},
-					fmt.Errorf("compute cash difference: %w: %w", errReconciliationCalculationFailed, err)
-			}
-			qrReceivedDifference, err := ComputeDifference(
-				finalObservation.ObservedReceivedVND, recon.ExpectedManualQRReceivedVND)
-			if err != nil {
-				return 0, zero, AuditRecord{},
-					fmt.Errorf("compute manual QR received difference: %w: %w", errReconciliationCalculationFailed, err)
-			}
-			qrRefundedDifference, err := ComputeDifference(
-				finalObservation.ObservedRefundedVND, recon.ManualQRRefundVND)
-			if err != nil {
-				return 0, zero, AuditRecord{},
-					fmt.Errorf("compute manual QR refunded difference: %w: %w", errReconciliationCalculationFailed, err)
-			}
+	detail, err := loadClosedShiftDetail(ctx, mc.Queries, mc.Actor, vc, closure, approver)
+	if err != nil {
+		return ClosedShiftDetailResponse{}, AuditRecord{}, err
+	}
+	return detail, closeAuditRecord(operation, vc, closure, discrepancies, approverID), nil
+}
 
-			// Step 7a: a nonzero difference requires a second relevant attempt
-			// (spec 5.3, 5.4, 7.5, 7.6). The exact initial evidence may close
-			// directly from sequence 1.
-			if cashDifference != 0 && finalCount.Sequence < 2 {
-				return 0, zero, AuditRecord{}, ErrCashRecountRequired
-			}
-			if (qrReceivedDifference != 0 || qrRefundedDifference != 0) && finalObservation.Sequence < 2 {
-				return 0, zero, AuditRecord{}, ErrQRRecheckRequired
-			}
+// verifyClose runs every Final Close precondition under the Shift lock, in
+// order: lock the Shift, re-evaluate the global blockers, re-verify the frozen
+// snapshot against the live sources, resolve the final evidence, derive the
+// differences, and check the recount, recheck, and reason rules.
+func verifyClose(ctx context.Context, q *sqlc.Queries, cmd CloseShiftCommand,
+	discrepancies []normalizedCloseDiscrepancy,
+) (verifiedClose, error) {
+	// The state branches map an unknown Shift to 404, a CLOSED one to the
+	// second-close conflict, and an OPEN one to not-started.
+	locked, err := lockClosingShift(ctx, q, cmd.ShiftID)
+	if err != nil {
+		return verifiedClose{}, err
+	}
 
-			// Step 7b: the reason set must match the server-derived
-			// differences exactly — every nonzero dimension carries exactly one
-			// entry and every zero dimension none (spec 7.7, 7.8).
-			entryCounts := make(map[DiscrepancyDimension]int, len(discrepancies))
-			for _, d := range discrepancies {
-				entryCounts[d.Dimension]++
-			}
-			for _, dimension := range []struct {
-				name       DiscrepancyDimension
-				difference int64
-			}{
-				{DimensionCash, cashDifference},
-				{DimensionManualQRReceived, qrReceivedDifference},
-				{DimensionManualQRRefunded, qrRefundedDifference},
-			} {
-				if dimension.difference != 0 {
-					if entryCounts[dimension.name] != 1 {
-						return 0, zero, AuditRecord{},
-							fmt.Errorf("%w: dimension %s", ErrDiscrepancyReasonRequired, dimension.name)
-					}
-				} else if entryCounts[dimension.name] > 0 {
-					return 0, zero, AuditRecord{},
-						fmt.Errorf("%w: dimension %s", ErrDiscrepancyReasonUnexpected, dimension.name)
-				}
-			}
-			// The HTTP boundary already enforced the reason and note shapes,
-			// so a residual failure here is a reason-to-dimension pairing the
-			// catalog forbids (spec 5.6) — the stable unexpected-reason
-			// conflict rather than a body error.
-			for _, d := range discrepancies {
-				if err := ValidateDiscrepancyReason(string(d.Dimension), string(d.Reason), d.Note); err != nil {
-					return 0, zero, AuditRecord{},
-						fmt.Errorf("%w: %s", ErrDiscrepancyReasonUnexpected, err.Error())
-				}
-			}
+	// Every global blocker is re-evaluated in one MVCC read. No Check or
+	// Session row lock is taken while the Shift lock is held.
+	if err := loadClosureBlockers(ctx, q); err != nil {
+		return verifiedClose{}, err
+	}
 
-			// Step 7c: any nonzero difference can only reach this point through
-			// the discrepant operation, whose fresh Manager Approval the
-			// executor verified before replay (spec 10, ADR-048, ADR-009). The
-			// approver is nullable exactly when all three differences are zero.
-			var approverID uuid.NullUUID
-			var approver *StaffSummary
-			if mc.Approver != nil {
-				approverID = uuid.NullUUID{UUID: mc.Approver.ID, Valid: true}
-				summary := staffSummaryFromApprover(*mc.Approver)
-				approver = &summary
-			}
+	recon, err := loadSourceVerifiedReconciliation(ctx, q, locked.ID)
+	if err != nil {
+		return verifiedClose{}, err
+	}
 
-			// Step 8: the immutable closure aggregate, then exactly the nonzero
-			// discrepancy rows, all in this one transaction (spec 5.5, 5.6).
-			closure, err := mc.Queries.InsertShiftClosure(ctx, sqlc.InsertShiftClosureParams{
-				SalesShiftID:                  locked.ID,
-				ReconciliationID:              recon.ID,
-				InitialCashCountID:            recon.CashCounts[0].ID,
-				FinalCashCountID:              finalCount.ID,
-				FinalQrObservationID:          finalObservation.ID,
-				OpenerStaffIdentityID:         locked.OpenedByStaffIdentityID,
-				CloserStaffIdentityID:         actor.StaffID,
-				CloserStaffAccessSessionID:    actor.SessionID,
-				ApprovedByStaffIdentityID:     approverID,
-				OpenedAt:                      locked.OpenedAt,
-				OpeningFloatVnd:               recon.OpeningFloatVND,
-				PayInVnd:                      recon.PayInVND,
-				PayOutVnd:                     recon.PayOutVND,
-				CashPaymentVnd:                recon.CashPaymentVND,
-				CashPaymentVoidVnd:            recon.CashPaymentVoidVND,
-				CashRefundVnd:                 recon.CashRefundVND,
-				ExpectedCashVnd:               recon.ExpectedCashVND,
-				ManualQrPaymentVnd:            recon.ManualQRPaymentVND,
-				ManualQrPaymentVoidVnd:        recon.ManualQRPaymentVoidVND,
-				ExpectedManualQrReceivedVnd:   recon.ExpectedManualQRReceivedVND,
-				ManualQrRefundVnd:             recon.ManualQRRefundVND,
-				ObservedCashVnd:               finalCount.CountedCashVND,
-				ObservedManualQrReceivedVnd:   finalObservation.ObservedReceivedVND,
-				ObservedManualQrRefundedVnd:   finalObservation.ObservedRefundedVND,
-				CashDifferenceVnd:             cashDifference,
-				ManualQrReceivedDifferenceVnd: qrReceivedDifference,
-				ManualQrRefundedDifferenceVnd: qrRefundedDifference,
-			})
-			if err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
-			}
+	finalCount, err := finalAttempt(recon.CashCounts, cmd.FinalCashCountID,
+		func(row CashCountResponse) uuid.UUID { return row.ID }, "final_cash_count_id")
+	if err != nil {
+		return verifiedClose{}, err
+	}
+	finalObservation, err := finalAttempt(recon.QRObservations, cmd.FinalQRObservationID,
+		func(row QRObservationResponse) uuid.UUID { return row.ID }, "final_qr_observation_id")
+	if err != nil {
+		return verifiedClose{}, err
+	}
 
-			if len(discrepancies) > 0 {
-				dimensions := make([]string, 0, len(discrepancies))
-				expecteds := make([]int64, 0, len(discrepancies))
-				observeds := make([]int64, 0, len(discrepancies))
-				differences := make([]int64, 0, len(discrepancies))
-				reasons := make([]string, 0, len(discrepancies))
-				notes := make([]string, 0, len(discrepancies))
-				// The reason-set check above guarantees exactly one entry per
-				// nonzero dimension and none per zero dimension, so each
-				// entry's amounts are the amounts of its own dimension.
-				for _, entry := range discrepancies {
-					var expected, observed, difference int64
-					switch entry.Dimension {
-					case DimensionCash:
-						expected, observed, difference =
-							recon.ExpectedCashVND, finalCount.CountedCashVND, cashDifference
-					case DimensionManualQRReceived:
-						expected, observed, difference =
-							recon.ExpectedManualQRReceivedVND,
-							finalObservation.ObservedReceivedVND, qrReceivedDifference
-					case DimensionManualQRRefunded:
-						expected, observed, difference =
-							recon.ManualQRRefundVND,
-							finalObservation.ObservedRefundedVND, qrRefundedDifference
-					}
-					dimensions = append(dimensions, string(entry.Dimension))
-					expecteds = append(expecteds, expected)
-					observeds = append(observeds, observed)
-					differences = append(differences, difference)
-					reasons = append(reasons, string(entry.Reason))
-					if entry.Note != nil {
-						notes = append(notes, *entry.Note)
-					} else {
-						// An empty Go string stores SQL NULL through the
-						// query's NULLIF(btrim(note), '') transform.
-						notes = append(notes, "")
-					}
-				}
-				if err := mc.Queries.InsertShiftDiscrepancies(ctx, sqlc.InsertShiftDiscrepanciesParams{
-					ShiftClosureID: closure.ID,
-					Dimensions:     dimensions,
-					Expecteds:      expecteds,
-					Observeds:      observeds,
-					Differences:    differences,
-					Reasons:        reasons,
-					Notes:          notes,
-				}); err != nil {
-					return 0, zero, AuditRecord{}, MapDBError(err)
-				}
-			}
+	diffs, err := deriveClosureDifferences(recon, finalCount, finalObservation)
+	if err != nil {
+		return verifiedClose{}, err
+	}
 
-			// Step 9: the one-way state transition. There is no reopen.
-			if err := mc.Queries.TransitionSalesShiftToClosed(ctx, locked.ID); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("transition sales shift to closed: %w", err)
-			}
+	// A nonzero difference requires a second relevant attempt. The exact
+	// initial evidence may close directly from sequence 1.
+	if diffs.cash != 0 && finalCount.Sequence < 2 {
+		return verifiedClose{}, ErrCashRecountRequired
+	}
+	if (diffs.qrReceived != 0 || diffs.qrRefunded != 0) && finalObservation.Sequence < 2 {
+		return verifiedClose{}, ErrQRRecheckRequired
+	}
 
-			// Step 10: the exact or discrepant closure audit event, written by
-			// the executor just before the commit (spec 13).
-			hasDiscrepancy := cashDifference != 0 || qrReceivedDifference != 0 || qrRefundedDifference != 0
-			eventType := EventShiftClosedExact
-			if operation == OpCloseWithDiscrepancy {
-				eventType = EventShiftClosedWithDiscrepancy
-			}
-			auditReasons := make([]closedDiscrepancyAuditDetails, 0, len(discrepancies))
-			for _, d := range discrepancies {
-				auditReasons = append(auditReasons, closedDiscrepancyAuditDetails{
-					Dimension: d.Dimension, Reason: d.Reason,
-				})
-			}
-			var auditApprover *uuid.UUID
-			if approverID.Valid {
-				id := approverID.UUID
-				auditApprover = &id
-			}
+	if err := checkDiscrepancyReasons(diffs, discrepancies); err != nil {
+		return verifiedClose{}, err
+	}
 
-			// The immutable detail reuses the frozen snapshot's loaded attempts
-			// and starter, plus the stored discrepancy rows with their
-			// database-assigned ids and creation times (spec 9.6).
-			storedDiscrepancies, err := mc.Queries.ListShiftClosureDiscrepancies(ctx, closure.ID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("list closure discrepancies: %w", err)
+	return verifiedClose{
+		shift:            locked,
+		recon:            recon,
+		finalCount:       finalCount,
+		finalObservation: finalObservation,
+		diffs:            diffs,
+	}, nil
+}
+
+// loadSourceVerifiedReconciliation loads the frozen snapshot, reloads every
+// live source total, and requires exact equality between them. Expected
+// values are derived from the source terms, so comparing the sources covers
+// them. A mismatch means an uncoordinated writer or corrupt state, never a
+// closure from unexplained numbers.
+func loadSourceVerifiedReconciliation(ctx context.Context, q *sqlc.Queries, shiftID uuid.UUID) (ReconciliationResponse, error) {
+	recon, err := loadReconciliationSnapshot(ctx, q, shiftID)
+	if err != nil {
+		return ReconciliationResponse{}, err
+	}
+	totals, err := q.GetShiftReconciliationTotals(ctx, shiftID)
+	if err != nil {
+		return ReconciliationResponse{}, fmt.Errorf("reload reconciliation totals: %w", err)
+	}
+	movements, err := q.SumCashMovements(ctx, shiftID)
+	if err != nil {
+		return ReconciliationResponse{}, fmt.Errorf("reload cash movement sums: %w", err)
+	}
+	if movements.PayInVnd != recon.PayInVND ||
+		movements.PayOutVnd != recon.PayOutVND ||
+		totals.CashPaymentVnd != recon.CashPaymentVND ||
+		totals.CashPaymentVoidVnd != recon.CashPaymentVoidVND ||
+		totals.CashRefundVnd != recon.CashRefundVND ||
+		totals.ManualQrPaymentVnd != recon.ManualQRPaymentVND ||
+		totals.ManualQrPaymentVoidVnd != recon.ManualQRPaymentVoidVND ||
+		totals.ManualQrRefundVnd != recon.ManualQRRefundVND {
+		return ReconciliationResponse{}, ErrReconciliationSourceChanged
+	}
+	return recon, nil
+}
+
+// finalAttempt returns the ledger row a close submitted as its final attempt,
+// which must be the latest row of its ledger. An id absent from the ledger is
+// an unknown attempt id (404); a present but superseded one is stale. The
+// append ledgers order by sequence, so the last row is the latest.
+func finalAttempt[T any](ledger []T, id uuid.UUID, idOf func(T) uuid.UUID, field string) (T, error) {
+	var final, zero T
+	found := false
+	for _, row := range ledger {
+		if idOf(row) == id {
+			final, found = row, true
+		}
+	}
+	if !found {
+		return zero, fmt.Errorf("%w: %s", ErrReconciliationAttemptNotFound, field)
+	}
+	if idOf(final) != idOf(ledger[len(ledger)-1]) {
+		return zero, ErrReconciliationStale
+	}
+	return final, nil
+}
+
+// deriveClosureDifferences derives the three signed differences from the
+// final evidence and the frozen expectations through the guarded arithmetic.
+// No amount crosses the boundary from the request, so a wrap is corrupt data,
+// not client input.
+func deriveClosureDifferences(recon ReconciliationResponse, finalCount CashCountResponse,
+	finalObservation QRObservationResponse,
+) (closureDifferences, error) {
+	cash, err := ComputeDifference(finalCount.CountedCashVND, recon.ExpectedCashVND)
+	if err != nil {
+		return closureDifferences{},
+			fmt.Errorf("compute cash difference: %w: %w", errReconciliationCalculationFailed, err)
+	}
+	qrReceived, err := ComputeDifference(
+		finalObservation.ObservedReceivedVND, recon.ExpectedManualQRReceivedVND)
+	if err != nil {
+		return closureDifferences{},
+			fmt.Errorf("compute manual QR received difference: %w: %w", errReconciliationCalculationFailed, err)
+	}
+	qrRefunded, err := ComputeDifference(
+		finalObservation.ObservedRefundedVND, recon.ManualQRRefundVND)
+	if err != nil {
+		return closureDifferences{},
+			fmt.Errorf("compute manual QR refunded difference: %w: %w", errReconciliationCalculationFailed, err)
+	}
+	return closureDifferences{cash: cash, qrReceived: qrReceived, qrRefunded: qrRefunded}, nil
+}
+
+// checkDiscrepancyReasons requires the reason set to match the server-derived
+// differences exactly: every nonzero dimension carries exactly one entry and
+// every zero dimension none.
+func checkDiscrepancyReasons(diffs closureDifferences, discrepancies []normalizedCloseDiscrepancy) error {
+	entryCounts := make(map[DiscrepancyDimension]int, len(discrepancies))
+	for _, d := range discrepancies {
+		entryCounts[d.Dimension]++
+	}
+	for _, dimension := range []struct {
+		name       DiscrepancyDimension
+		difference int64
+	}{
+		{DimensionCash, diffs.cash},
+		{DimensionManualQRReceived, diffs.qrReceived},
+		{DimensionManualQRRefunded, diffs.qrRefunded},
+	} {
+		if dimension.difference != 0 {
+			if entryCounts[dimension.name] != 1 {
+				return fmt.Errorf("%w: dimension %s", ErrDiscrepancyReasonRequired, dimension.name)
 			}
-			discrepancyResponses := make([]DiscrepancyResponse, 0, len(storedDiscrepancies))
-			for _, row := range storedDiscrepancies {
-				var note *string
-				if row.Note.Valid {
-					note = &row.Note.String
-				}
-				discrepancyResponses = append(discrepancyResponses, DiscrepancyResponse{
-					Dimension:     DiscrepancyDimension(row.Dimension),
-					ExpectedVND:   row.ExpectedVnd,
-					ObservedVND:   row.ObservedVnd,
-					DifferenceVND: row.DifferenceVnd,
-					Reason:        DiscrepancyReason(row.Reason),
-					Note:          note,
-					CreatedAt:     row.CreatedAt,
-				})
-			}
+		} else if entryCounts[dimension.name] > 0 {
+			return fmt.Errorf("%w: dimension %s", ErrDiscrepancyReasonUnexpected, dimension.name)
+		}
+	}
+	// The HTTP boundary already enforced the reason and note shapes, so a
+	// residual failure here is a reason-to-dimension pairing the catalog
+	// forbids — the stable unexpected-reason conflict rather than a body
+	// error.
+	for _, d := range discrepancies {
+		if err := ValidateDiscrepancyReason(string(d.Dimension), string(d.Reason), d.Note); err != nil {
+			return fmt.Errorf("%w: %s", ErrDiscrepancyReasonUnexpected, err.Error())
+		}
+	}
+	return nil
+}
 
-			opener, err := mc.Queries.GetStaffSummary(ctx, locked.OpenedByStaffIdentityID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("load opener summary: %w", err)
-			}
-			closer, err := mc.Queries.GetStaffSummary(ctx, actor.StaffID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("load closer summary: %w", err)
-			}
+// insertClosure writes the immutable closure aggregate.
+func insertClosure(ctx context.Context, q *sqlc.Queries, actor Actor, vc verifiedClose,
+	approverID uuid.NullUUID,
+) (sqlc.InsertShiftClosureRow, error) {
+	closure, err := q.InsertShiftClosure(ctx, sqlc.InsertShiftClosureParams{
+		SalesShiftID:                  vc.shift.ID,
+		ReconciliationID:              vc.recon.ID,
+		InitialCashCountID:            vc.recon.CashCounts[0].ID,
+		FinalCashCountID:              vc.finalCount.ID,
+		FinalQrObservationID:          vc.finalObservation.ID,
+		OpenerStaffIdentityID:         vc.shift.OpenedByStaffIdentityID,
+		CloserStaffIdentityID:         actor.StaffID,
+		CloserStaffAccessSessionID:    actor.SessionID,
+		ApprovedByStaffIdentityID:     approverID,
+		OpenedAt:                      vc.shift.OpenedAt,
+		OpeningFloatVnd:               vc.recon.OpeningFloatVND,
+		PayInVnd:                      vc.recon.PayInVND,
+		PayOutVnd:                     vc.recon.PayOutVND,
+		CashPaymentVnd:                vc.recon.CashPaymentVND,
+		CashPaymentVoidVnd:            vc.recon.CashPaymentVoidVND,
+		CashRefundVnd:                 vc.recon.CashRefundVND,
+		ExpectedCashVnd:               vc.recon.ExpectedCashVND,
+		ManualQrPaymentVnd:            vc.recon.ManualQRPaymentVND,
+		ManualQrPaymentVoidVnd:        vc.recon.ManualQRPaymentVoidVND,
+		ExpectedManualQrReceivedVnd:   vc.recon.ExpectedManualQRReceivedVND,
+		ManualQrRefundVnd:             vc.recon.ManualQRRefundVND,
+		ObservedCashVnd:               vc.finalCount.CountedCashVND,
+		ObservedManualQrReceivedVnd:   vc.finalObservation.ObservedReceivedVND,
+		ObservedManualQrRefundedVnd:   vc.finalObservation.ObservedRefundedVND,
+		CashDifferenceVnd:             vc.diffs.cash,
+		ManualQrReceivedDifferenceVnd: vc.diffs.qrReceived,
+		ManualQrRefundedDifferenceVnd: vc.diffs.qrRefunded,
+	})
+	if err != nil {
+		return sqlc.InsertShiftClosureRow{}, MapDBError(err)
+	}
+	return closure, nil
+}
 
-			detail := ClosedShiftDetailResponse{
-				ClosedShiftSummaryResponse: ClosedShiftSummaryResponse{
-					ID:       locked.ID,
-					Opener:   staffSummaryFromRow(opener),
-					Closer:   staffSummaryFromRow(closer),
-					OpenedAt: locked.OpenedAt,
-					ClosedAt: closure.ClosedAt,
+// dimensionAmounts returns one closure dimension's expected, observed, and
+// difference amounts.
+func (vc verifiedClose) dimensionAmounts(dimension DiscrepancyDimension) (expected, observed, difference int64) {
+	switch dimension {
+	case DimensionCash:
+		return vc.recon.ExpectedCashVND, vc.finalCount.CountedCashVND, vc.diffs.cash
+	case DimensionManualQRReceived:
+		return vc.recon.ExpectedManualQRReceivedVND, vc.finalObservation.ObservedReceivedVND, vc.diffs.qrReceived
+	case DimensionManualQRRefunded:
+		return vc.recon.ManualQRRefundVND, vc.finalObservation.ObservedRefundedVND, vc.diffs.qrRefunded
+	}
+	return 0, 0, 0
+}
 
-					OpeningFloatVND:   recon.OpeningFloatVND,
-					ExpectedCashVND:   recon.ExpectedCashVND,
-					ObservedCashVND:   finalCount.CountedCashVND,
-					CashDifferenceVND: cashDifference,
+// insertClosureDiscrepancies stores one discrepancy row per reason entry. An
+// exact close has no entries and writes nothing.
+func insertClosureDiscrepancies(ctx context.Context, q *sqlc.Queries, closureID uuid.UUID,
+	vc verifiedClose, discrepancies []normalizedCloseDiscrepancy,
+) error {
+	if len(discrepancies) == 0 {
+		return nil
+	}
+	dimensions := make([]string, 0, len(discrepancies))
+	expecteds := make([]int64, 0, len(discrepancies))
+	observeds := make([]int64, 0, len(discrepancies))
+	differences := make([]int64, 0, len(discrepancies))
+	reasons := make([]string, 0, len(discrepancies))
+	notes := make([]string, 0, len(discrepancies))
+	// The reason-set check guarantees exactly one entry per nonzero dimension
+	// and none per zero dimension, so each entry's amounts are the amounts of
+	// its own dimension.
+	for _, entry := range discrepancies {
+		expected, observed, difference := vc.dimensionAmounts(entry.Dimension)
+		dimensions = append(dimensions, string(entry.Dimension))
+		expecteds = append(expecteds, expected)
+		observeds = append(observeds, observed)
+		differences = append(differences, difference)
+		reasons = append(reasons, string(entry.Reason))
+		if entry.Note != nil {
+			notes = append(notes, *entry.Note)
+		} else {
+			// An empty Go string stores SQL NULL through the query's
+			// NULLIF(btrim(note), '') transform.
+			notes = append(notes, "")
+		}
+	}
+	if err := q.InsertShiftDiscrepancies(ctx, sqlc.InsertShiftDiscrepanciesParams{
+		ShiftClosureID: closureID,
+		Dimensions:     dimensions,
+		Expecteds:      expecteds,
+		Observeds:      observeds,
+		Differences:    differences,
+		Reasons:        reasons,
+		Notes:          notes,
+	}); err != nil {
+		return MapDBError(err)
+	}
+	return nil
+}
 
-					ExpectedManualQRReceivedVND:   recon.ExpectedManualQRReceivedVND,
-					ObservedManualQRReceivedVND:   finalObservation.ObservedReceivedVND,
-					ManualQRReceivedDifferenceVND: qrReceivedDifference,
+// loadClosedShiftDetail builds the immutable close response. It reuses the
+// frozen snapshot's loaded attempts and starter, plus the stored discrepancy
+// rows with their database-assigned ids and creation times.
+func loadClosedShiftDetail(ctx context.Context, q *sqlc.Queries, actor Actor, vc verifiedClose,
+	closure sqlc.InsertShiftClosureRow, approver *StaffSummary,
+) (ClosedShiftDetailResponse, error) {
+	discrepancies, err := loadClosedDiscrepancies(ctx, q, closure.ID)
+	if err != nil {
+		return ClosedShiftDetailResponse{}, err
+	}
+	opener, err := q.GetStaffSummary(ctx, vc.shift.OpenedByStaffIdentityID)
+	if err != nil {
+		return ClosedShiftDetailResponse{}, fmt.Errorf("load opener summary: %w", err)
+	}
+	closer, err := q.GetStaffSummary(ctx, actor.StaffID)
+	if err != nil {
+		return ClosedShiftDetailResponse{}, fmt.Errorf("load closer summary: %w", err)
+	}
 
-					ExpectedManualQRRefundedVND:   recon.ManualQRRefundVND,
-					ObservedManualQRRefundedVND:   finalObservation.ObservedRefundedVND,
-					ManualQRRefundedDifferenceVND: qrRefundedDifference,
+	recon := vc.recon
+	return ClosedShiftDetailResponse{
+		ClosedShiftSummaryResponse: ClosedShiftSummaryResponse{
+			ID:       vc.shift.ID,
+			Opener:   staffSummaryFromRow(opener),
+			Closer:   staffSummaryFromRow(closer),
+			OpenedAt: vc.shift.OpenedAt,
+			ClosedAt: closure.ClosedAt,
 
-					HasDiscrepancy: hasDiscrepancy,
-				},
-				Starter:                         recon.Starter,
-				PayInVND:                        recon.PayInVND,
-				PayOutVND:                       recon.PayOutVND,
-				CashPaymentVND:                  recon.CashPaymentVND,
-				CashPaymentVoidVND:              recon.CashPaymentVoidVND,
-				CashRefundVND:                   recon.CashRefundVND,
-				ManualQRPaymentVND:              recon.ManualQRPaymentVND,
-				ManualQRPaymentVoidVND:          recon.ManualQRPaymentVoidVND,
-				PendingManualQRRefundVND:        recon.PendingManualQRRefundVND,
-				PendingRefundVND:                recon.PendingRefundVND,
-				UnresolvedPostSaleAdjustmentVND: recon.UnresolvedPostSaleAdjustmentVND,
-				CashCounts:                      recon.CashCounts,
-				QRObservations:                  recon.QRObservations,
-				Discrepancies:                   discrepancyResponses,
-				Approver:                        approver,
-			}
+			OpeningFloatVND:   recon.OpeningFloatVND,
+			ExpectedCashVND:   recon.ExpectedCashVND,
+			ObservedCashVND:   vc.finalCount.CountedCashVND,
+			CashDifferenceVND: vc.diffs.cash,
 
-			return 200, detail, AuditRecord{
-				EventType: eventType,
-				Details: closedShiftAuditDetails{
-					SalesShiftID:                  locked.ID,
-					ReconciliationID:              recon.ID,
-					ClosureID:                     closure.ID,
-					FinalCashCountID:              finalCount.ID,
-					FinalQRObservationID:          finalObservation.ID,
-					CashDifferenceVND:             cashDifference,
-					ManualQRReceivedDifferenceVND: qrReceivedDifference,
-					ManualQRRefundedDifferenceVND: qrRefundedDifference,
-					Discrepancies:                 auditReasons,
-					ApproverStaffIdentityID:       auditApprover,
-				},
-			}, nil
+			ExpectedManualQRReceivedVND:   recon.ExpectedManualQRReceivedVND,
+			ObservedManualQRReceivedVND:   vc.finalObservation.ObservedReceivedVND,
+			ManualQRReceivedDifferenceVND: vc.diffs.qrReceived,
+
+			ExpectedManualQRRefundedVND:   recon.ManualQRRefundVND,
+			ObservedManualQRRefundedVND:   vc.finalObservation.ObservedRefundedVND,
+			ManualQRRefundedDifferenceVND: vc.diffs.qrRefunded,
+
+			HasDiscrepancy: vc.diffs.nonzero(),
+		},
+		Starter:                         recon.Starter,
+		PayInVND:                        recon.PayInVND,
+		PayOutVND:                       recon.PayOutVND,
+		CashPaymentVND:                  recon.CashPaymentVND,
+		CashPaymentVoidVND:              recon.CashPaymentVoidVND,
+		CashRefundVND:                   recon.CashRefundVND,
+		ManualQRPaymentVND:              recon.ManualQRPaymentVND,
+		ManualQRPaymentVoidVND:          recon.ManualQRPaymentVoidVND,
+		PendingManualQRRefundVND:        recon.PendingManualQRRefundVND,
+		PendingRefundVND:                recon.PendingRefundVND,
+		UnresolvedPostSaleAdjustmentVND: recon.UnresolvedPostSaleAdjustmentVND,
+		CashCounts:                      recon.CashCounts,
+		QRObservations:                  recon.QRObservations,
+		Discrepancies:                   discrepancies,
+		Approver:                        approver,
+	}, nil
+}
+
+// closeAuditRecord is the exact or discrepant closure audit event.
+func closeAuditRecord(operation string, vc verifiedClose, closure sqlc.InsertShiftClosureRow,
+	discrepancies []normalizedCloseDiscrepancy, approverID uuid.NullUUID,
+) AuditRecord {
+	eventType := EventShiftClosedExact
+	if operation == OpCloseWithDiscrepancy {
+		eventType = EventShiftClosedWithDiscrepancy
+	}
+	reasons := make([]closedDiscrepancyAuditDetails, 0, len(discrepancies))
+	for _, d := range discrepancies {
+		reasons = append(reasons, closedDiscrepancyAuditDetails{
+			Dimension: d.Dimension, Reason: d.Reason,
 		})
+	}
+	var approver *uuid.UUID
+	if approverID.Valid {
+		id := approverID.UUID
+		approver = &id
+	}
+	return AuditRecord{
+		EventType: eventType,
+		Details: closedShiftAuditDetails{
+			SalesShiftID:                  vc.shift.ID,
+			ReconciliationID:              vc.recon.ID,
+			ClosureID:                     closure.ID,
+			FinalCashCountID:              vc.finalCount.ID,
+			FinalQRObservationID:          vc.finalObservation.ID,
+			CashDifferenceVND:             vc.diffs.cash,
+			ManualQRReceivedDifferenceVND: vc.diffs.qrReceived,
+			ManualQRRefundedDifferenceVND: vc.diffs.qrRefunded,
+			Discrepancies:                 reasons,
+			ApproverStaffIdentityID:       approver,
+		},
+	}
 }

@@ -50,7 +50,7 @@ func NewRecordCashMovementHandler(runner *Runner) *RecordCashMovementHandler {
 // Cash or source total: no aggregate may be revealed before the blind initial
 // count commits.
 //
-// Cash Movements are append-only: Phase 4 provides no edit, reverse, or delete.
+// Cash Movements are append-only: there is no edit, reverse, or delete.
 func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd RecordCashMovementCommand) (int, CashMovementResult, error) {
 	if cmd.AmountVND == nil {
 		return 0, CashMovementResult{}, fmt.Errorf("%w: amount_vnd is required", response.ErrInvalid)
@@ -80,82 +80,99 @@ func (h *RecordCashMovementHandler) Handle(ctx context.Context, actor Actor, cmd
 
 	return ExecuteMutation(ctx, h.runner, actor, spec,
 		func(mc MutationContext) (int, CashMovementResult, AuditRecord, error) {
-			var zero CashMovementResult
-
-			if err := ValidateMethod(cmd.Method); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
-			}
-			if err := ValidateReason(cmd.Reason); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
-			}
-			if err := ValidateAmount(amount); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
-			}
-			if err := ValidateNote(note, cmd.Reason); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
-			}
-
-			// Lock the Shift row so a concurrent state change cannot be missed.
-			// A missing or non-OPEN Shift maps to OPEN_SALES_SHIFT_REQUIRED.
-			openShift, err := mc.Queries.GetOpenSalesShiftForUpdate(ctx, cmd.ShiftID)
+			result, audit, err := recordCashMovement(ctx, mc, cmd, amount, note)
 			if err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
+				return 0, CashMovementResult{}, AuditRecord{}, err
 			}
-
-			initiator, err := mc.Queries.GetStaffSummary(ctx, actor.StaffID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("load initiator summary: %w", err)
-			}
-
-			noteArg := sql.NullString{}
-			if note != nil {
-				noteArg = sql.NullString{String: *note, Valid: true}
-			}
-
-			inserted, err := mc.Queries.InsertCashMovement(ctx, sqlc.InsertCashMovementParams{
-				SalesShiftID:                  openShift.ID,
-				Method:                        cmd.Method,
-				AmountVnd:                     amount,
-				Reason:                        cmd.Reason,
-				Note:                          noteArg,
-				InitiatedByStaffIdentityID:    actor.StaffID,
-				InitiatedStaffAccessSessionID: actor.SessionID,
-				ApprovedByStaffIdentityID:     mc.Approver.ID,
-			})
-			if err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
-			}
-
-			movement := CashMovementResponse{
-				ID:           inserted.ID,
-				SalesShiftID: openShift.ID,
-				Method:       cmd.Method,
-				AmountVND:    amount,
-				Reason:       cmd.Reason,
-				Note:         note,
-				Initiator: StaffSummary{
-					ID:          initiator.ID,
-					DisplayName: initiator.DisplayName,
-					LoginCode:   initiator.LoginCode,
-				},
-				Approver:   staffSummaryFromApprover(*mc.Approver),
-				OccurredAt: inserted.OccurredAt,
-			}
-
-			return 201, CashMovementResult{
-				Movement: movement,
-			}, AuditRecord{
-				EventType: EventCashMovementRecorded,
-				Details: cashMovementAuditDetails{
-					CashMovementID:           movement.ID,
-					SalesShiftID:             openShift.ID,
-					Method:                   movement.Method,
-					AmountVND:                movement.AmountVND,
-					Reason:                   movement.Reason,
-					Note:                     movement.Note,
-					InitiatorStaffIdentityID: initiator.ID,
-					ApproverStaffIdentityID:  mc.Approver.ID,
-				},
-			}, nil
+			return 201, result, audit, nil
 		})
+}
+
+// validateCashMovement checks the movement's business fields, reporting any
+// failure as invalid input.
+func validateCashMovement(method, reason string, amount int64, note *string) error {
+	if err := ValidateMethod(method); err != nil {
+		return fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+	if err := ValidateReason(reason); err != nil {
+		return fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+	if err := ValidateAmount(amount); err != nil {
+		return fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+	if err := ValidateNote(note, reason); err != nil {
+		return fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+	}
+	return nil
+}
+
+// recordCashMovement is the Cash Movement mutation body. The pipeline has
+// already verified the Manager approval, so mc.Approver is set.
+func recordCashMovement(ctx context.Context, mc MutationContext, cmd RecordCashMovementCommand,
+	amount int64, note *string,
+) (CashMovementResult, AuditRecord, error) {
+	if err := validateCashMovement(cmd.Method, cmd.Reason, amount, note); err != nil {
+		return CashMovementResult{}, AuditRecord{}, err
+	}
+
+	// Lock the Shift row so a concurrent state change cannot be missed. A
+	// missing or non-OPEN Shift maps to OPEN_SALES_SHIFT_REQUIRED.
+	openShift, err := mc.Queries.GetOpenSalesShiftForUpdate(ctx, cmd.ShiftID)
+	if err != nil {
+		return CashMovementResult{}, AuditRecord{}, MapDBError(err)
+	}
+
+	initiator, err := mc.Queries.GetStaffSummary(ctx, mc.Actor.StaffID)
+	if err != nil {
+		return CashMovementResult{}, AuditRecord{}, fmt.Errorf("load initiator summary: %w", err)
+	}
+
+	noteArg := sql.NullString{}
+	if note != nil {
+		noteArg = sql.NullString{String: *note, Valid: true}
+	}
+
+	inserted, err := mc.Queries.InsertCashMovement(ctx, sqlc.InsertCashMovementParams{
+		SalesShiftID:                  openShift.ID,
+		Method:                        cmd.Method,
+		AmountVnd:                     amount,
+		Reason:                        cmd.Reason,
+		Note:                          noteArg,
+		InitiatedByStaffIdentityID:    mc.Actor.StaffID,
+		InitiatedStaffAccessSessionID: mc.Actor.SessionID,
+		ApprovedByStaffIdentityID:     mc.Approver.ID,
+	})
+	if err != nil {
+		return CashMovementResult{}, AuditRecord{}, MapDBError(err)
+	}
+
+	movement := CashMovementResponse{
+		ID:           inserted.ID,
+		SalesShiftID: openShift.ID,
+		Method:       cmd.Method,
+		AmountVND:    amount,
+		Reason:       cmd.Reason,
+		Note:         note,
+		Initiator: StaffSummary{
+			ID:          initiator.ID,
+			DisplayName: initiator.DisplayName,
+			LoginCode:   initiator.LoginCode,
+		},
+		Approver:   staffSummaryFromApprover(*mc.Approver),
+		OccurredAt: inserted.OccurredAt,
+	}
+
+	return CashMovementResult{Movement: movement}, AuditRecord{
+		EventType: EventCashMovementRecorded,
+		Details: cashMovementAuditDetails{
+			CashMovementID:           movement.ID,
+			SalesShiftID:             openShift.ID,
+			Method:                   movement.Method,
+			AmountVND:                movement.AmountVND,
+			Reason:                   movement.Reason,
+			Note:                     movement.Note,
+			InitiatorStaffIdentityID: initiator.ID,
+			ApproverStaffIdentityID:  mc.Approver.ID,
+		},
+	}, nil
 }
