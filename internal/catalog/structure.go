@@ -275,26 +275,8 @@ func (h *SetSelectionRuleHandler) Handle(ctx context.Context, actor Actor, cmd S
 			return 0, SelectionRuleResponse{}, AuditRecord{}, fmt.Errorf("%w: modifier group is retired", ErrEntityRetired)
 		}
 
-		options, err := q.ListModifierOptionsByGroup(ctx, cmd.GroupID)
-		if err != nil {
-			return 0, SelectionRuleResponse{}, AuditRecord{}, MapDBError(err)
-		}
-		active := 0
-		optByID := make(map[uuid.UUID]sqlc.ModifierOption, len(options))
-		for _, o := range options {
-			optByID[o.ID] = o
-			if !o.RetiredAt.Valid {
-				active++
-			}
-		}
-		if err := ValidateSelectionRule(cmd.MinSelections, cmd.MaxSelections, active, len(defaults)); err != nil {
-			return 0, SelectionRuleResponse{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrInvalidModifierConfiguration, err.Error())
-		}
-		for _, id := range defaults {
-			o, ok := optByID[id]
-			if !ok || o.RetiredAt.Valid || !o.Available {
-				return 0, SelectionRuleResponse{}, AuditRecord{}, fmt.Errorf("%w: default option %s must belong to the group and be available", ErrInvalidModifierConfiguration, id)
-			}
+		if err := validateSelectionRuleOptions(ctx, q, cmd, defaults); err != nil {
+			return 0, SelectionRuleResponse{}, AuditRecord{}, err
 		}
 
 		beforeRows, err := q.ListModifierGroupDefaultOptionsByGroup(ctx, cmd.GroupID)
@@ -336,4 +318,31 @@ func (h *SetSelectionRuleHandler) Handle(ctx context.Context, actor Actor, cmd S
 		}
 		return 200, res, audit, nil
 	})
+}
+
+// validateSelectionRuleOptions checks the new bounds against the group's
+// active options, and that each default is an available option of the group.
+func validateSelectionRuleOptions(ctx context.Context, q *sqlc.Queries, cmd SetSelectionRuleCommand, defaults []uuid.UUID) error {
+	options, err := q.ListModifierOptionsByGroup(ctx, cmd.GroupID)
+	if err != nil {
+		return MapDBError(err)
+	}
+	active := 0
+	optByID := make(map[uuid.UUID]sqlc.ModifierOption, len(options))
+	for _, o := range options {
+		optByID[o.ID] = o
+		if !o.RetiredAt.Valid {
+			active++
+		}
+	}
+	if err := ValidateSelectionRule(cmd.MinSelections, cmd.MaxSelections, active, len(defaults)); err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalidModifierConfiguration, err.Error())
+	}
+	for _, id := range defaults {
+		o, ok := optByID[id]
+		if !ok || o.RetiredAt.Valid || !o.Available {
+			return fmt.Errorf("%w: default option %s must belong to the group and be available", ErrInvalidModifierConfiguration, id)
+		}
+	}
+	return nil
 }

@@ -43,7 +43,6 @@ func (h *AttachItemModifierGroupHandler) Handle(ctx context.Context, actor Actor
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, ItemModifierGroupResponse, AuditRecord, error) {
-		// 1. Lock owner (item)
 		item, err := q.GetMenuItemForUpdate(ctx, cmd.ItemID)
 		if err != nil {
 			return 0, ItemModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
@@ -52,7 +51,6 @@ func (h *AttachItemModifierGroupHandler) Handle(ctx context.Context, actor Actor
 			return 0, ItemModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: item is retired", ErrEntityRetired)
 		}
 
-		// 2. Lock group
 		group, err := q.GetModifierGroupForUpdate(ctx, cmd.ModifierGroupID)
 		if err != nil {
 			return 0, ItemModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
@@ -61,7 +59,6 @@ func (h *AttachItemModifierGroupHandler) Handle(ctx context.Context, actor Actor
 			return 0, ItemModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: modifier group is retired", ErrEntityRetired)
 		}
 
-		// 3. Create assignment
 		err = q.CreateItemModifierGroup(ctx, sqlc.CreateItemModifierGroupParams{
 			MenuItemID:      cmd.ItemID,
 			ModifierGroupID: cmd.ModifierGroupID,
@@ -118,7 +115,6 @@ func (h *AttachCategoryModifierGroupHandler) Handle(ctx context.Context, actor A
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, CategoryModifierGroupResponse, AuditRecord, error) {
-		// 1. Lock owner (category)
 		category, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
 		if err != nil {
 			return 0, CategoryModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
@@ -127,7 +123,6 @@ func (h *AttachCategoryModifierGroupHandler) Handle(ctx context.Context, actor A
 			return 0, CategoryModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: category is retired", ErrEntityRetired)
 		}
 
-		// 2. Lock group
 		group, err := q.GetModifierGroupForUpdate(ctx, cmd.ModifierGroupID)
 		if err != nil {
 			return 0, CategoryModifierGroupResponse{}, AuditRecord{}, MapDBError(err)
@@ -136,7 +131,6 @@ func (h *AttachCategoryModifierGroupHandler) Handle(ctx context.Context, actor A
 			return 0, CategoryModifierGroupResponse{}, AuditRecord{}, fmt.Errorf("%w: modifier group is retired", ErrEntityRetired)
 		}
 
-		// 3. Create assignment
 		err = q.CreateCategoryModifierGroup(ctx, sqlc.CreateCategoryModifierGroupParams{
 			MenuCategoryID:  cmd.CategoryID,
 			ModifierGroupID: cmd.ModifierGroupID,
@@ -193,7 +187,6 @@ func (h *ExcludeInheritedModifierGroupHandler) Handle(ctx context.Context, actor
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, ItemModifierGroupExclusionResponse, AuditRecord, error) {
-		// 1. Lock owner (item)
 		item, err := q.GetMenuItemForUpdate(ctx, cmd.ItemID)
 		if err != nil {
 			return 0, ItemModifierGroupExclusionResponse{}, AuditRecord{}, MapDBError(err)
@@ -202,7 +195,6 @@ func (h *ExcludeInheritedModifierGroupHandler) Handle(ctx context.Context, actor
 			return 0, ItemModifierGroupExclusionResponse{}, AuditRecord{}, fmt.Errorf("%w: item is retired", ErrEntityRetired)
 		}
 
-		// 2. Lock group
 		group, err := q.GetModifierGroupForUpdate(ctx, cmd.ModifierGroupID)
 		if err != nil {
 			return 0, ItemModifierGroupExclusionResponse{}, AuditRecord{}, MapDBError(err)
@@ -211,7 +203,7 @@ func (h *ExcludeInheritedModifierGroupHandler) Handle(ctx context.Context, actor
 			return 0, ItemModifierGroupExclusionResponse{}, AuditRecord{}, fmt.Errorf("%w: modifier group is retired", ErrEntityRetired)
 		}
 
-		// 3. Verify that item's category is currently assigned to this modifier group
+		// Only a group the item's category provides can be excluded.
 		_, err = q.GetCategoryModifierGroup(ctx, sqlc.GetCategoryModifierGroupParams{
 			MenuCategoryID:  item.CategoryID,
 			ModifierGroupID: cmd.ModifierGroupID,
@@ -223,7 +215,6 @@ func (h *ExcludeInheritedModifierGroupHandler) Handle(ctx context.Context, actor
 			return 0, ItemModifierGroupExclusionResponse{}, AuditRecord{}, MapDBError(err)
 		}
 
-		// 4. Create exclusion
 		err = q.CreateItemModifierGroupExclusion(ctx, sqlc.CreateItemModifierGroupExclusionParams{
 			MenuItemID:      cmd.ItemID,
 			ModifierGroupID: cmd.ModifierGroupID,
@@ -285,7 +276,6 @@ func (h *SetModifierGroupDefaultsHandler) Handle(ctx context.Context, actor Acto
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, ModifierGroupDefaultsResponse, AuditRecord, error) {
-		// 1. Lock group
 		group, err := q.GetModifierGroupForUpdate(ctx, cmd.GroupID)
 		if err != nil {
 			return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, MapDBError(err)
@@ -294,48 +284,11 @@ func (h *SetModifierGroupDefaultsHandler) Handle(ctx context.Context, actor Acto
 			return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, fmt.Errorf("%w: modifier group is retired", ErrEntityRetired)
 		}
 
-		// 2. Validate cardinality
-		count := len(optIDs)
-		if count < int(group.MinSelections) || count > int(group.MaxSelections) {
-			return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, fmt.Errorf("%w: default options count %d must be between min %d and max %d", ErrInvalidModifierConfiguration, count, group.MinSelections, group.MaxSelections)
+		if err := validateGroupDefaults(ctx, q, group, optIDs); err != nil {
+			return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, err
 		}
 
-		// 3. Validate distinct options
-		seen := make(map[uuid.UUID]bool, len(optIDs))
-		for _, id := range optIDs {
-			if seen[id] {
-				return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, fmt.Errorf("%w: duplicate default option %s", ErrInvalidModifierConfiguration, id)
-			}
-			seen[id] = true
-		}
-
-		// 4. Validate all options belong to this group, are available, and not retired
-		if len(optIDs) > 0 {
-			options, err := q.ListModifierOptionsByGroup(ctx, cmd.GroupID)
-			if err != nil {
-				return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, MapDBError(err)
-			}
-
-			optMap := make(map[uuid.UUID]sqlc.ModifierOption, len(options))
-			for _, opt := range options {
-				optMap[opt.ID] = opt
-			}
-
-			for _, id := range optIDs {
-				opt, ok := optMap[id]
-				if !ok {
-					return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, fmt.Errorf("%w: option %s does not belong to group", ErrInvalidModifierConfiguration, id)
-				}
-				if opt.RetiredAt.Valid {
-					return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, fmt.Errorf("%w: default option %s is retired", ErrEntityRetired, id)
-				}
-				if !opt.Available {
-					return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, fmt.Errorf("%w: default option %s is not available", ErrInvalidModifierConfiguration, id)
-				}
-			}
-		}
-
-		// 5. Delete existing defaults and reinsert
+		// Replace the defaults wholesale: delete, then reinsert.
 		if err := q.DeleteModifierGroupDefaultOptions(ctx, cmd.GroupID); err != nil {
 			return 0, ModifierGroupDefaultsResponse{}, AuditRecord{}, MapDBError(err)
 		}
@@ -362,4 +315,47 @@ func (h *SetModifierGroupDefaultsHandler) Handle(ctx context.Context, actor Acto
 		}
 		return 200, res, audit, nil
 	})
+}
+
+// validateGroupDefaults checks the default count against the group's
+// selection bounds, that the defaults are distinct, and that each is an
+// available, active option of the group.
+func validateGroupDefaults(ctx context.Context, q *sqlc.Queries, group sqlc.ModifierGroup, optIDs []uuid.UUID) error {
+	count := len(optIDs)
+	if count < int(group.MinSelections) || count > int(group.MaxSelections) {
+		return fmt.Errorf("%w: default options count %d must be between min %d and max %d", ErrInvalidModifierConfiguration, count, group.MinSelections, group.MaxSelections)
+	}
+
+	seen := make(map[uuid.UUID]bool, len(optIDs))
+	for _, id := range optIDs {
+		if seen[id] {
+			return fmt.Errorf("%w: duplicate default option %s", ErrInvalidModifierConfiguration, id)
+		}
+		seen[id] = true
+	}
+	if len(optIDs) == 0 {
+		return nil
+	}
+
+	options, err := q.ListModifierOptionsByGroup(ctx, group.ID)
+	if err != nil {
+		return MapDBError(err)
+	}
+	optMap := make(map[uuid.UUID]sqlc.ModifierOption, len(options))
+	for _, opt := range options {
+		optMap[opt.ID] = opt
+	}
+	for _, id := range optIDs {
+		opt, ok := optMap[id]
+		if !ok {
+			return fmt.Errorf("%w: option %s does not belong to group", ErrInvalidModifierConfiguration, id)
+		}
+		if opt.RetiredAt.Valid {
+			return fmt.Errorf("%w: default option %s is retired", ErrEntityRetired, id)
+		}
+		if !opt.Available {
+			return fmt.Errorf("%w: default option %s is not available", ErrInvalidModifierConfiguration, id)
+		}
+	}
+	return nil
 }

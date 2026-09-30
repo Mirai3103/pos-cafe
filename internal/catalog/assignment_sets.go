@@ -55,8 +55,6 @@ func deleteCategoryGroupExclusions(ctx context.Context, q *sqlc.Queries, categor
 	return refs, nil
 }
 
-// === Command 7 ===
-
 type replaceItemGroupsFingerprint struct {
 	ItemID   uuid.UUID   `json:"item_id"`
 	Direct   []uuid.UUID `json:"direct_group_ids"`
@@ -135,25 +133,8 @@ func (h *ReplaceItemModifierGroupsHandler) Handle(ctx context.Context, actor Act
 
 		dAdd, dRem := DiffIDSets(curDirect, direct)
 		eAdd, eRem := DiffIDSets(curExcluded, excluded)
-		for _, g := range dRem {
-			if err := q.DeleteItemModifierGroup(ctx, sqlc.DeleteItemModifierGroupParams{MenuItemID: cmd.ItemID, ModifierGroupID: g}); err != nil {
-				return 0, ItemModifierGroupsResponse{}, AuditRecord{}, MapDBError(err)
-			}
-		}
-		for _, g := range eRem {
-			if err := q.DeleteItemModifierGroupExclusion(ctx, sqlc.DeleteItemModifierGroupExclusionParams{MenuItemID: cmd.ItemID, ModifierGroupID: g}); err != nil {
-				return 0, ItemModifierGroupsResponse{}, AuditRecord{}, MapDBError(err)
-			}
-		}
-		for _, g := range dAdd {
-			if err := q.CreateItemModifierGroup(ctx, sqlc.CreateItemModifierGroupParams{MenuItemID: cmd.ItemID, ModifierGroupID: g}); err != nil {
-				return 0, ItemModifierGroupsResponse{}, AuditRecord{}, MapDBError(err)
-			}
-		}
-		for _, g := range eAdd {
-			if err := q.CreateItemModifierGroupExclusion(ctx, sqlc.CreateItemModifierGroupExclusionParams{MenuItemID: cmd.ItemID, ModifierGroupID: g}); err != nil {
-				return 0, ItemModifierGroupsResponse{}, AuditRecord{}, MapDBError(err)
-			}
+		if err := applyItemGroupChanges(ctx, q, cmd.ItemID, IDSetChange{Added: dAdd, Removed: dRem}, IDSetChange{Added: eAdd, Removed: eRem}); err != nil {
+			return 0, ItemModifierGroupsResponse{}, AuditRecord{}, err
 		}
 
 		res := ItemModifierGroupsResponse{ItemID: cmd.ItemID, DirectGroupIDs: direct, ExcludedGroupIDs: excluded}
@@ -172,8 +153,6 @@ func (h *ReplaceItemModifierGroupsHandler) Handle(ctx context.Context, actor Act
 	})
 }
 
-// === Command 8 ===
-
 type replaceCategoryGroupsFingerprint struct {
 	CategoryID uuid.UUID   `json:"category_id"`
 	GroupIDs   []uuid.UUID `json:"group_ids"`
@@ -184,6 +163,32 @@ type categoryModifierGroupsReplacedAudit struct {
 	Added             []uuid.UUID    `json:"added"`
 	Removed           []uuid.UUID    `json:"removed"`
 	RemovedExclusions []ExclusionRef `json:"removed_exclusions"`
+}
+
+// applyItemGroupChanges writes an item's direct and excluded group changes:
+// removals first, then additions.
+func applyItemGroupChanges(ctx context.Context, q *sqlc.Queries, itemID uuid.UUID, direct, excluded IDSetChange) error {
+	for _, g := range direct.Removed {
+		if err := q.DeleteItemModifierGroup(ctx, sqlc.DeleteItemModifierGroupParams{MenuItemID: itemID, ModifierGroupID: g}); err != nil {
+			return MapDBError(err)
+		}
+	}
+	for _, g := range excluded.Removed {
+		if err := q.DeleteItemModifierGroupExclusion(ctx, sqlc.DeleteItemModifierGroupExclusionParams{MenuItemID: itemID, ModifierGroupID: g}); err != nil {
+			return MapDBError(err)
+		}
+	}
+	for _, g := range direct.Added {
+		if err := q.CreateItemModifierGroup(ctx, sqlc.CreateItemModifierGroupParams{MenuItemID: itemID, ModifierGroupID: g}); err != nil {
+			return MapDBError(err)
+		}
+	}
+	for _, g := range excluded.Added {
+		if err := q.CreateItemModifierGroupExclusion(ctx, sqlc.CreateItemModifierGroupExclusionParams{MenuItemID: itemID, ModifierGroupID: g}); err != nil {
+			return MapDBError(err)
+		}
+	}
+	return nil
 }
 
 // ReplaceCategoryModifierGroupsHandler replaces the groups a category provides.
@@ -258,8 +263,6 @@ func (h *ReplaceCategoryModifierGroupsHandler) Handle(ctx context.Context, actor
 	})
 }
 
-// === Command 9 ===
-
 type replaceGroupAssignmentsFingerprint struct {
 	GroupID     uuid.UUID   `json:"group_id"`
 	ItemIDs     []uuid.UUID `json:"item_ids"`
@@ -274,7 +277,7 @@ type modifierGroupAssignmentsReplacedAudit struct {
 }
 
 // ReplaceGroupAssignmentsHandler sets exactly which items and categories a
-// group is directly attached to. It serves the 9b Batch Linker.
+// group is directly attached to. It serves the Batch Linker.
 type ReplaceGroupAssignmentsHandler struct {
 	runner *Runner
 }
@@ -342,24 +345,10 @@ func (h *ReplaceGroupAssignmentsHandler) Handle(ctx context.Context, actor Actor
 		iAdd, iRem := DiffIDSets(curItems, items)
 		cAdd, cRem := DiffIDSets(curCats, cats)
 
-		if err := lockOwners(UnionIDs(curItems, items), iAdd, func(ids []uuid.UUID) ([]uuid.UUID, []bool, error) {
-			rows, err := q.LockMenuItemsByIDs(ctx, ids)
-			locked, retired := make([]uuid.UUID, len(rows)), make([]bool, len(rows))
-			for i, r := range rows {
-				locked[i], retired[i] = r.ID, r.RetiredAt.Valid
-			}
-			return locked, retired, err
-		}, "menu item"); err != nil {
+		if err := lockOwners(UnionIDs(curItems, items), iAdd, lockMenuItemRows(ctx, q), "menu item"); err != nil {
 			return 0, zero, AuditRecord{}, err
 		}
-		if err := lockOwners(UnionIDs(curCats, cats), cAdd, func(ids []uuid.UUID) ([]uuid.UUID, []bool, error) {
-			rows, err := q.LockMenuCategoriesByIDs(ctx, ids)
-			locked, retired := make([]uuid.UUID, len(rows)), make([]bool, len(rows))
-			for i, r := range rows {
-				locked[i], retired[i] = r.ID, r.RetiredAt.Valid
-			}
-			return locked, retired, err
-		}, "category"); err != nil {
+		if err := lockOwners(UnionIDs(curCats, cats), cAdd, lockCategoryRows(ctx, q), "category"); err != nil {
 			return 0, zero, AuditRecord{}, err
 		}
 
@@ -373,33 +362,11 @@ func (h *ReplaceGroupAssignmentsHandler) Handle(ctx context.Context, actor Actor
 			}
 		}
 
-		removedExcl := []ExclusionRef{}
-		for _, c := range cRem {
-			if err := q.DeleteCategoryModifierGroup(ctx, sqlc.DeleteCategoryModifierGroupParams{MenuCategoryID: c, ModifierGroupID: cmd.GroupID}); err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
-			}
-			refs, err := deleteCategoryGroupExclusions(ctx, q, c, cmd.GroupID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-			removedExcl = append(removedExcl, refs...)
+		removedExcl, err := applyGroupAssignmentChanges(ctx, q, cmd.GroupID,
+			IDSetChange{Added: iAdd, Removed: iRem}, IDSetChange{Added: cAdd, Removed: cRem})
+		if err != nil {
+			return 0, zero, AuditRecord{}, err
 		}
-		for _, c := range cAdd {
-			if err := q.CreateCategoryModifierGroup(ctx, sqlc.CreateCategoryModifierGroupParams{MenuCategoryID: c, ModifierGroupID: cmd.GroupID}); err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
-			}
-		}
-		for _, i := range iRem {
-			if err := q.DeleteItemModifierGroup(ctx, sqlc.DeleteItemModifierGroupParams{MenuItemID: i, ModifierGroupID: cmd.GroupID}); err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
-			}
-		}
-		for _, i := range iAdd {
-			if err := q.CreateItemModifierGroup(ctx, sqlc.CreateItemModifierGroupParams{MenuItemID: i, ModifierGroupID: cmd.GroupID}); err != nil {
-				return 0, zero, AuditRecord{}, MapDBError(err)
-			}
-		}
-		sortExclusionRefs(removedExcl)
 
 		res := ModifierGroupAssignmentsResponse{GroupID: cmd.GroupID, ItemIDs: items, CategoryIDs: cats, RemovedExclusions: removedExcl}
 		if len(iAdd)+len(iRem)+len(cAdd)+len(cRem) == 0 {
@@ -416,4 +383,62 @@ func (h *ReplaceGroupAssignmentsHandler) Handle(ctx context.Context, actor Actor
 		}
 		return 200, res, audit, nil
 	})
+}
+
+// lockMenuItemRows returns a lockOwners callback that locks menu item rows.
+func lockMenuItemRows(ctx context.Context, q *sqlc.Queries) func([]uuid.UUID) ([]uuid.UUID, []bool, error) {
+	return func(ids []uuid.UUID) ([]uuid.UUID, []bool, error) {
+		rows, err := q.LockMenuItemsByIDs(ctx, ids)
+		locked, retired := make([]uuid.UUID, len(rows)), make([]bool, len(rows))
+		for i, r := range rows {
+			locked[i], retired[i] = r.ID, r.RetiredAt.Valid
+		}
+		return locked, retired, err
+	}
+}
+
+// lockCategoryRows returns a lockOwners callback that locks category rows.
+func lockCategoryRows(ctx context.Context, q *sqlc.Queries) func([]uuid.UUID) ([]uuid.UUID, []bool, error) {
+	return func(ids []uuid.UUID) ([]uuid.UUID, []bool, error) {
+		rows, err := q.LockMenuCategoriesByIDs(ctx, ids)
+		locked, retired := make([]uuid.UUID, len(rows)), make([]bool, len(rows))
+		for i, r := range rows {
+			locked[i], retired[i] = r.ID, r.RetiredAt.Valid
+		}
+		return locked, retired, err
+	}
+}
+
+// applyGroupAssignmentChanges writes a group's category changes, then its
+// item changes, removals before additions. It returns the exclusions that
+// removing the group from a category deleted, sorted.
+func applyGroupAssignmentChanges(ctx context.Context, q *sqlc.Queries, groupID uuid.UUID, items, categories IDSetChange) ([]ExclusionRef, error) {
+	removedExcl := []ExclusionRef{}
+	for _, c := range categories.Removed {
+		if err := q.DeleteCategoryModifierGroup(ctx, sqlc.DeleteCategoryModifierGroupParams{MenuCategoryID: c, ModifierGroupID: groupID}); err != nil {
+			return nil, MapDBError(err)
+		}
+		refs, err := deleteCategoryGroupExclusions(ctx, q, c, groupID)
+		if err != nil {
+			return nil, err
+		}
+		removedExcl = append(removedExcl, refs...)
+	}
+	for _, c := range categories.Added {
+		if err := q.CreateCategoryModifierGroup(ctx, sqlc.CreateCategoryModifierGroupParams{MenuCategoryID: c, ModifierGroupID: groupID}); err != nil {
+			return nil, MapDBError(err)
+		}
+	}
+	for _, i := range items.Removed {
+		if err := q.DeleteItemModifierGroup(ctx, sqlc.DeleteItemModifierGroupParams{MenuItemID: i, ModifierGroupID: groupID}); err != nil {
+			return nil, MapDBError(err)
+		}
+	}
+	for _, i := range items.Added {
+		if err := q.CreateItemModifierGroup(ctx, sqlc.CreateItemModifierGroupParams{MenuItemID: i, ModifierGroupID: groupID}); err != nil {
+			return nil, MapDBError(err)
+		}
+	}
+	sortExclusionRefs(removedExcl)
+	return removedExcl, nil
 }
