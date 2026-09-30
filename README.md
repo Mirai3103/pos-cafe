@@ -1,164 +1,226 @@
-# POS Cafe Backend - Idiomatic Go Vertical Slice Starter
+# POS Cafe
 
 [![Go Version](https://img.shields.io/badge/Go-1.27+-00ADD8?style=flat&logo=go)](https://golang.org)
-[![Architecture](https://img.shields.io/badge/Architecture-Vertical%20Slice%20%2B%20CQRS-orange?style=flat)](https://jimmybogard.com/vertical-slice-architecture/)
-[![Database](https://img.shields.io/badge/Database-PostgreSQL%20(pgx%2Fv5)-blue?style=flat&logo=postgresql)](https://github.com/jackc/pgx)
-[![Tests](https://img.shields.io/badge/Tests-Passing%20(with%20--race)-brightgreen?style=flat)](https://github.com/stretchr/testify)
+[![Database](https://img.shields.io/badge/Database-PostgreSQL%2017-blue?style=flat&logo=postgresql)](https://www.postgresql.org)
 [![Swagger](https://img.shields.io/badge/Swagger-OpenAPI%202.0-green?style=flat&logo=swagger)](https://swagger.io)
 
-A production-ready, highly maintainable, and **Idiomatic Golang** backend boilerplate built on **Vertical Slice Architecture** and **CQRS principles**. Designed specifically for Point of Sale (POS) and ordering systems, starting with a clean Cafe POS domain.
+A point-of-sale system for a single cafe: a Go backend organised as **vertical
+slices** over PostgreSQL, and a React frontend in `web/` that is embedded into the
+same binary.
+
+The domain language is defined in [`CONTEXT.md`](CONTEXT.md) and is binding.
+Architecture decisions live in [`spec/decisions.md`](spec/decisions.md), and current
+status and remaining work in [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
-## 🌟 Key Highlights & Philosophy
+## Key Ideas
 
-- **Idiomatic Go First:** No heavy enterprise C#/Java porting baggage. No reflection-based DI containers (`dig`/`fx`), no opaque mediator layers (`go-mediatr`), no `//go:linkname` runtime hacks.
-- **Vertical Slice Architecture (VSA):** Code is sliced vertically by business operation (Command/Query). Each slice encapsulates its request contract, validation, domain logic, database interaction, and HTTP transport.
-- **Production-Ready PostgreSQL (`pgx/v5`):** Powered by `jackc/pgx/v5` via standard library compatibility. Robust connection pooling, high throughput, and full support for PostgreSQL types and transactions.
-- **Type-Safe SQL with `sqlc`:** Write clean, standard SQL. `sqlc` compiles queries into type-safe Go structs and interfaces with zero runtime reflection.
-- **Event-Driven with Watermill:** Built-in in-memory event bus powered by `ThreeDotsLabs/watermill`. Decouple background side-effects (kitchen display, receipt printing, loyalty points) without external message broker setup.
-- **Explicit Transactions:** `database.WithTx` runs several sqlc queries inside one transaction with commit/rollback (and panic unwinding) handled for you — the primitive every multi-write slice needs.
-- **Zero-Setup Auto-Migrations:** Schema migrations are embedded directly into the binary via Go's standard `embed.FS` and applied on startup.
-- **Interactive Swagger UI:** Built-in OpenAPI documentation generated with `swaggo/swag`, available out of the box at `/swagger/index.html`.
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Technology | Description |
-| :--- | :--- | :--- |
-| **Language** | Go 1.27+ | Modern Go features |
-| **HTTP Framework** | [Echo v4](https://echo.labstack.com/) | High-performance, minimalist HTTP router |
-| **Database Driver** | [jackc/pgx/v5](https://github.com/jackc/pgx) | High-performance PostgreSQL driver and toolkit |
-| **Data Access** | [sqlc](https://sqlc.dev/) | Compile SQL to type-safe Go code |
-| **Event Bus** | [ThreeDotsLabs/watermill](https://github.com/ThreeDotsLabs/watermill) | Industry standard Pub/Sub event bus |
-| **Validation** | [go-playground/validator v10](https://github.com/go-playground/validator) | Struct and field validation |
-| **Logging** | `log/slog` | Go standard library structured logging |
-| **Configuration** | [joho/godotenv](https://github.com/joho/godotenv) | Environment variable and `.env` loader |
-| **API Documentation** | [swaggo/swag](https://github.com/swaggo/swag) | Automated Swagger UI / OpenAPI docs |
-| **Testing** | [stretchr/testify](https://github.com/stretchr/testify) | Test assertions and test suites |
+- **Idiomatic Go:** explicit wiring in `cmd/api/main.go`, no DI container, no
+  mediator, no reflection-based dispatch. Handlers are plain structs with a typed
+  `Handle` method.
+- **Vertical slices:** each business area (`auth`, `catalog`, `tables`, `shift`,
+  `sales`, `preparation`) owns its routes, HTTP handlers, domain rules, DTOs,
+  errors, and use cases. Business slices never import one another — they depend
+  only on `auth` (middleware, Manager approval), `platform`, and `response` — and
+  read another slice's tables through their own sqlc queries (ADR-006).
+- **One shared command pipeline:** every authorized mutation and read runs through
+  `internal/platform/command`, which reloads the actor's authority inside the
+  transaction, checks capabilities, enforces idempotency, and writes the audit
+  event (ADR-005, ADR-048). Slices differ only in the `Policy` they declare.
+- **Type-safe SQL with `sqlc`:** queries are plain SQL in `sql/queries/`, compiled to
+  Go. No ORM.
+- **Embedded migrations:** schema migrations are embedded with `embed.FS` and applied
+  on startup. Forward-only.
+- **Money is whole VND** stored as `BIGINT`.
 
 ---
 
-## 📂 Project Structure
+## Tech Stack
+
+| Component | Technology |
+| :--- | :--- |
+| **Language** | Go 1.27+ |
+| **HTTP** | [Echo v4](https://echo.labstack.com/) |
+| **Database** | PostgreSQL 17 via [jackc/pgx/v5](https://github.com/jackc/pgx) (`database/sql` compatibility) |
+| **Data access** | [sqlc](https://sqlc.dev/) |
+| **Logging** | `log/slog` (JSON) |
+| **Configuration** | Environment variables, `.env` via [joho/godotenv](https://github.com/joho/godotenv) |
+| **API docs** | [swaggo/swag](https://github.com/swaggo/swag), Swagger UI at `/swagger/index.html` |
+| **Testing** | [stretchr/testify](https://github.com/stretchr/testify), per-package PostgreSQL clones |
+| **Frontend** | React 19, Vite, TanStack Router and Query, Tailwind CSS, [orval](https://orval.dev/)-generated client, [bun](https://bun.sh/) |
+
+---
+
+## Project Structure
 
 ```text
 pos-cafe/
-├── cmd/
-│   └── api/
-│       └── main.go                 # Application entrypoint: explicit wiring & graceful shutdown
-├── config/
-│   └── config.go                   # Environment configuration loader with .env support
-├── docs/                           # Auto-generated Swagger 2.0 / OpenAPI documentation
-│   ├── docs.go
-│   ├── swagger.json
-│   └── swagger.yaml
+├── cmd/api/                    # Entrypoint: explicit wiring, graceful shutdown
+├── api/openapi/                # Generated Swagger 2.0 (swag): docs.go, swagger.json, swagger.yaml
 ├── internal/
-│   ├── category/                   # === VERTICAL SLICE: CATEGORY (CQRS) ===
-│   │   ├── create_category.go      # Command & Handler: Create category + Publish domain event
-│   │   ├── get_category.go         # Query & Handler: Fetch category by ID
-│   │   ├── list_categories.go      # Query & Handler: List all / active categories
-│   │   ├── update_category.go      # Command & Handler: Update category details
-│   │   ├── delete_category.go      # Command & Handler: Delete category
-│   │   ├── dto.go                  # Shared category response struct & mapping helpers
-│   │   ├── routes.go               # Route registry for Category slices
-│   │   └── category_test.go        # End-to-end integration & unit tests
-│   ├── database/
-│   │   ├── db.go                   # PostgreSQL connection pool setup (pgx/v5)
-│   │   ├── tx.go                   # WithTx / WithTxOptions transaction helpers
-│   │   ├── migrations/             # Embedded SQL migration files (embed.FS)
-│   │   │   └── 000001_init_schema.sql
-│   │   └── sqlc/                   # sqlc generated type-safe models & queries
-│   │       ├── categories.sql.go
-│   │       ├── db.go
-│   │       ├── models.go
-│   │       └── querier.go          # sqlc.Querier interface for seamless mocking
-│   ├── eventbus/                   # === EVENT BUS (Watermill In-Memory) ===
-│   │   ├── eventbus.go             # Generic Publish/Subscribe wrapper
-│   │   └── eventbus_test.go        # Event bus concurrency test
-│   ├── httpvalidator/              # Echo validator adapter over go-playground/validator
-│   │   └── httpvalidator.go
-│   └── response/                   # Standardized JSON response envelope & HTTP error mapper
-│       └── response.go
+│   ├── platform/
+│   │   ├── command/            # Shared mutation/read pipeline: in-tx authority reload, capability
+│   │   │                       #   check, optional Gate (self Manager PIN) / second-party Approval,
+│   │   │                       #   idempotency (pluggable IdempotencyStore), audit, advisory lock;
+│   │   │                       #   per-slice Policy
+│   │   ├── httpx/              # Shared Echo helpers: actor, UUID params, body binding, results/errors
+│   │   ├── config/             # Environment configuration
+│   │   └── database/           # pgx pool, embedded migrations (migrations/), sqlc code (sqlc/)
+│   ├── response/               # API envelope + table-driven ErrorMapper
+│   ├── auth/                   # Staff access sessions, PIN sign-in, rate limiting, staff administration
+│   ├── catalog/                # Menu, categories, sizes, modifier groups, availability, images
+│   ├── tables/                 # Tables and table overview
+│   ├── shift/                  # Sales Shift, Cash Movements, closure and reconciliation
+│   ├── sales/                  # Service Sessions, Order Drafts, Checks, Payments, corrections
+│   ├── preparation/            # Preparation Queue, alerts, waste, remake, cancellation
+│   └── testdb/                 # Ephemeral per-package Postgres clones for integration tests
 ├── sql/
-│   └── queries/                    # SQL source files for sqlc compilation
-│       └── categories.sql
-├── .env.example                    # Sample environment file
-├── .env                            # Local environment configuration
-├── .gitignore                      # Git ignore rules
-├── Makefile                        # Build, run, test, and code-generation shortcuts
-├── sqlc.yaml                       # sqlc code generator configuration
-├── go.mod
-└── go.sum
+│   ├── queries/                # sqlc query files (platform.sql = shared authority/idempotency queries)
+│   └── init/                   # Creates cafe_pos_test on first Postgres boot
+├── web/                        # React frontend (see below); embed.go serves the built SPA from the binary
+├── docs/                       # Specs, plans, backlog, domain rationale, history/, reports/
+├── spec/                       # Architecture decision records (decisions.md)
+├── design-system/              # Static HTML prototype + its checks (pos-cafe/tests/)
+├── scripts/                    # Development seed scripts (run with bun)
+├── resources/seeds/            # Demo menu images used by the dev seed
+├── CONTEXT.md                  # Domain language (binding)
+├── ROADMAP.md                  # Current status and remaining phases
+├── Makefile
+└── sqlc.yaml
+```
+
+### Anatomy of a slice
+
+Each business slice under `internal/` follows the same shape. `internal/tables` is
+the smallest and a good reference:
+
+| File | Role |
+| :--- | :--- |
+| `routes.go` | `NewSlices(db, queries)` builds one `Runner` and every handler; `RegisterRoutes` mounts them on `/api/v1` behind `RequireAuth` / `RequireCapability`. |
+| `http*.go` | Echo handlers with swag annotations. They read the actor, bind the body, validate the `request_id`, call the use case, and write the result through `httpx`. |
+| `executor.go` | The slice's `command.Policy` and thin wrappers over `command.ExecuteMutation` / `command.ExecuteRead`. |
+| `domain.go` | Capabilities, operation names, audit event types, and pure business rules. |
+| `dto.go` | Request commands and response types. |
+| `errors.go` | Domain sentinels, `MapDBError`, and the slice's `response.ErrorMapper`. |
+| One file per use case (or small group) | e.g. `commands.go` (create, rename, set availability), `overview.go` (read). |
+| `*_test.go` / `*_integration_test.go` | Unit tests and database-backed tests (`//go:build integration`). |
+
+### The command pipeline
+
+`command.ExecuteMutation` runs a mutation in one read-write transaction, in this
+order:
+
+1. reload the actor's session and identity (authority) inside the transaction;
+2. verify the spec's required capabilities;
+3. run the optional `Gate` (e.g. a self Manager-PIN re-authentication);
+4. verify the optional second-party Manager `Approval`;
+5. fingerprint the business input (never a credential);
+6. take an advisory lock on (actor, request id);
+7. replay a stored result for an exact duplicate, or reject a reused request id
+   with `ErrRequestConflict`;
+8. claim the request in the policy's `IdempotencyStore`;
+9. run the slice's body;
+10. write the business audit event, when the body returns one;
+11. store the replayable result and commit.
+
+Authority and gates are re-checked before a replay, so a revoked session, a lost
+role, or a rotated PIN cannot replay an earlier success. Denials are audited under
+the slice's own event type.
+
+`command.ExecuteRead` runs a read in a read-only `REPEATABLE READ` transaction with
+the same authority reload and capability check, so the check and every query in the
+body observe one snapshot.
+
+What differs between slices is declared once in a `command.Policy`: the denial
+event type and log scope, whether the actor is attributed on a denial, what a failed
+denial audit returns, whether read denials are audited, which slice errors count as
+security denials, the sentinel for a rejected approval, and the idempotency store
+(`command.IdempotencyKeys`, the shared `idempotency_keys` table, by default). The
+Tables policy:
+
+```go
+var policy = command.Policy{
+	DenialEventType:      EventAuthorizationDenied, // "tables.authorization_denied"
+	LogScope:             "tables",
+	Attribution:          command.AttributeActorIfConfirmed,
+	OnDenialAuditFailure: command.ReturnAuditError,
+}
+
+func NewRunner(db *sql.DB, queries *sqlc.Queries) *Runner {
+	return command.NewRunner(db, queries, policy)
+}
 ```
 
 ---
 
-## ⚖️ Why Idiomatic Go?
-
-| Dimension | This Starter Template | Typical C# / Java Port in Go |
-| :--- | :--- | :--- |
-| **Data Flow** | Direct, typed function calls (`h.Handle(ctx, cmd)`) | Opaque reflection via `mediatr.Send(ctx, cmd)` |
-| **Dependency Injection** | Explicit manual wiring in `main.go` | Reflection runtime container (`dig`/`fx`) |
-| **Database Access** | Pure SQL compiled to type-safe Go (`sqlc`) | Bulky ORM or custom reflection runtime scanners |
-| **Runtime Safety** | 100% standard memory safety, 0 reflection hacks | `//go:linkname` and `unsafe.Pointer` type scanning |
-| **Package Structure** | Package by domain feature (`package category`) | Over-fragmented folders (`commands`, `dtos`, `contracts`) |
-| **Error Handling** | Standard Go 1.13+ `errors.Is` & `%w` | Deep custom exception hierarchies with stack wrappers |
-
----
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
-- **Go**: Version 1.27 or higher (see the `go` directive in `go.mod`).
-- **Docker + Docker Compose**: for the local PostgreSQL instance.
-- **sqlc** (optional, only needed when editing SQL queries):
+
+- **Go** 1.27 or higher (see the `go` directive in `go.mod`).
+- **Docker + Docker Compose** for the local PostgreSQL instance.
+- **bun** for the frontend (`make build`, `make dev-seed`, and everything in `web/`).
+- **sqlc** (only when editing SQL queries):
   ```bash
   go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
   ```
-- **swag** (optional, only needed when updating Swagger comments):
+- **swag** (only when changing Swagger annotations):
   ```bash
   go install github.com/swaggo/swag/cmd/swag@latest
   ```
 
 `golangci-lint` and `govulncheck` are installed on demand by `make lint` and
-`make vuln`, so there is nothing to set up by hand.
+`make vuln`.
 
-### Quick Run
+### Run the backend
 
 ```bash
-# 1. Clone or navigate to the project directory
-cd pos-cafe
-
-# 2. Start PostgreSQL (creates both cafe_pos and cafe_pos_test on first boot)
+# 1. Start PostgreSQL (creates both cafe_pos and cafe_pos_test on first boot)
 make docker-up
 make db-wait
 
-# 3. Run the application
+# 2. Run the API server
 make run
 # or: go run ./cmd/api
 ```
 
-Run `make help` to see every available target.
+The server:
+1. Reads `.env` if present (falling back to the process environment).
+2. Connects to PostgreSQL via `DATABASE_URL`.
+3. Applies the embedded SQL migrations.
+4. Serves the API under `/api/v1`, Swagger UI at `/swagger/index.html`, catalog
+   images at `/media`, a health probe at `/health`, and the embedded web build at
+   `/` — all on `http://localhost:8080`.
 
-The application will:
-1. Automatically read `.env` (fallback to system environment variables).
-2. Connect to PostgreSQL via `DATABASE_URL` (configured in `.env`).
-3. Automatically execute embedded SQL migrations.
-4. Start the HTTP server at `http://localhost:8080`.
+On an empty database, create the first Manager with `POST /api/v1/auth/bootstrap`.
+For a full demo data set (staff with PIN `1234`, tables, and the menu with images),
+run `make dev-seed` against the running server. It **truncates** the development
+database first, so never point it at real data.
+
+### Run the frontend
+
+```bash
+cd web
+bun install
+bun run dev        # Vite on http://localhost:5173, proxies /api, /swagger, /media, /health to :8080
+```
+
+`make build` builds the frontend and then compiles one binary with the web build
+embedded (`build/app.exe`).
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Every setting is read from the environment, with `.env` loaded first if present
-(see `.env.example`). All variables are optional — the defaults below are what
-the template runs with out of the box.
+(see `.env.example`). All variables are optional.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `PORT` | `8080` | HTTP listen port. Validated to be 1–65535. |
 | `DATABASE_URL` | `postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos?sslmode=disable` | PostgreSQL DSN. Must not be empty. |
+| `MEDIA_DIR` | `./data/media` | Where content-addressed catalog images are stored (ADR-057). Back it up with the database. |
 | `APP_ENV` | `development` | Free-form environment label used in logs. |
 | `CORS_ALLOWED_ORIGINS` | `*` | Comma-separated allowed origins. |
 | `HTTP_READ_TIMEOUT` | `15s` | `http.Server.ReadTimeout` (Go duration string). |
@@ -166,25 +228,225 @@ the template runs with out of the box.
 | `HTTP_IDLE_TIMEOUT` | `60s` | `http.Server.IdleTimeout`. |
 | `HTTP_READ_HEADER_TIMEOUT` | `5s` | `http.Server.ReadHeaderTimeout` (Slowloris protection). |
 
-`config.Load` fails fast on an invalid `PORT`, an empty `DATABASE_URL`, or a
-non-positive timeout — a zero timeout means *no* timeout in `net/http`, which
-would silently drop the protection these settings exist to provide.
+Loading fails fast on an invalid `PORT`, an empty `DATABASE_URL`, or a non-positive
+timeout — a zero timeout means *no* timeout in `net/http`, which would silently drop
+the protection these settings exist to provide.
 
 ---
 
-## 🧪 Testing Strategy & Safety
+## API
 
-We separate fast in-memory **Unit Tests** from database-backed **Integration Tests** using Go build tags, with strict safety controls protecting development data:
+All endpoints live under `/api/v1` and are documented in Swagger UI at
+**[http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)**.
+The generated spec is committed in `api/openapi/`; regenerate it after changing
+handler annotations:
 
-### 1. Pure Unit Tests (Fast & Independent)
-Runs completely in-memory using consumer-defined mock interfaces, executing all tests in parallel in **< 0.01s**:
 ```bash
-make test
-# or: go test -v -race ./...
+make swagger
 ```
 
-### 2. Integration Tests (PostgreSQL Required)
-Tests run against ephemeral per-package database clones (isolated with `//go:build integration` tags):
+The frontend's typed client is generated from `api/openapi/swagger.yaml` with
+`cd web && bun run codegen`.
+
+Conventions every slice follows:
+
+- **Authentication:** `POST /auth/sign-in` with a login code and PIN returns a
+  token; send it as `Authorization: Bearer <token>`. Routes additionally require a
+  capability (or, for staff administration, the Manager role) derived from the
+  staff member's roles.
+- **Idempotency:** every mutation body carries a client-generated `request_id`
+  (UUID). Resending the same request returns the stored result; reusing the id for
+  a different change is a `409 REQUEST_CONFLICT`.
+- **Envelope:** responses are `{"success": true, "data": ...}` or
+  `{"success": false, "error": {"code": "...", "message": "..."}}`, with the
+  code and status chosen by the slice's `ErrorMapper`.
+
+Example — create a Table:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tables \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"request_id": "0b8e5f9e-6d3c-4d2a-9a57-3f7f0c1d2e4b", "name": "Bàn 1"}'
+```
+
+```json
+{
+  "success": true,
+  "data": { "id": "…", "name": "Bàn 1", "available": true }
+}
+```
+
+A second table with the same (normalized) name answers `409` with code
+`TABLE_NAME_CONFLICT`; a caller without `tables.administer` gets `403 FORBIDDEN`.
+
+---
+
+## Adding a New Use Case
+
+Walkthrough using the Tables slice: "rename a Table" (`PATCH /tables/:table_id/name`).
+
+### Step 1: Schema and queries
+
+If the use case needs schema changes, add the next numbered migration under
+`internal/platform/database/migrations/` (e.g. `000017_….sql`). Add the queries to
+the slice's file in `sql/queries/`:
+
+```sql
+-- name: GetTableForUpdate :one
+SELECT id, name, normalized_name, available, created_at, updated_at
+FROM tables
+WHERE id = $1
+FOR UPDATE;
+
+-- name: RenameTable :one
+UPDATE tables
+SET name = $2, normalized_name = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, name, normalized_name, available, created_at, updated_at;
+```
+
+Then run `make sqlc`.
+
+### Step 2: Domain names and DTO
+
+In `domain.go`, name the operation and the audit event; reuse or add a capability:
+
+```go
+OpRenameTable     = "tables.rename_table"
+EventTableRenamed = "TABLE_RENAMED"
+```
+
+In `dto.go`, add the command. It always carries a `request_id`; route parameters are
+`json:"-"` and filled by the HTTP handler:
+
+```go
+type RenameTableCommand struct {
+	RequestID uuid.UUID `json:"request_id"`
+	TableID   uuid.UUID `json:"-"`
+	Name      string    `json:"name"`
+}
+```
+
+### Step 3: The use case
+
+Build a `MutationSpec` and run the body through the slice's executor. The
+fingerprint is the normalized business input. Business preconditions go inside the
+body, which runs after the idempotency claim, so a replay of an earlier success
+still returns its stored result:
+
+```go
+func (h *RenameTableHandler) Handle(ctx context.Context, actor Actor, cmd RenameTableCommand) (int, TableResponse, error) {
+	display, key := NormalizeTableName(cmd.Name)
+	spec := MutationSpec{
+		RequestID:   cmd.RequestID,
+		Operation:   OpRenameTable,
+		Fingerprint: renameTableFingerprint{TableID: cmd.TableID, Name: display},
+		Required:    []string{CapTablesAdminister},
+	}
+
+	return ExecuteMutation(ctx, h.runner, actor, spec,
+		func(q *sqlc.Queries) (int, TableResponse, AuditRecord, error) {
+			if err := ValidateTableName(display); err != nil {
+				return 0, TableResponse{}, AuditRecord{}, fmt.Errorf("%w: %s", response.ErrInvalid, err.Error())
+			}
+			before, err := q.GetTableForUpdate(ctx, cmd.TableID)
+			if err != nil {
+				return 0, TableResponse{}, AuditRecord{}, MapDBError(err)
+			}
+			after, err := q.RenameTable(ctx, sqlc.RenameTableParams{
+				ID: cmd.TableID, Name: display, NormalizedName: key,
+			})
+			if err != nil {
+				return 0, TableResponse{}, AuditRecord{}, MapDBError(err)
+			}
+			return 200, toTableResponse(after), AuditRecord{
+				EventType: EventTableRenamed,
+				Details:   tableRenamedAuditDetails{TableID: after.ID, BeforeName: before.Name, AfterName: after.Name},
+			}, nil
+		})
+}
+```
+
+Return a zero `AuditRecord` for a same-state no-op. Slices that need the approver,
+the raw `*sql.Tx`, or a `Gate` / `Approval` call `command.ExecuteMutation` with a
+`command.MutationContext` body directly (see `internal/sales` and
+`internal/shift`). A read uses `ExecuteRead` with the required capability instead,
+as `overview.go` does.
+
+### Step 4: Errors
+
+New failure modes get a sentinel in `errors.go`, a case in `MapDBError` if they
+come from PostgreSQL, and a row in the slice's `response.ErrorMapper` with their
+status and code. Messages that could carry database detail use the sentinel's fixed
+text.
+
+### Step 5: HTTP handler and route
+
+Add the handler (with swag annotations) in `http.go`, using the `httpx` helpers:
+
+```go
+func (s *Slices) handleRenameTable(c echo.Context) error {
+	actor, err := httpx.Actor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	tableID, err := httpx.UUIDParam(c, "table_id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	cmd, err := httpx.BindBody[RenameTableCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := httpx.RequireRequestID(cmd.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	cmd.TableID = tableID
+
+	status, res, err := s.RenameTable.Handle(c.Request().Context(), actor, cmd)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return httpx.SendResult(c, status, res)
+}
+```
+
+Wire the handler in `NewSlices` and mount the route in `RegisterRoutes`:
+
+```go
+v1.PATCH("/tables/:table_id/name", s.handleRenameTable,
+	authn.RequireAuth(), authn.RequireCapability(CapTablesAdminister))
+```
+
+A brand-new slice additionally gets its own `Policy` in `executor.go` and one
+`NewSlices(...)` / `RegisterRoutes(...)` pair in `cmd/api/main.go`.
+
+### Step 6: Tests and docs
+
+Add unit tests for pure rules and an integration test against the package's
+PostgreSQL clone (see [Testing](#testing)), run `make swagger`, and regenerate the
+frontend client if it consumes the endpoint. A design decision that deviates from
+`CONTEXT.md` needs an ADR in `spec/decisions.md`.
+
+---
+
+## Testing
+
+Tests are split by the `integration` build tag.
+
+### Unit tests
+
+```bash
+make test
+# or: go test -race ./...
+```
+
+These cover pure domain rules, DTO and error mapping, route registration, and other
+logic that needs no database.
+
+### Integration tests (PostgreSQL required)
+
 ```bash
 make test-integration-fast # local feedback, no race detector
 make test-integration      # full race-enabled integration gate
@@ -192,8 +454,8 @@ make test-db-clean         # remove inactive clones left by interrupted runs
 ```
 
 > [!NOTE]
-> Each package's `TestMain` provisions an ephemeral clone of
-> `cafe_pos_test_template` — a schema-migrated copy of the base test database —
+> Each package's `TestMain` calls `testdb.Run`, which provisions an ephemeral clone
+> of `cafe_pos_test_template` — a schema-migrated copy of the base test database —
 > and runs the whole package against that clone, so package test binaries may
 > execute concurrently without wiping each other's fixtures. Direct package
 > commands remain supported, e.g.:
@@ -212,352 +474,82 @@ docker compose exec postgres createdb -U cafe_pos cafe_pos_test
 ```
 
 > [!IMPORTANT]
-> **Zero-Risk Test Safety Guard:** The integration test runner strictly requires `TEST_DATABASE_URL` and enforces that the base database name ends exactly in `_test` (e.g. `cafe_pos_test`) — the template database and its ephemeral clones are derived from that name. It **never** falls back to your development database and will instantly abort if a non-test database is provided.
+> **Test safety guard:** the integration harness requires `TEST_DATABASE_URL` and
+> enforces that the base database name ends in `_test` (e.g. `cafe_pos_test`) — the
+> template database and its clones are derived from that name. It never falls back
+> to the development database.
 
-### 3. Lint & Vulnerability Scan
+### Frontend tests
+
+```bash
+cd web && bun test
+```
+
+### Design-system prototype checks
+
+The static HTML prototype in `design-system/pos-cafe/` has its own Node checks,
+unrelated to the application:
+
+```bash
+node design-system/pos-cafe/tests/e2e-suite-test.js   # likewise for the other files in that folder
+```
+
+### Lint and vulnerability scan
 
 ```bash
 make lint    # golangci-lint, config in .golangci.yml (schema v2)
 make vuln    # govulncheck against the module graph
-make check   # fmt + vet + lint + unit tests, i.e. what CI enforces
+make check   # fmt + vet + lint + unit tests
 ```
+
+`make check` is the fast local subset of CI; CI additionally runs the integration
+tests and `govulncheck`.
 
 ---
 
-## 📖 Swagger Documentation
-
-Access the interactive Swagger UI directly in your browser:
-👉 **[http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)**
-
-To regenerate Swagger documentation after adding or modifying API endpoints:
-```bash
-make swagger
-```
-
----
-
-## 📡 API Reference (`Category` Slice)
-
-### Base URL: `/api/v1`
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/health` | Health check endpoint |
-| `POST` | `/api/v1/categories` | Create a new category (triggers domain event) |
-| `GET` | `/api/v1/categories` | List categories (supports `?active_only=true`) |
-| `GET` | `/api/v1/categories/:id` | Get category details by ID |
-| `PUT` | `/api/v1/categories/:id` | Update category by ID |
-| `DELETE` | `/api/v1/categories/:id` | Delete category by ID |
-
-### Example cURL Requests
-
-#### 1. Create a Category
-```bash
-curl -X POST http://localhost:8080/api/v1/categories \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Espresso Bar",
-    "description": "Single-origin espresso, Latte, Flat White",
-    "display_order": 1,
-    "is_active": true
-  }'
-```
-
-**Response (`201 Created`):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "name": "Espresso Bar",
-    "description": "Single-origin espresso, Latte, Flat White",
-    "display_order": 1,
-    "is_active": true,
-    "created_at": "2026-09-08T20:00:00Z",
-    "updated_at": "2026-09-08T20:00:00Z"
-  }
-}
-```
-
-#### 2. Conflict Handling (Duplicate Name)
-```bash
-curl -X POST http://localhost:8080/api/v1/categories \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Espresso Bar"}'
-```
-
-**Response (`409 Conflict`):**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "CONFLICT",
-    "message": "resource already exists: category with name 'Espresso Bar'"
-  }
-}
-```
-
-#### 3. Validation Error
-```bash
-curl -X POST http://localhost:8080/api/v1/categories \
-  -H "Content-Type: application/json" \
-  -d '{"name": "E"}'
-```
-
-**Response (`400 Bad Request`):**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "BAD_REQUEST",
-    "message": "invalid input data: field 'name' must be at least 2 characters"
-  }
-}
-```
-
----
-
-## ⚡ Event-Driven Architecture (Watermill)
-
-The boilerplate includes an in-memory event bus built on `ThreeDotsLabs/watermill`.
-
-### Publishing an Event
-Inside any slice handler:
-```go
-const TopicOrderPlaced = "order.placed"
-
-type OrderPlacedEvent struct {
-    OrderID int64   `json:"order_id"`
-    Total   float64 `json:"total"`
-}
-
-// Publish domain event
-_ = h.bus.Publish(TopicOrderPlaced, OrderPlacedEvent{
-    OrderID: order.ID,
-    Total:   order.Total,
-})
-```
-
-### Subscribing to an Event
-In `cmd/api/main.go` or within another consumer slice:
-```go
-_ = bus.Subscribe(ctx, "order.placed", func(ctx context.Context, payload []byte) error {
-    var evt OrderPlacedEvent
-    if err := json.Unmarshal(payload, &evt); err != nil {
-        return err
-    }
-
-    // Execute decoupled background tasks:
-    // - Dispatch to Kitchen Display System (KDS)
-    // - Send thermal receipt print command
-    // - Accumulate loyalty reward points
-    return nil
-})
-```
-
-
-### ⚠️ Delivery Guarantees — Read This Before Trusting an Event
-
-The bus is **in-process and non-persistent** (`gochannel` with
-`Persistent: false`). Events live only in memory, in this process:
-
-- A crash, a `SIGKILL`, or a deploy between the database commit and the
-  subscriber running **loses the event permanently**. There is no retry, no
-  dead-letter queue, no replay.
-- Publishing happens *after* the transaction commits, so a failed publish leaves
-  the database correct but the side-effect never fires. `create_category.go`
-  deliberately logs and swallows this: an unroutable event must not fail a
-  request that already succeeded.
-- Nothing crosses a process boundary. Scale to more than one replica and each
-  instance only sees its own events.
-
-That is the right trade-off for side-effects you can afford to lose — logging,
-cache warming, a nice-to-have notification. It is **not** safe for anything the
-business depends on: decrementing stock, charging a card, sending a receipt.
-
-**When you need real guarantees, add the transactional outbox pattern:**
-
-1. Add an `outbox` table (`id`, `topic`, `payload JSONB`, `created_at`,
-   `published_at NULL`).
-2. Inside the same `database.WithTx` that writes your domain rows, `INSERT` the
-   event into `outbox`. The commit now makes the state change and the intent to
-   publish atomic — the exact failure window described above disappears.
-3. Run a background relay that polls unpublished rows
-   (`SELECT ... WHERE published_at IS NULL ORDER BY id FOR UPDATE SKIP LOCKED`),
-   publishes each to the bus, and stamps `published_at`.
-4. Consumers must be **idempotent**: the relay guarantees at-least-once
-   delivery, so a redelivery after a crash has to be a no-op. Key handlers on
-   the event id.
-
-Swapping `gochannel` for Kafka/NATS/Redis later is a one-line change in
-`eventbus.New` — Watermill keeps the `Publish`/`Subscribe` API identical — but
-it does **not** remove the need for the outbox. The gap between "row committed"
-and "message sent to the broker" is exactly the same gap; only the outbox closes
-it.
-
----
-
-## 🔒 Transactions
-
-A single sqlc query is already atomic, so call it directly. The moment a slice
-performs **several writes that must succeed or fail together** — placing an order
-writes the order, its line items, and decrements stock — wrap them in
-`database.WithTx`:
-
-```go
-func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd PlaceOrderCommand) (*Response, error) {
-    var placed sqlc.Order
-
-    err := database.WithTx(ctx, h.db, func(q *sqlc.Queries) error {
-        order, err := q.CreateOrder(ctx, sqlc.CreateOrderParams{TableID: cmd.TableID})
-        if err != nil {
-            return fmt.Errorf("create order: %w", err)
-        }
-
-        for _, line := range cmd.Lines {
-            if err := q.AddOrderLine(ctx, sqlc.AddOrderLineParams{
-                OrderID:   order.ID,
-                ProductID: line.ProductID,
-                Quantity:  line.Quantity,
-            }); err != nil {
-                return fmt.Errorf("add order line: %w", err)
-            }
-
-            if err := q.DecrementStock(ctx, line.ProductID); err != nil {
-                return fmt.Errorf("decrement stock: %w", err)
-            }
-        }
-
-        placed = order
-        return nil
-    })
-    if err != nil {
-        return nil, err
-    }
-
-    res := toResponse(placed)
-    return &res, nil
-}
-```
-
-**Rules of the helper:**
-
-- Returning `nil` from the callback commits; returning an error rolls back and
-  returns *your* error unwrapped by the helper, so `response.ErrConflict` and
-  friends still map to the right status code.
-- The `*sqlc.Queries` passed in is bound to the transaction. Do not capture it
-  outside the callback — it is invalid once `WithTx` returns.
-- A panic inside the callback rolls the transaction back and then re-panics, so
-  a bug can never strand an open transaction holding row locks.
-- Assign results to variables declared *outside* the callback (`placed` above);
-  the callback only returns an `error`.
-- `WithTxOptions` takes a `*sql.TxOptions` when you need a stricter isolation
-  level, e.g. `&sql.TxOptions{Isolation: sql.LevelSerializable}` for logic that
-  must not observe a phantom read.
-
-Slices that need transactions take a `database.Beginner` (the one-method
-interface `BeginTx` lives on) instead of `*sql.DB`, keeping them as mockable as
-the consumer-defined store interfaces.
-
----
-
-## 🧩 How to Add a New Vertical Slice
-
-Adding a new feature (e.g. `Product` or `Order`) requires **zero modifications** to existing slices:
-
-### Step 1: Add Migration
-Create `internal/database/migrations/000002_create_products.sql`:
-```sql
-CREATE TABLE IF NOT EXISTS products (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    category_id BIGINT NOT NULL REFERENCES categories(id),
-    name VARCHAR(255) NOT NULL,
-    price NUMERIC(12, 2) NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### Step 2: Define Queries & Generate Code
-Create `sql/queries/products.sql`:
-```sql
--- name: CreateProduct :one
-INSERT INTO products (category_id, name, price, is_active)
-VALUES ($1, $2, $3, $4)
-RETURNING *;
-
--- name: ListProducts :many
-SELECT * FROM products ORDER BY name ASC;
-```
-Run code generation:
-```bash
-make sqlc
-```
-
-### Step 3: Implement Slice Package
-Create folder `internal/product/`:
-- `create_product.go`: `CreateCommand`, `CreateHandler`, and `HandleHTTP`.
-- `list_products.go`: `ListQuery`, `ListHandler`, and `HandleHTTP`.
-- `dto.go`: Response models.
-- `routes.go`: `RegisterRoutes(g *echo.Group)`.
-
-### Step 4: Register in `cmd/api/main.go`
-```go
-productSlices := product.NewSlices(queries, bus)
-productSlices.RegisterRoutes(v1)
-```
-
-If a handler in the new slice writes several tables at once, pass `db` alongside
-`queries` and use `database.WithTx` inside the handler — see
-[Transactions](#-transactions).
-
----
-
-## 🧰 Makefile Commands
+## Makefile Commands
 
 | Command | Description |
 | :--- | :--- |
-| `make docker-up` | Start background PostgreSQL container (`cafe-pos-db`) |
-| `make docker-down` | Stop background PostgreSQL container |
-| `make docker-logs` | Stream PostgreSQL logs |
+| `make docker-up` | Start PostgreSQL (`pos-cafe-db`); creates `cafe_pos` and `cafe_pos_test` on first boot |
+| `make docker-down` | Stop PostgreSQL (keeps the data volume) |
+| `make docker-logs` | Tail PostgreSQL logs |
 | `make db-wait` | Block until PostgreSQL accepts connections |
-| `make run` | Start the API server |
-| `make build` | Compile the binary into `bin/api` |
-| `make test` | Run fast, isolated in-memory unit tests (`-race`) |
-| `make test-integration`| Run integration tests against `cafe_pos_test` |
-| `make test-all` | Run both unit and integration test suites |
-| `make coverage` | Calculate statement test coverage |
-| `make fmt` | Format all Go source files with `gofmt` |
-| `make vet` | Run standard Go static code analysis |
+| `make run` | Run the API server |
+| `make build-web` | Build the React frontend with bun |
+| `make build-app` | Build the Go binary, embedding the web build, into `build/app.exe` |
+| `make build` | `build-web` then `build-app` |
+| `make test` | Unit tests with the race detector |
+| `make test-integration` | Integration tests with the race detector (needs `docker-up`) |
+| `make test-integration-fast` | Integration tests without the race detector |
+| `make test-db-clean` | Remove inactive ephemeral integration-test clones |
+| `make test-all` | Unit + integration tests |
+| `make coverage` | Coverage across unit + integration tests |
+| `make fmt` | Format all Go code with `gofmt` |
+| `make vet` | Run `go vet` |
 | `make lint` | Run `golangci-lint` (installed on demand) |
 | `make vuln` | Scan dependencies with `govulncheck` |
-| `make check` | Run every gate CI enforces, before pushing |
-| `make help` | List all available targets |
-| `make sqlc` | Generate type-safe database queries from SQL |
-| `make swagger` | Generate Swagger UI / OpenAPI documentation |
-| `make tidy` | Run `go mod tidy` to clean up dependencies |
-| `make clean` | Clean build artifacts and local test databases |
+| `make check` | fmt + vet + lint + unit tests, before you push |
+| `make sqlc` | Regenerate type-safe SQL bindings |
+| `make swagger` | Regenerate the Swagger/OpenAPI spec in `api/openapi/` |
+| `make tidy` | Run `go mod tidy` |
+| `make clean` | Remove build artifacts (`bin/`, `build/`) |
+| `make dev-seed` | Reset the dev database and seed demo data via the running API (dev only) |
+| `make help` | List all targets |
 
 ---
 
-## 🗺️ Deliberately Not Included
+## Documentation Map
 
-This is a **boilerplate**, not a finished POS. The following are left out on
-purpose so the template stays small and unopinionated — each is a decision the
-consuming project should make for itself:
-
-| Not included | Why, and what to do about it |
+| Where | What |
 | :--- | :--- |
-| **Authentication / authorization** | Every product wants a different scheme (JWT, session, OIDC, API key) and a different role model. Add it as Echo middleware on the `/api/v1` group in `main.go`; the slices need no changes. |
-| **Transactional outbox** | See the section above. Add it when an event carries business meaning, not before. |
-| **Pagination** | `ListCategories` returns every row, which is fine for a handful of categories. Do **not** copy that shape into `products` or `orders` — add `LIMIT`/`OFFSET` or keyset pagination to those queries from day one. |
-| **Rate limiting, body limits, security headers, request timeouts** | Echo ships `middleware.RateLimiter`, `BodyLimit`, `Secure`, and `TimeoutWithConfig`. Wire the ones your deployment needs next to the existing middleware stack. |
-| **Metrics and tracing** | Only structured logging (`slog`) is set up. Add OpenTelemetry or Prometheus when you have somewhere to send the data. |
-| **Down migrations** | The embedded runner applies forward-only migrations and records them in `schema_migrations`. Roll forward with a new numbered file; if you need reversible migrations, swap in `golang-migrate`. |
-| **Multi-tenancy, i18n, soft deletes** | Domain decisions, not infrastructure. |
-
----
-
-## 📄 License
-
-This boilerplate is open-source and available under the [MIT License](LICENSE).
+| [`CONTEXT.md`](CONTEXT.md) | Domain language. Binding. |
+| [`ROADMAP.md`](ROADMAP.md) | Current status and remaining phases. |
+| [`spec/decisions.md`](spec/decisions.md) | Architecture decision records. Append-only. |
+| [`docs/superpowers/specs/`](docs/superpowers/specs/) | Approved per-phase designs. |
+| [`docs/superpowers/plans/`](docs/superpowers/plans/) | Implementation plans. |
+| [`docs/backlog/`](docs/backlog/) | Work not yet designed, and open questions. |
+| [`docs/domain-rationale/`](docs/domain-rationale/) | Why `CONTEXT.md` says what it says. |
+| [`docs/history/`](docs/history/) | Frozen historical records (the TypeScript-to-Go migration plan). |
+| [`docs/reports/`](docs/reports/) | Test reports (e.g. the manual smoke test). |
+| [`docs/agent-prompts/`](docs/agent-prompts/) | Prompts used for agent sessions. |

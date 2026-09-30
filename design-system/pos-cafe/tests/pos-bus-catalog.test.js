@@ -16,7 +16,7 @@ global.window = {
 };
 
 // Load pos-bus.js
-require(path.join(__dirname, '../design-system/pos-cafe/shared/pos-bus.js'));
+require(path.join(__dirname, '../shared/pos-bus.js'));
 const bus = global.window.POS_BUS;
 
 console.log('--- Testing POS_BUS Catalog API ---');

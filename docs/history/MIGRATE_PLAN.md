@@ -2,9 +2,9 @@
 
 > ## 🔒 CLOSED — 2026-09-18
 >
-> **This migration is complete and this document is frozen.** See [ADR-047](spec/decisions.md).
+> **This migration is complete and this document is frozen.** See [ADR-047](../../spec/decisions.md).
 >
-> For current status and remaining work, read [`ROADMAP.md`](ROADMAP.md). This file
+> For current status and remaining work, read [`ROADMAP.md`](../../ROADMAP.md). This file
 > is retained as the historical record of Phases 0 through 6C — several ADRs
 > reference its checklists — and its body is not edited further.
 >
@@ -13,12 +13,12 @@
 > - **The tracker table at the bottom is stale.** It records Preparation as
 >   `PENDING 2/3`; Phase 6C completed on 2026-09-18 in commit `3c6f61e`, making it
 >   3/3. `ROADMAP.md` carries the corrected status.
-> - **Section 7 is superseded** by backlog [Phase 11](docs/backlog/phase-11-clients-over-lan-and-single-binary.md),
+> - **Section 7 is superseded** by backlog [Phase 11](../../docs/backlog/phase-11-clients-over-lan-and-single-binary.md),
 >   which merges it with the LAN-serving requirements from the TypeScript tracker.
 > - **The Go system has passed its source.** TypeScript tickets 07 and 11 remain
 >   unimplemented in `cafe-pos` while Go delivered them as Phases 5C and 6C. From
 >   there on, no canonical implementation exists to port: remaining work is designed
->   from [`CONTEXT.md`](CONTEXT.md), which now lives in this repository. References
+>   from [`CONTEXT.md`](../../CONTEXT.md), which now lives in this repository. References
 >   to `cafe-pos/src` below are historical provenance and carry no live authority.
 
 > **Source Project:** `/home/laffy/cafe-pos/src` (Fullstack TS: React 19 + tRPC + Drizzle ORM + PostgreSQL)  
@@ -72,8 +72,8 @@ The source project is already cleanly structured around domain boundaries. We ma
 
 ### Phase 2: Catalog Expansion (`internal/catalog`) (✅ COMPLETED)
 *Focus: Expand beyond simple categories to support menu items, sizes with absolute pricing, topping modifiers, category/item attachments, inherited exclusions, and dedicated menu projections.*
-*Approved Design Spec:* [`docs/superpowers/specs/2026-09-10-catalog-slice-design.md`](docs/superpowers/specs/2026-09-10-catalog-slice-design.md)
-*Implementation Plan:* [`docs/superpowers/plans/2026-09-10-catalog-slice.md`](docs/superpowers/plans/2026-09-10-catalog-slice.md)
+*Approved Design Spec:* [`docs/superpowers/specs/2026-09-10-catalog-slice-design.md`](../../docs/superpowers/specs/2026-09-10-catalog-slice-design.md)
+*Implementation Plan:* [`docs/superpowers/plans/2026-09-10-catalog-slice.md`](../../docs/superpowers/plans/2026-09-10-catalog-slice.md)
 
 - [x] **2.1 Database Schema Migration:** `000003_create_catalog_tables.sql`
   - Created tables: `menu_categories` (expanded from 000001), `menu_items`, `menu_item_sizes` (storing absolute `price_vnd` per size rather than relative adjustments; direct items have nullable `price_vnd`), `modifier_groups`, `modifier_options`, `category_modifier_groups`, `item_modifier_groups`, `item_modifier_group_exclusions`, `modifier_group_default_options`, `catalog_mutation_requests` (idempotency tracking), and `audit_events`.
@@ -104,8 +104,8 @@ The source project is already cleanly structured around domain boundaries. We ma
 ---
 
 ### Phase 3: Tables & Floor Layout (`internal/tables`) (✅ COMPLETED)
-*Approved Design Spec:* [`docs/superpowers/specs/2026-09-12-tables-slice-design.md`](docs/superpowers/specs/2026-09-12-tables-slice-design.md)
-*Implementation Plan:* [`docs/superpowers/plans/2026-09-12-tables-slice.md`](docs/superpowers/plans/2026-09-12-tables-slice.md)
+*Approved Design Spec:* [`docs/superpowers/specs/2026-09-12-tables-slice-design.md`](../../docs/superpowers/specs/2026-09-12-tables-slice-design.md)
+*Implementation Plan:* [`docs/superpowers/plans/2026-09-12-tables-slice.md`](../../docs/superpowers/plans/2026-09-12-tables-slice.md)
 
 > The checklist below predates the canonical source review and is superseded by the spec above. It is kept only as a record of the original sketch.
 
@@ -124,8 +124,8 @@ The source project is already cleanly structured around domain boundaries. We ma
 ---
 
 ### Phase 4: Sales Shift & Cash Movements (`internal/shift`) (✅ COMPLETED)
-*Approved Design Spec:* [`docs/superpowers/specs/2026-09-13-shift-slice-design.md`](docs/superpowers/specs/2026-09-13-shift-slice-design.md)
-*Implementation Plan:* [`docs/superpowers/plans/2026-09-13-shift-slice.md`](docs/superpowers/plans/2026-09-13-shift-slice.md)
+*Approved Design Spec:* [`docs/superpowers/specs/2026-09-13-shift-slice-design.md`](../../docs/superpowers/specs/2026-09-13-shift-slice-design.md)
+*Implementation Plan:* [`docs/superpowers/plans/2026-09-13-shift-slice.md`](../../docs/superpowers/plans/2026-09-13-shift-slice.md)
 
 > The checklist below predates the canonical source review and is superseded by the spec above. It is kept only as a record of the original sketch.
 
@@ -146,17 +146,17 @@ The source project is already cleanly structured around domain boundaries. We ma
 ---
 
 ### Phase 5: Core Sales, Orders & Payments (`internal/sales`)
-*Approved Design Spec:* [`docs/superpowers/specs/2026-09-13-sales-session-draft-design.md`](docs/superpowers/specs/2026-09-13-sales-session-draft-design.md)
-*Implementation Plan:* [`docs/superpowers/plans/2026-09-13-sales-session-draft.md`](docs/superpowers/plans/2026-09-13-sales-session-draft.md)
+*Approved Design Spec:* [`docs/superpowers/specs/2026-09-13-sales-session-draft-design.md`](../../docs/superpowers/specs/2026-09-13-sales-session-draft-design.md)
+*Implementation Plan:* [`docs/superpowers/plans/2026-09-13-sales-session-draft.md`](../../docs/superpowers/plans/2026-09-13-sales-session-draft.md)
 
 > The checklist below predates the canonical source review and is superseded by the spec above. It is kept only as a record of the original sketch. Phase 5 is delivered as four sub-phases (spec §3), each with its own design specification, implementation plan, and test suite; sub-phase spec links are added here as each lands.
 
 | Sub-phase | Scope | Status |
 | :--- | :--- | :---: |
-| **5A** — Service Session lifecycle, Table assignments, Order Draft | [spec](docs/superpowers/specs/2026-09-13-sales-session-draft-design.md) / [plan](docs/superpowers/plans/2026-09-13-sales-session-draft.md) | ✅ COMPLETED (2026-09-13) |
-| **5B** — Commit, Committed Items, Checks, Charge Allocations, Order Draft targeting | [spec](docs/superpowers/specs/2026-09-14-sales-commit-checks-design.md) / [plan](docs/superpowers/plans/2026-09-14-sales-commit-checks.md) | ✅ COMPLETED (2026-09-14) |
-| **5C** — Cash and Manual QR Payments, Check splitting and merging, settlement | [spec](docs/superpowers/specs/2026-09-14-sales-payments-settlement-design.md) / [plan](docs/superpowers/plans/2026-09-14-sales-payments-settlement.md) | ✅ COMPLETED (2026-09-14) |
-| **5D** — Submit, Orders, Preparation Units, Service Session closure, Completed Sale | [spec](docs/superpowers/specs/2026-09-15-sales-submission-closure-design.md) / [plan](docs/superpowers/plans/2026-09-15-sales-submission-closure.md) | ✅ COMPLETED (2026-09-15) |
+| **5A** — Service Session lifecycle, Table assignments, Order Draft | [spec](../../docs/superpowers/specs/2026-09-13-sales-session-draft-design.md) / [plan](../../docs/superpowers/plans/2026-09-13-sales-session-draft.md) | ✅ COMPLETED (2026-09-13) |
+| **5B** — Commit, Committed Items, Checks, Charge Allocations, Order Draft targeting | [spec](../../docs/superpowers/specs/2026-09-14-sales-commit-checks-design.md) / [plan](../../docs/superpowers/plans/2026-09-14-sales-commit-checks.md) | ✅ COMPLETED (2026-09-14) |
+| **5C** — Cash and Manual QR Payments, Check splitting and merging, settlement | [spec](../../docs/superpowers/specs/2026-09-14-sales-payments-settlement-design.md) / [plan](../../docs/superpowers/plans/2026-09-14-sales-payments-settlement.md) | ✅ COMPLETED (2026-09-14) |
+| **5D** — Submit, Orders, Preparation Units, Service Session closure, Completed Sale | [spec](../../docs/superpowers/specs/2026-09-15-sales-submission-closure-design.md) / [plan](../../docs/superpowers/plans/2026-09-15-sales-submission-closure.md) | ✅ COMPLETED (2026-09-15) |
 
 *Focus: The heart of the POS system. Low-latency order placement, bill splitting, payments.*
 
@@ -184,19 +184,19 @@ The source project is already cleanly structured around domain boundaries. We ma
 ### Phase 6: Preparation Station / Kitchen Display (`internal/preparation`)
 *Focus: Real-time drink queue for Baristas, status transitions.*
 
-*Approved 6A Design Spec:* [`docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md`](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md)
-*Approved 6B Design Spec:* [`docs/superpowers/specs/2026-09-17-preparation-corrections-design.md`](docs/superpowers/specs/2026-09-17-preparation-corrections-design.md)
-*Approved 6B Implementation Plan:* [`docs/superpowers/plans/2026-09-17-preparation-corrections.md`](docs/superpowers/plans/2026-09-17-preparation-corrections.md)
-*Approved 6C Design Spec:* [`docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md`](docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md)
-*Approved 6C Implementation Plan:* [`docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md`](docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md)
+*Approved 6A Design Spec:* [`docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md`](../../docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md)
+*Approved 6B Design Spec:* [`docs/superpowers/specs/2026-09-17-preparation-corrections-design.md`](../../docs/superpowers/specs/2026-09-17-preparation-corrections-design.md)
+*Approved 6B Implementation Plan:* [`docs/superpowers/plans/2026-09-17-preparation-corrections.md`](../../docs/superpowers/plans/2026-09-17-preparation-corrections.md)
+*Approved 6C Design Spec:* [`docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md`](../../docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md)
+*Approved 6C Implementation Plan:* [`docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md`](../../docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md)
 
 > The sketch checklist at the bottom of this section predates Phase 5D, which already created Preparation Units synchronously at Submit and introduced the single-unit advance command; it is kept only as a record of the original sketch, and the sub-phase checklists below are authoritative. Phase 6 is delivered as ordered sub-phases (ADR-032) so Cancellation can be designed with its unfinished Refund/Comp and closure dependencies instead of weakening those boundaries. Synchronous Submit remains the queue-creation boundary: `order.submitted` is neither published nor consumed through Watermill for queue creation, per ADR-033.
 
 | Sub-phase | Scope | Status |
 | :--- | :--- | :---: |
-| **6A** — Preparation Queue reads and bulk transitions | [spec](docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md) | ✅ COMPLETED (2026-09-16) |
-| **6B** — Alerts, Waste, Remake, priority, and state correction | [spec](docs/superpowers/specs/2026-09-17-preparation-corrections-design.md) / [plan](docs/superpowers/plans/2026-09-17-preparation-corrections.md) | ✅ COMPLETED (2026-09-17) |
-| **6C** — Cancellation/change and financial correction integration | [spec](docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md) / [plan](docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md) | ✅ COMPLETED (2026-09-18) |
+| **6A** — Preparation Queue reads and bulk transitions | [spec](../../docs/superpowers/specs/2026-09-16-preparation-queue-transitions-design.md) | ✅ COMPLETED (2026-09-16) |
+| **6B** — Alerts, Waste, Remake, priority, and state correction | [spec](../../docs/superpowers/specs/2026-09-17-preparation-corrections-design.md) / [plan](../../docs/superpowers/plans/2026-09-17-preparation-corrections.md) | ✅ COMPLETED (2026-09-17) |
+| **6C** — Cancellation/change and financial correction integration | [spec](../../docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md) / [plan](../../docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md) | ✅ COMPLETED (2026-09-18) |
 
 **6A — Preparation Queue reads and bulk transitions (✅ COMPLETED 2026-09-16):**
 

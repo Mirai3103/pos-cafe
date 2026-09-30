@@ -13,7 +13,7 @@ This specification defines how the surviving planning documents of the TypeScrip
 
 `pos-cafe` has passed its source. The TypeScript tracker `.scratch/opening-day-pos-v0/` holds seventeen implementation tickets; nine are `completed` there. Tickets 07 (Split Checks and mixed settlement) and 11 (Correct charges and Payments without mutation) remain `ready-for-agent` in TypeScript and are already delivered in Go as Phase 5C and Phase 6C. From ticket 12 onward no canonical implementation exists on either side: the remaining work is designed from `CONTEXT.md`, not ported from code.
 
-Two consequences follow. First, "migration" is no longer an accurate frame for the work ahead, and `MIGRATE_PLAN.md` is no longer an accurate roadmap. Second, the Go specifications cite `cafe-pos/CONTEXT.md` as binding authority in fifteen places, and `spec/decisions.md` cites a `cafe-pos/.scratch` ticket. Those are dangling references to a repository this project does not own and does not track. The migration cannot be called closed while its authority lives elsewhere.
+Two consequences follow. First, "migration" is no longer an accurate frame for the work ahead, and `docs/history/MIGRATE_PLAN.md` is no longer an accurate roadmap. Second, the Go specifications cite `cafe-pos/CONTEXT.md` as binding authority in fifteen places, and `spec/decisions.md` cites a `cafe-pos/.scratch` ticket. Those are dangling references to a repository this project does not own and does not track. The migration cannot be called closed while its authority lives elsewhere.
 
 ### Goals
 
@@ -21,7 +21,7 @@ Two consequences follow. First, "migration" is no longer an accurate frame for t
 2. Preserve the remaining roadmap as actionable backlog tickets renumbered onto Go phases, with source traceability retained.
 3. Preserve the unanswered design questions that still gate launch, separated from the ones Go has already answered.
 4. Record migration closure as an architecture decision, so that a future session does not go looking for TypeScript code to port.
-5. Leave `MIGRATE_PLAN.md` intact as a historical record rather than rewriting it.
+5. Leave `docs/history/MIGRATE_PLAN.md` intact as a historical record rather than rewriting it.
 
 ### Non-Goals
 
@@ -62,7 +62,7 @@ The TypeScript project at `E:/Code/cafe-pos` holds these planning documents.
 pos-cafe/
 ├─ CONTEXT.md                  (new, verbatim copy)
 ├─ ROADMAP.md                  (new)
-├─ MIGRATE_PLAN.md             (closure banner prepended; body unchanged)
+├─ MIGRATE_PLAN.md             (closure banner prepended; body unchanged; since moved to docs/history/)
 ├─ spec/decisions.md           (ADR-047 and ADR-048 appended)
 └─ docs/backlog/
    ├─ README.md
@@ -86,7 +86,7 @@ The repository carries several kinds of planning document, and each has exactly 
 | `docs/superpowers/specs/` | Per-phase approved designs | Frozen once approved |
 | `docs/backlog/` | Work not yet designed | Status transitions; superseded by a spec when a phase begins |
 | `ROADMAP.md` | Current status of every phase, and pointers | Updated as phases land |
-| `MIGRATE_PLAN.md` | Historical record of the TypeScript-to-Go migration | Frozen |
+| `docs/history/MIGRATE_PLAN.md` | Historical record of the TypeScript-to-Go migration | Frozen |
 
 When `CONTEXT.md` and a Go implementation disagree, `CONTEXT.md` states the intent and `spec/decisions.md` states why Go differs. Neither silently overrides the other: an unrecorded divergence is a defect.
 
@@ -128,12 +128,12 @@ The six remaining implementation tickets are renumbered onto Go phase numbers. M
 | 08 Recover a failed or abandoned checkout | 13 | none | Near-verbatim |
 | 09 Post-Shift corrections and Audit history | 14 | 07, 08 | Near-verbatim |
 | 10 Recover numbered-paper outage Sales | 15 | 09 | Near-verbatim |
-| 11 Serve clients over LAN and single-binary packaging | 16, plus `MIGRATE_PLAN.md` Phase 7 | none | Rewritten |
+| 11 Serve clients over LAN and single-binary packaging | 16, plus `docs/history/MIGRATE_PLAN.md` Phase 7 | none | Rewritten |
 | 12 Back up, restore, update, and verify readiness | 17 | 10, 11 | Partly rewritten |
 
 Phases 07, 08, and 11 are unblocked. Phases 07 and 08 depend in TypeScript on ticket 11, which is still `ready-for-agent` there; Go delivered that work as Phase 6C, so the dependency is already satisfied here. This is the single most consequential finding of the source review and is stated explicitly in each of those two tickets.
 
-Phase 11 absorbs the existing `MIGRATE_PLAN.md` Phase 7 (OpenAPI client generation, static asset embedding, hardware verification) together with TypeScript ticket 16 (LAN binding, health endpoint, Local Access QR, production smoke test). Both describe the same deliverable: one authoritative local service reachable by the cafe's clients. Keeping them apart would split one phase across two trackers.
+Phase 11 absorbs the existing `docs/history/MIGRATE_PLAN.md` Phase 7 (OpenAPI client generation, static asset embedding, hardware verification) together with TypeScript ticket 16 (LAN binding, health endpoint, Local Access QR, production smoke test). Both describe the same deliverable: one authoritative local service reachable by the cafe's clients. Keeping them apart would split one phase across two trackers.
 
 Phase 11 carries no `Blocked by` edge because its source ticket depends only on work already delivered. Its packaging and LAN half is independent of every remaining phase. Its generated-client half is not blocked but is order-sensitive: each of Phases 07 through 10 adds routes, so a client generated before them goes stale. The ticket records that as sequencing guidance, not as a dependency, so that packaging can be proven early on low-spec hardware.
 
@@ -226,15 +226,15 @@ Two are closed on arrival, with the reason recorded:
 1. A one-paragraph statement of where the project is: Phases 0 through 6C complete, migration closed, remaining work designed from `CONTEXT.md`.
 2. A status table covering every phase, 0 through 12, with its status, its design specification link where one exists, and its backlog ticket link where one does not.
 3. The dependency ordering for phases 07 through 12.
-4. Pointers to `CONTEXT.md`, `spec/decisions.md`, `docs/superpowers/specs/`, `docs/backlog/`, and `MIGRATE_PLAN.md`, each with its job from the table in Section 3.1.
+4. Pointers to `CONTEXT.md`, `spec/decisions.md`, `docs/superpowers/specs/`, `docs/backlog/`, and `docs/history/MIGRATE_PLAN.md`, each with its job from the table in Section 3.1.
 
-The status table corrects a defect in the current `MIGRATE_PLAN.md` tracker, which records Preparation as `PENDING 2/3` although its own Phase 6C checklist is complete and committed as `3c6f61e`.
+The status table corrects a defect in the current `docs/history/MIGRATE_PLAN.md` tracker, which records Preparation as `PENDING 2/3` although its own Phase 6C checklist is complete and committed as `3c6f61e`.
 
 `ROADMAP.md` does not restate acceptance criteria. Those live in the backlog tickets.
 
 ---
 
-## 9. MIGRATE_PLAN.md
+## 9. MIGRATE_PLAN.md (now docs/history/MIGRATE_PLAN.md)
 
 The file is kept and its body is not edited. A short banner is prepended:
 

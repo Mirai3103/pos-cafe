@@ -33,8 +33,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const SETTINGS_PATH = path.join(__dirname, '..', 'design-system', 'pos-cafe', 'pages', 'settings.html');
-const POS_BUS_PATH = path.join(__dirname, '..', 'design-system', 'pos-cafe', 'shared', 'pos-bus.js');
+const SETTINGS_PATH = path.join(__dirname, '..', 'pages', 'settings.html');
+const POS_BUS_PATH = path.join(__dirname, '..', 'shared', 'pos-bus.js');
 
 let totalTests = 0;
 let passedTests = 0;

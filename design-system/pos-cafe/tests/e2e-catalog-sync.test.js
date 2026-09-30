@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const ROOT_DIR = path.resolve(__dirname, '..');
+const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
 const POS_DIR = path.join(ROOT_DIR, 'design-system', 'pos-cafe');
 const INDEX_PATH = path.join(POS_DIR, 'index.html');
 const SETTINGS_PATH = path.join(POS_DIR, 'pages', 'settings.html');

@@ -54,7 +54,7 @@
 | `internal/preparation/advance_integration_test.go` | Single-transition timestamp regression coverage |
 | `docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml` | Generated OpenAPI artifacts |
 | `spec/decisions.md` | ADR-032 through ADR-035 |
-| `MIGRATE_PLAN.md` | Mark 6A complete and preserve 6B/6C boundaries |
+| `docs/history/MIGRATE_PLAN.md` | Mark 6A complete and preserve 6B/6C boundaries |
 
 ---
 
@@ -1939,7 +1939,7 @@ git commit -m "feat(preparation): expose queue and bulk routes"
 
 **Files:**
 - Modify: `spec/decisions.md`
-- Modify: `MIGRATE_PLAN.md`
+- Modify: `docs/history/MIGRATE_PLAN.md`
 - Verify: all Phase 6A files
 
 **Interfaces:**
@@ -2001,7 +2001,7 @@ Append four entries to `spec/decisions.md`, matching the file's existing ADR for
 
 - [ ] **Step 2: Update the migration roadmap**
 
-In `MIGRATE_PLAN.md`:
+In `docs/history/MIGRATE_PLAN.md`:
 
 - Mark every implemented Phase 6A queue, timestamp, shared transition, bulk, authorization, audit, idempotency, HTTP, and test checkbox complete.
 - Leave Alerts, acknowledgment, Waste, Remake, priority, and State Correction under 6B unchecked.
@@ -2082,7 +2082,7 @@ Run:
 git status --short
 git diff --check
 git diff --stat
-git diff -- internal/preparation sql/queries/preparation.sql internal/database/migrations/000012_add_preparation_queue_fields.sql spec/decisions.md MIGRATE_PLAN.md
+git diff -- internal/preparation sql/queries/preparation.sql internal/database/migrations/000012_add_preparation_queue_fields.sql spec/decisions.md docs/history/MIGRATE_PLAN.md
 $untracked = @(git ls-files --others --exclude-standard)
 foreach ($file in $untracked) {
 	$issues = & git diff --no-index --check -- NUL $file 2>&1
@@ -2095,7 +2095,7 @@ Expected: no whitespace errors in tracked or untracked files; no Watermill consu
 - [ ] **Step 9: Commit documentation if explicitly requested**
 
 ```powershell
-git add spec/decisions.md MIGRATE_PLAN.md
+git add spec/decisions.md docs/history/MIGRATE_PLAN.md
 git commit -m "docs(preparation): record Phase 6A decisions"
 ```
 

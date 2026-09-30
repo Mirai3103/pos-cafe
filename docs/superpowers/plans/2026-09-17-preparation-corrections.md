@@ -53,7 +53,7 @@
 | `internal/sales/session_close_integration_test.go` | Closure and Completed Sale regression coverage |
 | `docs/{docs.go,swagger.json,swagger.yaml}` | Generated OpenAPI artifacts |
 | `spec/decisions.md` | ADR-036 through ADR-039 |
-| `MIGRATE_PLAN.md` | Mark 6B complete while preserving the 6C boundary |
+| `docs/history/MIGRATE_PLAN.md` | Mark 6B complete while preserving the 6C boundary |
 
 ---
 
@@ -886,7 +886,7 @@ git commit -m "feat(preparation): expose correction routes"
 - Modify: `internal/preparation/corrections_e2e_integration_test.go` or the focused command integration files
 - Modify: `internal/sales/session_close_integration_test.go`
 - Modify: `spec/decisions.md`
-- Modify: `MIGRATE_PLAN.md`
+- Modify: `docs/history/MIGRATE_PLAN.md`
 - Verify: all Phase 6B files and generated artifacts
 
 - [ ] **Step 1: Add end-to-end recovery workflows**
@@ -919,7 +919,7 @@ Append the approved decisions from spec Section 13 to `spec/decisions.md` using 
 
 - [ ] **Step 4: Update the Phase 6 roadmap**
 
-In `MIGRATE_PLAN.md`:
+In `docs/history/MIGRATE_PLAN.md`:
 
 - Link the approved 6B design and this implementation plan.
 - Mark each implemented 6B schema, command, queue, authorization, projection, HTTP, concurrency, and test item complete.
@@ -956,7 +956,7 @@ Expected: every command exits 0.
 
 ```powershell
 git diff --stat
-git diff -- internal/preparation internal/sales sql/queries internal/database/migrations spec/decisions.md MIGRATE_PLAN.md
+git diff -- internal/preparation internal/sales sql/queries internal/database/migrations spec/decisions.md docs/history/MIGRATE_PLAN.md
 git grep -n -E 'manager_pin|pin_hash' -- internal/preparation sql/queries/preparation.sql
 git grep -n -E 'refund|comp|CANCELLED' -- internal/preparation
 ```
@@ -971,7 +971,7 @@ Expected:
 - [ ] **Step 8: Commit decisions and final regressions**
 
 ```powershell
-git add internal/preparation internal/sales internal/database/migrations internal/database/sqlc sql/queries docs spec/decisions.md MIGRATE_PLAN.md
+git add internal/preparation internal/sales internal/database/migrations internal/database/sqlc sql/queries docs spec/decisions.md docs/history/MIGRATE_PLAN.md
 git commit -m "docs(preparation): complete Phase 6B recovery"
 ```
 

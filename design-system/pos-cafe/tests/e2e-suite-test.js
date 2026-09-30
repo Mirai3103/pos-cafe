@@ -17,7 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT_DIR = path.resolve(__dirname, '..');
+const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
 const POS_DIR = path.join(ROOT_DIR, 'design-system', 'pos-cafe');
 
 const PAGES = [

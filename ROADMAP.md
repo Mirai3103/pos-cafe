@@ -20,7 +20,7 @@ half is now in design and is being delivered as nine reviewable slices; see
 | [`docs/backlog/`](docs/backlog/) | Work not yet designed. Superseded by a spec when its phase begins. |
 | [`docs/domain-rationale/`](docs/domain-rationale/) | Why `CONTEXT.md` says what it says. Historical reasoning, not authority. |
 | `ROADMAP.md` | This file. Current status. The only one updated as work lands. |
-| [`MIGRATE_PLAN.md`](MIGRATE_PLAN.md) | Historical record of the migration. Frozen. |
+| [`docs/history/MIGRATE_PLAN.md`](docs/history/MIGRATE_PLAN.md) | Historical record of the migration. Frozen. |
 
 When `CONTEXT.md` and an implementation disagree, `CONTEXT.md` states the intent and
 `spec/decisions.md` states why Go differs. An unrecorded divergence is a defect.
