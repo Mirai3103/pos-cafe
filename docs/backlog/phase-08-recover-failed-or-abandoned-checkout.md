@@ -1,6 +1,6 @@
 # Phase 08: Recover a failed or abandoned checkout
 
-**Status:** ready-for-design
+**Status:** completed
 **Blocked by:** none
 **Source:** cafe-pos `.scratch/opening-day-pos-v0/issues/13-recover-failed-or-abandoned-checkout.md`
 
@@ -44,25 +44,25 @@ blockers.
 
 ## Acceptance criteria
 
-- [ ] Paid Committed Items that cannot complete Submit persist visibly as Awaiting
+- [x] Paid Committed Items that cannot complete Submit persist visibly as Awaiting
       Submission with their original Check, Payment, snapshot, actor, and failure
       meaning.
-- [ ] Retrying Submit uses the original committed facts and idempotency identity and
+- [x] Retrying Submit uses the original committed facts and idempotency identity and
       can never create a second Order or Preparation Unit for the same work.
-- [ ] Staff can cancel Awaiting Submission and complete the required linked Refund
+- [x] Staff can cancel Awaiting Submission and complete the required linked Refund
       without silently submitting preparation work.
-- [ ] A Service Session and Sales Shift cannot close while Awaiting Submission or
+- [x] A Service Session and Sales Shift cannot close while Awaiting Submission or
       its required Refund remains unresolved.
-- [ ] An unpaid unsubmitted checkout can terminate as an Abandoned Checkout with
+- [x] An unpaid unsubmitted checkout can terminate as an Abandoned Checkout with
       actor, time, one of `CUSTOMER_LEFT`, `CUSTOMER_REQUEST`, `SYSTEM_FAILURE`, or
       `OTHER`, and the note required by `OTHER`.
-- [ ] A checkout with any Payment cannot be abandoned until every Payment has been
+- [x] A checkout with any Payment cannot be abandoned until every Payment has been
       fully returned through the normal Refund workflow.
-- [ ] Abandonment creates no Order, Preparation Unit, or Completed Sale, while its
+- [x] Abandonment creates no Order, Preparation Unit, or Completed Sale, while its
       immutable Committed Items and Audit Events remain inspectable.
-- [ ] Network retries of Commit, Payment, Submit, Cancel, Refund, and Abandon return
+- [x] Network retries of Commit, Payment, Submit, Cancel, Refund, and Abandon return
       stable results and do not duplicate money or work.
-- [ ] Integration tests exercise induced Submit failure, successful retry,
+- [x] Integration tests exercise induced Submit failure, successful retry,
       cancel-and-refund, unpaid abandonment, paid rejection, closure blockers, and
       concurrency.
 - [ ] The Cashier interface keeps Awaiting Submission and abandoned outcomes

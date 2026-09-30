@@ -43,6 +43,8 @@ import type {
   PostSalesRefunds201,
   PostSalesRefundsRefundIdConfirm200,
   PostSalesServiceSessionsDineIn201,
+  PostSalesServiceSessionsIdAbandon200,
+  PostSalesServiceSessionsIdCancelAwaitingSubmission200,
   PostSalesServiceSessionsIdClose201,
   PostSalesServiceSessionsIdDraft200,
   PostSalesServiceSessionsIdDraftCommit200,
@@ -54,6 +56,7 @@ import type {
   PutSalesServiceSessionsIdTables200,
   ResponseAPIResponse,
   SalesAddDraftItemCommand,
+  SalesCheckoutRecoveryCommand,
   SalesCloseServiceSessionCommand,
   SalesCommitOrderDraftCommand,
   SalesCompWasteCommand,
@@ -860,6 +863,144 @@ export function useGetSalesServiceSessionsId<TData = Awaited<ReturnType<typeof g
 
 
 /**
+ * Ends an ACTIVE Session that has no Order and holds no money as an Abandoned Checkout: drafts CANCELLED, live Checks ABANDONED, Tables released, no Completed Sale. Every Payment must first be fully refunded. Requires a reason (CUSTOMER_LEFT, CUSTOMER_REQUEST, SYSTEM_FAILURE, OTHER); OTHER requires a note.
+ * @summary Abandon an unsubmitted checkout
+ */
+export const postSalesServiceSessionsIdAbandon = (
+    id: string,
+    salesCheckoutRecoveryCommand: SalesCheckoutRecoveryCommand,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PostSalesServiceSessionsIdAbandon200>(
+      {url: `/sales/service-sessions/${id}/abandon`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: salesCheckoutRecoveryCommand, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPostSalesServiceSessionsIdAbandonMutationKey = () => ['postSalesServiceSessionsIdAbandon'] as const;
+
+export const getPostSalesServiceSessionsIdAbandonMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdAbandon>>, TError,PostSalesServiceSessionsIdAbandonMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdAbandon>>, TError,PostSalesServiceSessionsIdAbandonMutationVariables, TContext> => {
+
+const mutationKey = getPostSalesServiceSessionsIdAbandonMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdAbandon>>, PostSalesServiceSessionsIdAbandonMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postSalesServiceSessionsIdAbandon(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsIdAbandonMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdAbandon>>>
+    export type PostSalesServiceSessionsIdAbandonMutationBody = SalesCheckoutRecoveryCommand
+    export type PostSalesServiceSessionsIdAbandonMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsIdAbandonMutationVariables = {id: string;data: SalesCheckoutRecoveryCommand}
+
+    /**
+ * @summary Abandon an unsubmitted checkout
+ */
+export const usePostSalesServiceSessionsIdAbandon = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdAbandon>>, TError,PostSalesServiceSessionsIdAbandonMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsIdAbandon>>,
+        TError,
+        PostSalesServiceSessionsIdAbandonMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsIdAbandonMutationOptions(options), queryClient);
+    }
+    /**
+ * Withdraws the charges of a Session's paid, unsubmitted Committed Items so the Refund command can return the money. Allowed only on an ACTIVE Session with no Order that is Awaiting Submission. Requires a reason (CUSTOMER_LEFT, CUSTOMER_REQUEST, SYSTEM_FAILURE, OTHER); OTHER requires a note.
+ * @summary Cancel paid work that never reached the bar
+ */
+export const postSalesServiceSessionsIdCancelAwaitingSubmission = (
+    id: string,
+    salesCheckoutRecoveryCommand: SalesCheckoutRecoveryCommand,
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<PostSalesServiceSessionsIdCancelAwaitingSubmission200>(
+      {url: `/sales/service-sessions/${id}/cancel-awaiting-submission`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: salesCheckoutRecoveryCommand, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPostSalesServiceSessionsIdCancelAwaitingSubmissionMutationKey = () => ['postSalesServiceSessionsIdCancelAwaitingSubmission'] as const;
+
+export const getPostSalesServiceSessionsIdCancelAwaitingSubmissionMutationOptions = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdCancelAwaitingSubmission>>, TError,PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdCancelAwaitingSubmission>>, TError,PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationVariables, TContext> => {
+
+const mutationKey = getPostSalesServiceSessionsIdCancelAwaitingSubmissionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSalesServiceSessionsIdCancelAwaitingSubmission>>, PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postSalesServiceSessionsIdCancelAwaitingSubmission(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationResult = NonNullable<Awaited<ReturnType<typeof postSalesServiceSessionsIdCancelAwaitingSubmission>>>
+    export type PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationBody = SalesCheckoutRecoveryCommand
+    export type PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationError = ResponseAPIResponse
+    export type PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationVariables = {id: string;data: SalesCheckoutRecoveryCommand}
+
+    /**
+ * @summary Cancel paid work that never reached the bar
+ */
+export const usePostSalesServiceSessionsIdCancelAwaitingSubmission = <TError = ResponseAPIResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSalesServiceSessionsIdCancelAwaitingSubmission>>, TError,PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationVariables, TContext>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postSalesServiceSessionsIdCancelAwaitingSubmission>>,
+        TError,
+        PostSalesServiceSessionsIdCancelAwaitingSubmissionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostSalesServiceSessionsIdCancelAwaitingSubmissionMutationOptions(options), queryClient);
+    }
+    /**
  * Freezes an eligible Service Session into an immutable Completed Sale and releases every held Table Assignment. A Session closes only when, in this order of refusal: every Check is settled, every committed item has been submitted to the bar, the Session carries at least one Order, and every Preparation Unit is terminal. Closing an already-closed Session returns its existing Completed Sale rather than an error.
  * @summary Close the Service Session
  */

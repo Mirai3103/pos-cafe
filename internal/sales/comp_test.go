@@ -195,7 +195,7 @@ func TestCompResultJSON(t *testing.T) {
 					ID:                     comp.ChargeAdjustmentID,
 					Kind:                   ChargeAdjustmentKindComp,
 					Scope:                  CompScopePostSale,
-					PreparationUnitID:      comp.PreparationUnitID,
+					PreparationUnitID:      &comp.PreparationUnitID,
 					PreparationWasteID:     &comp.WasteID,
 					ChargeAllocationID:     uuid.New(),
 					CompletedSaleID:        &saleID,

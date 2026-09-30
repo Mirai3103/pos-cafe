@@ -12,11 +12,17 @@ import (
 )
 
 type Querier interface {
+	AbandonServiceSession(ctx context.Context, id uuid.UUID) error
+	// MERGED Checks keep their state; they already carry no charge.
+	AbandonSessionChecks(ctx context.Context, serviceSessionID uuid.UUID) ([]uuid.UUID, error)
 	// Fills the acknowledgment tuple together; the all-or-nothing check
 	// constraint rejects any partial write.
 	AcknowledgePreparationAlert(ctx context.Context, arg AcknowledgePreparationAlertParams) (AcknowledgePreparationAlertRow, error)
 	AddStaffRole(ctx context.Context, arg AddStaffRoleParams) error
 	AdvisoryXactLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	// Only a Session with no Order is abandoned, so every COMMITTED draft here is
+	// unsubmitted.
+	CancelSessionDrafts(ctx context.Context, serviceSessionID uuid.UUID) error
 	// Catalog sqlc queries
 	// Idempotency, audit, and entity CRUD primitives.
 	ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogRequestParams) (CatalogMutationRequest, error)
@@ -65,8 +71,14 @@ type Querier interface {
 	DeleteModifierGroupDefaultOptions(ctx context.Context, modifierGroupID uuid.UUID) error
 	DisableIdentity(ctx context.Context, arg DisableIdentityParams) error
 	ExpireSession(ctx context.Context, arg ExpireSessionParams) error
-	// A draft that prevents a new one opening: EDITABLE, or COMMITTED without a
-	// corresponding Order.
+	// A draft that prevents a new one opening: EDITABLE, CANCELLED, or COMMITTED
+	// without a corresponding Order.
+	//
+	// CANCELLED blocks because Cancel Awaiting Submission withdrew the draft's
+	// charge: an orderless cancelled draft's Session must be abandoned (Refund,
+	// then Abandon), not re-ordered. A new round that got submitted would leave
+	// the withdrawn allocations unsubmitted for closure forever and strand the
+	// Session ACTIVE (ADR-066).
 	//
 	// 5D added the orders table and completed the second clause as 5B's comment
 	// promised. The rule stops staff stacking rounds ahead of the kitchen; it does
@@ -84,6 +96,8 @@ type Querier interface {
 	// never matches itself. A separate query rather than a nullable exclusion
 	// parameter keeps the add path's query untouched.
 	FindDraftItemByCompositionExcluding(ctx context.Context, arg FindDraftItemByCompositionExcludingParams) (FindDraftItemByCompositionExcludingRow, error)
+	// Phase 08: the terminal record the Service Session projection reads.
+	GetAbandonedCheckoutBySession(ctx context.Context, serviceSessionID uuid.UUID) (GetAbandonedCheckoutBySessionRow, error)
 	// -- Display Details (BA-1) --
 	GetActiveMenuItemIDByCode(ctx context.Context, arg GetActiveMenuItemIDByCodeParams) (uuid.UUID, error)
 	// The one active Shift (OPEN or CLOSING) for the current-Shift read. The
@@ -119,6 +133,7 @@ type Querier interface {
 	// conventions: valid Payments exclude voided ones, completed live Refunds are
 	// completed Refunds without a Completed Sale, and base charge comes from the
 	// Charge Allocations' frozen unit prices.
+	// Phase 08 adds awaiting_submission_count: ACTIVE Sessions whose committed, orderless draft sits on a Check holding net money.
 	GetGlobalShiftClosureBlockers(ctx context.Context) (GetGlobalShiftClosureBlockersRow, error)
 	// Includes released assignments, so a released sequence number is never
 	// reused and the audit trail stays unambiguous.
@@ -192,6 +207,10 @@ type Querier interface {
 	// verify a PIN load and lock the identity row themselves.
 	GetSessionAuthority(ctx context.Context, arg GetSessionAuthorityParams) (GetSessionAuthorityRow, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
+	// Phase 08: the money an Abandon must see returned. Valid Payments exclude
+	// voided ones; a Refund counts only once completed; a pending Refund is
+	// counted separately because it has not moved money.
+	GetSessionHeldMoney(ctx context.Context, serviceSessionID uuid.UUID) (GetSessionHeldMoneyRow, error)
 	GetSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	// -- Phase 6C: Payment Void, Refund & correction reconciliation --
 	// Every Phase 6C reconciliation term for one Shift in one read (ADR-046).
@@ -228,6 +247,7 @@ type Querier interface {
 	GetStaffRolesForUpdate(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetStaffSummary(ctx context.Context, id uuid.UUID) (GetStaffSummaryRow, error)
 	GetTableForUpdate(ctx context.Context, id uuid.UUID) (Table, error)
+	InsertAbandonedCheckout(ctx context.Context, arg InsertAbandonedCheckoutParams) (uuid.UUID, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
 	// Batches a per-entry audit-insert loop into one round trip for callers
 	// (Sales table-assignment audits) that write several events of the same type,
@@ -510,6 +530,9 @@ type Querier interface {
 	// fall out of step with the Order that defines it.
 	ListSubmittedCommittedItems(ctx context.Context, committedItemIds []uuid.UUID) ([]uuid.UUID, error)
 	ListTables(ctx context.Context) ([]Table, error)
+	// Phase 08: the committed draft's Charge Allocations with their frozen charge,
+	// computed the way GetGlobalShiftClosureBlockers computes base charge.
+	ListWithdrawableAllocations(ctx context.Context, orderDraftID uuid.UUID) ([]ListWithdrawableAllocationsRow, error)
 	// Step 4: the selected Charge Adjustments FOR UPDATE, each ascending UUID,
 	// after the Payments so both refundable capacities are held in one order.
 	LockChargeAdjustmentsForRefund(ctx context.Context, chargeAdjustmentIds []uuid.UUID) ([]LockChargeAdjustmentsForRefundRow, error)
@@ -682,6 +705,11 @@ type Querier interface {
 	// errors instead of collapsing into ErrNothingToSubmit, per spec §9.3.
 	LockServiceSessionForSubmission(ctx context.Context, id uuid.UUID) (LockServiceSessionForSubmissionRow, error)
 	LockServiceSessionForUpdate(ctx context.Context, id uuid.UUID) (LockServiceSessionForUpdateRow, error)
+	// Phase 08: every Check of one Session, after the caller holds the Session
+	// lock, in the ascending (created_at, id) order Submit and 5C use. Like
+	// Submit, this runs Session-then-Checks against Payment's Check-then-Session,
+	// so it inherits ADR-031's AB-BA window (ADR-066).
+	LockSessionChecksForRecovery(ctx context.Context, serviceSessionID uuid.UUID) ([]LockSessionChecksForRecoveryRow, error)
 	// The committed-but-unsubmitted Order Draft of the Session the caller has
 	// already locked with LockServiceSessionForSubmission. Only the draft is
 	// locked here: the Session lock is its own query so a missing or closed
@@ -709,6 +737,7 @@ type Querier interface {
 	// The absorbed Check keeps no charge and points at the survivor, which is
 	// what the MERGED branch of check_settlement_evidence_valid requires.
 	MarkCheckMerged(ctx context.Context, arg MarkCheckMergedParams) error
+	MarkOrderDraftCancelled(ctx context.Context, id uuid.UUID) error
 	MarkOrderDraftCommitted(ctx context.Context, id uuid.UUID) error
 	MoveAllocationsToCheck(ctx context.Context, arg MoveAllocationsToCheckParams) error
 	// -- Structure (BA-1) --
@@ -771,6 +800,8 @@ type Querier interface {
 	RetireModifierOption(ctx context.Context, arg RetireModifierOptionParams) (ModifierOption, error)
 	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
+	// Phase 08: recovery applies only to a Session with no Order (ADR-066).
+	SessionHasOrder(ctx context.Context, serviceSessionID uuid.UUID) (bool, error)
 	// A whole set of quantity rewrites in one statement. Split and Merge compute
 	// the new quantities in Go and hand the batch over, so the work done while the
 	// Checks are locked is a fixed number of round trips rather than one per

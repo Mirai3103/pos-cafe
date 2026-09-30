@@ -206,7 +206,7 @@ func insertCancellationAdjustments(ctx context.Context, q *sqlc.Queries,
 		adjustment, err := q.InsertChargeAdjustment(ctx, sqlc.InsertChargeAdjustmentParams{
 			Kind:               chargeAdjustmentKindCancellation,
 			Scope:              chargeAdjustmentScopeLiveCheck,
-			PreparationUnitID:  id,
+			PreparationUnitID:  uuid.NullUUID{UUID: id, Valid: true},
 			ChargeAllocationID: unit.ChargeAllocationID,
 			CheckID:            unit.CheckID,
 			SalesShiftID:       shiftID,

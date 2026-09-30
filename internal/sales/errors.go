@@ -111,8 +111,12 @@ var (
 	ErrFinancialInvariantViolated = errors.New("check financials do not satisfy their invariant")
 
 	ErrNothingToSubmit                  = errors.New("no committed order draft awaits submission")
+	ErrNothingAwaitingSubmission        = errors.New("the service session is not awaiting submission")
+	ErrSessionHasOrder                  = errors.New("the service session already has a submitted order")
+	ErrPaymentRequiresRefund            = errors.New("every payment must be fully refunded before the checkout is abandoned")
 	ErrCheckNotSettledForSubmission     = errors.New("every check must be settled before a takeaway order is submitted")
 	ErrCheckNotSettledForClosure        = errors.New("every check must be settled before the service session closes")
+	ErrAwaitingSubmissionForClosure     = errors.New("paid committed items must be submitted or cancelled before the service session closes")
 	ErrPendingRefundForClosure          = errors.New("every pending refund must be resolved before the service session closes")
 	ErrUnsubmittedWorkForClosure        = errors.New("every committed item must be submitted before the service session closes")
 	ErrOrderRequiredForClosure          = errors.New("a service session with no order cannot close")
@@ -276,9 +280,13 @@ var httpErrors = response.ErrorMapper{
 	sentinelMessage(ErrLineTotalOutOfRange, http.StatusUnprocessableEntity, "LINE_TOTAL_OUT_OF_RANGE"),
 	sentinelMessage(ErrCheckChargeOutOfRange, http.StatusUnprocessableEntity, "CHECK_CHARGE_OUT_OF_RANGE"),
 	sentinelMessage(ErrInvalidCheckTarget, http.StatusUnprocessableEntity, "INVALID_CHECK_TARGET"),
+	sentinelMessage(ErrNothingAwaitingSubmission, http.StatusConflict, "NOTHING_AWAITING_SUBMISSION"),
+	sentinelMessage(ErrPaymentRequiresRefund, http.StatusConflict, "PAYMENT_REQUIRES_REFUND"),
+	sentinelMessage(ErrSessionHasOrder, http.StatusConflict, "SESSION_HAS_ORDER"),
 	sentinelMessage(ErrNothingToSubmit, http.StatusConflict, "NOTHING_TO_SUBMIT"),
 	sentinelMessage(ErrCheckNotSettledForSubmission, http.StatusConflict, "CHECK_NOT_SETTLED_FOR_SUBMISSION"),
 	sentinelMessage(ErrCheckNotSettledForClosure, http.StatusConflict, "CHECK_NOT_SETTLED_FOR_CLOSURE"),
+	sentinelMessage(ErrAwaitingSubmissionForClosure, http.StatusConflict, "AWAITING_SUBMISSION_FOR_CLOSURE"),
 	sentinelMessage(ErrPendingRefundForClosure, http.StatusConflict, "PENDING_REFUND_FOR_CLOSURE"),
 	sentinelMessage(ErrUnsubmittedWorkForClosure, http.StatusConflict, "UNSUBMITTED_WORK_FOR_CLOSURE"),
 	sentinelMessage(ErrOrderRequiredForClosure, http.StatusConflict, "ORDER_REQUIRED_FOR_CLOSURE"),

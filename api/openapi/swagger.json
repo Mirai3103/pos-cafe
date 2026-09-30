@@ -5849,6 +5849,182 @@
                 }
             }
         },
+        "/sales/service-sessions/{id}/abandon": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ends an ACTIVE Session that has no Order and holds no money as an Abandoned Checkout: drafts CANCELLED, live Checks ABANDONED, Tables released, no Completed Sale. Every Payment must first be fully refunded. Requires a reason (CUSTOMER_LEFT, CUSTOMER_REQUEST, SYSTEM_FAILURE, OTHER); OTHER requires a note.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Abandon an unsubmitted checkout",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Abandon request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.CheckoutRecoveryCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/service-sessions/{id}/cancel-awaiting-submission": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Withdraws the charges of a Session's paid, unsubmitted Committed Items so the Refund command can return the money. Allowed only on an ACTIVE Session with no Order that is Awaiting Submission. Requires a reason (CUSTOMER_LEFT, CUSTOMER_REQUEST, SYSTEM_FAILURE, OTHER); OTHER requires a note.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sales"
+                ],
+                "summary": "Cancel paid work that never reached the bar",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Cancel request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sales.CheckoutRecoveryCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/sales.ServiceSessionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/sales/service-sessions/{id}/close": {
             "post": {
                 "security": [
@@ -10756,6 +10932,26 @@
                 }
             }
         },
+        "sales.AbandonedCheckoutResponse": {
+            "type": "object",
+            "properties": {
+                "actor_staff_identity_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
         "sales.AddDraftItemCommand": {
             "type": "object",
             "properties": {
@@ -10864,6 +11060,10 @@
                 },
                 "submitted": {
                     "type": "boolean"
+                },
+                "withdrawn": {
+                    "description": "Withdrawn is true once a WITHDRAWAL Charge Adjustment removed this\nallocation's charge (Phase 08).",
+                    "type": "boolean"
                 }
             }
         },
@@ -10929,6 +11129,20 @@
                 },
                 "total_voided_vnd": {
                     "type": "integer"
+                }
+            }
+        },
+        "sales.CheckoutRecoveryCommand": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
                 }
             }
         },
@@ -11691,6 +11905,24 @@
         "sales.ServiceSessionResponse": {
             "type": "object",
             "properties": {
+                "abandoned_checkout": {
+                    "description": "Phase 08: the terminal record, present only on an ABANDONED Session.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/sales.AbandonedCheckoutResponse"
+                        }
+                    ]
+                },
+                "awaiting_submission": {
+                    "description": "Phase 08: paid Committed Items that have not entered an Order (spec §4),\nderived, never stored.",
+                    "type": "boolean"
+                },
+                "awaiting_submission_committed_item_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "checks": {
                     "description": "Filled from 5B; payments within each Check are filled by 5C.",
                     "type": "array",

@@ -1406,6 +1406,19 @@ definitions:
       success:
         type: boolean
     type: object
+  sales.AbandonedCheckoutResponse:
+    properties:
+      actor_staff_identity_id:
+        type: string
+      id:
+        type: string
+      note:
+        type: string
+      occurred_at:
+        type: string
+      reason:
+        type: string
+    type: object
   sales.AddDraftItemCommand:
     properties:
       menu_item_id:
@@ -1478,6 +1491,11 @@ definitions:
         type: string
       submitted:
         type: boolean
+      withdrawn:
+        description: |-
+          Withdrawn is true once a WITHDRAWAL Charge Adjustment removed this
+          allocation's charge (Phase 08).
+        type: boolean
     type: object
   sales.CheckResponse:
     properties:
@@ -1521,6 +1539,15 @@ definitions:
         type: integer
       total_voided_vnd:
         type: integer
+    type: object
+  sales.CheckoutRecoveryCommand:
+    properties:
+      note:
+        type: string
+      reason:
+        type: string
+      request_id:
+        type: string
     type: object
   sales.CloseServiceSessionCommand:
     properties:
@@ -2020,6 +2047,20 @@ definitions:
     type: object
   sales.ServiceSessionResponse:
     properties:
+      abandoned_checkout:
+        allOf:
+        - $ref: '#/definitions/sales.AbandonedCheckoutResponse'
+        description: 'Phase 08: the terminal record, present only on an ABANDONED
+          Session.'
+      awaiting_submission:
+        description: |-
+          Phase 08: paid Committed Items that have not entered an Order (spec §4),
+          derived, never stored.
+        type: boolean
+      awaiting_submission_committed_item_ids:
+        items:
+          type: string
+        type: array
       checks:
         description: Filled from 5B; payments within each Check are filled by 5C.
         items:
@@ -6210,6 +6251,121 @@ paths:
       security:
       - BearerAuth: []
       summary: Get a Service Session
+      tags:
+      - sales
+  /sales/service-sessions/{id}/abandon:
+    post:
+      consumes:
+      - application/json
+      description: 'Ends an ACTIVE Session that has no Order and holds no money as
+        an Abandoned Checkout: drafts CANCELLED, live Checks ABANDONED, Tables released,
+        no Completed Sale. Every Payment must first be fully refunded. Requires a
+        reason (CUSTOMER_LEFT, CUSTOMER_REQUEST, SYSTEM_FAILURE, OTHER); OTHER requires
+        a note.'
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Abandon request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.CheckoutRecoveryCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Abandon an unsubmitted checkout
+      tags:
+      - sales
+  /sales/service-sessions/{id}/cancel-awaiting-submission:
+    post:
+      consumes:
+      - application/json
+      description: Withdraws the charges of a Session's paid, unsubmitted Committed
+        Items so the Refund command can return the money. Allowed only on an ACTIVE
+        Session with no Order that is Awaiting Submission. Requires a reason (CUSTOMER_LEFT,
+        CUSTOMER_REQUEST, SYSTEM_FAILURE, OTHER); OTHER requires a note.
+      parameters:
+      - description: Service Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Cancel request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sales.CheckoutRecoveryCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sales.ServiceSessionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel paid work that never reached the bar
       tags:
       - sales
   /sales/service-sessions/{id}/close:

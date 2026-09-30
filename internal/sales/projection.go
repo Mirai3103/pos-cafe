@@ -20,6 +20,8 @@ func newServiceSessionResponse() ServiceSessionResponse {
 		Checks:           make([]CheckResponse, 0),
 		Orders:           make([]OrderResponse, 0),
 		PreparationUnits: make([]PreparationUnitResponse, 0),
+
+		AwaitingSubmissionCommittedItemIDs: make([]uuid.UUID, 0),
 	}
 }
 
@@ -72,6 +74,8 @@ func LoadServiceSession(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUI
 		return out, err
 	}
 	out.Checks = checks
+	out.AwaitingSubmissionCommittedItemIDs = DeriveAwaitingSubmission(checks)
+	out.AwaitingSubmission = len(out.AwaitingSubmissionCommittedItemIDs) > 0
 
 	orders, err := loadOrders(ctx, q, sessionID)
 	if err != nil {
@@ -84,6 +88,20 @@ func LoadServiceSession(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUI
 		return out, err
 	}
 	out.PreparationUnits = units
+
+	abandoned, err := q.GetAbandonedCheckoutBySession(ctx, sessionID)
+	switch {
+	case err == nil:
+		out.AbandonedCheckout = &AbandonedCheckoutResponse{
+			ID:                   abandoned.ID,
+			Reason:               abandoned.Reason,
+			Note:                 nullStringPtr(abandoned.Note),
+			ActorStaffIdentityID: abandoned.ActorStaffIdentityID,
+			OccurredAt:           abandoned.OccurredAt,
+		}
+	case !errors.Is(err, sql.ErrNoRows):
+		return out, fmt.Errorf("load abandoned checkout: %w", err)
+	}
 
 	draft, err := q.GetEditableDraft(ctx, sessionID)
 	if err != nil {
@@ -232,6 +250,16 @@ func loadCheckForSnapshot(ctx context.Context, q *sqlc.Queries, row sqlc.ListSes
 		return CheckResponse{}, err
 	}
 
+	withdrawn := make(map[uuid.UUID]bool)
+	for _, adjustment := range adjustments {
+		if adjustment.Kind == ChargeAdjustmentKindWithdrawal {
+			withdrawn[adjustment.ChargeAllocationID] = true
+		}
+	}
+	for i := range allocations {
+		allocations[i].Withdrawn = withdrawn[allocations[i].ID]
+	}
+
 	payments, originalPaymentVND, voidedPaymentVND, err := loadCheckPayments(ctx, q, row.ID, mode)
 	if err != nil {
 		return CheckResponse{}, err
@@ -268,7 +296,7 @@ func loadCheckForSnapshot(ctx context.Context, q *sqlc.Queries, row sqlc.ListSes
 	// guarantees that a SETTLED Check carries complete evidence; this
 	// guarantees that its state matches the money. A SETTLED Check carrying a
 	// pending Refund still has a zero balance, so it stays settled.
-	if row.State != CheckStateMerged &&
+	if row.State != CheckStateMerged && row.State != CheckStateAbandoned &&
 		(row.State == CheckStateSettled) != SettlesCheck(financials.BalanceVND) {
 		slog.Error("check state does not match its balance",
 			"check_id", row.ID, "state", row.State, "balance_vnd", financials.BalanceVND)
@@ -440,7 +468,7 @@ func loadCheckAdjustments(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 			ID:                     row.ID,
 			Kind:                   row.Kind,
 			Scope:                  row.Scope,
-			PreparationUnitID:      row.PreparationUnitID,
+			PreparationUnitID:      nullUUIDPtr(row.PreparationUnitID),
 			PreparationWasteID:     nullUUIDPtr(row.PreparationWasteID),
 			ChargeAllocationID:     row.ChargeAllocationID,
 			CompletedSaleID:        nullUUIDPtr(row.CompletedSaleID),

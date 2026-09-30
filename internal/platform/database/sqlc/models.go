@@ -12,6 +12,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// Owned by internal/sales (Phase 08). The terminal record of an Abandoned Checkout.
+type AbandonedCheckout struct {
+	ID                   uuid.UUID      `json:"id"`
+	ServiceSessionID     uuid.UUID      `json:"service_session_id"`
+	SalesShiftID         uuid.UUID      `json:"sales_shift_id"`
+	Reason               string         `json:"reason"`
+	Note                 sql.NullString `json:"note"`
+	ActorStaffIdentityID uuid.UUID      `json:"actor_staff_identity_id"`
+	StaffAccessSessionID uuid.UUID      `json:"staff_access_session_id"`
+	OccurredAt           time.Time      `json:"occurred_at"`
+}
+
 type AuditEvent struct {
 	ID         uuid.UUID       `json:"id"`
 	EventType  string          `json:"event_type"`
@@ -55,7 +67,7 @@ type ChargeAdjustment struct {
 	ID                 uuid.UUID     `json:"id"`
 	Kind               string        `json:"kind"`
 	Scope              string        `json:"scope"`
-	PreparationUnitID  uuid.UUID     `json:"preparation_unit_id"`
+	PreparationUnitID  uuid.NullUUID `json:"preparation_unit_id"`
 	PreparationWasteID uuid.NullUUID `json:"preparation_waste_id"`
 	ChargeAllocationID uuid.UUID     `json:"charge_allocation_id"`
 	CheckID            uuid.UUID     `json:"check_id"`

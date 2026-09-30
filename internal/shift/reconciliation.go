@@ -297,9 +297,8 @@ func revealClosingShift(ctx context.Context, q *sqlc.Queries, locked sqlc.SalesS
 }
 
 // loadClosureBlockers evaluates every global closure blocker in one read and
-// returns the first violation in their load-bearing precedence: unsettled
-// Checks, pending Refunds, unresolved financial correction obligations, active
-// Service Sessions. Start and Final Close both evaluate the set through this
+// returns the first violation in their load-bearing precedence (see
+// closureBlockerErr). Start and Final Close both evaluate the set through this
 // helper. Blocker reads are MVCC reads; the caller owns whatever row locking
 // its protocol requires.
 func loadClosureBlockers(ctx context.Context, q *sqlc.Queries) error {
@@ -307,14 +306,25 @@ func loadClosureBlockers(ctx context.Context, q *sqlc.Queries) error {
 	if err != nil {
 		return fmt.Errorf("load global closure blockers: %w", err)
 	}
+	return closureBlockerErr(blockers)
+}
+
+// closureBlockerErr applies the blockers' load-bearing precedence: unsettled
+// Checks, pending Refunds, unresolved financial correction obligations,
+// Service Sessions Awaiting Submission, active Service Sessions. Awaiting
+// Submission comes fourth: every such Session is also active, so its place
+// changes only which error staff read, never whether closure is blocked.
+func closureBlockerErr(b sqlc.GetGlobalShiftClosureBlockersRow) error {
 	switch {
-	case blockers.UnsettledCheckCount > 0:
+	case b.UnsettledCheckCount > 0:
 		return ErrUnsettledCheck
-	case blockers.PendingRefundCount > 0:
+	case b.PendingRefundCount > 0:
 		return ErrPendingRefund
-	case blockers.UnresolvedCorrectionVnd > 0:
+	case b.UnresolvedCorrectionVnd > 0:
 		return ErrUnresolvedCorrection
-	case blockers.ActiveServiceSessionCount > 0:
+	case b.AwaitingSubmissionCount > 0:
+		return ErrAwaitingSubmission
+	case b.ActiveServiceSessionCount > 0:
 		return ErrActiveServiceSession
 	}
 	return nil

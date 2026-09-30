@@ -444,7 +444,7 @@ func assertLiveCompAdmissible(ctx context.Context, q *sqlc.Queries, source compW
 	}
 	for _, existing := range existingAdjustments {
 		if existing.Kind == ChargeAdjustmentKindComp &&
-			existing.PreparationUnitID == source.PreparationUnitID {
+			existing.PreparationUnitID.Valid && existing.PreparationUnitID.UUID == source.PreparationUnitID {
 			return 0, fmt.Errorf(
 				"%w: unit %s already carries a comp", ErrWasteAlreadyComped, source.PreparationUnitID)
 		}
@@ -553,7 +553,7 @@ func insertCompChargeAdjustment(ctx context.Context, q *sqlc.Queries, req compRe
 	adjustment, err := q.InsertChargeAdjustment(ctx, sqlc.InsertChargeAdjustmentParams{
 		Kind:               ChargeAdjustmentKindComp,
 		Scope:              scope,
-		PreparationUnitID:  source.PreparationUnitID,
+		PreparationUnitID:  uuid.NullUUID{UUID: source.PreparationUnitID, Valid: true},
 		PreparationWasteID: uuid.NullUUID{UUID: source.WasteID, Valid: true},
 		ChargeAllocationID: source.ChargeAllocationID.UUID,
 		CheckID:            source.CheckID.UUID,

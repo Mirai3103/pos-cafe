@@ -196,3 +196,29 @@ func TestEvaluateClosureReadinessRejectionOrder(t *testing.T) {
 	s.Orders = []sales.OrderResponse{{ID: uuid.New()}}
 	require.ErrorIs(t, sales.EvaluateClosureReadiness(s).Err(), sales.ErrUnfulfilledPreparationForClosure)
 }
+
+func TestDeriveAwaitingSubmission(t *testing.T) {
+	paidItem, unpaidItem, withdrawnItem, submittedItem := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	checks := []sales.CheckResponse{
+		{EffectiveReceivedVND: 50000, Allocations: []sales.ChargeAllocationResponse{
+			{CommittedItemID: paidItem},
+			{CommittedItemID: paidItem}, // split across two allocations: reported once
+			{CommittedItemID: withdrawnItem, Withdrawn: true},
+			{CommittedItemID: submittedItem, Submitted: true},
+		}},
+		{EffectiveReceivedVND: 0, Allocations: []sales.ChargeAllocationResponse{
+			{CommittedItemID: unpaidItem},
+		}},
+	}
+	require.Equal(t, []uuid.UUID{paidItem}, sales.DeriveAwaitingSubmission(checks))
+	require.Empty(t, sales.DeriveAwaitingSubmission(nil))
+}
+
+func TestEvaluateClosureReadinessAwaitingSubmissionComesFirst(t *testing.T) {
+	s := eligible()
+	s.Checks[0].State = sales.CheckStateOpen // also unsettled
+	s.AwaitingSubmission = true
+	got := sales.EvaluateClosureReadiness(s)
+	require.False(t, got.Eligible)
+	require.ErrorIs(t, got.Err(), sales.ErrAwaitingSubmissionForClosure)
+}
