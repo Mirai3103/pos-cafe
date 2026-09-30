@@ -31,7 +31,7 @@ comment:
 
 ignore:
   - "cmd/**"
-  - "docs/**"
-  - "internal/database/sqlc/**"
+  - "api/openapi/**"
+  - "internal/platform/database/sqlc/**"
   - "**/*_mock.go"
   - "**/*.pb.go"

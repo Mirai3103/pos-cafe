@@ -12,8 +12,8 @@ import (
 )
 
 // The generated-Swagger contract of the Phase 07 Shift closure and
-// reconciliation routes. The test reads ../../docs/swagger.json — the file
-// `make swagger` (`swag init -g cmd/api/main.go -o docs`) generates — and
+// reconciliation routes. The test reads ../../api/openapi/swagger.json — the file
+// `make swagger` (`swag init -g cmd/api/main.go -o api/openapi`) generates — and
 // asserts every Phase 07 route is documented with its method, BearerAuth
 // security, the exact request body schema, the success status wired to the
 // exact response DTO, and the error statuses its handler can return: the full
@@ -62,7 +62,7 @@ type swaggerOperation struct {
 	Responses  map[string]swaggerResponse   `json:"responses"`
 }
 
-// swaggerDoc is the slice of docs/swagger.json the contract reads.
+// swaggerDoc is the slice of api/openapi/swagger.json the contract reads.
 type swaggerDoc struct {
 	Paths       map[string]map[string]*swaggerOperation `json:"paths"`
 	Definitions map[string]json.RawMessage              `json:"definitions"`
@@ -176,8 +176,8 @@ func collectSwaggerResponseRefs(schema *swaggerSchema, doc *swaggerDoc,
 }
 
 func TestSwaggerPhase07RouteContracts(t *testing.T) {
-	raw, err := os.ReadFile("../../docs/swagger.json")
-	require.NoError(t, err, "docs/swagger.json must exist; regenerate with `make swagger`")
+	raw, err := os.ReadFile("../../api/openapi/swagger.json")
+	require.NoError(t, err, "api/openapi/swagger.json must exist; regenerate with `make swagger`")
 
 	var doc swaggerDoc
 	require.NoError(t, json.Unmarshal(raw, &doc))
@@ -316,8 +316,8 @@ func swaggerRejectPinExamples(value any, definition string, t *testing.T) {
 // generated document. It also pins the removal of the pre-Phase-07 shapes the
 // carry-forward review flagged.
 func TestSwaggerPhase07RequestSecretsAreExampleFree(t *testing.T) {
-	raw, err := os.ReadFile("../../docs/swagger.json")
-	require.NoError(t, err, "docs/swagger.json must exist; regenerate with `make swagger`")
+	raw, err := os.ReadFile("../../api/openapi/swagger.json")
+	require.NoError(t, err, "api/openapi/swagger.json must exist; regenerate with `make swagger`")
 
 	var doc swaggerDoc
 	require.NoError(t, json.Unmarshal(raw, &doc))

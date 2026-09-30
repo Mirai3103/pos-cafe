@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"

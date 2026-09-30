@@ -17,8 +17,8 @@ type Querier interface {
 	AcknowledgePreparationAlert(ctx context.Context, arg AcknowledgePreparationAlertParams) (AcknowledgePreparationAlertRow, error)
 	AddStaffRole(ctx context.Context, arg AddStaffRoleParams) error
 	AdvisoryXactLock(ctx context.Context, pgAdvisoryXactLock int64) error
-	// -- Advisory Lock --
-	CatalogAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
+	// Catalog sqlc queries
+	// Idempotency, audit, and entity CRUD primitives.
 	ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogRequestParams) (CatalogMutationRequest, error)
 	ClaimIdempotencyRecord(ctx context.Context, arg ClaimIdempotencyRecordParams) (IdempotencyKey, error)
 	ClearStaffRoles(ctx context.Context, staffIdentityID uuid.UUID) error
@@ -98,10 +98,6 @@ type Querier interface {
 	// cross-Session, source, or not-later Order with one typed error.
 	GetCancellationReplacementOrder(ctx context.Context, arg GetCancellationReplacementOrderParams) (GetCancellationReplacementOrderRow, error)
 	GetCatalogMutationRequest(ctx context.Context, arg GetCatalogMutationRequestParams) (CatalogMutationRequest, error)
-	// Catalog sqlc queries
-	// Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
-	GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error)
-	GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetCategoryModifierGroup(ctx context.Context, arg GetCategoryModifierGroupParams) (CategoryModifierGroup, error)
 	// One closed Shift's immutable detail aggregate, keyed by the Shift id the
 	// history route exposes. An open or closing Shift id finds no row here. The
@@ -182,13 +178,11 @@ type Querier interface {
 	// The frozen per-Shift reconciliation, read back for the CLOSING response and
 	// re-verified against fresh totals at Final Close.
 	GetReconciliationSnapshot(ctx context.Context, salesShiftID uuid.UUID) (ShiftReconciliation, error)
-	GetSalesOccurredAt(ctx context.Context) (time.Time, error)
 	// Queries for internal/sales (Phase 5A).
 	//
-	// Authority, role, and advisory-lock queries are slice-local by ADR-007: the
-	// shared table is shared, the helper logic is not.
-	GetSalesSessionAuthority(ctx context.Context, arg GetSalesSessionAuthorityParams) (GetSalesSessionAuthorityRow, error)
-	GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
+	// Session authority, roles, and advisory locks come from the shared command
+	// pipeline (internal/platform/command) and sql/queries/platform.sql.
+	GetSalesOccurredAt(ctx context.Context) (time.Time, error)
 	GetSalesShiftStateByID(ctx context.Context, id uuid.UUID) (string, error)
 	GetServiceSession(ctx context.Context, id uuid.UUID) (GetServiceSessionRow, error)
 	// Queries shared by every vertical slice through internal/platform/command.
@@ -221,10 +215,6 @@ type Querier interface {
 	// pending_refund_vnd. internal/shift owns this SQL and imports neither sales
 	// nor preparation.
 	GetShiftReconciliationTotals(ctx context.Context, salesShiftID uuid.UUID) (GetShiftReconciliationTotalsRow, error)
-	// -- Authority --
-	// Names are prefixed because sqlc query names are global across the package.
-	GetShiftSessionAuthority(ctx context.Context, arg GetShiftSessionAuthorityParams) (GetShiftSessionAuthorityRow, error)
-	GetShiftSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error)
 	GetStaffByID(ctx context.Context, id uuid.UUID) (StaffIdentity, error)
 	// Locks the actor's own identity row so State Correction's self-PIN
 	// verification cannot interleave with a concurrent disablement or PIN
@@ -723,6 +713,7 @@ type Querier interface {
 	MoveAllocationsToCheck(ctx context.Context, arg MoveAllocationsToCheckParams) error
 	// -- Structure (BA-1) --
 	MoveMenuItemToCategory(ctx context.Context, arg MoveMenuItemToCategoryParams) (MenuItem, error)
+	// Names are prefixed because sqlc query names are global across the package.
 	// -- Sales Shift --
 	OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error)
 	RaiseCheckCharge(ctx context.Context, arg RaiseCheckChargeParams) error
@@ -780,7 +771,6 @@ type Querier interface {
 	RetireModifierOption(ctx context.Context, arg RetireModifierOptionParams) (ModifierOption, error)
 	RevokeAllStaffSessions(ctx context.Context, staffIdentityID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
-	SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	// A whole set of quantity rewrites in one statement. Split and Merge compute
 	// the new quantities in Go and hand the batch over, so the work done while the
 	// Checks are locked is a fixed number of round trips rather than one per
@@ -808,7 +798,6 @@ type Querier interface {
 	// Writes all four evidence columns together, because the composite constraint
 	// check_settlement_evidence_valid rejects any partial set.
 	SettleCheck(ctx context.Context, arg SettleCheckParams) error
-	ShiftAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error
 	StoreCatalogRequestResult(ctx context.Context, arg StoreCatalogRequestResultParams) error
 	StoreIdempotencyResult(ctx context.Context, arg StoreIdempotencyResultParams) error
 	SumCashMovements(ctx context.Context, salesShiftID uuid.UUID) (SumCashMovementsRow, error)

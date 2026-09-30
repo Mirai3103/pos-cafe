@@ -329,94 +329,19 @@ func (q *Queries) GetOrderDraftCheckTarget(ctx context.Context, id uuid.UUID) (s
 }
 
 const getSalesOccurredAt = `-- name: GetSalesOccurredAt :one
+
 SELECT clock_timestamp()::timestamptz AS occurred_at
 `
 
+// Queries for internal/sales (Phase 5A).
+//
+// Session authority, roles, and advisory locks come from the shared command
+// pipeline (internal/platform/command) and sql/queries/platform.sql.
 func (q *Queries) GetSalesOccurredAt(ctx context.Context) (time.Time, error) {
 	row := q.db.QueryRowContext(ctx, getSalesOccurredAt)
 	var occurred_at time.Time
 	err := row.Scan(&occurred_at)
 	return occurred_at, err
-}
-
-const getSalesSessionAuthority = `-- name: GetSalesSessionAuthority :one
-
-SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
-       s.last_human_activity_at, s.expires_at, s.revoked_at,
-       i.enabled AS identity_enabled, i.display_name, i.login_code
-FROM staff_access_sessions s
-JOIN staff_identities i ON i.id = s.staff_identity_id
-WHERE s.id = $1 AND s.staff_identity_id = $2
-`
-
-type GetSalesSessionAuthorityParams struct {
-	ID              uuid.UUID `json:"id"`
-	StaffIdentityID uuid.UUID `json:"staff_identity_id"`
-}
-
-type GetSalesSessionAuthorityRow struct {
-	SessionID           uuid.UUID      `json:"session_id"`
-	StaffIdentityID     uuid.UUID      `json:"staff_identity_id"`
-	State               string         `json:"state"`
-	ActiveWorkspace     sql.NullString `json:"active_workspace"`
-	LastHumanActivityAt time.Time      `json:"last_human_activity_at"`
-	ExpiresAt           time.Time      `json:"expires_at"`
-	RevokedAt           sql.NullTime   `json:"revoked_at"`
-	IdentityEnabled     bool           `json:"identity_enabled"`
-	DisplayName         string         `json:"display_name"`
-	LoginCode           string         `json:"login_code"`
-}
-
-// Queries for internal/sales (Phase 5A).
-//
-// Authority, role, and advisory-lock queries are slice-local by ADR-007: the
-// shared table is shared, the helper logic is not.
-func (q *Queries) GetSalesSessionAuthority(ctx context.Context, arg GetSalesSessionAuthorityParams) (GetSalesSessionAuthorityRow, error) {
-	row := q.db.QueryRowContext(ctx, getSalesSessionAuthority, arg.ID, arg.StaffIdentityID)
-	var i GetSalesSessionAuthorityRow
-	err := row.Scan(
-		&i.SessionID,
-		&i.StaffIdentityID,
-		&i.State,
-		&i.ActiveWorkspace,
-		&i.LastHumanActivityAt,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.IdentityEnabled,
-		&i.DisplayName,
-		&i.LoginCode,
-	)
-	return i, err
-}
-
-const getSalesSessionRoles = `-- name: GetSalesSessionRoles :many
-SELECT role
-FROM staff_operational_roles
-WHERE staff_identity_id = $1
-ORDER BY role ASC
-`
-
-func (q *Queries) GetSalesSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getSalesSessionRoles, staffIdentityID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var role string
-		if err := rows.Scan(&role); err != nil {
-			return nil, err
-		}
-		items = append(items, role)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getSalesShiftStateByID = `-- name: GetSalesShiftStateByID :one
@@ -3987,15 +3912,6 @@ func (q *Queries) ResolveCompSource(ctx context.Context, id uuid.UUID) (ResolveC
 		&i.AmountVnd,
 	)
 	return i, err
-}
-
-const salesAdvisoryLock = `-- name: SalesAdvisoryLock :exec
-SELECT pg_advisory_xact_lock($1)
-`
-
-func (q *Queries) SalesAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error {
-	_, err := q.db.ExecContext(ctx, salesAdvisoryLock, pgAdvisoryXactLock)
-	return err
 }
 
 const setAllocationQuantities = `-- name: SetAllocationQuantities :exec

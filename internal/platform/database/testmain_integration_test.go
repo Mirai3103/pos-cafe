@@ -3,11 +3,13 @@
 package database_test
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"testing"
 
 	"github.com/Mirai3103/pos-cafe/internal/testdb"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,4 +33,18 @@ func TestDatabasePackageUsesSharedDatabase(t *testing.T) {
 	first := setupTestDB(t)
 	second := setupTestDB(t)
 	require.Same(t, first, second)
+}
+
+func setupTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+
+	_, err := databaseTestDB.ExecContext(context.Background(), "TRUNCATE TABLE menu_categories CASCADE")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_, cleanErr := databaseTestDB.ExecContext(context.Background(), "TRUNCATE TABLE menu_categories CASCADE")
+		assert.NoError(t, cleanErr)
+	})
+
+	return databaseTestDB
 }

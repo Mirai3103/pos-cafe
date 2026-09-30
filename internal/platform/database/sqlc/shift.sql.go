@@ -603,84 +603,6 @@ func (q *Queries) GetShiftReconciliationTotals(ctx context.Context, salesShiftID
 	return i, err
 }
 
-const getShiftSessionAuthority = `-- name: GetShiftSessionAuthority :one
-
-SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
-       s.last_human_activity_at, s.expires_at, s.revoked_at,
-       i.enabled AS identity_enabled, i.display_name, i.login_code
-FROM staff_access_sessions s
-JOIN staff_identities i ON i.id = s.staff_identity_id
-WHERE s.id = $1 AND s.staff_identity_id = $2
-`
-
-type GetShiftSessionAuthorityParams struct {
-	ID              uuid.UUID `json:"id"`
-	StaffIdentityID uuid.UUID `json:"staff_identity_id"`
-}
-
-type GetShiftSessionAuthorityRow struct {
-	SessionID           uuid.UUID      `json:"session_id"`
-	StaffIdentityID     uuid.UUID      `json:"staff_identity_id"`
-	State               string         `json:"state"`
-	ActiveWorkspace     sql.NullString `json:"active_workspace"`
-	LastHumanActivityAt time.Time      `json:"last_human_activity_at"`
-	ExpiresAt           time.Time      `json:"expires_at"`
-	RevokedAt           sql.NullTime   `json:"revoked_at"`
-	IdentityEnabled     bool           `json:"identity_enabled"`
-	DisplayName         string         `json:"display_name"`
-	LoginCode           string         `json:"login_code"`
-}
-
-// -- Authority --
-// Names are prefixed because sqlc query names are global across the package.
-func (q *Queries) GetShiftSessionAuthority(ctx context.Context, arg GetShiftSessionAuthorityParams) (GetShiftSessionAuthorityRow, error) {
-	row := q.db.QueryRowContext(ctx, getShiftSessionAuthority, arg.ID, arg.StaffIdentityID)
-	var i GetShiftSessionAuthorityRow
-	err := row.Scan(
-		&i.SessionID,
-		&i.StaffIdentityID,
-		&i.State,
-		&i.ActiveWorkspace,
-		&i.LastHumanActivityAt,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.IdentityEnabled,
-		&i.DisplayName,
-		&i.LoginCode,
-	)
-	return i, err
-}
-
-const getShiftSessionRoles = `-- name: GetShiftSessionRoles :many
-SELECT role
-FROM staff_operational_roles
-WHERE staff_identity_id = $1
-ORDER BY role ASC
-`
-
-func (q *Queries) GetShiftSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getShiftSessionRoles, staffIdentityID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var role string
-		if err := rows.Scan(&role); err != nil {
-			return nil, err
-		}
-		items = append(items, role)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getStaffSummary = `-- name: GetStaffSummary :one
 SELECT id, display_name, login_code
 FROM staff_identities
@@ -1344,6 +1266,7 @@ func (q *Queries) LockSalesShiftForReconciliation(ctx context.Context, id uuid.U
 
 const openSalesShift = `-- name: OpenSalesShift :one
 
+
 INSERT INTO sales_shifts (opened_by_staff_identity_id, opening_float_vnd)
 VALUES ($1, $2)
 RETURNING id, state, opened_by_staff_identity_id, opening_float_vnd, opened_at
@@ -1354,6 +1277,7 @@ type OpenSalesShiftParams struct {
 	OpeningFloatVnd         int64     `json:"opening_float_vnd"`
 }
 
+// Names are prefixed because sqlc query names are global across the package.
 // -- Sales Shift --
 func (q *Queries) OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) (SalesShift, error) {
 	row := q.db.QueryRowContext(ctx, openSalesShift, arg.OpenedByStaffIdentityID, arg.OpeningFloatVnd)
@@ -1366,15 +1290,6 @@ func (q *Queries) OpenSalesShift(ctx context.Context, arg OpenSalesShiftParams) 
 		&i.OpenedAt,
 	)
 	return i, err
-}
-
-const shiftAdvisoryLock = `-- name: ShiftAdvisoryLock :exec
-SELECT pg_advisory_xact_lock($1)
-`
-
-func (q *Queries) ShiftAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error {
-	_, err := q.db.ExecContext(ctx, shiftAdvisoryLock, pgAdvisoryXactLock)
-	return err
 }
 
 const sumCashMovements = `-- name: SumCashMovements :one

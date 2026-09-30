@@ -15,18 +15,8 @@ import (
 	"github.com/lib/pq"
 )
 
-const catalogAdvisoryLock = `-- name: CatalogAdvisoryLock :exec
-
-SELECT pg_advisory_xact_lock($1)
-`
-
-// -- Advisory Lock --
-func (q *Queries) CatalogAdvisoryLock(ctx context.Context, pgAdvisoryXactLock int64) error {
-	_, err := q.db.ExecContext(ctx, catalogAdvisoryLock, pgAdvisoryXactLock)
-	return err
-}
-
 const claimCatalogRequest = `-- name: ClaimCatalogRequest :one
+
 INSERT INTO catalog_mutation_requests
     (actor_id, request_id, operation, request_hash, response_code, response_body)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -46,6 +36,8 @@ type ClaimCatalogRequestParams struct {
 	ResponseBody json.RawMessage `json:"response_body"`
 }
 
+// Catalog sqlc queries
+// Idempotency, audit, and entity CRUD primitives.
 func (q *Queries) ClaimCatalogRequest(ctx context.Context, arg ClaimCatalogRequestParams) (CatalogMutationRequest, error) {
 	row := q.db.QueryRowContext(ctx, claimCatalogRequest,
 		arg.ActorID,
@@ -648,82 +640,6 @@ func (q *Queries) GetCatalogMutationRequest(ctx context.Context, arg GetCatalogM
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const getCatalogSessionAuthority = `-- name: GetCatalogSessionAuthority :one
-
-SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
-       s.last_human_activity_at, s.expires_at, s.revoked_at,
-       i.enabled AS identity_enabled, i.pin_hash
-FROM staff_access_sessions s
-JOIN staff_identities i ON i.id = s.staff_identity_id
-WHERE s.id = $1 AND s.staff_identity_id = $2
-`
-
-type GetCatalogSessionAuthorityParams struct {
-	ID              uuid.UUID `json:"id"`
-	StaffIdentityID uuid.UUID `json:"staff_identity_id"`
-}
-
-type GetCatalogSessionAuthorityRow struct {
-	SessionID           uuid.UUID      `json:"session_id"`
-	StaffIdentityID     uuid.UUID      `json:"staff_identity_id"`
-	State               string         `json:"state"`
-	ActiveWorkspace     sql.NullString `json:"active_workspace"`
-	LastHumanActivityAt time.Time      `json:"last_human_activity_at"`
-	ExpiresAt           time.Time      `json:"expires_at"`
-	RevokedAt           sql.NullTime   `json:"revoked_at"`
-	IdentityEnabled     bool           `json:"identity_enabled"`
-	PinHash             string         `json:"pin_hash"`
-}
-
-// Catalog sqlc queries
-// Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
-func (q *Queries) GetCatalogSessionAuthority(ctx context.Context, arg GetCatalogSessionAuthorityParams) (GetCatalogSessionAuthorityRow, error) {
-	row := q.db.QueryRowContext(ctx, getCatalogSessionAuthority, arg.ID, arg.StaffIdentityID)
-	var i GetCatalogSessionAuthorityRow
-	err := row.Scan(
-		&i.SessionID,
-		&i.StaffIdentityID,
-		&i.State,
-		&i.ActiveWorkspace,
-		&i.LastHumanActivityAt,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.IdentityEnabled,
-		&i.PinHash,
-	)
-	return i, err
-}
-
-const getCatalogSessionRoles = `-- name: GetCatalogSessionRoles :many
-SELECT role
-FROM staff_operational_roles
-WHERE staff_identity_id = $1
-ORDER BY role ASC
-`
-
-func (q *Queries) GetCatalogSessionRoles(ctx context.Context, staffIdentityID uuid.UUID) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getCatalogSessionRoles, staffIdentityID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var role string
-		if err := rows.Scan(&role); err != nil {
-			return nil, err
-		}
-		items = append(items, role)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getCategoryModifierGroup = `-- name: GetCategoryModifierGroup :one

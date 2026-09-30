@@ -1,22 +1,4 @@
--- -- Authority --
 -- Names are prefixed because sqlc query names are global across the package.
-
--- name: GetShiftSessionAuthority :one
-SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
-       s.last_human_activity_at, s.expires_at, s.revoked_at,
-       i.enabled AS identity_enabled, i.display_name, i.login_code
-FROM staff_access_sessions s
-JOIN staff_identities i ON i.id = s.staff_identity_id
-WHERE s.id = $1 AND s.staff_identity_id = $2;
-
--- name: GetShiftSessionRoles :many
-SELECT role
-FROM staff_operational_roles
-WHERE staff_identity_id = $1
-ORDER BY role ASC;
-
--- name: ShiftAdvisoryLock :exec
-SELECT pg_advisory_xact_lock($1);
 
 -- -- Sales Shift --
 

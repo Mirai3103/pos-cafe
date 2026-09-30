@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"

@@ -12,8 +12,8 @@ import (
 )
 
 // The generated-Swagger contract of the Phase 6B and Phase 6C correction
-// routes. The test reads ../../docs/swagger.json — the file `swag init -g
-// cmd/api/main.go -o docs` generates — and asserts each route exposes its POST
+// routes. The test reads ../../api/openapi/swagger.json — the file `swag init -g
+// cmd/api/main.go -o api/openapi` generates — and asserts each route exposes its POST
 // operation with BearerAuth, the documented request body schema, the success
 // status wired to the exact response DTO, and the full
 // 400|401|403|404|409|500 error set (plus the 422 guarded-range code where the
@@ -60,7 +60,7 @@ type swaggerOperation struct {
 	Responses  map[string]swaggerResponse   `json:"responses"`
 }
 
-// swaggerDoc is the slice of docs/swagger.json the contract reads.
+// swaggerDoc is the slice of api/openapi/swagger.json the contract reads.
 type swaggerDoc struct {
 	Paths       map[string]map[string]*swaggerOperation `json:"paths"`
 	Definitions map[string]json.RawMessage              `json:"definitions"`
@@ -134,8 +134,8 @@ func swaggerDefinitionFieldNames(value any, visit func(string)) {
 }
 
 func TestSwaggerCorrectionRouteContracts(t *testing.T) {
-	raw, err := os.ReadFile("../../docs/swagger.json")
-	require.NoError(t, err, "docs/swagger.json must exist; regenerate with `swag init -g cmd/api/main.go -o docs`")
+	raw, err := os.ReadFile("../../api/openapi/swagger.json")
+	require.NoError(t, err, "api/openapi/swagger.json must exist; regenerate with `swag init -g cmd/api/main.go -o api/openapi`")
 
 	var doc swaggerDoc
 	require.NoError(t, json.Unmarshal(raw, &doc))

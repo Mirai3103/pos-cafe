@@ -1,19 +1,5 @@
 -- Catalog sqlc queries
--- Authorization, advisory-lock, idempotency, audit, and entity CRUD primitives.
-
--- name: GetCatalogSessionAuthority :one
-SELECT s.id AS session_id, s.staff_identity_id, s.state, s.active_workspace,
-       s.last_human_activity_at, s.expires_at, s.revoked_at,
-       i.enabled AS identity_enabled, i.pin_hash
-FROM staff_access_sessions s
-JOIN staff_identities i ON i.id = s.staff_identity_id
-WHERE s.id = $1 AND s.staff_identity_id = $2;
-
--- name: GetCatalogSessionRoles :many
-SELECT role
-FROM staff_operational_roles
-WHERE staff_identity_id = $1
-ORDER BY role ASC;
+-- Idempotency, audit, and entity CRUD primitives.
 
 -- name: ClaimCatalogRequest :one
 INSERT INTO catalog_mutation_requests
@@ -453,11 +439,6 @@ FROM modifier_group_default_options mgdo
 JOIN modifier_options mo ON mo.id = mgdo.modifier_option_id
 WHERE mgdo.modifier_group_id = $1
 ORDER BY mo.normalized_name ASC, mo.id ASC;
-
--- -- Advisory Lock --
-
--- name: CatalogAdvisoryLock :exec
-SELECT pg_advisory_xact_lock($1);
 
 -- -- Paginated Reads --
 

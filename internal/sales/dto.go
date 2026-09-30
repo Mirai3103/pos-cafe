@@ -246,11 +246,11 @@ type ServiceSessionResponse struct {
 	CreatedAt          time.Time              `json:"created_at"`
 	Draft              *OrderDraftResponse    `json:"draft"`
 
-	// Filled by Commit; payments within each Check are filled by Payment.
+	// Filled from 5B; payments within each Check are filled by 5C.
 	Checks []CheckResponse `json:"checks"`
-	// Filled by Submit.
+	// Filled from 5D.
 	Orders []OrderResponse `json:"orders"`
-	// Filled by Submit.
+	// Filled from 5D.
 	PreparationUnits []PreparationUnitResponse `json:"preparation_units"`
 }
 

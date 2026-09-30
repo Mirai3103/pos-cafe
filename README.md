@@ -44,6 +44,7 @@ status and remaining work in [`ROADMAP.md`](ROADMAP.md).
 | **HTTP** | [Echo v4](https://echo.labstack.com/) |
 | **Database** | PostgreSQL 17 via [jackc/pgx/v5](https://github.com/jackc/pgx) (`database/sql` compatibility) |
 | **Data access** | [sqlc](https://sqlc.dev/) |
+| **Validation** | [go-playground/validator v10](https://github.com/go-playground/validator) behind `e.Validator` (used by the auth handlers) |
 | **Logging** | `log/slog` (JSON) |
 | **Configuration** | Environment variables, `.env` via [joho/godotenv](https://github.com/joho/godotenv) |
 | **API docs** | [swaggo/swag](https://github.com/swaggo/swag), Swagger UI at `/swagger/index.html` |
@@ -68,6 +69,7 @@ pos-cafe/
 │   │   ├── config/             # Environment configuration
 │   │   └── database/           # pgx pool, embedded migrations (migrations/), sqlc code (sqlc/)
 │   ├── response/               # API envelope + table-driven ErrorMapper
+│   ├── httpvalidator/          # Echo validator adapter (struct tags) used by auth handlers
 │   ├── auth/                   # Staff access sessions, PIN sign-in, rate limiting, staff administration
 │   ├── catalog/                # Menu, categories, sizes, modifier groups, availability, images
 │   ├── tables/                 # Tables and table overview

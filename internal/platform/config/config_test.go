@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"github.com/Mirai3103/pos-cafe/config"
+	"github.com/Mirai3103/pos-cafe/internal/platform/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
