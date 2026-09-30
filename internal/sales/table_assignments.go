@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 )
 
@@ -167,102 +167,128 @@ func (h *SetSessionTablesHandler) Handle(ctx context.Context, actor Actor,
 
 	return ExecuteMutation(ctx, h.runner, actor, spec,
 		func(mc MutationContext) (int, ServiceSessionResponse, AuditRecord, error) {
-			var zero ServiceSessionResponse
-			q := mc.Queries
-
-			session, err := q.LockServiceSessionForUpdate(ctx, cmd.ServiceSessionID)
+			result, err := applySetSessionTables(ctx, mc.Queries, actor, cmd)
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return 0, zero, AuditRecord{},
-						fmt.Errorf("%w: %s", ErrServiceSessionNotFound, cmd.ServiceSessionID)
-				}
-				return 0, zero, AuditRecord{}, fmt.Errorf("lock service session: %w", err)
+				return 0, ServiceSessionResponse{}, AuditRecord{}, err
 			}
-			if session.ServiceMode != ModeDineIn {
-				return 0, zero, AuditRecord{}, ErrTakeawayTablesNotAvailable
-			}
-			if session.State != StateActive {
-				return 0, zero, AuditRecord{}, ErrServiceSessionClosed
-			}
-
-			// Spec 6.1: every 5A mutation requires a Sales Shift in state OPEN.
-			// Like the draft-lock query's sh.id = s.sales_shift_id AND
-			// sh.state = 'OPEN', this deliberately checks the Session's OWN
-			// Shift, not whether some open Shift exists.
-			shiftState, err := q.GetSalesShiftStateByID(ctx, session.SalesShiftID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("load sales shift state: %w", err)
-			}
-			if shiftState != "OPEN" {
-				return 0, zero, AuditRecord{}, ErrOpenShiftRequired
-			}
-
-			current, err := q.LockCurrentTableAssignments(ctx, cmd.ServiceSessionID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("lock current assignments: %w", err)
-			}
-
-			desired := make(map[uuid.UUID]struct{}, len(cmd.TableIDs))
-			for _, id := range cmd.TableIDs {
-				desired[id] = struct{}{}
-			}
-			assignedNow := make(map[uuid.UUID]struct{}, len(current))
-			var toRelease []sqlc.LockCurrentTableAssignmentsRow
-			for _, row := range current {
-				assignedNow[row.TableID] = struct{}{}
-				if _, keep := desired[row.TableID]; !keep {
-					toRelease = append(toRelease, row)
-				}
-			}
-			var toAdd []uuid.UUID
-			for _, id := range cmd.TableIDs {
-				if _, already := assignedNow[id]; !already {
-					toAdd = append(toAdd, id)
-				}
-			}
-
-			if err := lockAndValidateTables(ctx, q, toAdd); err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			released := make([]tableAssignmentAudit, 0, len(toRelease))
-			for _, row := range toRelease {
-				if err := q.ReleaseTableAssignment(ctx, sqlc.ReleaseTableAssignmentParams{
-					ID:                        row.ID,
-					ReleasedByStaffIdentityID: uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-				}); err != nil {
-					return 0, zero, AuditRecord{}, fmt.Errorf("release table assignment: %w", err)
-				}
-				released = append(released, tableAssignmentAudit{
-					TableAssignmentID: row.ID,
-					TableID:           row.TableID,
-					ServiceSessionID:  cmd.ServiceSessionID,
-				})
-			}
-			if err := writeAssignmentAudits(ctx, q, actor, EventTableAssignmentReleased, released); err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			if len(toAdd) > 0 {
-				startSeq, err := nextAssignmentSequence(ctx, q, cmd.ServiceSessionID)
-				if err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
-				added, err := assignTables(ctx, q, actor, cmd.ServiceSessionID, toAdd, startSeq)
-				if err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
-				if err := writeAssignmentAudits(ctx, q, actor, EventTableAssignmentCreated, added); err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
-			}
-
-			result, err := LoadServiceSession(ctx, q, cmd.ServiceSessionID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-			// The per-Table events above are the whole audit trail for this
-			// command; there is no meaningful Session-level event to add.
+			// The per-Table events are the whole audit trail for this command;
+			// there is no meaningful Session-level event to add.
 			return 200, result, AuditRecord{}, nil
 		})
+}
+
+// applySetSessionTables is the Set Session Tables mutation body. It locks the
+// Session and its current assignments, releases the Tables no longer wanted,
+// and assigns the new ones.
+func applySetSessionTables(ctx context.Context, q *sqlc.Queries, actor Actor,
+	cmd SetSessionTablesCommand,
+) (ServiceSessionResponse, error) {
+	if err := lockDineInSessionForTables(ctx, q, cmd.ServiceSessionID); err != nil {
+		return ServiceSessionResponse{}, err
+	}
+
+	current, err := q.LockCurrentTableAssignments(ctx, cmd.ServiceSessionID)
+	if err != nil {
+		return ServiceSessionResponse{}, fmt.Errorf("lock current assignments: %w", err)
+	}
+	toRelease, toAdd := diffTableAssignments(current, cmd.TableIDs)
+
+	if err := lockAndValidateTables(ctx, q, toAdd); err != nil {
+		return ServiceSessionResponse{}, err
+	}
+	if err := releaseTableAssignments(ctx, q, actor, cmd.ServiceSessionID, toRelease); err != nil {
+		return ServiceSessionResponse{}, err
+	}
+	if len(toAdd) > 0 {
+		startSeq, err := nextAssignmentSequence(ctx, q, cmd.ServiceSessionID)
+		if err != nil {
+			return ServiceSessionResponse{}, err
+		}
+		added, err := assignTables(ctx, q, actor, cmd.ServiceSessionID, toAdd, startSeq)
+		if err != nil {
+			return ServiceSessionResponse{}, err
+		}
+		if err := writeAssignmentAudits(ctx, q, actor, EventTableAssignmentCreated, added); err != nil {
+			return ServiceSessionResponse{}, err
+		}
+	}
+
+	return LoadServiceSession(ctx, q, cmd.ServiceSessionID)
+}
+
+// lockDineInSessionForTables locks the Session and refuses one that is not an
+// active Dine-in Session whose own Sales Shift is still open.
+func lockDineInSessionForTables(ctx context.Context, q *sqlc.Queries, sessionID uuid.UUID) error {
+	session, err := q.LockServiceSessionForUpdate(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: %s", ErrServiceSessionNotFound, sessionID)
+		}
+		return fmt.Errorf("lock service session: %w", err)
+	}
+	if session.ServiceMode != ModeDineIn {
+		return ErrTakeawayTablesNotAvailable
+	}
+	if session.State != StateActive {
+		return ErrServiceSessionClosed
+	}
+
+	// Changing a Session's Tables is new work, so it requires an open Sales
+	// Shift. Like the draft-lock query's sh.id = s.sales_shift_id AND
+	// sh.state = 'OPEN', this deliberately checks the Session's OWN Shift, not
+	// whether some open Shift exists.
+	shiftState, err := q.GetSalesShiftStateByID(ctx, session.SalesShiftID)
+	if err != nil {
+		return fmt.Errorf("load sales shift state: %w", err)
+	}
+	if shiftState != "OPEN" {
+		return ErrOpenShiftRequired
+	}
+	return nil
+}
+
+// diffTableAssignments splits the change from the current assignments to the
+// desired Table set into the assignments to release and the Tables to add, the
+// latter in the caller's selection order.
+func diffTableAssignments(current []sqlc.LockCurrentTableAssignmentsRow, desiredIDs []uuid.UUID) (
+	toRelease []sqlc.LockCurrentTableAssignmentsRow, toAdd []uuid.UUID,
+) {
+	desired := make(map[uuid.UUID]struct{}, len(desiredIDs))
+	for _, id := range desiredIDs {
+		desired[id] = struct{}{}
+	}
+	assignedNow := make(map[uuid.UUID]struct{}, len(current))
+	for _, row := range current {
+		assignedNow[row.TableID] = struct{}{}
+		if _, keep := desired[row.TableID]; !keep {
+			toRelease = append(toRelease, row)
+		}
+	}
+	for _, id := range desiredIDs {
+		if _, already := assignedNow[id]; !already {
+			toAdd = append(toAdd, id)
+		}
+	}
+	return toRelease, toAdd
+}
+
+// releaseTableAssignments releases each assignment and audits the releases.
+func releaseTableAssignments(ctx context.Context, q *sqlc.Queries, actor Actor, sessionID uuid.UUID,
+	toRelease []sqlc.LockCurrentTableAssignmentsRow,
+) error {
+	released := make([]tableAssignmentAudit, 0, len(toRelease))
+	for _, row := range toRelease {
+		if err := q.ReleaseTableAssignment(ctx, sqlc.ReleaseTableAssignmentParams{
+			ID:                        row.ID,
+			ReleasedByStaffIdentityID: uuid.NullUUID{UUID: actor.StaffID, Valid: true},
+		}); err != nil {
+			return fmt.Errorf("release table assignment: %w", err)
+		}
+		released = append(released, tableAssignmentAudit{
+			TableAssignmentID: row.ID,
+			TableID:           row.TableID,
+			ServiceSessionID:  sessionID,
+		})
+	}
+	return writeAssignmentAudits(ctx, q, actor, EventTableAssignmentReleased, released)
 }

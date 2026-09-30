@@ -14,7 +14,7 @@ This specification defines the Go implementation of Commit — the commercial bo
 
 As in 5A, the implementation may improve structure, schema, and correctness, but the observable business behavior must match the canonical source in `cafe-pos/src/sales` and the definitions in `CONTEXT.md`. Where the TypeScript runtime behavior conflicts with those documents, the canonical documents win. Known implementation defects are corrected rather than migrated, and every deviation is recorded as an ADR.
 
-`MIGRATE_PLAN.md`'s Phase 5 sketch remains superseded, for the reasons 5A §1 gives. In particular the sketch's `checks` table carries `discount_vnd` and `tax_vnd` columns that exist nowhere in the canonical model; this specification does not create them.
+`docs/history/MIGRATE_PLAN.md`'s Phase 5 sketch remains superseded, for the reasons 5A §1 gives. In particular the sketch's `checks` table carries `discount_vnd` and `tax_vnd` columns that exist nowhere in the canonical model; this specification does not create them.
 
 ### Goals
 
@@ -112,7 +112,7 @@ The replay-returns-a-snapshot rule of 5A §5.5 carries a sharper consequence her
 
 Migration `000009_create_sales_commit_slice.sql`.
 
-All monetary columns are `BIGINT`, per MIGRATE_PLAN §4.2. The canonical schema stores them as `numeric` with a `trunc()` check constraint to compensate for JavaScript's lack of an integer type; that compensation has no purpose in Go and is not migrated.
+All monetary columns are `BIGINT`, per `docs/history/MIGRATE_PLAN.md` §4.2. The canonical schema stores them as `numeric` with a `trunc()` check constraint to compensate for JavaScript's lack of an integer type; that compensation has no purpose in Go and is not migrated.
 
 ### 5.1 Adding `order_drafts.check_target`
 
@@ -524,7 +524,7 @@ Integration packages run with `-p 1`.
 
 - **ADR-015 — Commit locks Catalog rows `FOR SHARE`.** Context: the canonical Commit locks `menu_items`, `menu_item_sizes`, and `modifier_options` `FOR UPDATE` to prevent retirement or an availability change between validation and write. Under `FOR UPDATE`, two cashiers committing orders that share one popular item serialize against each other on the system's busiest path, for no correctness gain — Commit only reads those rows. Decision: Commit takes `FOR SHARE` on Catalog rows, in sorted id order, after the Sales rows. `internal/catalog`'s mutations take `FOR UPDATE` and are therefore still blocked for the duration of a Commit. 5A's single-row `FOR UPDATE` in the add-draft-item path is left unchanged rather than churned. Consequence: concurrent Commits sharing menu items proceed in parallel while retirement and availability changes remain excluded; the Sales-before-Catalog lock order of 5A §10 is preserved, so no deadlock cycle is introduced.
 
-`MIGRATE_PLAN.md` gains the 5B spec and plan links in its Phase 5 sub-phase table, with 5B marked complete when the implementation lands. Its Phase 5 detail is not rewritten, and its tracker row stays pending until 5D.
+`docs/history/MIGRATE_PLAN.md` gains the 5B spec and plan links in its Phase 5 sub-phase table, with 5B marked complete when the implementation lands. Its Phase 5 detail is not rewritten, and its tracker row stays pending until 5D.
 
 ---
 
@@ -546,4 +546,4 @@ Integration packages run with `-p 1`.
 14. `internal/sales` imports no slice but `internal/auth`, and the extended catalog resolution consistency test pins both sales queries to `catalog.EffectiveGroupIDs`.
 15. Unit, PostgreSQL integration, HTTP, and concurrency tests pass. Existing Auth, Catalog, Tables, Shift, and 5A Sales suites remain passing.
 16. Swagger documentation reflects all fourteen Sales operations with Bearer security.
-17. `spec/decisions.md` records ADR-013, ADR-014, and ADR-015. `MIGRATE_PLAN.md` gains the 5B links without a rewrite of its Phase 5 detail.
+17. `spec/decisions.md` records ADR-013, ADR-014, and ADR-015. `docs/history/MIGRATE_PLAN.md` gains the 5B links without a rewrite of its Phase 5 detail.

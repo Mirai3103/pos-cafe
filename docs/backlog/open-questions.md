@@ -26,7 +26,7 @@ device concepts inside the Order or Payment model?
 
 **Why it still matters.** No Go slice produces a customer receipt. Phase 6C lists
 receipt generation as an explicit non-goal, and the Phase 5 architecture mapping in
-`MIGRATE_PLAN.md` named "Receipt" as in-scope for Sales without it ever being
+`docs/history/MIGRATE_PLAN.md` named "Receipt" as in-scope for Sales without it ever being
 designed. The cafe currently has no defined answer to what it hands a customer.
 
 **Who answers:** design question, resolvable here — but it depends on the fiscal

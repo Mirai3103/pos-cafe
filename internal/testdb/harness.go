@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
 )

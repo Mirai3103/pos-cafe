@@ -18,7 +18,7 @@ import { CorrectionsLog } from "./corrections-log";
 import { CategoryFilterBar } from "./category-filter-bar";
 import { WasteDialog } from "./waste-dialog";
 import { CorrectStateDialog } from "./correct-state-dialog";
-import { KdsErrorToast } from "./kds-error-toast";
+import { ErrorToast } from "@/components/feedback/error-toast";
 
 /** Reasons Remake accepts (internal/preparation/domain.go's remakeReasons) — narrower than Waste's. */
 const REMAKE_REASONS = new Set(["PREPARATION_ERROR", "QUALITY_FAILURE", "OTHER"]);
@@ -193,7 +193,7 @@ export function KdsView(): ReactElement {
         onClose={() => setCorrectTarget(null)}
       />
 
-      <KdsErrorToast
+      <ErrorToast
         message={errorMessage}
         onDismiss={() => {
           setErrorMessage(null);

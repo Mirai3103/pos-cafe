@@ -7,8 +7,8 @@ import {
   isSelectionValid,
   normalizePreparationNote,
   MAX_PREPARATION_NOTE_LENGTH,
-} from "../utils/selection";
-import { calculateItemUnitPrice, calculateLineTotal } from "../utils/pricing";
+} from "../lib/selection";
+import { calculateItemUnitPrice, calculateLineTotal } from "../lib/pricing";
 import { formatVND } from "@/lib/utils";
 import { playTapChirp } from "@/lib/sound";
 

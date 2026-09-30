@@ -1,6 +1,6 @@
 import { useHotkeys } from "react-hotkeys-hook";
-import type { PosPhase } from "../utils/phase";
-import { resolveDineInF9, type DineInStatus } from "../utils/dine-in";
+import type { PosPhase } from "../lib/phase";
+import { resolveDineInF9, type DineInStatus } from "../lib/dine-in";
 
 export type F9Action = "none" | "checkout" | "submit" | "next-customer" | "close";
 

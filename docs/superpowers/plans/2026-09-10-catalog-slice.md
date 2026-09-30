@@ -803,7 +803,7 @@ git commit -m "feat(catalog): expose catalog REST API"
 **Files:**
 - Create: `internal/catalog/catalog_integration_test.go`
 - Modify generated: `docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml`
-- Modify: `MIGRATE_PLAN.md`
+- Modify: `docs/history/MIGRATE_PLAN.md`
 
 **Interfaces:**
 - Verifies the complete public behavior; introduces no new production API.
@@ -836,7 +836,7 @@ Confirm Swagger lists 27 Catalog operations, Bearer security, request bodies, de
 
 - [ ] **Step 5: Update migration progress documentation**
 
-Mark Phase 2 schema, queries, business slices, and testing complete in `MIGRATE_PLAN.md`. Replace the simplified `price_adjustment`/single-menu wording with links to the approved spec and implemented absolute-Size-price/projection behavior.
+Mark Phase 2 schema, queries, business slices, and testing complete in `docs/history/MIGRATE_PLAN.md`. Replace the simplified `price_adjustment`/single-menu wording with links to the approved spec and implemented absolute-Size-price/projection behavior.
 
 - [ ] **Step 6: Run final quality gates**
 
@@ -855,6 +855,6 @@ Expected: all commands exit 0; only intended Catalog, generated Swagger/sqlc, mi
 - [ ] **Step 7: Commit**
 
 ```bash
-git add internal/catalog docs MIGRATE_PLAN.md
+git add internal/catalog docs docs/history/MIGRATE_PLAN.md
 git commit -m "test(catalog): verify complete catalog behavior"
 ```

@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/labstack/echo/v4"
 )
 
@@ -32,15 +33,19 @@ type Slices struct {
 	StaffSetEnabled  *StaffSetEnabledHandler
 	StaffReplaceRole *StaffReplaceRolesHandler
 	StaffResetPin    *StaffResetPinHandler
+
+	stopCleanup []func()
+	closeOnce   sync.Once
 }
 
 func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 	signInLimiter := NewRateLimiter(5, 15*time.Minute)
 	unlockLimiter := NewRateLimiter(3, 5*time.Minute)
-	signInLimiter.StartCleanup()
-	unlockLimiter.StartCleanup()
+	stopSignInCleanup := signInLimiter.StartCleanup()
+	stopUnlockCleanup := unlockLimiter.StartCleanup()
 
 	return &Slices{
+		stopCleanup:      []func(){stopSignInCleanup, stopUnlockCleanup},
 		Middleware:       NewMiddleware(queries),
 		SignInLimiter:    signInLimiter,
 		UnlockLimiter:    unlockLimiter,
@@ -61,6 +66,16 @@ func NewSlices(db *sql.DB, queries *sqlc.Queries) *Slices {
 		StaffReplaceRole: NewStaffReplaceRolesHandler(db, queries),
 		StaffResetPin:    NewStaffResetPinHandler(db, queries),
 	}
+}
+
+// Close stops the rate limiters' background cleanup goroutines started by
+// NewSlices. It is safe to call more than once.
+func (s *Slices) Close() {
+	s.closeOnce.Do(func() {
+		for _, stop := range s.stopCleanup {
+			stop()
+		}
+	})
 }
 
 func (s *Slices) RegisterRoutes(v1 *echo.Group) {

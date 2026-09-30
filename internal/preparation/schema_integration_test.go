@@ -93,7 +93,7 @@ func TestPreparationQueueMigrationBackfillsFirstStart(t *testing.T) {
 	)
 	require.NoError(t, err)
 	migration, err := os.ReadFile(filepath.Join(
-		"..", "database", "migrations", "000012_add_preparation_queue_fields.sql",
+		"..", "platform", "database", "migrations", "000012_add_preparation_queue_fields.sql",
 	))
 	require.NoError(t, err)
 	_, err = env.DB.Exec(string(migration))
@@ -286,7 +286,7 @@ func TestPreparationCorrectionsSchemaBackfillsStandardPriority(t *testing.T) {
 	unit := env.SubmittedUnits(t, 1)[0]
 
 	migration, err := os.ReadFile(filepath.Join(
-		"..", "database", "migrations", "000013_add_preparation_corrections.sql",
+		"..", "platform", "database", "migrations", "000013_add_preparation_corrections.sql",
 	))
 	require.NoError(t, err)
 	// The emulation drops 6B objects with CASCADE, which also removes any
@@ -295,7 +295,7 @@ func TestPreparationCorrectionsSchemaBackfillsStandardPriority(t *testing.T) {
 	// therefore replays both migrations in order, leaving the package clone in
 	// its fully migrated state for the tests that follow.
 	laterMigration, err := os.ReadFile(filepath.Join(
-		"..", "database", "migrations", "000014_add_preparation_financial_corrections.sql",
+		"..", "platform", "database", "migrations", "000014_add_preparation_financial_corrections.sql",
 	))
 	require.NoError(t, err)
 

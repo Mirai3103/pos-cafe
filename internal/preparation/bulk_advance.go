@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
@@ -61,7 +61,7 @@ func validateBulkAdvance(cmd BulkAdvanceCommand) error {
 
 // BulkAdvanceHandler moves a batch of Preparation Units to one explicit target
 // state in a single transaction. Authority and idempotency are handled once by
-// the executor; each unit's own transition runs inside a savepoint so a
+// the pipeline; each unit's own transition runs inside a savepoint so a
 // UNIT_NOT_FOUND or INVALID_TRANSITION fails only that unit.
 type BulkAdvanceHandler struct{ runner *Runner }
 
@@ -102,7 +102,7 @@ func (h *BulkAdvanceHandler) Handle(ctx context.Context, actor Actor,
 			audits := make([]AuditRecord, 0, len(selected))
 			for _, unitID := range lockOrder {
 				var transition transitionOutcome
-				err := mc.withUnitSavepoint(ctx, func(q *sqlc.Queries) error {
+				err := withUnitSavepoint(ctx, mc, func(q *sqlc.Queries) error {
 					var err error
 					transition, err = applyAdvance(ctx, q, actor, unitID, cmd.TargetState)
 					return err
@@ -153,7 +153,7 @@ func failedBulkOutcome(unitID uuid.UUID, code string) BulkAdvanceOutcome {
 
 // writeAdvanceAudits batches one PREPARATION_UNIT_ADVANCED audit row per
 // successful unit into a single insert. These per-unit events are the complete
-// business audit trail of the bulk advance; the executor itself is given a
+// business audit trail of the bulk advance; the pipeline itself is given a
 // zero AuditRecord, so no extra batch-summary event exists.
 func writeAdvanceAudits(ctx context.Context, q *sqlc.Queries, actor Actor,
 	audits []AuditRecord,

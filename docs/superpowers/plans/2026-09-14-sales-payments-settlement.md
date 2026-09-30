@@ -71,7 +71,7 @@ Every task's requirements implicitly include this section.
 | `internal/shift/http.go` | Swagger description names Refund as the outstanding term |
 | `internal/shift/expected_cash_integration_test.go` | New: Cash Payments raise the figure, Manual QR does not |
 | `spec/decisions.md` | Append ADR-016 through ADR-020 |
-| `MIGRATE_PLAN.md` | 5C spec and plan links in the Phase 5 sub-phase table |
+| `docs/history/MIGRATE_PLAN.md` | 5C spec and plan links in the Phase 5 sub-phase table |
 
 ---
 
@@ -3257,7 +3257,7 @@ git commit -m "feat(shift): complete Expected Cash with its Cash Payment term"
 
 **Files:**
 - Create: `internal/sales/payment_concurrency_integration_test.go`
-- Modify: `spec/decisions.md`, `MIGRATE_PLAN.md`, `internal/sales/routes_test.go`, `docs/swagger.json`, `docs/swagger.yaml`
+- Modify: `spec/decisions.md`, `docs/history/MIGRATE_PLAN.md`, `internal/sales/routes_test.go`, `docs/swagger.json`, `docs/swagger.yaml`
 
 **Interfaces:**
 - Consumes: everything Tasks 1 through 9 produced.
@@ -3544,7 +3544,7 @@ Append ADR-016 through ADR-020 to `spec/decisions.md`, copying the five records 
 
 ADR-020 must state explicitly that it supersedes ADR-008's claim that "Phase 5 adds the Cash Payment and Cash Refund terms", since Phase 5 adds only the first. Add a one-line pointer at the end of ADR-008 itself: `* **Superseded in part by ADR-020** for the Cash Refund term.`
 
-- [ ] **Step 7: Update MIGRATE_PLAN.md**
+- [ ] **Step 7: Update docs/history/MIGRATE_PLAN.md**
 
 In the Phase 5 sub-phase table, replace the 5C row:
 
@@ -3577,7 +3577,7 @@ Expected: all green. If the Auth, Catalog, Tables, or 5A/5B Sales suites fail, t
 - [ ] **Step 10: Commit**
 
 ```bash
-git add internal/sales/payment_concurrency_integration_test.go internal/sales/payments_integration_test.go internal/sales/http_test.go internal/sales/routes_test.go spec/decisions.md MIGRATE_PLAN.md docs/swagger.json docs/swagger.yaml
+git add internal/sales/payment_concurrency_integration_test.go internal/sales/payments_integration_test.go internal/sales/http_test.go internal/sales/routes_test.go spec/decisions.md docs/history/MIGRATE_PLAN.md docs/swagger.json docs/swagger.yaml
 git commit -m "docs(sales): record Phase 5C decisions and verify the full suite"
 ```
 

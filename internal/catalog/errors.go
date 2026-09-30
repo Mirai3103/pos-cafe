@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Mirai3103/pos-cafe/internal/platform/command"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -14,7 +15,6 @@ var (
 	ErrNotFound                     = errors.New("catalog entity not found")
 	ErrNameConflict                 = errors.New("catalog name conflict")
 	ErrCodeConflict                 = errors.New("catalog code conflict")
-	ErrRequestConflict              = errors.New("request conflict")
 	ErrInvalidPricingConfiguration  = errors.New("invalid pricing configuration")
 	ErrInvalidModifierConfiguration = errors.New("invalid modifier configuration")
 	ErrInvalidCategoryConfiguration = errors.New("invalid category configuration")
@@ -22,9 +22,11 @@ var (
 	ErrInvalidInheritance           = errors.New("invalid inheritance")
 	ErrEntityRetired                = errors.New("entity retired")
 	ErrInvalidManagerPin            = errors.New("invalid manager pin")
-	ErrForbidden                    = errors.New("forbidden")
-	ErrUnauthorized                 = errors.New("unauthorized")
-	ErrInvalidStoredResult          = errors.New("invalid stored result")
+
+	ErrRequestConflict     = command.ErrRequestConflict
+	ErrForbidden           = command.ErrForbidden
+	ErrUnauthorized        = command.ErrUnauthorized
+	ErrInvalidStoredResult = command.ErrInvalidStoredResult
 )
 
 // MapDBError maps PostgreSQL driver and database errors to domain sentinels.
@@ -58,51 +60,33 @@ func MapDBError(err error) error {
 	return err
 }
 
-// MapHTTPError maps catalog domain errors and input validation errors to *response.CodedError.
+// httpErrors is the Catalog HTTP error mapping. Every rule answers with the
+// error's own text except a corrupted stored result, whose text would echo
+// internal replay state.
+var httpErrors = response.ErrorMapper{
+	{Target: ErrNotFound, Spec: response.ErrorSpec{Status: http.StatusNotFound, Code: "CATALOG_NOT_FOUND"}},
+	{Target: ErrCodeConflict, Spec: response.ErrorSpec{Status: http.StatusConflict, Code: "CATALOG_CODE_CONFLICT"}},
+	{Target: ErrNameConflict, Spec: response.ErrorSpec{Status: http.StatusConflict, Code: "CATALOG_NAME_CONFLICT"}},
+	{Target: ErrRequestConflict, Spec: response.ErrorSpec{Status: http.StatusConflict, Code: "REQUEST_CONFLICT"}},
+	{Target: ErrInvalidPricingConfiguration, Spec: response.ErrorSpec{Status: http.StatusBadRequest, Code: "INVALID_PRICING_CONFIGURATION"}},
+	{Target: ErrInvalidModifierConfiguration, Spec: response.ErrorSpec{Status: http.StatusBadRequest, Code: "INVALID_MODIFIER_CONFIGURATION"}},
+	{Target: ErrInvalidCategoryConfiguration, Spec: response.ErrorSpec{Status: http.StatusBadRequest, Code: "INVALID_CATEGORY_CONFIGURATION"}},
+	{Target: ErrInvalidRetirement, Spec: response.ErrorSpec{Status: http.StatusBadRequest, Code: "INVALID_RETIREMENT"}},
+	{Target: ErrInvalidInheritance, Spec: response.ErrorSpec{Status: http.StatusConflict, Code: "INVALID_INHERITANCE"}},
+	{Target: ErrEntityRetired, Spec: response.ErrorSpec{Status: http.StatusConflict, Code: "ENTITY_RETIRED"}},
+	{Target: ErrInvalidManagerPin, Spec: response.ErrorSpec{Status: http.StatusForbidden, Code: "INVALID_MANAGER_PIN"}},
+	{Target: ErrForbidden, Spec: response.ErrorSpec{Status: http.StatusForbidden, Code: "FORBIDDEN"}},
+	{Target: ErrUnauthorized, Spec: response.ErrorSpec{Status: http.StatusUnauthorized, Code: "UNAUTHORIZED"}},
+	{Target: ErrInvalidStoredResult, Spec: response.ErrorSpec{
+		Status: http.StatusInternalServerError, Code: "INVALID_STORED_RESULT", Message: "an unexpected error occurred",
+	}},
+	{Target: ErrInvalidImage, Spec: response.ErrorSpec{Status: http.StatusBadRequest, Code: "INVALID_IMAGE"}},
+	{Target: ErrImageTooLarge, Spec: response.ErrorSpec{Status: http.StatusRequestEntityTooLarge, Code: "IMAGE_TOO_LARGE"}},
+	{Target: response.ErrInvalid, Spec: response.ErrorSpec{Status: http.StatusBadRequest, Code: "INVALID_INPUT"}},
+}
+
+// MapHTTPError maps catalog domain errors and input validation errors to
+// *response.CodedError.
 func MapHTTPError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var codedErr *response.CodedError
-	if errors.As(err, &codedErr) {
-		return err
-	}
-	switch {
-	case errors.Is(err, ErrNotFound):
-		return response.NewCodedError(http.StatusNotFound, "CATALOG_NOT_FOUND", err.Error(), err)
-	case errors.Is(err, ErrCodeConflict):
-		return response.NewCodedError(http.StatusConflict, "CATALOG_CODE_CONFLICT", err.Error(), err)
-	case errors.Is(err, ErrNameConflict):
-		return response.NewCodedError(http.StatusConflict, "CATALOG_NAME_CONFLICT", err.Error(), err)
-	case errors.Is(err, ErrRequestConflict):
-		return response.NewCodedError(http.StatusConflict, "REQUEST_CONFLICT", err.Error(), err)
-	case errors.Is(err, ErrInvalidPricingConfiguration):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_PRICING_CONFIGURATION", err.Error(), err)
-	case errors.Is(err, ErrInvalidModifierConfiguration):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_MODIFIER_CONFIGURATION", err.Error(), err)
-	case errors.Is(err, ErrInvalidCategoryConfiguration):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_CATEGORY_CONFIGURATION", err.Error(), err)
-	case errors.Is(err, ErrInvalidRetirement):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_RETIREMENT", err.Error(), err)
-	case errors.Is(err, ErrInvalidInheritance):
-		return response.NewCodedError(http.StatusConflict, "INVALID_INHERITANCE", err.Error(), err)
-	case errors.Is(err, ErrEntityRetired):
-		return response.NewCodedError(http.StatusConflict, "ENTITY_RETIRED", err.Error(), err)
-	case errors.Is(err, ErrInvalidManagerPin):
-		return response.NewCodedError(http.StatusForbidden, "INVALID_MANAGER_PIN", err.Error(), err)
-	case errors.Is(err, ErrForbidden):
-		return response.NewCodedError(http.StatusForbidden, "FORBIDDEN", err.Error(), err)
-	case errors.Is(err, ErrUnauthorized):
-		return response.NewCodedError(http.StatusUnauthorized, "UNAUTHORIZED", err.Error(), err)
-	case errors.Is(err, ErrInvalidStoredResult):
-		return response.NewCodedError(http.StatusInternalServerError, "INVALID_STORED_RESULT", "an unexpected error occurred", err)
-	case errors.Is(err, ErrInvalidImage):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_IMAGE", err.Error(), err)
-	case errors.Is(err, ErrImageTooLarge):
-		return response.NewCodedError(http.StatusRequestEntityTooLarge, "IMAGE_TOO_LARGE", err.Error(), err)
-	case errors.Is(err, response.ErrInvalid):
-		return response.NewCodedError(http.StatusBadRequest, "INVALID_INPUT", err.Error(), err)
-	default:
-		return err
-	}
+	return httpErrors.Map(err)
 }

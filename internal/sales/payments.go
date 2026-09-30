@@ -9,12 +9,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
 
-// lockedCheck is a Check acquired under the uniform 5C lock protocol, with
+// lockedCheck is a Check acquired under the uniform Check lock protocol, with
 // the parent state its caller needs to evaluate preconditions.
 type lockedCheck struct {
 	ID                  uuid.UUID
@@ -28,8 +28,8 @@ type lockedCheck struct {
 }
 
 // checkPreconditions reports the first failing precondition shared by every
-// command that operates on a Check, in the precedence §6.2 documents: the
-// Check's own state, then its Session, then the Shift.
+// command that operates on a Check, in a fixed precedence: the Check's own
+// state, then its Session, then the Shift.
 //
 // Existence is the caller's concern, because a Check id that locks nothing
 // means a different failure to each command. Evaluating the rest in one place
@@ -129,8 +129,8 @@ func lockCheckForMutation(ctx context.Context, q *sqlc.Queries, checkID uuid.UUI
 // assertChargeMatchesAllocations verifies a Check's stored charge against the
 // live invariant: base allocations less LIVE_CHECK adjustments.
 //
-// The comparison is 5B's invariant, corrected by Phase 6C: stored charge_vnd is
-// a denormalization of the original allocations minus every live Charge
+// The comparison is Commit's invariant, corrected for Charge Adjustments:
+// stored charge_vnd is a denormalization of the original allocations minus every live Charge
 // Adjustment, and a disagreement is a defect rather than a business state, so
 // it fails the request with a logged 500. Every command that rewrites a charge
 // runs this first — a value that has drifted must not be built on, or the drift
@@ -290,34 +290,8 @@ func recordPayment(ctx context.Context, q *sqlc.Queries, actor Actor,
 		return zero, AuditRecord{}, err
 	}
 	if SettlesCheck(remainingVND) {
-		if err := q.SettleCheck(ctx, sqlc.SettleCheckParams{
-			ID:                          check.ID,
-			SettledAt:                   sql.NullTime{Time: receivedAt, Valid: true},
-			SettledByStaffIdentityID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-			SettledDuringSalesShiftID:   uuid.NullUUID{UUID: check.SalesShiftID, Valid: true},
-			SettledStaffAccessSessionID: uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-		}); err != nil {
-			return zero, AuditRecord{}, fmt.Errorf("settle check: %w", err)
-		}
-		// Payment and settlement are two distinct facts. ExecuteMutation
-		// writes the one it is handed, so the settlement event is written
-		// here, inside the same transaction.
-		settledDetails, err := marshalAuditDetails(checkSettledAudit{
-			CheckID:      check.ID,
-			PaymentID:    paymentID,
-			SalesShiftID: check.SalesShiftID,
-		})
-		if err != nil {
+		if err := settleCheckByPayment(ctx, q, actor, check, paymentID, receivedAt); err != nil {
 			return zero, AuditRecord{}, err
-		}
-		if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
-			EventType:  EventCheckSettled,
-			ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
-			SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
-			Details:    settledDetails,
-			OccurredAt: receivedAt,
-		}); err != nil {
-			return zero, AuditRecord{}, fmt.Errorf("insert check settled audit event: %w", err)
 		}
 	}
 
@@ -329,6 +303,42 @@ func recordPayment(ctx context.Context, q *sqlc.Queries, actor Actor,
 		EventType: in.AuditEvent,
 		Details:   in.AuditDetails(paymentID, check),
 	}, nil
+}
+
+// settleCheckByPayment settles a Check the Payment fully covered and audits
+// the settlement. Payment and settlement are two distinct facts.
+// ExecuteMutation writes the one it is handed, so the settlement event is
+// written here, inside the same transaction.
+func settleCheckByPayment(ctx context.Context, q *sqlc.Queries, actor Actor, check lockedCheck,
+	paymentID uuid.UUID, receivedAt time.Time,
+) error {
+	if err := q.SettleCheck(ctx, sqlc.SettleCheckParams{
+		ID:                          check.ID,
+		SettledAt:                   sql.NullTime{Time: receivedAt, Valid: true},
+		SettledByStaffIdentityID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
+		SettledDuringSalesShiftID:   uuid.NullUUID{UUID: check.SalesShiftID, Valid: true},
+		SettledStaffAccessSessionID: uuid.NullUUID{UUID: actor.SessionID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("settle check: %w", err)
+	}
+	settledDetails, err := marshalAuditDetails(checkSettledAudit{
+		CheckID:      check.ID,
+		PaymentID:    paymentID,
+		SalesShiftID: check.SalesShiftID,
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := q.InsertAuditEvent(ctx, sqlc.InsertAuditEventParams{
+		EventType:  EventCheckSettled,
+		ActorID:    uuid.NullUUID{UUID: actor.StaffID, Valid: true},
+		SessionID:  uuid.NullUUID{UUID: actor.SessionID, Valid: true},
+		Details:    settledDetails,
+		OccurredAt: receivedAt,
+	}); err != nil {
+		return fmt.Errorf("insert check settled audit event: %w", err)
+	}
+	return nil
 }
 
 type checkSettledAudit struct {

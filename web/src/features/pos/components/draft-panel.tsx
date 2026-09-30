@@ -7,7 +7,7 @@ import type {
 import { DraftEmptyState } from "./draft-empty-state";
 import { DraftItemRow } from "./draft-item-row";
 import { NoShiftNotice } from "./no-shift-notice";
-import { calculateDraftSubtotal } from "../utils/pricing";
+import { calculateDraftSubtotal } from "../lib/pricing";
 import { formatVND } from "@/lib/utils";
 
 interface DraftPanelProps {

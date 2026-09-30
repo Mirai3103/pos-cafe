@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { PendingOrdersList, PendingOrdersButton } from "./pending-orders-drawer";
-import type { PendingOrder } from "../utils/pending-orders";
+import type { PendingOrder } from "../lib/pending-orders";
 
 // The Sheet shell renders through a portal, which renderToString leaves empty,
 // so these tests cover the list body the Sheet wraps.

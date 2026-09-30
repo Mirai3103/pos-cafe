@@ -10,11 +10,11 @@ import {
   deriveNonZeroDimensions,
   getReasonsForDimension,
   getDefaultReasonForDimension,
-} from "@/features/shift/utils/discrepancy";
+} from "@/features/shift/lib/discrepancy";
 import type {
   ShiftCloseDiscrepancyInputDimension,
   ShiftCloseDiscrepancyInputReason,
-} from "@/features/shift/utils/discrepancy";
+} from "@/features/shift/lib/discrepancy";
 import { newRequestId } from "@/lib/command";
 import { formatVND } from "@/lib/utils";
 import { playClick, playSuccess, playError } from "@/lib/sound";

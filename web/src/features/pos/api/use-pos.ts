@@ -15,7 +15,7 @@ import {
   useDeleteSalesServiceSessionsIdDraftItemsItemId,
 } from "@/api/generated/endpoints/sales/sales";
 import { unwrap, unwrapNullable } from "@/lib/unwrap";
-import { shouldPollSession } from "../utils/dine-in";
+import { shouldPollSession } from "../lib/dine-in";
 import { newRequestId } from "@/lib/command";
 import type {
   SalesAddDraftItemCommand,

@@ -478,7 +478,7 @@ Integration packages run with `-p 1`.
 
 - **ADR-020 — Expected Cash gains its Cash Payment term in 5C; the Cash Refund term is deferred to Refund.** Context: ADR-008 shipped `expected_cash_vnd` as Opening Float plus Pay Ins less Pay Outs, and recorded that "Phase 5 adds the Cash Payment and Cash Refund terms". 5C is the first sub-phase that creates a Cash Payment, and no sub-phase of Phase 5 creates a Refund. Decision: `internal/shift` adds one sqlc query summing applied amounts of `CASH` Payments for a Shift, and `ComputeExpectedCash` becomes Opening Float plus Cash Payments and Pay Ins, less Pay Outs. The sum is over applied amounts rather than tendered amounts, per `CONTEXT.md`. The Cash Refund term is deferred to whichever phase introduces Refund, and the Swagger description names Refund as the outstanding dependency rather than "Phase 5". `internal/shift` reads the `payments` table through its own query and does not import `internal/sales`, following ADR-012. Consequence: Expected Cash becomes a usable reconciliation figure for every cafe that does not issue cash refunds, which is the current operating reality; the remaining gap is named precisely instead of being attributed to a phase that will close without filling it.
 
-`MIGRATE_PLAN.md` gains the 5C spec and plan links in its Phase 5 sub-phase table, with 5C marked complete when the implementation lands. Its Phase 5 detail is not rewritten, and its tracker row stays pending until 5D.
+`docs/history/MIGRATE_PLAN.md` gains the 5C spec and plan links in its Phase 5 sub-phase table, with 5C marked complete when the implementation lands. Its Phase 5 detail is not rewritten, and its tracker row stays pending until 5D.
 
 ---
 
@@ -500,4 +500,4 @@ Integration packages run with `-p 1`.
 14. `internal/sales` imports no slice but `internal/auth`.
 15. Unit, PostgreSQL integration, HTTP, and concurrency tests pass, with no seeded fixtures. Existing Auth, Catalog, Tables, Shift, 5A, and 5B suites remain passing, the Shift suite updated only for the completed Expected Cash term.
 16. Swagger documentation reflects all eighteen Sales operations with Bearer security.
-17. `spec/decisions.md` records ADR-016 through ADR-020. `MIGRATE_PLAN.md` gains the 5C links without a rewrite of its Phase 5 detail.
+17. `spec/decisions.md` records ADR-016 through ADR-020. `docs/history/MIGRATE_PLAN.md` gains the 5C links without a rewrite of its Phase 5 detail.

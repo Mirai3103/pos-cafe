@@ -94,7 +94,7 @@ CREATE TABLE idempotency_keys (
 - **Quyết định:**
   - Migration `000006` của Phase 3 tạo luôn `service_sessions` và `table_assignments`, kèm `COMMENT ON TABLE` ghi rõ quyền sở hữu thuộc `internal/sales` (Phase 5).
   - `service_sessions` lược bỏ **duy nhất** cột `sales_shift_id` vì `sales_shifts` là bảng của Phase 4. Phase 5 bổ sung bằng `ALTER TABLE service_sessions ADD COLUMN sales_shift_id UUID NOT NULL REFERENCES sales_shifts(id)`.
-  - `internal/tables` **không** import `internal/sales`. Nó đọc occupancy qua query sqlc của riêng nó (`ListCurrentTableOccupants`), đúng nguyên tắc "dùng queries hoặc interface, đừng import struct" của MIGRATE_PLAN §4.1.
+  - `internal/tables` **không** import `internal/sales`. Nó đọc occupancy qua query sqlc của riêng nó (`ListCurrentTableOccupants`), đúng nguyên tắc "dùng queries hoặc interface, đừng import struct" của `docs/history/MIGRATE_PLAN.md` §4.1.
   - Phase 3 chỉ **đọc** hai bảng này, không ghi qua API. Test integration seed trực tiếp bằng SQL.
 - **Hệ quả:**
   - Contract công khai của Tables hoàn chỉnh và ổn định ngay từ Phase 3; frontend không phải chịu breaking change khi Phase 5 lên.
@@ -180,7 +180,7 @@ CREATE TABLE idempotency_keys (
 
 * **Decision Date:** 2026-09-13
 * **Status:** Accepted
-* **Context:** Draft item validation needs each Menu Item's effective Modifier Groups, which `internal/catalog` already computes in the exported pure function `EffectiveGroupIDs`; MIGRATE_PLAN §4.1 forbids importing another slice, and ADR-006 established reading another slice's tables through one's own sqlc query.
+* **Context:** Draft item validation needs each Menu Item's effective Modifier Groups, which `internal/catalog` already computes in the exported pure function `EffectiveGroupIDs`; `docs/history/MIGRATE_PLAN.md` §4.1 forbids importing another slice, and ADR-006 established reading another slice's tables through one's own sqlc query.
 * **Decision:**
 * `internal/sales` expresses the resolution once, in SQL, in `sql/queries/sales.sql`, rather than importing the function or reimplementing it in Go; an integration test importing both packages pins the SQL result to `catalog.EffectiveGroupIDs` over shared fixtures including the inherited-and-excluded and excluded-and-direct cases.
 * **Consequences:**
@@ -654,7 +654,7 @@ CREATE TABLE idempotency_keys (
 * **Decision:**
 * `CONTEXT.md` is copied verbatim into this repository and is the binding domain authority. The fifteen citations are rewritten to the local path.
 * References to `cafe-pos/src` and `cafe-pos/.scratch` inside Phase 0-6C specifications are historical provenance and carry no live authority. They are left exactly as written; rewriting them would falsify an approved record.
-* Work from Phase 07 onward is designed from `CONTEXT.md`, not ported. `ROADMAP.md` supersedes `MIGRATE_PLAN.md`, which is frozen as the migration's historical record.
+* Work from Phase 07 onward is designed from `CONTEXT.md`, not ported. `ROADMAP.md` supersedes `docs/history/MIGRATE_PLAN.md`, which is frozen as the migration's historical record.
 * The domain glossary is not annotated with Go deviations. Every deviation is recorded here, as this document has recorded forty-six of them.
 * **Consequences:**
 * Every authority citation in the repository resolves locally; the project has no documentation dependency on `cafe-pos`.

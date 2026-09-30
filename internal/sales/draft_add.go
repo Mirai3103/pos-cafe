@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 )
 
@@ -149,8 +149,8 @@ func NewAddDraftItemHandler(runner *Runner) *AddDraftItemHandler {
 // Validation is deliberately shallow: it checks only that what has been chosen
 // is currently choosable, not that the configuration is complete. A sized item
 // with no Size and a required Group with no selection are both valid draft
-// states. Commit, in 5B, is where completeness is enforced, because that is
-// where price is fixed.
+// states. Commit is where completeness is enforced, because that is where
+// price is fixed.
 func (h *AddDraftItemHandler) Handle(ctx context.Context, actor Actor,
 	cmd AddDraftItemCommand,
 ) (int, ServiceSessionResponse, error) {
@@ -187,23 +187,9 @@ func (h *AddDraftItemHandler) Handle(ctx context.Context, actor Actor,
 				}
 			}
 
-			// Absent means "use the menu's defaults"; empty means "the
-			// customer declined every option".
-			var optionIDs []uuid.UUID
-			if cmd.ModifierOptionIDs == nil {
-				var groups []uuid.UUID
-				optionIDs, groups, err = defaultOptionIDs(ctx, q, item.ID)
-				if err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
-				if err := validateModifierOptionsForGroups(ctx, q, groups, optionIDs); err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
-			} else {
-				optionIDs = *cmd.ModifierOptionIDs
-				if err := validateModifierOptions(ctx, q, item.ID, optionIDs); err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
+			optionIDs, err := resolveAddedOptionIDs(ctx, q, item.ID, cmd.ModifierOptionIDs)
+			if err != nil {
+				return 0, zero, AuditRecord{}, err
 			}
 
 			note, err := NormalizePreparationNote(cmd.PreparationNote)
@@ -235,6 +221,29 @@ func (h *AddDraftItemHandler) Handle(ctx context.Context, actor Actor,
 				},
 			}, nil
 		})
+}
+
+// resolveAddedOptionIDs validates the added item's Modifier Options. Absent
+// means "use the menu's defaults"; empty means "the customer declined every
+// option".
+func resolveAddedOptionIDs(ctx context.Context, q *sqlc.Queries, menuItemID uuid.UUID,
+	requested *[]uuid.UUID,
+) ([]uuid.UUID, error) {
+	if requested == nil {
+		optionIDs, groups, err := defaultOptionIDs(ctx, q, menuItemID)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateModifierOptionsForGroups(ctx, q, groups, optionIDs); err != nil {
+			return nil, err
+		}
+		return optionIDs, nil
+	}
+	optionIDs := *requested
+	if err := validateModifierOptions(ctx, q, menuItemID, optionIDs); err != nil {
+		return nil, err
+	}
+	return optionIDs, nil
 }
 
 // upsertDraftItem increments an existing line of the same composition or

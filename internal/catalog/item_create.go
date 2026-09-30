@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/Mirai3103/pos-cafe/internal/response"
 	"github.com/google/uuid"
 )
@@ -49,40 +49,22 @@ func NewCreateItemHandler(runner *Runner) *CreateItemHandler {
 // Handle executes the item creation command.
 func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateItemCommand) (int, ItemResponse, error) {
 	display, key := NormalizeName(cmd.Name)
-
-	var sizesFp []createItemSizeFingerprint
-	if len(cmd.Sizes) > 0 {
-		sizesFp = make([]createItemSizeFingerprint, len(cmd.Sizes))
-		for i, s := range cmd.Sizes {
-			sDisplay, _ := NormalizeName(s.Name)
-			sizesFp[i] = createItemSizeFingerprint{
-				Name:     sDisplay,
-				PriceVND: s.PriceVND,
-			}
-		}
-	}
-
 	spec := MutationSpec{
-		RequestID: cmd.RequestID,
-		Operation: OpItemCreate,
-		Fingerprint: createItemFingerprint{
-			CategoryID: cmd.CategoryID,
-			Name:       display,
-			PriceVND:   cmd.PriceVND,
-			Sizes:      sizesFp,
-		},
+		RequestID:         cmd.RequestID,
+		Operation:         OpItemCreate,
+		Fingerprint:       newCreateItemFingerprint(cmd, display),
 		Required:          []string{CapAdministerStructure, CapChangePrice},
 		RequireManagerPIN: true,
 		ManagerPIN:        cmd.ManagerPIN,
 	}
 
 	return ExecuteMutation(ctx, h.runner, actor, spec, func(q *sqlc.Queries) (int, ItemResponse, AuditRecord, error) {
-		// 1. Validate category_id is provided.
 		if cmd.CategoryID == uuid.Nil {
 			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: category_id is required", response.ErrInvalid)
 		}
 
-		// 2. Lock parent category row for deterministic concurrency control.
+		// Lock the parent category so the insert serializes with concurrent
+		// changes to it, such as its retirement.
 		category, err := q.GetMenuCategoryForUpdate(ctx, cmd.CategoryID)
 		if err != nil {
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
@@ -90,135 +72,140 @@ func (h *CreateItemHandler) Handle(ctx context.Context, actor Actor, cmd CreateI
 		if category.RetiredAt.Valid {
 			return 0, ItemResponse{}, AuditRecord{}, ErrEntityRetired
 		}
-
-		// 3. Validate pricing configuration: exactly one pricing form.
-		hasDirect := cmd.PriceVND != nil
-		hasSizes := len(cmd.Sizes) > 0
-
-		if (!hasDirect && !hasSizes) || (hasDirect && hasSizes) {
-			return 0, ItemResponse{}, AuditRecord{}, ErrInvalidPricingConfiguration
-		}
-
-		// 4. Validate item name is non-empty after normalization.
-		if display == "" {
-			return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: item name cannot be empty", response.ErrInvalid)
-		}
-
-		// 5. Validate direct price if present.
-		if hasDirect {
-			if err := ValidatePrice(*cmd.PriceVND); err != nil {
-				return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: %s", ErrInvalidPricingConfiguration, err.Error())
-			}
-		}
-
-		// 6. Validate sizes if present: duplicate normalized names and price bounds.
-		if hasSizes {
-			seenSizes := make(map[string]bool, len(cmd.Sizes))
-			for _, s := range cmd.Sizes {
-				sDisplay, sKey := NormalizeName(s.Name)
-				if sDisplay == "" {
-					return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: size name cannot be empty", response.ErrInvalid)
-				}
-				if seenSizes[sKey] {
-					return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: duplicate size name %q", ErrNameConflict, sDisplay)
-				}
-				seenSizes[sKey] = true
-
-				if err := ValidatePrice(s.PriceVND); err != nil {
-					return 0, ItemResponse{}, AuditRecord{}, fmt.Errorf("%w: size %q price %d: %s", ErrInvalidPricingConfiguration, sDisplay, s.PriceVND, err.Error())
-				}
-			}
-		}
-
-		// 7. Create Menu Item in database.
-		var priceNull sql.NullInt64
-		if hasDirect {
-			priceNull = sql.NullInt64{Int64: *cmd.PriceVND, Valid: true}
+		if err := validateNewItem(cmd, display); err != nil {
+			return 0, ItemResponse{}, AuditRecord{}, err
 		}
 
 		item, err := q.CreateMenuItem(ctx, sqlc.CreateMenuItemParams{
 			CategoryID:     cmd.CategoryID,
 			Name:           display,
 			NormalizedName: key,
-			PriceVnd:       priceNull,
+			PriceVnd:       newItemPrice(cmd.PriceVND),
 			Available:      true,
 		})
 		if err != nil {
 			return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
 		}
-
-		// 8. Create Sizes in database in a single batch insert if sized item.
-		var createdSizes []sqlc.MenuItemSize
-		if hasSizes {
-			sizeNames := make([]string, len(cmd.Sizes))
-			sizeNormNames := make([]string, len(cmd.Sizes))
-			sizePrices := make([]int64, len(cmd.Sizes))
-			for i, s := range cmd.Sizes {
-				sDisplay, sKey := NormalizeName(s.Name)
-				sizeNames[i] = sDisplay
-				sizeNormNames[i] = sKey
-				sizePrices[i] = s.PriceVND
-			}
-			createdSizes, err = q.CreateMenuItemSizes(ctx, sqlc.CreateMenuItemSizesParams{
-				MenuItemID:      item.ID,
-				Names:           sizeNames,
-				NormalizedNames: sizeNormNames,
-				Prices:          sizePrices,
-			})
-			if err != nil {
-				return 0, ItemResponse{}, AuditRecord{}, MapDBError(err)
-			}
-		}
-
-		// 9. Assemble ItemResponse.
-		res := ItemResponse{
-			ID:         item.ID,
-			CategoryID: item.CategoryID,
-			Name:       item.Name,
-			Available:  item.Available,
-		}
-		if item.PriceVnd.Valid {
-			v := item.PriceVnd.Int64
-			res.PriceVND = &v
-		}
-		if len(createdSizes) > 0 {
-			res.Sizes = make([]SizeResponse, len(createdSizes))
-			for i, s := range createdSizes {
-				res.Sizes[i] = SizeResponse{
-					ID:        s.ID,
-					Name:      s.Name,
-					PriceVND:  s.PriceVnd,
-					Available: s.Available,
-				}
-			}
-		}
-
-		// 10. Assemble secret-free AuditRecord.
-		auditDetails := itemCreatedAuditDetails{
-			ItemID:     item.ID,
-			CategoryID: item.CategoryID,
-			Name:       item.Name,
-		}
-		if item.PriceVnd.Valid {
-			v := item.PriceVnd.Int64
-			auditDetails.PriceVND = &v
-		}
-		if len(createdSizes) > 0 {
-			auditDetails.Sizes = make([]itemCreatedSizeAudit, len(createdSizes))
-			for i, s := range createdSizes {
-				auditDetails.Sizes[i] = itemCreatedSizeAudit{
-					SizeID:   s.ID,
-					Name:     s.Name,
-					PriceVND: s.PriceVnd,
-				}
-			}
+		sizes, err := createItemSizes(ctx, q, item.ID, cmd.Sizes)
+		if err != nil {
+			return 0, ItemResponse{}, AuditRecord{}, err
 		}
 
 		audit := AuditRecord{
 			EventType: EventItemCreated,
-			Details:   auditDetails,
+			Details:   newItemCreatedAudit(item, sizes),
 		}
-
-		return 201, res, audit, nil
+		return 201, newItemResponse(item, sizes), audit, nil
 	})
+}
+
+// newCreateItemFingerprint normalizes the business input the idempotency key
+// covers. The Manager PIN is deliberately absent.
+func newCreateItemFingerprint(cmd CreateItemCommand, display string) createItemFingerprint {
+	var sizes []createItemSizeFingerprint
+	if len(cmd.Sizes) > 0 {
+		sizes = make([]createItemSizeFingerprint, len(cmd.Sizes))
+		for i, s := range cmd.Sizes {
+			sDisplay, _ := NormalizeName(s.Name)
+			sizes[i] = createItemSizeFingerprint{
+				Name:     sDisplay,
+				PriceVND: s.PriceVND,
+			}
+		}
+	}
+	return createItemFingerprint{
+		CategoryID: cmd.CategoryID,
+		Name:       display,
+		PriceVND:   cmd.PriceVND,
+		Sizes:      sizes,
+	}
+}
+
+// validateNewItem checks that the item has exactly one pricing form, a
+// non-empty name, a valid direct price, and distinct, validly priced sizes.
+func validateNewItem(cmd CreateItemCommand, display string) error {
+	hasDirect := cmd.PriceVND != nil
+	hasSizes := len(cmd.Sizes) > 0
+	if hasDirect == hasSizes {
+		return ErrInvalidPricingConfiguration
+	}
+	if display == "" {
+		return fmt.Errorf("%w: item name cannot be empty", response.ErrInvalid)
+	}
+	if hasDirect {
+		if err := ValidatePrice(*cmd.PriceVND); err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidPricingConfiguration, err.Error())
+		}
+	}
+
+	seenSizes := make(map[string]bool, len(cmd.Sizes))
+	for _, s := range cmd.Sizes {
+		sDisplay, sKey := NormalizeName(s.Name)
+		if sDisplay == "" {
+			return fmt.Errorf("%w: size name cannot be empty", response.ErrInvalid)
+		}
+		if seenSizes[sKey] {
+			return fmt.Errorf("%w: duplicate size name %q", ErrNameConflict, sDisplay)
+		}
+		seenSizes[sKey] = true
+
+		if err := ValidatePrice(s.PriceVND); err != nil {
+			return fmt.Errorf("%w: size %q price %d: %s", ErrInvalidPricingConfiguration, sDisplay, s.PriceVND, err.Error())
+		}
+	}
+	return nil
+}
+
+func newItemPrice(price *int64) sql.NullInt64 {
+	if price == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: *price, Valid: true}
+}
+
+// createItemSizes inserts a sized item's sizes in one batch. A direct-price
+// item has none and creates nothing.
+func createItemSizes(ctx context.Context, q *sqlc.Queries, itemID uuid.UUID, sizes []CreateSizeInput) ([]sqlc.MenuItemSize, error) {
+	if len(sizes) == 0 {
+		return nil, nil
+	}
+	names := make([]string, len(sizes))
+	normalizedNames := make([]string, len(sizes))
+	prices := make([]int64, len(sizes))
+	for i, s := range sizes {
+		names[i], normalizedNames[i] = NormalizeName(s.Name)
+		prices[i] = s.PriceVND
+	}
+	created, err := q.CreateMenuItemSizes(ctx, sqlc.CreateMenuItemSizesParams{
+		MenuItemID:      itemID,
+		Names:           names,
+		NormalizedNames: normalizedNames,
+		Prices:          prices,
+	})
+	if err != nil {
+		return nil, MapDBError(err)
+	}
+	return created, nil
+}
+
+// newItemCreatedAudit assembles the audit details, which never carry the
+// Manager PIN.
+func newItemCreatedAudit(item sqlc.MenuItem, sizes []sqlc.MenuItemSize) itemCreatedAuditDetails {
+	details := itemCreatedAuditDetails{
+		ItemID:     item.ID,
+		CategoryID: item.CategoryID,
+		Name:       item.Name,
+		PriceVND:   nullInt64Ptr(item.PriceVnd),
+	}
+	if len(sizes) > 0 {
+		details.Sizes = make([]itemCreatedSizeAudit, len(sizes))
+		for i, s := range sizes {
+			details.Sizes[i] = itemCreatedSizeAudit{
+				SizeID:   s.ID,
+				Name:     s.Name,
+				PriceVND: s.PriceVnd,
+			}
+		}
+	}
+	return details
 }

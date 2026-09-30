@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Mirai3103/pos-cafe/internal/database/sqlc"
+	"github.com/Mirai3103/pos-cafe/internal/platform/database/sqlc"
 	"github.com/google/uuid"
 )
 
@@ -45,79 +45,87 @@ func (h *CloseServiceSessionHandler) Handle(ctx context.Context, actor Actor,
 
 	return ExecuteMutation(ctx, h.runner, actor, spec,
 		func(mc MutationContext) (int, CompletedSaleResponse, AuditRecord, error) {
-			var zero CompletedSaleResponse
-			q := mc.Queries
-
-			session, err := q.LockServiceSessionForClosure(ctx, cmd.ServiceSessionID)
+			out, audit, err := applyCloseServiceSession(ctx, mc.Queries, actor, cmd.ServiceSessionID)
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return 0, zero, AuditRecord{}, fmt.Errorf(
-						"%w: %s", ErrServiceSessionNotFound, cmd.ServiceSessionID)
-				}
-				return 0, zero, AuditRecord{}, fmt.Errorf("lock service session: %w", err)
+				return 0, CompletedSaleResponse{}, AuditRecord{}, err
 			}
-
-			// An already-closed Session returns its existing sale rather than
-			// an error: closing twice is a duplicate, not a mistake.
-			existingID, err := q.FindCompletedSaleByServiceSession(ctx, cmd.ServiceSessionID)
-			switch {
-			case err == nil:
-				out, err := LoadCompletedSale(ctx, q, existingID)
-				if err != nil {
-					return 0, zero, AuditRecord{}, err
-				}
-				return http.StatusCreated, out, AuditRecord{}, nil
-			case !errors.Is(err, sql.ErrNoRows):
-				return 0, zero, AuditRecord{}, fmt.Errorf("find completed sale: %w", err)
-			}
-			if session.State != StateActive {
-				return 0, zero, AuditRecord{}, fmt.Errorf(
-					"%w: %s", ErrServiceSessionClosed, cmd.ServiceSessionID)
-			}
-
-			projection, err := LoadServiceSession(ctx, q, cmd.ServiceSessionID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-			if err := EvaluateClosureReadiness(projection).Err(); err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			completedAt := time.Now()
-			saleID, err := q.InsertCompletedSale(ctx, sqlc.InsertCompletedSaleParams{
-				ServiceSessionID:              cmd.ServiceSessionID,
-				CompletedByStaffIdentityID:    actor.StaffID,
-				CompletedStaffAccessSessionID: actor.SessionID,
-				CompletedAt:                   completedAt,
-			})
-			if err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("insert completed sale: %w", err)
-			}
-
-			releasedTableIDs, err := releaseHeldTableAssignments(ctx, q, actor,
-				cmd.ServiceSessionID, completedAt)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			if err := q.CloseServiceSession(ctx, cmd.ServiceSessionID); err != nil {
-				return 0, zero, AuditRecord{}, fmt.Errorf("close service session: %w", err)
-			}
-
-			out, err := LoadCompletedSale(ctx, q, saleID)
-			if err != nil {
-				return 0, zero, AuditRecord{}, err
-			}
-
-			return http.StatusCreated, out, AuditRecord{
-				EventType: EventServiceSessionClosed,
-				Details: map[string]any{
-					"service_session_id": cmd.ServiceSessionID,
-					"completed_sale_id":  saleID,
-					"released_table_ids": releasedTableIDs,
-				},
-			}, nil
+			return http.StatusCreated, out, audit, nil
 		})
+}
+
+// applyCloseServiceSession is the closure mutation body. It locks the Session,
+// answers an already-closed Session with its existing sale, checks closure
+// readiness, then appends the Completed Sale, releases every held Table, and
+// closes the Session.
+func applyCloseServiceSession(ctx context.Context, q *sqlc.Queries, actor Actor, sessionID uuid.UUID) (
+	CompletedSaleResponse, AuditRecord, error,
+) {
+	var zero CompletedSaleResponse
+	session, err := q.LockServiceSessionForClosure(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return zero, AuditRecord{}, fmt.Errorf("%w: %s", ErrServiceSessionNotFound, sessionID)
+		}
+		return zero, AuditRecord{}, fmt.Errorf("lock service session: %w", err)
+	}
+
+	// An already-closed Session returns its existing sale rather than an
+	// error: closing twice is a duplicate, not a mistake.
+	existingID, err := q.FindCompletedSaleByServiceSession(ctx, sessionID)
+	switch {
+	case err == nil:
+		out, err := LoadCompletedSale(ctx, q, existingID)
+		if err != nil {
+			return zero, AuditRecord{}, err
+		}
+		return out, AuditRecord{}, nil
+	case !errors.Is(err, sql.ErrNoRows):
+		return zero, AuditRecord{}, fmt.Errorf("find completed sale: %w", err)
+	}
+	if session.State != StateActive {
+		return zero, AuditRecord{}, fmt.Errorf("%w: %s", ErrServiceSessionClosed, sessionID)
+	}
+
+	projection, err := LoadServiceSession(ctx, q, sessionID)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+	if err := EvaluateClosureReadiness(projection).Err(); err != nil {
+		return zero, AuditRecord{}, err
+	}
+
+	completedAt := time.Now()
+	saleID, err := q.InsertCompletedSale(ctx, sqlc.InsertCompletedSaleParams{
+		ServiceSessionID:              sessionID,
+		CompletedByStaffIdentityID:    actor.StaffID,
+		CompletedStaffAccessSessionID: actor.SessionID,
+		CompletedAt:                   completedAt,
+	})
+	if err != nil {
+		return zero, AuditRecord{}, fmt.Errorf("insert completed sale: %w", err)
+	}
+
+	releasedTableIDs, err := releaseHeldTableAssignments(ctx, q, actor, sessionID, completedAt)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+
+	if err := q.CloseServiceSession(ctx, sessionID); err != nil {
+		return zero, AuditRecord{}, fmt.Errorf("close service session: %w", err)
+	}
+
+	out, err := LoadCompletedSale(ctx, q, saleID)
+	if err != nil {
+		return zero, AuditRecord{}, err
+	}
+	return out, AuditRecord{
+		EventType: EventServiceSessionClosed,
+		Details: map[string]any{
+			"service_session_id": sessionID,
+			"completed_sale_id":  saleID,
+			"released_table_ids": releasedTableIDs,
+		},
+	}, nil
 }
 
 // releaseHeldTableAssignments releases every Table the Session holds, one

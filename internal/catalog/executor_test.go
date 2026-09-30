@@ -9,9 +9,9 @@ import (
 )
 
 func TestIsSecurityDenial(t *testing.T) {
-	assert.False(t, isSecurityDenial(fmt.Errorf("load staff for PIN verification: %w", sql.ErrConnDone)))
-	assert.True(t, isSecurityDenial(fmt.Errorf("%w: manager PIN verification failed", ErrInvalidManagerPin)))
-	assert.True(t, isSecurityDenial(ErrForbidden))
-	assert.True(t, isSecurityDenial(ErrUnauthorized))
-	assert.False(t, isSecurityDenial(nil))
+	assert.False(t, policy.IsSecurityDenial(fmt.Errorf("load staff for PIN verification: %w", sql.ErrConnDone)))
+	assert.True(t, policy.IsSecurityDenial(fmt.Errorf("%w: manager PIN verification failed", ErrInvalidManagerPin)))
+	assert.True(t, policy.IsSecurityDenial(ErrForbidden))
+	assert.True(t, policy.IsSecurityDenial(ErrUnauthorized))
+	assert.False(t, policy.IsSecurityDenial(nil))
 }

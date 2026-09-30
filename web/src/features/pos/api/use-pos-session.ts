@@ -2,7 +2,7 @@ import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetSalesServiceSessionsIdQueryKey } from "@/api/generated/endpoints/sales/sales";
 import { ApiError } from "@/lib/unwrap";
-import { needsNewRound } from "../utils/dine-in";
+import { needsNewRound } from "../lib/dine-in";
 import { useServiceSession, useStartNextDraft, useStartTakeawaySession } from "./use-pos";
 import type { SalesServiceSessionResponse } from "@/api/generated/models";
 

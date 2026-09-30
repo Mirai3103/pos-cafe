@@ -1,7 +1,18 @@
-// Package sales implements the Sales vertical slice. Phase 5A covers the
-// Service Session lifecycle up to its commercial boundary: opening a Takeaway
-// or Dine-in Session, maintaining Table assignments, and building the Order
-// Draft. Commit, Payment, Submit, and closure land in 5B, 5C, and 5D.
+// Package sales implements the Sales vertical slice: the Service Session
+// lifecycle from opening a Takeaway or Dine-in Session to closing it into an
+// immutable Completed Sale.
+//
+// Within a Session it maintains Table assignments, builds and edits Order
+// Drafts, commits them into priced Committed Items charged to Checks, splits
+// and merges Checks, records Cash and Manual QR Payments, and submits
+// committed work to the bar as Orders and Preparation Units. After money has
+// moved it applies Manager-approved, append-only financial corrections —
+// Comps, Refunds, and Payment Voids — to a live Check or, post-sale, to a
+// Completed Sale, without rewriting any closed row.
+//
+// Every command and authorized read runs through the shared
+// platform/command pipeline under the Sales policy (see executor.go), and
+// every HTTP error is mapped by MapHTTPError.
 package sales
 
 import (
@@ -64,7 +75,7 @@ const (
 	EventAuthorizationDenied = "sales.authorization_denied"
 	// EventOrderDraftCommitted drops the canonical TAKEAWAY_CHECKOUT_ prefix.
 	// Commit is mode-agnostic — the canonical source runs one handler for
-	// Dine-in too — and 5A already dropped that prefix throughout.
+	// Dine-in too — and the draft commands drop that prefix throughout.
 	EventOrderDraftCommitted      = "ORDER_DRAFT_COMMITTED"
 	EventOrderDraftStarted        = "ORDER_DRAFT_STARTED"
 	EventOrderDraftCheckTargetSet = "ORDER_DRAFT_CHECK_TARGET_SET"
@@ -74,7 +85,8 @@ const (
 	EventServiceSessionClosed = "SERVICE_SESSION_CLOSED"
 )
 
-// Service Session states. 5A writes only StateActive; 5D writes StateClosed.
+// Service Session states. Opening writes StateActive; closure writes
+// StateClosed.
 //
 // There is no separate literal for the Shift's open state: whether a Shift is
 // open is answered by reading sales_shifts, not by comparing a string, so no
@@ -84,7 +96,7 @@ const (
 	StateClosed = "CLOSED"
 )
 
-// Order Draft states. 5A writes only DraftStateEditable; 5B writes
+// Order Draft states. Opening a draft writes DraftStateEditable; Commit writes
 // DraftStateCommitted.
 const (
 	DraftStateEditable  = "EDITABLE"
@@ -201,9 +213,9 @@ func FormatServiceNumber(seq int32) (string, error) {
 	return fmt.Sprintf("S%05d", seq), nil
 }
 
-// Check states. 5B writes only CheckStateOpen; 5C writes the other two.
-// The domain ships complete so the CURRENT_UNPAID target query's state filter
-// is meaningful rather than vacuous. See ADR-014.
+// Check states. Commit opens a Check, settlement settles it, and Merge marks
+// the absorbed one merged. The domain is complete so the CURRENT_UNPAID target
+// query's state filter is meaningful rather than vacuous. See ADR-014.
 const (
 	CheckStateOpen    = "OPEN"
 	CheckStateSettled = "SETTLED"
@@ -368,9 +380,8 @@ func ValidateTransactionReference(ref *string) (*string, error) {
 }
 
 // Preparation Unit states. ADR-028 declares the complete canonical domain
-// although 5D writes only the first four: 5A shipped a guessed partial domain
-// for service_sessions.state and had to correct it, and 5C responded with the
-// complete-domain precedent this follows.
+// rather than only the states Sales itself writes, because a guessed partial
+// domain has had to be corrected before.
 const (
 	UnitStateQueued        = "QUEUED"
 	UnitStateInPreparation = "IN_PREPARATION"
@@ -381,9 +392,9 @@ const (
 )
 
 // IsTerminalUnitState reports whether a Preparation Unit has reached a state
-// it cannot leave. Closure requires every unit to be terminal. Cancelled and
-// Wasted are unreachable in Phase 5 but accepted here, so the policy is
-// written once against the complete domain rather than re-edited in Phase 6.
+// it cannot leave. Closure requires every unit to be terminal. The policy is
+// written once against the complete domain, so Cancelled and Wasted units are
+// terminal too.
 func IsTerminalUnitState(state string) bool {
 	switch state {
 	case UnitStateFulfilled, UnitStateCancelled, UnitStateWasted:
@@ -404,7 +415,7 @@ func ModeRequiresSettlementBeforeSubmit(mode string) bool {
 	return mode == ModeTakeaway
 }
 
-// --- Phase 6C: Comp ---
+// --- Comp ---
 
 // OpCompWaste is the idempotency action name, stored in
 // idempotency_keys.action (VARCHAR(50)).
@@ -412,7 +423,7 @@ const OpCompWaste = "sales.comp_waste"
 
 // Correction scopes. A LIVE_CHECK adjustment changes the active Session's
 // Check charge; a POST_SALE adjustment links to a Completed Sale and never
-// rewrites its snapshot (spec §2, §6.3).
+// rewrites its snapshot.
 const (
 	CompScopeLiveCheck = "LIVE_CHECK"
 	CompScopePostSale  = "POST_SALE"
@@ -423,7 +434,7 @@ const (
 // immutable source and never edits it.
 const ChargeAdjustmentKindComp = "COMP"
 
-// Comp reason catalog (spec §2). Every operation keeps its own allowlist; the
+// Comp reason catalog. Every operation keeps its own allowlist; the
 // migration 000014 constraint enforces the same set at the database boundary.
 const (
 	CompReasonCafeError       = "CAFE_ERROR"
@@ -441,8 +452,8 @@ var compReasons = []string{
 // char_length check.
 const MaxCorrectionNoteRunes = 500
 
-// Phase 6C business audit event types (spec §15). CHECK_SETTLED already exists
-// above: the settlement fact is the same event whichever command produced it.
+// Comp business audit event types. CHECK_SETTLED already exists above: the
+// settlement fact is the same event whichever command produced it.
 const (
 	EventCheckChargeAdjusted = "CHECK_CHARGE_ADJUSTED"
 	EventSalesCompRecorded   = "SALES_COMP_RECORDED"
@@ -541,13 +552,13 @@ func ValidateCompWasteCommand(cmd CompWasteCommand, note *string) error {
 	return ValidateManagerApprovalInput(cmd.ManagerApproval)
 }
 
-// --- Phase 6C: Refund ---
+// --- Refund ---
 
 // OpRecordRefund is the idempotency action name, stored in
 // idempotency_keys.action (VARCHAR(50)).
 const OpRecordRefund = "sales.record_refund"
 
-// Refund reason catalog (spec §2). Every operation keeps its own allowlist;
+// Refund reason catalog. Every operation keeps its own allowlist;
 // the migration 000014 constraint enforces the same set at the database
 // boundary. The literals intentionally duplicate the Comp catalog: a future
 // operation may admit a reason another does not.
@@ -563,8 +574,8 @@ var refundReasons = []string{
 	RefundReasonCafeError, RefundReasonOther,
 }
 
-// Phase 6C Refund audit event types (spec §15). REFUND_COMPLETED is written in
-// the same transaction only when a Cash Refund's completion is inserted.
+// Refund audit event types. REFUND_COMPLETED is written in the same
+// transaction only when a Cash Refund's completion is inserted.
 const (
 	EventRefundRecorded  = "REFUND_RECORDED"
 	EventRefundCompleted = "REFUND_COMPLETED"
@@ -611,7 +622,7 @@ func ValidateRefundNote(reason string, note *string) error {
 // NormalizeRefundAllocations orders both allocation collections by source
 // UUID. The normalized order shapes the fingerprint, the selection handed to
 // the locking queries, and the response order, so a reordered but otherwise
-// identical request is the same request (spec §9.1). Caller slices are never
+// identical request is the same request. Caller slices are never
 // mutated, because request order is audit-relevant elsewhere.
 func NormalizeRefundAllocations(cmd RecordRefundCommand) RecordRefundCommand {
 	cmd.PaymentAllocations = sortedRefundPaymentAllocations(cmd.PaymentAllocations)
@@ -745,13 +756,13 @@ func ValidateRecordRefundCommand(cmd RecordRefundCommand, note *string) error {
 	return nil
 }
 
-// --- Phase 6C: Payment Void ---
+// --- Payment Void ---
 
 // OpVoidPayment is the idempotency action name, stored in
 // idempotency_keys.action (VARCHAR(50)).
 const OpVoidPayment = "sales.void_payment"
 
-// Payment Void reason catalog (spec §2). Every operation keeps its own
+// Payment Void reason catalog. Every operation keeps its own
 // allowlist; the migration 000014 constraint enforces the same set at the
 // database boundary.
 const (
@@ -767,8 +778,8 @@ var voidPaymentReasons = []string{
 	VoidReasonPaymentRecordedInError, VoidReasonOther,
 }
 
-// Phase 6C Payment Void audit event types (spec §15). The reopening event is
-// written only when the Void leaves a positive balance behind.
+// Payment Void audit event types. The reopening event is written only when the
+// Void leaves a positive balance behind.
 const (
 	EventPaymentVoided                 = "PAYMENT_VOIDED"
 	EventCheckReopenedAfterPaymentVoid = "CHECK_REOPENED_AFTER_PAYMENT_VOID"

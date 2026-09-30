@@ -1134,7 +1134,7 @@ git commit -m "feat(shift): reconcile refunds and payment voids"
 - Regenerate: `docs/swagger.json`
 - Regenerate: `docs/swagger.yaml`
 - Modify: `spec/decisions.md`
-- Modify: `MIGRATE_PLAN.md`
+- Modify: `docs/history/MIGRATE_PLAN.md`
 
 **Interfaces:**
 - Verifies all five operation routes and stable error/status contracts.
@@ -1201,7 +1201,7 @@ ADR-045: Payment Void is whole, append-only, and open-original-Shift only.
 ADR-046: Expected Cash uses valid Cash Payments less completed Cash Refunds.
 ```
 
-Do not describe Shift Close as implemented. Update `MIGRATE_PLAN.md` Phase 6.C status and checklist only after the next step is green.
+Do not describe Shift Close as implemented. Update `docs/history/MIGRATE_PLAN.md` Phase 6.C status and checklist only after the next step is green.
 
 - [ ] **Step 7: Run formatting, generation-drift, build, vet, and lint gates**
 
@@ -1242,6 +1242,6 @@ Expected: only Phase 6.C implementation, generated contracts, approved ADRs, roa
 - [ ] **Step 10: Commit public contracts and Phase completion**
 
 ```bash
-git add internal/preparation/cancel_concurrency_integration_test.go internal/sales/correction_concurrency_integration_test.go internal/preparation/preparation_integration_test.go internal/sales/sales_integration_test.go internal/preparation/swagger_test.go internal/sales/routes_test.go docs/docs.go docs/swagger.json docs/swagger.yaml spec/decisions.md MIGRATE_PLAN.md docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md
+git add internal/preparation/cancel_concurrency_integration_test.go internal/sales/correction_concurrency_integration_test.go internal/preparation/preparation_integration_test.go internal/sales/sales_integration_test.go internal/preparation/swagger_test.go internal/sales/routes_test.go docs/docs.go docs/swagger.json docs/swagger.yaml spec/decisions.md docs/history/MIGRATE_PLAN.md docs/superpowers/specs/2026-09-18-preparation-financial-corrections-design.md docs/superpowers/plans/2026-09-18-preparation-financial-corrections.md
 git commit -m "feat: complete preparation financial corrections"
 ```

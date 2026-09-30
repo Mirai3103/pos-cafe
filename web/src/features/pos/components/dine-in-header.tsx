@@ -1,6 +1,6 @@
 import { ArrowLeftRight, Utensils } from "lucide-react";
 import type { SalesServiceSessionResponse } from "@/api/generated/models";
-import { sessionTableLabel } from "../utils/dine-in";
+import { sessionTableLabel } from "../lib/dine-in";
 
 export interface DineInHeaderProps {
   session: SalesServiceSessionResponse;

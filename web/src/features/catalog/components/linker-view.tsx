@@ -2,8 +2,8 @@
 import { useState, type ReactElement } from "react";
 import { MonitorSmartphone, Search, Zap } from "lucide-react";
 import { useHotkeys } from "react-hotkeys-hook";
-import type { StockToastMessage } from "@/features/settings/components/stock-toast";
-import { ItemPickerBody } from "@/features/pos/components/item-picker-dialog";
+import type { StockToastMessage } from "@/components/feedback/stock-toast";
+import { ItemPickerBody } from "@/features/pos";
 import { cn } from "@/lib/utils";
 import { useCatalogSave } from "../api/use-catalog-admin";
 import { currentAssignment, filterItems, type Assignment, type CatalogModel } from "../lib/catalog-model";

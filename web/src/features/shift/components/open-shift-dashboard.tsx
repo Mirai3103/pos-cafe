@@ -7,7 +7,7 @@ import { DenominationCalculator } from "./denomination-calculator";
 import {
   type DenominationCounts,
   calculateDenominationTotal,
-} from "@/features/shift/utils/denomination";
+} from "@/features/shift/lib/denomination";
 import { useStartReconciliation } from "@/features/shift/api/use-shift";
 import { newRequestId } from "@/lib/command";
 import { formatVND } from "@/lib/utils";

@@ -65,7 +65,7 @@ Every task's requirements implicitly include this section.
 | `internal/database/migrations/000009_create_sales_commit_slice.sql` | Schema (new) |
 | `sql/queries/sales.sql` | Commit, Check, and round queries appended |
 | `spec/decisions.md` | Append ADR-013, ADR-014, ADR-015 |
-| `MIGRATE_PLAN.md` | 5B spec and plan links in the Phase 5 sub-phase table |
+| `docs/history/MIGRATE_PLAN.md` | 5B spec and plan links in the Phase 5 sub-phase table |
 
 ---
 
@@ -3230,7 +3230,7 @@ git commit -m "test(sales): cover Commit concurrency, idempotency and the OPEN-o
 ## Task 15: Decision Records And Roadmap
 
 **Files:**
-- Modify: `spec/decisions.md`, `MIGRATE_PLAN.md`
+- Modify: `spec/decisions.md`, `docs/history/MIGRATE_PLAN.md`
 
 - [ ] **Step 1: Append the three ADRs**
 
@@ -3238,7 +3238,7 @@ Append to `spec/decisions.md`, following the existing format. Copy ADR-013, ADR-
 
 - [ ] **Step 2: Update the Phase 5 sub-phase table**
 
-In `MIGRATE_PLAN.md`, change the 5B row to:
+In `docs/history/MIGRATE_PLAN.md`, change the 5B row to:
 
 ```markdown
 | **5B** — Commit, Committed Items, Checks, Charge Allocations, Order Draft targeting | [spec](docs/superpowers/specs/2026-09-14-sales-commit-checks-design.md) / [plan](docs/superpowers/plans/2026-09-14-sales-commit-checks.md) | ✅ COMPLETED (2026-09-14) |
@@ -3254,7 +3254,7 @@ Expected: both paths exist.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add spec/decisions.md MIGRATE_PLAN.md
+git add spec/decisions.md docs/history/MIGRATE_PLAN.md
 git commit -m "docs: record ADR-013..015 and mark Phase 5B complete in the roadmap"
 ```
 

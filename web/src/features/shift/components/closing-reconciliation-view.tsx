@@ -17,7 +17,7 @@ import { CloseShiftDialog } from "./close-shift-dialog";
 import {
   DIMENSION_LABELS,
   type ShiftCloseDiscrepancyInputDimension,
-} from "@/features/shift/utils/discrepancy";
+} from "@/features/shift/lib/discrepancy";
 import { formatVND } from "@/lib/utils";
 import type {
   ShiftCurrentShiftResponse,

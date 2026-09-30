@@ -70,6 +70,21 @@ func TestMapHTTPError(t *testing.T) {
 		require.NoError(t, tables.MapHTTPError(nil))
 	})
 
+	t.Run("database detail never reaches the client", func(t *testing.T) {
+		detail := "Key (normalized_name)=(ban 1) already exists."
+		for _, in := range []error{
+			tables.MapDBError(&pgconn.PgError{Code: "23505", Detail: detail}),
+			tables.MapDBError(&pgconn.PgError{Code: "23503", Detail: detail}),
+			tables.MapDBError(sql.ErrNoRows),
+		} {
+			var coded *response.CodedError
+			require.ErrorAs(t, tables.MapHTTPError(in), &coded)
+			assert.NotContains(t, coded.Message, detail)
+			assert.NotContains(t, coded.Message, "sql:")
+			assert.ErrorIs(t, coded, in, "the detail stays in the cause for diagnostics")
+		}
+	})
+
 	t.Run("stored result error hides detail from the client", func(t *testing.T) {
 		mapped := tables.MapHTTPError(fmt.Errorf("%w: raw body 0xdeadbeef", tables.ErrInvalidStoredResult))
 		var coded *response.CodedError
