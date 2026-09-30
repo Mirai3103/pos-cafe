@@ -22,4 +22,9 @@ export interface SalesChargeAllocationResponse {
   preparation_note?: string;
   size_name?: string;
   submitted?: boolean;
+  /**
+     * Withdrawn is true once a WITHDRAWAL Charge Adjustment removed this
+     * allocation's charge (Phase 08).
+     */
+  withdrawn?: boolean;
 }

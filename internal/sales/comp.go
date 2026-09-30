@@ -325,7 +325,7 @@ func applyLiveCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	}
 	for _, existing := range existingAdjustments {
 		if existing.Kind == ChargeAdjustmentKindComp &&
-			existing.PreparationUnitID == source.PreparationUnitID {
+			existing.PreparationUnitID.Valid && existing.PreparationUnitID.UUID == source.PreparationUnitID {
 			return CompResult{}, AuditRecord{}, fmt.Errorf(
 				"%w: unit %s already carries a comp", ErrWasteAlreadyComped, source.PreparationUnitID)
 		}
@@ -341,7 +341,7 @@ func applyLiveCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	adjustment, err := q.InsertChargeAdjustment(ctx, sqlc.InsertChargeAdjustmentParams{
 		Kind:               ChargeAdjustmentKindComp,
 		Scope:              CompScopeLiveCheck,
-		PreparationUnitID:  source.PreparationUnitID,
+		PreparationUnitID:  uuid.NullUUID{UUID: source.PreparationUnitID, Valid: true},
 		PreparationWasteID: uuid.NullUUID{UUID: source.WasteID, Valid: true},
 		ChargeAllocationID: source.ChargeAllocationID.UUID,
 		CheckID:            checkID,
@@ -463,7 +463,7 @@ func applyPostSaleCompWaste(ctx context.Context, q *sqlc.Queries, actor Actor,
 	adjustment, err := q.InsertChargeAdjustment(ctx, sqlc.InsertChargeAdjustmentParams{
 		Kind:               ChargeAdjustmentKindComp,
 		Scope:              CompScopePostSale,
-		PreparationUnitID:  source.PreparationUnitID,
+		PreparationUnitID:  uuid.NullUUID{UUID: source.PreparationUnitID, Valid: true},
 		PreparationWasteID: uuid.NullUUID{UUID: source.WasteID, Valid: true},
 		ChargeAllocationID: source.ChargeAllocationID.UUID,
 		CheckID:            source.CheckID.UUID,

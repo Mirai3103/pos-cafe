@@ -265,6 +265,7 @@ RETURNING id, sequence, observed_received_vnd, observed_refunded_vnd, observed_a
 -- conventions: valid Payments exclude voided ones, completed live Refunds are
 -- completed Refunds without a Completed Sale, and base charge comes from the
 -- Charge Allocations' frozen unit prices.
+-- Phase 08 adds awaiting_submission_count: ACTIVE Sessions whose committed, orderless draft sits on a Check holding net money.
 WITH live_check_obligations AS (
     SELECT DISTINCT ca.check_id
     FROM charge_adjustments AS ca
@@ -326,6 +327,28 @@ SELECT
        FROM live_check_financials AS cf)
       + (SELECT unresolved_post_sale_adjustment_vnd FROM post_sale)))::BIGINT
         AS unresolved_correction_vnd,
+    (SELECT count(*)
+     FROM order_drafts AS d
+     JOIN service_sessions AS s ON s.id = d.service_session_id
+     WHERE s.state = 'ACTIVE'
+       AND d.state = 'COMMITTED'
+       AND NOT EXISTS (SELECT 1 FROM orders AS o WHERE o.order_draft_id = d.id)
+       AND EXISTS (
+           SELECT 1
+           FROM committed_items AS ci
+           JOIN charge_allocations AS ca ON ca.committed_item_id = ci.id
+           WHERE ci.order_draft_id = d.id
+             AND COALESCE((SELECT SUM(p.applied_amount_vnd)
+                           FROM payments AS p
+                           WHERE p.check_id = ca.check_id
+                             AND NOT EXISTS (SELECT 1 FROM payment_voids AS pv
+                                             WHERE pv.payment_id = p.id)), 0)
+               - COALESCE((SELECT SUM(r.amount_vnd)
+                           FROM refunds AS r
+                           JOIN refund_completions AS rc ON rc.refund_id = r.id
+                           WHERE r.check_id = ca.check_id
+                             AND r.completed_sale_id IS NULL), 0) > 0))::BIGINT
+        AS awaiting_submission_count,
     (SELECT count(*) FROM service_sessions WHERE state = 'ACTIVE')::BIGINT
         AS active_service_session_count;
 

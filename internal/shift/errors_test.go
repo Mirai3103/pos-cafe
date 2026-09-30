@@ -64,6 +64,7 @@ func TestMapHTTPErrorStatusesAndCodes(t *testing.T) {
 		{shift.ErrUnsettledCheck, http.StatusConflict, "SHIFT_UNSETTLED_CHECK"},
 		{shift.ErrPendingRefund, http.StatusConflict, "SHIFT_PENDING_REFUND"},
 		{shift.ErrUnresolvedCorrection, http.StatusConflict, "SHIFT_UNRESOLVED_CORRECTION"},
+		{shift.ErrAwaitingSubmission, http.StatusConflict, "SHIFT_AWAITING_SUBMISSION"},
 		{shift.ErrActiveServiceSession, http.StatusConflict, "SHIFT_ACTIVE_SERVICE_SESSION"},
 		{shift.ErrManagerApprovalUnavailable, http.StatusForbidden, "MANAGER_APPROVAL_UNAVAILABLE"},
 		{shift.ErrRequestConflict, http.StatusConflict, "REQUEST_CONFLICT"},

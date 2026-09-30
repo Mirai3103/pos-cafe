@@ -1,6 +1,7 @@
 package sales
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -703,6 +704,77 @@ func (s *Slices) handleCloseSession(c echo.Context) error {
 	body.ServiceSessionID = sessionID
 
 	status, result, err := s.CloseSession.Handle(c.Request().Context(), actor, body)
+	if err != nil {
+		return sendError(c, err)
+	}
+	return sendResult(c, status, result)
+}
+
+// handleCancelAwaitingSubmission godoc
+//
+//	@Summary		Cancel paid work that never reached the bar
+//	@Description	Withdraws the charges of a Session's paid, unsubmitted Committed Items so the Refund command can return the money. Allowed only on an ACTIVE Session with no Order that is Awaiting Submission. Requires a reason (CUSTOMER_LEFT, CUSTOMER_REQUEST, SYSTEM_FAILURE, OTHER); OTHER requires a note.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string					true	"Service Session ID"
+//	@Param			body	body		CheckoutRecoveryCommand	true	"Cancel request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/cancel-awaiting-submission [post]
+func (s *Slices) handleCancelAwaitingSubmission(c echo.Context) error {
+	return s.handleCheckoutRecovery(c, s.CancelAwaitingSubmission.Handle)
+}
+
+// handleAbandonCheckout godoc
+//
+//	@Summary		Abandon an unsubmitted checkout
+//	@Description	Ends an ACTIVE Session that has no Order and holds no money as an Abandoned Checkout: drafts CANCELLED, live Checks ABANDONED, Tables released, no Completed Sale. Every Payment must first be fully refunded. Requires a reason (CUSTOMER_LEFT, CUSTOMER_REQUEST, SYSTEM_FAILURE, OTHER); OTHER requires a note.
+//	@Tags			sales
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string					true	"Service Session ID"
+//	@Param			body	body		CheckoutRecoveryCommand	true	"Abandon request"
+//	@Success		200		{object}	response.APIResponse{data=ServiceSessionResponse}
+//	@Failure		400		{object}	response.APIResponse
+//	@Failure		401		{object}	response.APIResponse
+//	@Failure		403		{object}	response.APIResponse
+//	@Failure		404		{object}	response.APIResponse
+//	@Failure		409		{object}	response.APIResponse
+//	@Router			/sales/service-sessions/{id}/abandon [post]
+func (s *Slices) handleAbandonCheckout(c echo.Context) error {
+	return s.handleCheckoutRecovery(c, s.AbandonCheckout.Handle)
+}
+
+// handleCheckoutRecovery is the shared request path of the two Phase 08
+// commands, which take the same body and return the same projection.
+func (s *Slices) handleCheckoutRecovery(c echo.Context,
+	handle func(context.Context, Actor, CheckoutRecoveryCommand) (int, ServiceSessionResponse, error),
+) error {
+	actor, err := getActor(c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	sessionID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return sendError(c, err)
+	}
+	body, err := bindBody[CheckoutRecoveryCommand](c)
+	if err != nil {
+		return sendError(c, err)
+	}
+	if err := checkRequestID(body.RequestID); err != nil {
+		return sendError(c, err)
+	}
+	body.ServiceSessionID = sessionID
+
+	status, result, err := handle(c.Request().Context(), actor, body)
 	if err != nil {
 		return sendError(c, err)
 	}

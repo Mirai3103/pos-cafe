@@ -253,6 +253,12 @@ type ServiceSessionResponse struct {
 	Orders []OrderResponse `json:"orders"`
 	// Filled from 5D.
 	PreparationUnits []PreparationUnitResponse `json:"preparation_units"`
+	// Phase 08: paid Committed Items that have not entered an Order (spec §4),
+	// derived, never stored.
+	AwaitingSubmission                 bool        `json:"awaiting_submission"`
+	AwaitingSubmissionCommittedItemIDs []uuid.UUID `json:"awaiting_submission_committed_item_ids"`
+	// Phase 08: the terminal record, present only on an ABANDONED Session.
+	AbandonedCheckout *AbandonedCheckoutResponse `json:"abandoned_checkout"`
 }
 
 // CommittedModifierResponse is one frozen Modifier Option on a Committed Item.
@@ -286,6 +292,9 @@ type ChargeAllocationResponse struct {
 	AmountVND         int64                       `json:"amount_vnd"`
 	CreatedAt         time.Time                   `json:"created_at"`
 	Submitted         bool                        `json:"submitted"`
+	// Withdrawn is true once a WITHDRAWAL Charge Adjustment removed this
+	// allocation's charge (Phase 08).
+	Withdrawn bool `json:"withdrawn"`
 }
 
 // PaymentResponse is one confirmed receipt of money applied to a Check.
@@ -329,7 +338,7 @@ type ChargeAdjustmentResponse struct {
 	ID                     uuid.UUID  `json:"id"`
 	Kind                   string     `json:"kind"`
 	Scope                  string     `json:"scope"`
-	PreparationUnitID      uuid.UUID  `json:"preparation_unit_id"`
+	PreparationUnitID      *uuid.UUID `json:"preparation_unit_id"`
 	PreparationWasteID     *uuid.UUID `json:"preparation_waste_id"`
 	ChargeAllocationID     uuid.UUID  `json:"charge_allocation_id"`
 	CompletedSaleID        *uuid.UUID `json:"completed_sale_id,omitempty"`
@@ -656,4 +665,22 @@ type VoidPaymentCommand struct {
 	Reason          string               `json:"reason"`
 	Note            *string              `json:"note"`
 	ManagerApproval ManagerApprovalInput `json:"manager_approval"`
+}
+
+// AbandonedCheckoutResponse is the terminal record of an Abandoned Checkout.
+type AbandonedCheckoutResponse struct {
+	ID                   uuid.UUID `json:"id"`
+	Reason               string    `json:"reason"`
+	Note                 *string   `json:"note"`
+	ActorStaffIdentityID uuid.UUID `json:"actor_staff_identity_id"`
+	OccurredAt           time.Time `json:"occurred_at"`
+}
+
+// CheckoutRecoveryCommand is the body of both Phase 08 commands, Cancel
+// Awaiting Submission and Abandon Checkout.
+type CheckoutRecoveryCommand struct {
+	RequestID        uuid.UUID `json:"request_id"`
+	ServiceSessionID uuid.UUID `json:"-"`
+	Reason           string    `json:"reason"`
+	Note             *string   `json:"note"`
 }

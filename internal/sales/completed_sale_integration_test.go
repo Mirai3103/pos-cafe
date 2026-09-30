@@ -263,7 +263,7 @@ func requireNoZeroCorrectionIDs(t *testing.T, corrections []sales.PostSaleCorrec
 		require.NotEqual(t, uuid.Nil, entry.Adjustment.ID)
 		require.NotEqual(t, uuid.Nil, entry.Adjustment.ChargeAllocationID)
 		require.NotEqual(t, uuid.Nil, entry.Adjustment.SalesShiftID)
-		require.NotEqual(t, uuid.Nil, entry.Adjustment.PreparationUnitID)
+		require.NotNil(t, entry.Adjustment.PreparationUnitID)
 		require.NotNil(t, entry.Adjustment.CompletedSaleID)
 		require.NotEqual(t, uuid.Nil, *entry.Adjustment.CompletedSaleID)
 

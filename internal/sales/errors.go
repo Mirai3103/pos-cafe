@@ -110,8 +110,12 @@ var (
 	ErrFinancialInvariantViolated = errors.New("check financials do not satisfy their invariant")
 
 	ErrNothingToSubmit                  = errors.New("no committed order draft awaits submission")
+	ErrNothingAwaitingSubmission        = errors.New("the service session is not awaiting submission")
+	ErrSessionHasOrder                  = errors.New("the service session already has a submitted order")
+	ErrPaymentRequiresRefund            = errors.New("every payment must be fully refunded before the checkout is abandoned")
 	ErrCheckNotSettledForSubmission     = errors.New("every check must be settled before a takeaway order is submitted")
 	ErrCheckNotSettledForClosure        = errors.New("every check must be settled before the service session closes")
+	ErrAwaitingSubmissionForClosure     = errors.New("paid committed items must be submitted or cancelled before the service session closes")
 	ErrPendingRefundForClosure          = errors.New("every pending refund must be resolved before the service session closes")
 	ErrUnsubmittedWorkForClosure        = errors.New("every committed item must be submitted before the service session closes")
 	ErrOrderRequiredForClosure          = errors.New("a service session with no order cannot close")
@@ -343,12 +347,20 @@ func MapHTTPError(err error) error {
 		return coded(http.StatusUnprocessableEntity, "CHECK_CHARGE_OUT_OF_RANGE", ErrCheckChargeOutOfRange)
 	case errors.Is(err, ErrInvalidCheckTarget):
 		return coded(http.StatusUnprocessableEntity, "INVALID_CHECK_TARGET", ErrInvalidCheckTarget)
+	case errors.Is(err, ErrNothingAwaitingSubmission):
+		return coded(http.StatusConflict, "NOTHING_AWAITING_SUBMISSION", ErrNothingAwaitingSubmission)
+	case errors.Is(err, ErrPaymentRequiresRefund):
+		return coded(http.StatusConflict, "PAYMENT_REQUIRES_REFUND", ErrPaymentRequiresRefund)
+	case errors.Is(err, ErrSessionHasOrder):
+		return coded(http.StatusConflict, "SESSION_HAS_ORDER", ErrSessionHasOrder)
 	case errors.Is(err, ErrNothingToSubmit):
 		return coded(http.StatusConflict, "NOTHING_TO_SUBMIT", ErrNothingToSubmit)
 	case errors.Is(err, ErrCheckNotSettledForSubmission):
 		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_SUBMISSION", ErrCheckNotSettledForSubmission)
 	case errors.Is(err, ErrCheckNotSettledForClosure):
 		return coded(http.StatusConflict, "CHECK_NOT_SETTLED_FOR_CLOSURE", ErrCheckNotSettledForClosure)
+	case errors.Is(err, ErrAwaitingSubmissionForClosure):
+		return coded(http.StatusConflict, "AWAITING_SUBMISSION_FOR_CLOSURE", ErrAwaitingSubmissionForClosure)
 	case errors.Is(err, ErrPendingRefundForClosure):
 		return coded(http.StatusConflict, "PENDING_REFUND_FOR_CLOSURE", ErrPendingRefundForClosure)
 	case errors.Is(err, ErrUnsubmittedWorkForClosure):

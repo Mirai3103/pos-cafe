@@ -68,8 +68,8 @@ it. Phase 11 owns them.
 | Phase | Ticket | Status | Blocked by |
 | --- | --- | --- | --- |
 | 07 | [Close and reconcile a Sales Shift](phase-07-close-and-reconcile-sales-shift.md) | completed | none |
-| 08 | [Recover a failed or abandoned checkout](phase-08-recover-failed-or-abandoned-checkout.md) | ready-for-design | none |
-| 09 | [Post-Shift corrections and Audit history](phase-09-post-shift-corrections-and-audit.md) | ready-for-design | 07, 08 |
+| 08 | [Recover a failed or abandoned checkout](phase-08-recover-failed-or-abandoned-checkout.md) | completed | none |
+| 09 | [Post-Shift corrections and Audit history](phase-09-post-shift-corrections-and-audit.md) | ready-for-design | none |
 | 10 | [Recover numbered-paper outage Sales](phase-10-recover-numbered-paper-outage-sales.md) | ready-for-design | 09 |
 | 11 | [Serve clients over LAN and single-binary packaging](phase-11-clients-over-lan-and-single-binary.md) | ready-for-design | none |
 | 12 | [Back up, restore, update, and verify readiness](phase-12-backup-restore-update-readiness.md) | ready-for-design | 10, 11 |

@@ -29,6 +29,7 @@ var (
 	ErrPendingRefund            = errors.New("the shift has pending refunds")
 	ErrUnresolvedCorrection     = errors.New("the shift has unresolved corrections")
 	ErrActiveServiceSession     = errors.New("the shift has active service sessions")
+	ErrAwaitingSubmission       = errors.New("the shift has service sessions awaiting submission")
 	// ErrReconciliationStale marks a close whose submitted final attempt ids
 	// are no longer the latest rows of their ledgers: a later attempt landed
 	// and the client must refresh and resubmit (spec 7.11, 12).
@@ -173,6 +174,8 @@ func MapHTTPError(err error) error {
 		return response.NewCodedError(http.StatusConflict, "SHIFT_PENDING_REFUND", ErrPendingRefund.Error(), err)
 	case errors.Is(err, ErrUnresolvedCorrection):
 		return response.NewCodedError(http.StatusConflict, "SHIFT_UNRESOLVED_CORRECTION", ErrUnresolvedCorrection.Error(), err)
+	case errors.Is(err, ErrAwaitingSubmission):
+		return response.NewCodedError(http.StatusConflict, "SHIFT_AWAITING_SUBMISSION", ErrAwaitingSubmission.Error(), err)
 	case errors.Is(err, ErrActiveServiceSession):
 		return response.NewCodedError(http.StatusConflict, "SHIFT_ACTIVE_SERVICE_SESSION", ErrActiveServiceSession.Error(), err)
 	case errors.Is(err, ErrReconciliationStale):

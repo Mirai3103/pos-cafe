@@ -5,6 +5,7 @@
  * Backend API for Cafe Point of Sale System built with Vertical Slice Architecture and Idiomatic Go.
  * OpenAPI spec version: 1.0
  */
+import type { SalesAbandonedCheckoutResponse } from './salesAbandonedCheckoutResponse';
 import type { SalesCheckResponse } from './salesCheckResponse';
 import type { SalesOrderDraftResponse } from './salesOrderDraftResponse';
 import type { SalesOrderResponse } from './salesOrderResponse';
@@ -12,6 +13,14 @@ import type { SalesPreparationUnitResponse } from './salesPreparationUnitRespons
 import type { SalesSessionTableResponse } from './salesSessionTableResponse';
 
 export interface SalesServiceSessionResponse {
+  /** Phase 08: the terminal record, present only on an ABANDONED Session. */
+  abandoned_checkout?: SalesAbandonedCheckoutResponse;
+  /**
+     * Phase 08: paid Committed Items that have not entered an Order (spec §4),
+     * derived, never stored.
+     */
+  awaiting_submission?: boolean;
+  awaiting_submission_committed_item_ids?: string[];
   /** Filled from 5B; payments within each Check are filled by 5C. */
   checks?: SalesCheckResponse[];
   created_at?: string;

@@ -1,7 +1,7 @@
 # Phase 09: Post-Shift corrections and Audit history
 
 **Status:** ready-for-design
-**Blocked by:** 07, 08
+**Blocked by:** none
 **Source:** cafe-pos `.scratch/opening-day-pos-v0/issues/14-record-post-shift-corrections-and-audit.md`
 
 **What to build:** Let a Manager append bookkeeping corrections after Shift closure

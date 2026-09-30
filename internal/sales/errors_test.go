@@ -29,6 +29,7 @@ func TestMapHTTPErrorCodes(t *testing.T) {
 		{"open shift required", ErrOpenShiftRequired, http.StatusConflict, "OPEN_SALES_SHIFT_REQUIRED"},
 		{"session not found", ErrServiceSessionNotFound, http.StatusNotFound, "SERVICE_SESSION_NOT_FOUND"},
 		{"session closed", ErrServiceSessionClosed, http.StatusConflict, "SERVICE_SESSION_ALREADY_CLOSED"},
+		{"payment requires refund", ErrPaymentRequiresRefund, http.StatusConflict, "PAYMENT_REQUIRES_REFUND"},
 		{"draft not found", ErrEditableDraftNotFound, http.StatusConflict, "EDITABLE_DRAFT_NOT_FOUND"},
 		{"draft item not found", ErrDraftItemNotFound, http.StatusNotFound, "DRAFT_ITEM_NOT_FOUND"},
 		{"menu item not found", ErrMenuItemNotFound, http.StatusNotFound, "MENU_ITEM_NOT_FOUND"},
@@ -208,6 +209,8 @@ func TestPhase5DErrorMapping(t *testing.T) {
 		{ErrUnfulfilledPreparationForClosure, http.StatusConflict, "UNFULFILLED_PREPARATION_FOR_CLOSURE"},
 		{ErrCompletedSaleNotFound, http.StatusNotFound, "COMPLETED_SALE_NOT_FOUND"},
 		{ErrNothingToSubmit, http.StatusConflict, "NOTHING_TO_SUBMIT"},
+		{ErrNothingAwaitingSubmission, http.StatusConflict, "NOTHING_AWAITING_SUBMISSION"},
+		{ErrSessionHasOrder, http.StatusConflict, "SESSION_HAS_ORDER"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.code, func(t *testing.T) {
@@ -232,6 +235,7 @@ func TestPhase6CRefundErrorMapping(t *testing.T) {
 		{ErrRefundAllocationInvalid, http.StatusBadRequest, "REFUND_ALLOCATION_INVALID"},
 		{ErrRefundExceedsAdjustmentCapacity, http.StatusConflict, "REFUND_EXCEEDS_ADJUSTMENT_CAPACITY"},
 		{ErrRefundExceedsPaymentCapacity, http.StatusConflict, "REFUND_EXCEEDS_PAYMENT_CAPACITY"},
+		{ErrAwaitingSubmissionForClosure, http.StatusConflict, "AWAITING_SUBMISSION_FOR_CLOSURE"},
 		{ErrRefundExceedsPendingRefund, http.StatusConflict, "REFUND_EXCEEDS_PENDING_REFUND"},
 		{ErrRefundMethodMismatch, http.StatusConflict, "REFUND_METHOD_MISMATCH"},
 		{ErrRefundAlreadyCompleted, http.StatusConflict, "REFUND_ALREADY_COMPLETED"},

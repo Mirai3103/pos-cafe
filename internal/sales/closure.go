@@ -6,6 +6,9 @@ import "github.com/google/uuid"
 // carrying the failing detail alongside it so the API can say what is
 // outstanding rather than only that something is.
 type ClosureReadiness struct {
+	// AwaitingSubmission: paid work the bar never received (spec §4).
+	AwaitingSubmission bool
+
 	Eligible bool
 
 	AllChecksSettled   bool
@@ -20,6 +23,28 @@ type ClosureReadiness struct {
 	NonterminalUnitIDs          []uuid.UUID
 }
 
+// DeriveAwaitingSubmission returns the Committed Items whose charge sits on a
+// Check holding net money but that are neither submitted nor withdrawn, each
+// once, in projection order. A non-empty result is the Awaiting Submission
+// state (spec §4): Payment committed, Submit did not.
+func DeriveAwaitingSubmission(checks []CheckResponse) []uuid.UUID {
+	out := make([]uuid.UUID, 0)
+	seen := make(map[uuid.UUID]bool)
+	for _, check := range checks {
+		if check.EffectiveReceivedVND <= 0 {
+			continue
+		}
+		for _, allocation := range check.Allocations {
+			if allocation.Submitted || allocation.Withdrawn || seen[allocation.CommittedItemID] {
+				continue
+			}
+			seen[allocation.CommittedItemID] = true
+			out = append(out, allocation.CommittedItemID)
+		}
+	}
+	return out
+}
+
 // EvaluateClosureReadiness is the one closure policy boundary, so the API's
 // answer and any client's preview cannot drift apart. It is pure: every input
 // it needs already travels in the Service Session projection, which is why 5D
@@ -31,6 +56,7 @@ type ClosureReadiness struct {
 // Check still owes the customer.
 func EvaluateClosureReadiness(session ServiceSessionResponse) ClosureReadiness {
 	out := ClosureReadiness{
+		AwaitingSubmission:          session.AwaitingSubmission,
 		UnsettledCheckIDs:           make([]uuid.UUID, 0),
 		PendingRefundCheckIDs:       make([]uuid.UUID, 0),
 		UnsubmittedCommittedItemIDs: make([]uuid.UUID, 0),
@@ -69,7 +95,7 @@ func EvaluateClosureReadiness(session ServiceSessionResponse) ClosureReadiness {
 	out.HasOrder = len(session.Orders) > 0
 	out.AllWorkSubmitted = out.HasOrder && len(out.UnsubmittedCommittedItemIDs) == 0
 	out.AllPreparationDone = out.HasOrder && len(out.NonterminalUnitIDs) == 0
-	out.Eligible = out.AllChecksSettled && out.AllRefundsResolved &&
+	out.Eligible = !out.AwaitingSubmission && out.AllChecksSettled && out.AllRefundsResolved &&
 		out.AllWorkSubmitted && out.AllPreparationDone
 
 	return out
@@ -78,10 +104,12 @@ func EvaluateClosureReadiness(session ServiceSessionResponse) ClosureReadiness {
 // Err returns the first unmet condition as a domain error, or nil when the
 // Session may close. The order is load-bearing: staff fix what they are told
 // about first, so it decides which of several outstanding problems they are
-// sent to resolve — unsettled money, then money owed back, then work, then the
+// sent to resolve — paid work the bar never received, then unsettled money, then money owed back, then work, then the
 // missing Order, then the bar.
 func (r ClosureReadiness) Err() error {
 	switch {
+	case r.AwaitingSubmission:
+		return ErrAwaitingSubmissionForClosure
 	case !r.AllChecksSettled:
 		return ErrCheckNotSettledForClosure
 	case !r.AllRefundsResolved:
