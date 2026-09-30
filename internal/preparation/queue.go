@@ -36,7 +36,7 @@ func NewActiveQueueHandler(runner *Runner) *ActiveQueueHandler {
 }
 
 // correctionEntryKind values: the discriminator the generated UNION ALL
-// history query reports on every row (spec §6.4).
+// history query reports on every row.
 const (
 	correctionEntryWaste  = "WASTE"
 	correctionEntryRemake = "REMAKE"
@@ -45,11 +45,10 @@ const (
 // Handle projects the bar's queue in one read: every Preparation Unit in the
 // active states QUEUED, IN_PREPARATION, and READY — plus a CANCELLED or
 // WASTED unit while it still has an unacknowledged alert — ordered by
-// priority lane then queued_at then id (spec §6.2), the active alerts oldest
-// first with each unit's identity projected at read time (spec §6.3), and the
-// Waste and Remake history of active Sessions, newest first, capped at 50
-// (spec §6.4), with each round's current unreleased Table assignments read at
-// the same instant.
+// priority lane then queued_at then id, the active alerts oldest first with
+// each unit's identity projected at read time, and the Waste and Remake
+// history of active Sessions, newest first, capped at 50, with each round's
+// current unreleased Table assignments read at the same instant.
 //
 // One read-only REPEATABLE READ transaction carries the authority check, the
 // units, the tables, the alerts, and the history, so the projection is
@@ -59,95 +58,135 @@ const (
 func (h *ActiveQueueHandler) Handle(ctx context.Context, actor Actor) (QueueResponse, error) {
 	return ExecuteRead(ctx, h.runner, actor, OpReadActiveQueue, CapPreparationOperate,
 		func(q *sqlc.Queries) (QueueResponse, error) {
-			// Every collection is allocated before any query, so the success
-			// response never carries a nil slice — the JSON contract
-			// serializes an empty collection as [] not null.
-			units := make([]QueueUnitResponse, 0)
-			alerts := make([]QueueAlertResponse, 0)
-			corrections := make([]QueueCorrectionResponse, 0)
-
-			observedAt, err := q.GetPreparationCurrentTime(ctx)
-			if err != nil {
-				return QueueResponse{}, fmt.Errorf("read preparation observed time: %w", err)
-			}
-			rows, err := q.ListActivePreparationUnits(ctx)
-			if err != nil {
-				return QueueResponse{}, fmt.Errorf("list active preparation units: %w", err)
-			}
-
-			// The tables query is one set-based round trip for every session
-			// on the queue, deduplicated first so N units of one round do not
-			// widen the lookup.
-			sessionIDs := make([]uuid.UUID, 0, len(rows))
-			seenSessions := make(map[uuid.UUID]struct{}, len(rows))
-			for _, row := range rows {
-				// Phase 5D rows used the application clock. Keep their client-side
-				// ages non-negative while new writes use the database clock.
-				if row.QueuedAt.After(observedAt) {
-					observedAt = row.QueuedAt
-				}
-				if row.InPreparationAt.Valid && row.InPreparationAt.Time.After(observedAt) {
-					observedAt = row.InPreparationAt.Time
-				}
-				if _, ok := seenSessions[row.ServiceSessionID]; !ok {
-					seenSessions[row.ServiceSessionID] = struct{}{}
-					sessionIDs = append(sessionIDs, row.ServiceSessionID)
-				}
-			}
-			tablesBySession := make(map[uuid.UUID][]string, len(sessionIDs))
-			if len(sessionIDs) > 0 {
-				tableRows, err := q.ListCurrentPreparationTables(ctx, sessionIDs)
-				if err != nil {
-					return QueueResponse{}, fmt.Errorf("list current preparation tables: %w", err)
-				}
-				for _, row := range tableRows {
-					tablesBySession[row.ServiceSessionID] = append(
-						tablesBySession[row.ServiceSessionID], row.Name,
-					)
-				}
-			}
-
-			for _, row := range rows {
-				unit, err := queueUnitFromRow(row, tablesBySession[row.ServiceSessionID])
-				if err != nil {
-					return QueueResponse{}, err
-				}
-				units = append(units, unit)
-			}
-
-			// The alerts and the history are two more set-based queries; the
-			// mapper preserves their SQL order and refuses malformed rows.
-			alertRows, err := q.ListActivePreparationAlerts(ctx)
-			if err != nil {
-				return QueueResponse{}, fmt.Errorf("list active preparation alerts: %w", err)
-			}
-			for _, row := range alertRows {
-				alert, err := queueAlertFromRow(row)
-				if err != nil {
-					return QueueResponse{}, err
-				}
-				alerts = append(alerts, alert)
-			}
-
-			correctionRows, err := q.ListRecentPreparationCorrections(ctx)
-			if err != nil {
-				return QueueResponse{}, fmt.Errorf("list recent preparation corrections: %w", err)
-			}
-			for _, row := range correctionRows {
-				correction, err := queueCorrectionFromRow(row)
-				if err != nil {
-					return QueueResponse{}, err
-				}
-				corrections = append(corrections, correction)
-			}
-
-			return QueueResponse{
-				ObservedAt:  observedAt,
-				Units:       units,
-				Alerts:      alerts,
-				Corrections: corrections,
-			}, nil
+			return readActiveQueue(ctx, q)
 		})
+}
+
+// readActiveQueue is the read body of the queue projection.
+func readActiveQueue(ctx context.Context, q *sqlc.Queries) (QueueResponse, error) {
+	observedAt, err := q.GetPreparationCurrentTime(ctx)
+	if err != nil {
+		return QueueResponse{}, fmt.Errorf("read preparation observed time: %w", err)
+	}
+	rows, err := q.ListActivePreparationUnits(ctx)
+	if err != nil {
+		return QueueResponse{}, fmt.Errorf("list active preparation units: %w", err)
+	}
+	observedAt = observedAtOrLater(observedAt, rows)
+
+	tablesBySession, err := loadQueueTables(ctx, q, rows)
+	if err != nil {
+		return QueueResponse{}, err
+	}
+	// Every collection is allocated non-nil, so the success response never
+	// carries a nil slice — the JSON contract serializes an empty collection
+	// as [] not null.
+	units := make([]QueueUnitResponse, 0)
+	for _, row := range rows {
+		unit, err := queueUnitFromRow(row, tablesBySession[row.ServiceSessionID])
+		if err != nil {
+			return QueueResponse{}, err
+		}
+		units = append(units, unit)
+	}
+
+	alerts, err := loadQueueAlerts(ctx, q)
+	if err != nil {
+		return QueueResponse{}, err
+	}
+	corrections, err := loadQueueCorrections(ctx, q)
+	if err != nil {
+		return QueueResponse{}, err
+	}
+
+	return QueueResponse{
+		ObservedAt:  observedAt,
+		Units:       units,
+		Alerts:      alerts,
+		Corrections: corrections,
+	}, nil
+}
+
+// observedAtOrLater raises observedAt to the latest unit timestamp. Rows
+// written before the database clock was adopted used the application clock;
+// this keeps their client-side ages non-negative while new writes use the
+// database clock.
+func observedAtOrLater(observedAt time.Time, rows []sqlc.ListActivePreparationUnitsRow) time.Time {
+	for _, row := range rows {
+		if row.QueuedAt.After(observedAt) {
+			observedAt = row.QueuedAt
+		}
+		if row.InPreparationAt.Valid && row.InPreparationAt.Time.After(observedAt) {
+			observedAt = row.InPreparationAt.Time
+		}
+	}
+	return observedAt
+}
+
+// loadQueueTables reads the current Table names of every session on the
+// queue in one set-based round trip, deduplicated first so N units of one
+// round do not widen the lookup.
+func loadQueueTables(ctx context.Context, q *sqlc.Queries,
+	rows []sqlc.ListActivePreparationUnitsRow,
+) (map[uuid.UUID][]string, error) {
+	sessionIDs := make([]uuid.UUID, 0, len(rows))
+	seenSessions := make(map[uuid.UUID]struct{}, len(rows))
+	for _, row := range rows {
+		if _, ok := seenSessions[row.ServiceSessionID]; !ok {
+			seenSessions[row.ServiceSessionID] = struct{}{}
+			sessionIDs = append(sessionIDs, row.ServiceSessionID)
+		}
+	}
+	tablesBySession := make(map[uuid.UUID][]string, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return tablesBySession, nil
+	}
+	tableRows, err := q.ListCurrentPreparationTables(ctx, sessionIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list current preparation tables: %w", err)
+	}
+	for _, row := range tableRows {
+		tablesBySession[row.ServiceSessionID] = append(
+			tablesBySession[row.ServiceSessionID], row.Name,
+		)
+	}
+	return tablesBySession, nil
+}
+
+// loadQueueAlerts reads the active alerts; the mapper preserves their SQL
+// order and refuses malformed rows.
+func loadQueueAlerts(ctx context.Context, q *sqlc.Queries) ([]QueueAlertResponse, error) {
+	alertRows, err := q.ListActivePreparationAlerts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active preparation alerts: %w", err)
+	}
+	alerts := make([]QueueAlertResponse, 0)
+	for _, row := range alertRows {
+		alert, err := queueAlertFromRow(row)
+		if err != nil {
+			return nil, err
+		}
+		alerts = append(alerts, alert)
+	}
+	return alerts, nil
+}
+
+// loadQueueCorrections reads the recent Waste and Remake history; the mapper
+// preserves its SQL order and refuses malformed rows.
+func loadQueueCorrections(ctx context.Context, q *sqlc.Queries) ([]QueueCorrectionResponse, error) {
+	correctionRows, err := q.ListRecentPreparationCorrections(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list recent preparation corrections: %w", err)
+	}
+	corrections := make([]QueueCorrectionResponse, 0)
+	for _, row := range correctionRows {
+		correction, err := queueCorrectionFromRow(row)
+		if err != nil {
+			return nil, err
+		}
+		corrections = append(corrections, correction)
+	}
+	return corrections, nil
 }
 
 // queueUnitFromRow maps one query row onto the queue DTO with explicit
@@ -204,7 +243,7 @@ func queueUnitFromRow(row sqlc.ListActivePreparationUnitsRow,
 }
 
 // queueAlertFromRow maps one active alert row onto the queue DTO with explicit
-// nullable handling (spec §6.3): the unit identity columns are projected
+// nullable handling: the unit identity columns are projected
 // values, and WasteID resolves through the Waste fact for WASTE alerts only —
 // the reserved Cancellation kinds keep it null. A WASTE alert is written in
 // the same transaction as its Waste fact, so a WASTE row that fails to resolve
@@ -253,8 +292,8 @@ func queueAlertFromRow(row sqlc.ListActivePreparationAlertsRow) (QueueAlertRespo
 	}, nil
 }
 
-// queueCorrectionFromRow maps one Waste/Remake history row onto the queue DTO
-// (spec §6.4). entry_kind discriminates two row shapes, so the mapper is
+// queueCorrectionFromRow maps one Waste/Remake history row onto the queue DTO.
+// entry_kind discriminates two row shapes, so the mapper is
 // discriminator-specific: a WASTE row must carry no remake linkage and a
 // REMAKE row must carry its full Waste linkage (Waste id, source unit, source
 // unit number). An unknown discriminator or a malformed nullable combination

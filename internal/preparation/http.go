@@ -1,100 +1,17 @@
 package preparation
 
 import (
-	"errors"
 	"fmt"
-	"log/slog"
-	"net/http"
 
 	"github.com/Mirai3103/pos-cafe/internal/auth"
+	"github.com/Mirai3103/pos-cafe/internal/platform/httpx"
 	"github.com/Mirai3103/pos-cafe/internal/response"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
-func getActor(c echo.Context) (Actor, error) {
-	claims := auth.GetStaff(c)
-	if claims == nil {
-		return Actor{}, fmt.Errorf("%w: unauthorized", response.ErrUnauthorized)
-	}
-	return Actor{StaffID: claims.StaffID, SessionID: claims.SessionID}, nil
-}
-
-func parseUUIDParam(c echo.Context, name string) (uuid.UUID, error) {
-	val := c.Param(name)
-	id, err := uuid.Parse(val)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("%w: invalid %s UUID: %s", response.ErrInvalid, name, val)
-	}
-	return id, nil
-}
-
-func bindBody[T any](c echo.Context) (T, error) {
-	var body T
-	if err := c.Bind(&body); err != nil {
-		return body, fmt.Errorf("%w: invalid request body: %s", response.ErrInvalid, err.Error())
-	}
-	return body, nil
-}
-
-func checkRequestID(id uuid.UUID) error {
-	if id == uuid.Nil {
-		return fmt.Errorf("%w: request_id is required", response.ErrInvalid)
-	}
-	return nil
-}
-
-func sendResult[T any](c echo.Context, status int, data T) error {
-	if status == http.StatusCreated {
-		return response.Created(c, data)
-	}
-	return response.OK(c, data)
-}
-
-// sendError writes the error response for the Preparation handlers.
-//
-// Handoff from Task 7's review: preparation's ErrorResponse returns
-// (status, body) rather than writing, so it can neither log nor see the
-// shared validation sentinels — both of which sales gets from response.Error
-// via its own mapper. This helper restores them:
-//
-//   - The sentinels the HTTP helpers raise (parseUUIDParam, bindBody, and
-//     checkRequestID wrap response.ErrInvalid; getActor wraps
-//     response.ErrUnauthorized) are mapped onto their proper statuses here
-//     instead of falling into the generic 500. The bodies mirror sales':
-//     response.ErrInvalid carries the INVALID_INPUT code sales' MapHTTPError
-//     assigns it, and response.ErrUnauthorized carries the UNAUTHORIZED code
-//     response.Error writes for it.
-//   - Any error ErrorResponse does not recognize is slog-logged server-side
-//     before the generic 500 body is written, exactly as response.Error's
-//     fallback does for sales. ErrInvalidStoredResult keeps its own
-//     INVALID_STORED_RESULT row and, like sales, is not logged here.
+// sendError writes err through the Preparation handler error mapping.
 func sendError(c echo.Context, err error) error {
-	switch {
-	case errors.Is(err, response.ErrInvalid):
-		return c.JSON(http.StatusBadRequest, response.APIResponse{
-			Success: false,
-			Error: &response.APIError{
-				Code:    "INVALID_INPUT",
-				Message: err.Error(),
-			},
-		})
-	case errors.Is(err, response.ErrUnauthorized):
-		return c.JSON(http.StatusUnauthorized, response.APIResponse{
-			Success: false,
-			Error: &response.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: err.Error(),
-			},
-		})
-	}
-
-	status, body := ErrorResponse(err)
-	if status == http.StatusInternalServerError &&
-		body.Error != nil && body.Error.Code == "INTERNAL_ERROR" {
-		slog.Error("internal server error", "error", err, "path", c.Path())
-	}
-	return c.JSON(status, body)
+	return httpx.SendError(c, err, handlerErrors.Map)
 }
 
 // validateCorrectionReasonAndNote is the Waste and Remake boundary check: it
@@ -159,7 +76,7 @@ func validateCorrectStateInput(cmd *CorrectStateCommand) (*string, error) {
 //	@Failure		500	{object}	response.APIResponse
 //	@Router			/preparation/queue [get]
 func (s *Slices) handleActiveQueue(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -187,11 +104,11 @@ func (s *Slices) handleActiveQueue(c echo.Context) error {
 //	@Failure		500		{object}	response.APIResponse
 //	@Router			/preparation/units/advance-many [post]
 func (s *Slices) handleBulkAdvance(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[BulkAdvanceCommand](c)
+	body, err := httpx.BindBody[BulkAdvanceCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -199,7 +116,7 @@ func (s *Slices) handleBulkAdvance(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleAdvanceUnit godoc
@@ -221,19 +138,19 @@ func (s *Slices) handleBulkAdvance(c echo.Context) error {
 //	@Failure		500		{object}	response.APIResponse
 //	@Router			/preparation/units/{unit_id}/advance [post]
 func (s *Slices) handleAdvanceUnit(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	unitID, err := parseUUIDParam(c, "unit_id")
+	unitID, err := httpx.UUIDParam(c, "unit_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[AdvanceUnitCommand](c)
+	body, err := httpx.BindBody[AdvanceUnitCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.UnitID = unitID
@@ -242,7 +159,7 @@ func (s *Slices) handleAdvanceUnit(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleAcknowledgeAlert godoc
@@ -264,19 +181,19 @@ func (s *Slices) handleAdvanceUnit(c echo.Context) error {
 //	@Failure		500			{object}	response.APIResponse
 //	@Router			/preparation/alerts/{alert_id}/acknowledge [post]
 func (s *Slices) handleAcknowledgeAlert(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	alertID, err := parseUUIDParam(c, "alert_id")
+	alertID, err := httpx.UUIDParam(c, "alert_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[AcknowledgeAlertCommand](c)
+	body, err := httpx.BindBody[AcknowledgeAlertCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	body.AlertID = alertID
@@ -285,7 +202,7 @@ func (s *Slices) handleAcknowledgeAlert(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleWasteUnit godoc
@@ -307,19 +224,19 @@ func (s *Slices) handleAcknowledgeAlert(c echo.Context) error {
 //	@Failure		500		{object}	response.APIResponse
 //	@Router			/preparation/units/{unit_id}/waste [post]
 func (s *Slices) handleWasteUnit(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	unitID, err := parseUUIDParam(c, "unit_id")
+	unitID, err := httpx.UUIDParam(c, "unit_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[WasteUnitCommand](c)
+	body, err := httpx.BindBody[WasteUnitCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	note, err := validateCorrectionReasonAndNote(body.Reason, body.Note, ValidateWasteReason)
@@ -333,7 +250,7 @@ func (s *Slices) handleWasteUnit(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleRemakeUnit godoc
@@ -355,19 +272,19 @@ func (s *Slices) handleWasteUnit(c echo.Context) error {
 //	@Failure		500			{object}	response.APIResponse
 //	@Router			/preparation/wastes/{waste_id}/remake [post]
 func (s *Slices) handleRemakeUnit(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	wasteID, err := parseUUIDParam(c, "waste_id")
+	wasteID, err := httpx.UUIDParam(c, "waste_id")
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[RemakeUnitCommand](c)
+	body, err := httpx.BindBody[RemakeUnitCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	note, err := validateCorrectionReasonAndNote(body.Reason, body.Note, ValidateRemakeReason)
@@ -381,7 +298,7 @@ func (s *Slices) handleRemakeUnit(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleCorrectState godoc
@@ -402,15 +319,15 @@ func (s *Slices) handleRemakeUnit(c echo.Context) error {
 //	@Failure		500		{object}	response.APIResponse
 //	@Router			/preparation/units/correct-state [post]
 func (s *Slices) handleCorrectState(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[CorrectStateCommand](c)
+	body, err := httpx.BindBody[CorrectStateCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	if err := checkRequestID(body.RequestID); err != nil {
+	if err := httpx.RequireRequestID(body.RequestID); err != nil {
 		return sendError(c, err)
 	}
 	note, err := validateCorrectStateInput(&body)
@@ -423,7 +340,7 @@ func (s *Slices) handleCorrectState(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }
 
 // handleCancelUnits godoc
@@ -445,11 +362,11 @@ func (s *Slices) handleCorrectState(c echo.Context) error {
 //	@Failure		500		{object}	response.APIResponse
 //	@Router			/preparation/units/cancel [post]
 func (s *Slices) handleCancelUnits(c echo.Context) error {
-	actor, err := getActor(c)
+	actor, err := httpx.Actor(c)
 	if err != nil {
 		return sendError(c, err)
 	}
-	body, err := bindBody[CancelUnitsCommand](c)
+	body, err := httpx.BindBody[CancelUnitsCommand](c)
 	if err != nil {
 		return sendError(c, err)
 	}
@@ -458,5 +375,5 @@ func (s *Slices) handleCancelUnits(c echo.Context) error {
 	if err != nil {
 		return sendError(c, err)
 	}
-	return sendResult(c, status, result)
+	return httpx.SendResult(c, status, result)
 }

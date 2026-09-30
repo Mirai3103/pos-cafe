@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Mirai3103/pos-cafe/internal/platform/command"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ import (
 // compares.
 func cancelFingerprintHashOf(t *testing.T, fingerprint cancelUnitsFingerprint) string {
 	t.Helper()
-	hash, err := fpHash(fingerprint)
+	hash, err := command.FingerprintHash(fingerprint)
 	require.NoError(t, err)
 	return hash
 }

@@ -22,7 +22,7 @@ type acknowledgeAlertFingerprint struct {
 // AcknowledgeAlertHandler acknowledges one Preparation Alert: it fills the
 // alert's acknowledgment tuple — the acking actor's identity, their Staff
 // Access Session, and one timestamp, together — and writes the
-// PREPARATION_ALERT_ACKNOWLEDGED audit, all inside the executor's single
+// PREPARATION_ALERT_ACKNOWLEDGED audit, all inside the pipeline's single
 // mutation transaction. It changes no unit state, Waste, charge, or closure
 // readiness, and requires no Manager PIN: only preparation.operate.
 type AcknowledgeAlertHandler struct{ runner *Runner }
@@ -58,14 +58,14 @@ func (h *AcknowledgeAlertHandler) Handle(ctx context.Context, actor Actor,
 			}
 			// The one business event was written inside the mutation through
 			// writePreparationAudits, sharing the evidence's timestamp, so the
-			// executor's single-audit step is deliberately given a zero
+			// pipeline's single-audit step is deliberately given a zero
 			// record.
 			return http.StatusOK, response, AuditRecord{}, nil
 		})
 }
 
 // applyAlertAcknowledgment is the mutation body, ordered so each step's
-// failure leaves the transaction — claim included — to the executor's
+// failure leaves the transaction — claim included — to the pipeline's
 // rollback:
 //
 //  1. lock the alert, mapping a miss to ErrAlertNotFound;
