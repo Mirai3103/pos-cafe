@@ -1,12 +1,14 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { Coffee, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { messageForError } from "@/lib/error-messages";
+import { playNewOrderChime } from "@/lib/sound";
 import { usePreparationQueue } from "../api/use-preparation-queue";
 import { usePreparationActions } from "../api/use-preparation-actions";
 import {
   buildBoard,
   distinctCategories,
+  hasNewUnits,
   summarizeBulkOutcomes,
   COLUMN_KEYS,
   type BoardUnit,
@@ -49,6 +51,14 @@ export function KdsView(): ReactElement {
     const timer = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Ring once per poll that brings a new Queued unit; the first load is silent.
+  const knownUnitIds = useRef<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    if (hasNewUnits(knownUnitIds.current, data.units)) playNewOrderChime();
+    knownUnitIds.current = new Set((data.units ?? []).flatMap((unit) => (unit.id ? [unit.id] : [])));
+  }, [data]);
 
   const handleAdvance = async (unitIds: string[], targetState: string) => {
     setFailedUnitIds(new Set());

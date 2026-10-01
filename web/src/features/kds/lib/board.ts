@@ -83,6 +83,19 @@ function toBoardUnit(unit: PreparationQueueUnitResponse): BoardUnit | null {
   };
 }
 
+/**
+ * True when this poll brings a Queued unit the previous poll did not have.
+ * `prevIds` holds every unit id of the previous poll (null before the first),
+ * so a known unit corrected back to Queued does not ring.
+ */
+export function hasNewUnits(
+  prevIds: ReadonlySet<string> | null,
+  units: PreparationQueueUnitResponse[] | undefined,
+): boolean {
+  if (!prevIds) return false;
+  return (units ?? []).some((unit) => unit.state === "QUEUED" && !!unit.id && !prevIds.has(unit.id));
+}
+
 /** Every category in the active board — exceptional units remain solely for alerts. */
 export function distinctCategories(units: PreparationQueueUnitResponse[] | undefined): string[] {
   const seen = new Set<string>();
