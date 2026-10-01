@@ -137,7 +137,7 @@ export function KdsView(): ReactElement {
           </div>
           <div className="flex flex-col text-left">
             <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">Màn hình Điều phối Pha chế (KDS)</h1>
-            <span className="text-[11px] font-medium text-emerald-600 leading-tight flex items-center gap-1.5 mt-0.5">
+            <span className="text-2xs font-medium text-emerald-600 leading-tight flex items-center gap-1.5 mt-0.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               Pha chế & Bếp · Tự động làm mới 5s
             </span>

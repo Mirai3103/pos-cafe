@@ -110,11 +110,11 @@ export function Field({ label, htmlFor, required, error, hint, children }: Field
       </label>
       {children}
       {error ? (
-        <p role="alert" className="text-[11px] font-semibold text-rose-600">
+        <p role="alert" className="text-2xs font-semibold text-rose-600">
           {error}
         </p>
       ) : hint ? (
-        <p className="text-[11px] text-slate-400">{hint}</p>
+        <p className="text-2xs text-slate-400">{hint}</p>
       ) : null}
     </div>
   );

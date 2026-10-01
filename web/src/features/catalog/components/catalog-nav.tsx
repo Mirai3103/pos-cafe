@@ -78,7 +78,7 @@ export function CatalogPills({
               {count && (
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 font-mono text-[11px] font-bold",
+                    "rounded-full px-2 py-0.5 font-mono text-2xs font-bold",
                     active ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600 dark:bg-muted",
                   )}
                 >

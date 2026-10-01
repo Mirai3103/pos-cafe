@@ -28,7 +28,7 @@ export interface ItemFormPanelProps {
   onRetire?: () => void;
 }
 
-const ERROR_TEXT = "text-[11px] font-semibold text-rose-600";
+const ERROR_TEXT = "text-2xs font-semibold text-rose-600";
 
 function groupSummary(g: CatGroup): string {
   return `${g.options.length} lựa chọn · ${g.max === 1 ? "chọn 1" : `tối đa ${g.max}`}`;
@@ -110,7 +110,7 @@ export function ItemFormPanel(p: ItemFormPanelProps): ReactElement {
             <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-border dark:bg-muted/30">
               <div>
                 <p className="text-xs font-bold text-slate-800 dark:text-foreground">Định giá Đa Kích cỡ (S / M / L)</p>
-                <p className="text-[11px] text-slate-500">Bật nếu món có nhiều kích cỡ khác nhau với các mức giá riêng biệt.</p>
+                <p className="text-2xs text-slate-500">Bật nếu món có nhiều kích cỡ khác nhau với các mức giá riêng biệt.</p>
               </div>
               <Chip active={form.mode === "sizes"} onClick={toggleMode}>
                 {form.mode === "sizes" ? "Đang BẬT" : "Đang TẮT"}
@@ -254,7 +254,7 @@ export function ItemFormPanel(p: ItemFormPanelProps): ReactElement {
           <section className="space-y-2">
             <p className="text-xs font-bold text-slate-700 dark:text-foreground">Nhóm tùy chọn Kế thừa từ Danh mục</p>
             {inherited.length === 0 ? (
-              <p className="text-[11px] text-slate-400">Danh mục này chưa có nhóm mặc định.</p>
+              <p className="text-2xs text-slate-400">Danh mục này chưa có nhóm mặc định.</p>
             ) : (
               inherited.map((id) => {
                 const g = byId.get(id);
@@ -266,7 +266,7 @@ export function ItemFormPanel(p: ItemFormPanelProps): ReactElement {
                       <p className={cn("text-xs font-bold", excluded ? "text-slate-400 line-through" : "text-slate-800 dark:text-foreground")}>
                         {g.name}
                       </p>
-                      <p className="text-[11px] text-slate-400">{groupSummary(g)}</p>
+                      <p className="text-2xs text-slate-400">{groupSummary(g)}</p>
                     </div>
                     <Chip active={!excluded} onClick={() => onChange(toggleExcluded(form, id))}>
                       {excluded ? "Đã loại trừ" : "Đang áp dụng"}
@@ -279,13 +279,13 @@ export function ItemFormPanel(p: ItemFormPanelProps): ReactElement {
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-slate-700 dark:text-foreground">Nhóm Topping & Tùy chọn Bổ sung</p>
-              <span className="text-[11px] text-slate-400">1 chạm để bật/tắt</span>
+              <span className="text-2xs text-slate-400">1 chạm để bật/tắt</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {extra.map((g) => (
                 <Chip key={g.id} active={form.directGroupIds.includes(g.id)} onClick={() => onChange(toggleDirect(form, g.id))}>
                   {g.name}
-                  <span className="font-mono text-[10px] text-slate-400">{g.options.length}</span>
+                  <span className="font-mono text-3xs text-slate-400">{g.options.length}</span>
                 </Chip>
               ))}
             </div>

@@ -133,7 +133,7 @@ export function TicketCard({
             </span>
           )}
           {hasRemake && (
-            <span className="bg-rose-100 text-rose-800 border border-rose-300 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide inline-flex items-center gap-1">
+            <span className="bg-rose-100 text-rose-800 border border-rose-300 px-2 py-0.5 rounded text-2xs font-bold uppercase tracking-wide inline-flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" />
               PHA LẠI
             </span>
@@ -146,7 +146,7 @@ export function TicketCard({
       </div>
 
       {/* Subtitle Info Row */}
-      <div className="flex items-center justify-between text-[11px] text-slate-400">
+      <div className="flex items-center justify-between text-2xs text-slate-400">
         <span>Đơn #{ticket.serviceNumber}</span>
         {formattedTime && <span className="font-mono">{formattedTime}</span>}
       </div>
@@ -174,21 +174,21 @@ export function TicketCard({
                   </span>
                   {unit.sizeName && <span className="text-xs font-normal text-slate-500">({unit.sizeName})</span>}
                   {unit.isRemake && (
-                    <span className="bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                    <span className="bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded text-3xs font-bold">
                       PHA LẠI
                     </span>
                   )}
                 </div>
                 {unit.modifierSummary && (
                   <div className="flex flex-wrap gap-1 mt-1">
-                    <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
+                    <span className="text-2xs font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
                       {unit.modifierSummary}
                     </span>
                   </div>
                 )}
                 {unit.preparationNote && (
                   <div className="mt-1">
-                    <span className="text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                    <span className="text-2xs font-semibold text-amber-900 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
                       <Info className="h-3 w-3 text-amber-600 shrink-0" />
                       {unit.preparationNote}
                     </span>

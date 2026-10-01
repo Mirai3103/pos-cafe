@@ -86,7 +86,7 @@ export function ManageLayout({ counters = {} }: ManageLayoutProps): ReactElement
               >
                 <ArrowLeft className="h-4 w-4 text-slate-500" />
                 <span>Về Quầy thu ngân</span>
-                <kbd className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:border-border dark:bg-muted">
+                <kbd className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-3xs text-slate-500 dark:border-border dark:bg-muted">
                   F1
                 </kbd>
               </Link>

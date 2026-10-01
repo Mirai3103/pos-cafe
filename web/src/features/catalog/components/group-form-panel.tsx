@@ -24,7 +24,7 @@ export interface GroupFormPanelProps {
   onRetire?: () => void;
 }
 
-const ERROR_TEXT = "text-[11px] font-semibold text-rose-600";
+const ERROR_TEXT = "text-2xs font-semibold text-rose-600";
 
 export function GroupFormPanel(p: GroupFormPanelProps): ReactElement {
   const { form, errors, onChange } = p;
@@ -102,7 +102,7 @@ export function GroupFormPanel(p: GroupFormPanelProps): ReactElement {
         <div className="space-y-2">
           <div>
             <p className="text-xs font-bold text-slate-700 dark:text-foreground">Danh sách lựa chọn / Topping con</p>
-            <p className="text-[11px] text-slate-400">Nhấn Enter tại ô giá để tự động thêm dòng mới và chuyển con trỏ.</p>
+            <p className="text-2xs text-slate-400">Nhấn Enter tại ô giá để tự động thêm dòng mới và chuyển con trỏ.</p>
           </div>
           {form.rows.map((row) => (
             <div key={row.key} className="space-y-1">

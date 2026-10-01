@@ -121,7 +121,7 @@ export function TablesView() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-extrabold text-foreground tracking-tight">Sơ đồ bàn</h1>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-200/60">
+              <span className="text-2xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-200/60">
                 Phục vụ
               </span>
             </div>
@@ -187,7 +187,7 @@ export function TablesView() {
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
         <div className="flex items-center gap-2">
           <LayoutGrid className="w-4 h-4 text-muted-foreground" />
-          <span className="font-bold text-foreground uppercase tracking-wider text-[11px]">Sơ đồ tất cả bàn</span>
+          <span className="font-bold text-foreground uppercase tracking-wider text-2xs">Sơ đồ tất cả bàn</span>
         </div>
         <span className="font-medium text-muted-foreground">{`Đang hiển thị ${tables.length} bàn`}</span>
       </div>

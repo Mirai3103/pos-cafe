@@ -39,13 +39,13 @@ export function AuthHeader({ stationSubtitle = "Đăng nhập PIN" }: AuthHeader
           </div>
           <div className="flex flex-col text-left">
             <span className="text-xs font-bold leading-tight text-foreground">Trạm làm việc</span>
-            <span className="text-[10px] font-medium leading-tight text-primary">{stationSubtitle}</span>
+            <span className="text-3xs font-medium leading-tight text-primary">{stationSubtitle}</span>
           </div>
         </div>
 
         <div className="hidden items-center gap-2 border-l border-border pl-3 md:flex">
           <span className="text-xs font-semibold text-foreground">The Coffee Workshop</span>
-          <span className="text-[11px] font-medium text-muted-foreground">· Chi nhánh Tây Hồ</span>
+          <span className="text-2xs font-medium text-muted-foreground">· Chi nhánh Tây Hồ</span>
         </div>
       </div>
 
@@ -70,7 +70,7 @@ export function AuthHeader({ stationSubtitle = "Đăng nhập PIN" }: AuthHeader
           <span className="font-mono text-xs font-bold tracking-tight text-foreground">
             {time || "--:--:--"}
           </span>
-          <span className="text-[10px] font-medium text-muted-foreground">{date || "--/--/----"}</span>
+          <span className="text-3xs font-medium text-muted-foreground">{date || "--/--/----"}</span>
         </div>
       </div>
     </header>

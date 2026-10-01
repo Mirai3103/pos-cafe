@@ -74,7 +74,7 @@ export function CategoryFormPanel(p: CategoryFormPanelProps): ReactElement {
         </div>
         <div className="space-y-1.5">
           <p className="text-xs font-bold text-slate-700 dark:text-foreground">Biểu tượng danh mục (Icon)</p>
-          <p className="text-[11px] text-slate-400">Chọn một biểu tượng phù hợp với nhóm đồ uống hoặc món ăn.</p>
+          <p className="text-2xs text-slate-400">Chọn một biểu tượng phù hợp với nhóm đồ uống hoặc món ăn.</p>
           <div className="flex flex-wrap gap-2">
             <Chip active={form.icon === null} onClick={() => onChange({ ...form, icon: null })}>
               Không có
@@ -91,7 +91,7 @@ export function CategoryFormPanel(p: CategoryFormPanelProps): ReactElement {
         </div>
         <div className="space-y-1.5">
           <p className="text-xs font-bold text-slate-700 dark:text-foreground">Nhóm tùy chọn mặc định (kế thừa tự động cho món mới)</p>
-          <p className="text-[11px] text-slate-400">Các món ăn thuộc danh mục này sẽ tự động kế thừa các nhóm tùy chọn được tích chọn.</p>
+          <p className="text-2xs text-slate-400">Các món ăn thuộc danh mục này sẽ tự động kế thừa các nhóm tùy chọn được tích chọn.</p>
           <div className="flex flex-wrap gap-2">
             {p.groups.map((g) => (
               <Chip key={g.id} active={form.groupIds.includes(g.id)} onClick={() => toggleGroup(g.id)}>

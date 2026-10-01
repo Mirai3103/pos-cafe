@@ -12,7 +12,7 @@ import { ToggleEnabledDialog } from "./toggle-enabled-dialog";
 export function StaffCounter(): ReactElement {
   const { rows } = useStaffList();
   return (
-    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400">
+    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-2xs font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400">
       {`${rows.filter((r) => r.enabled).length} người`}
     </span>
   );
