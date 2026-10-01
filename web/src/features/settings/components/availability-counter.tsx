@@ -9,7 +9,7 @@ export function TabCounter({ count }: { count: number }): ReactElement {
   return (
     <span
       className={cn(
-        "rounded-full border px-2 py-0.5 font-mono text-[11px] font-bold text-white",
+        "rounded-full border px-2 py-0.5 font-mono text-2xs font-bold text-white",
         count > 0 ? "border-rose-500 bg-rose-600 shadow-xs" : "border-emerald-500/80 bg-emerald-600/80",
       )}
     >
@@ -21,7 +21,7 @@ export function TabCounter({ count }: { count: number }): ReactElement {
 /** The catalog tab's badge: how many Menu Items exist. */
 export function ItemCountBadge({ count }: { count: number }): ReactElement {
   return (
-    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400">
+    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-2xs font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400">
       {`${count} món`}
     </span>
   );

@@ -56,7 +56,7 @@ export function CategoriesView({ model, onToast }: CategoriesViewProps): ReactEl
                   </div>
                   <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-foreground">{c.name}</p>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-2xs text-slate-500">
                       Thứ tự {c.displayOrder} · {count} món
                     </p>
                   </div>
@@ -82,10 +82,10 @@ export function CategoriesView({ model, onToast }: CategoriesViewProps): ReactEl
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {c.groupIds.length === 0 ? (
-                  <span className="text-[11px] text-slate-400">Chưa có nhóm mặc định</span>
+                  <span className="text-2xs text-slate-400">Chưa có nhóm mặc định</span>
                 ) : (
                   c.groupIds.map((id) => (
-                    <span key={id} className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:bg-muted dark:text-muted-foreground">
+                    <span key={id} className="rounded-lg bg-slate-100 px-2 py-1 text-2xs font-semibold text-slate-600 dark:bg-muted dark:text-muted-foreground">
                       {groupName.get(id)}
                     </span>
                   ))

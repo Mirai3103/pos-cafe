@@ -50,7 +50,7 @@ export function GroupsView({ model, onToast }: GroupsViewProps): ReactElement {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-slate-900 dark:text-foreground">{g.name}</p>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-2xs text-slate-500">
                     {ruleLabel(g)} · Dùng cho {usage.itemIds.length} món · {usage.categoryIds.length} danh mục
                   </p>
                 </div>
@@ -78,7 +78,7 @@ export function GroupsView({ model, onToast }: GroupsViewProps): ReactElement {
                   <li key={o.id} className="flex items-center justify-between text-xs">
                     <span className="text-slate-700 dark:text-foreground">
                       {o.name}
-                      {g.defaultOptionIds.includes(o.id) && <span className="ml-1.5 text-[10px] font-bold text-emerald-600">Mặc định</span>}
+                      {g.defaultOptionIds.includes(o.id) && <span className="ml-1.5 text-3xs font-bold text-emerald-600">Mặc định</span>}
                     </span>
                     <span className="font-mono text-slate-500">{o.surchargeVnd > 0 ? `+${formatVND(o.surchargeVnd)}` : "0"}</span>
                   </li>

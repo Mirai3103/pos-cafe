@@ -103,7 +103,7 @@ export function LinkerView({ model, onToast }: LinkerViewProps): ReactElement {
               )}
             >
               <span>{g.name}</span>
-              <span className="font-mono text-[10px] text-slate-400">{currentAssignment(model, g.id).itemIds.length} món</span>
+              <span className="font-mono text-3xs text-slate-400">{currentAssignment(model, g.id).itemIds.length} món</span>
             </button>
           ))}
         </section>
@@ -140,7 +140,7 @@ export function LinkerView({ model, onToast }: LinkerViewProps): ReactElement {
                       />
                       {c.name} · Gán cho cả danh mục
                     </label>
-                    <span className="text-[11px] text-slate-500">
+                    <span className="text-2xs text-slate-500">
                       <button type="button" className="min-h-[48px] px-1 font-semibold text-emerald-700" onClick={() => edit(selectAllInCategory(pending, model, group.id, c.id))}>
                         Chọn hết
                       </button>
@@ -173,7 +173,7 @@ export function LinkerView({ model, onToast }: LinkerViewProps): ReactElement {
                           }}
                         />
                         <span className="flex-1 font-semibold text-slate-800 dark:text-foreground">{i.name}</span>
-                        {STATE_LABEL[state] && <span className="text-[10px] font-semibold text-slate-500">{STATE_LABEL[state]}</span>}
+                        {STATE_LABEL[state] && <span className="text-3xs font-semibold text-slate-500">{STATE_LABEL[state]}</span>}
                       </label>
                     );
                   })}
@@ -201,7 +201,7 @@ export function LinkerView({ model, onToast }: LinkerViewProps): ReactElement {
           <div className="flex items-center gap-2 border-b border-slate-100 p-3 dark:border-border">
             <MonitorSmartphone className="h-4 w-4 text-emerald-600" />
             <p className="text-xs font-bold text-slate-700 dark:text-foreground">Mô phỏng màn hình thu ngân</p>
-            <span className="ml-auto rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Live POS Sync</span>
+            <span className="ml-auto rounded-full bg-emerald-50 px-2 py-0.5 text-3xs font-bold text-emerald-700">Live POS Sync</span>
           </div>
           {preview ? (
             <div className="flex max-h-[70vh] flex-col">

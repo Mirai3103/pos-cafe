@@ -157,7 +157,7 @@ export function CashMovementDialog({
                 key={quick}
                 type="button"
                 onClick={() => setAmount(quick.toString())}
-                className="px-2 py-1 rounded-md text-[11px] font-mono font-medium border border-border bg-muted/40 hover:bg-muted transition"
+                className="px-2 py-1 rounded-md text-2xs font-mono font-medium border border-border bg-muted/40 hover:bg-muted transition"
               >
                 +{quick / 1000}k
               </button>

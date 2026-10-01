@@ -90,10 +90,10 @@ export function WorkspacePicker() {
           {/* Workspace Chips */}
           <div className="mb-6 flex w-full flex-col gap-3">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
                 Khu vực phân bổ:
               </span>
-              <span className="font-mono text-[10px] text-muted-foreground">Chọn 1 trạm</span>
+              <span className="font-mono text-3xs text-muted-foreground">Chọn 1 trạm</span>
             </div>
 
             <div className="grid w-full grid-cols-1 gap-2.5">
@@ -129,7 +129,7 @@ export function WorkspacePicker() {
                     </div>
                     <span
                       className={cn(
-                        "rounded-lg px-2 py-0.5 font-mono text-[11px] font-medium",
+                        "rounded-lg px-2 py-0.5 font-mono text-2xs font-medium",
                         isSelected
                           ? "bg-emerald-200/70 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300"
                           : "bg-muted text-muted-foreground",

@@ -42,7 +42,7 @@ export function TableCard({
               <div className="flex items-center gap-2">
                 <span className="font-mono font-bold text-base text-foreground">{table.name}</span>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 dark:bg-muted dark:text-muted-foreground border border-slate-200 dark:border-border">
+              <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-slate-100 text-slate-600 dark:bg-muted dark:text-muted-foreground border border-slate-200 dark:border-border">
                 Trống
               </span>
             </div>
@@ -57,7 +57,7 @@ export function TableCard({
               <PlusCircle className="w-4 h-4" />
               <span>+ Mở bàn phục vụ</span>
             </span>
-            <span className="text-[11px] font-mono text-muted-foreground">Sẵn sàng</span>
+            <span className="text-2xs font-mono text-muted-foreground">Sẵn sàng</span>
           </div>
         </button>
 
@@ -82,12 +82,12 @@ export function TableCard({
               </div>
               <div className="flex items-center gap-1">
                 {switchedOff && (
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded-full text-2xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                     <span>Tạm ngưng</span>
                   </span>
                 )}
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded-full text-2xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
                   <span>Có khách</span>
                 </span>
@@ -104,7 +104,7 @@ export function TableCard({
                 </span>
               ))}
               {table.occupants.length > 1 && (
-                <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold border border-indigo-200 dark:border-indigo-800">
+                <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-3xs font-bold border border-indigo-200 dark:border-indigo-800">
                   {`Ghép ${table.occupants.length} đơn`}
                 </span>
               )}
@@ -113,14 +113,14 @@ export function TableCard({
 
           <div className="pt-3 border-t border-slate-100 dark:border-border flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+              <span className="text-3xs text-muted-foreground uppercase font-bold tracking-wider">
                 Đơn phục vụ
               </span>
               <span className="font-mono font-bold text-sm text-foreground tabular-nums">
                 {table.occupants.map((o) => `#${o.serviceNumber}`).join(", ")}
               </span>
             </div>
-            <span className="min-h-[48px] flex items-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 gap-1">
+            <span className="min-h-[48px] flex items-center text-2xs font-bold text-indigo-600 dark:text-indigo-400 gap-1">
               <span>Thao tác</span>
               <ChevronRight className="w-4 h-4" />
             </span>
@@ -145,7 +145,7 @@ export function TableCard({
             <div className="flex items-center gap-2">
               <span className="font-mono font-bold text-base text-muted-foreground">{table.name}</span>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 dark:bg-muted dark:text-muted-foreground border border-slate-200 dark:border-border flex items-center gap-1">
+            <span className="px-2 py-0.5 rounded-full text-2xs font-bold bg-slate-100 text-slate-500 dark:bg-muted dark:text-muted-foreground border border-slate-200 dark:border-border flex items-center gap-1">
               <Power className="w-3 h-3 text-slate-400" />
               <span>Tạm ngưng</span>
             </span>
@@ -158,7 +158,7 @@ export function TableCard({
 
         <div className="pt-3 border-t border-muted/50 flex items-center justify-between text-xs text-muted-foreground">
           <span className="min-h-[48px] flex items-center">Chưa sẵn sàng</span>
-          <span className="text-[11px] font-mono">Đóng</span>
+          <span className="text-2xs font-mono">Đóng</span>
         </div>
       </button>
 

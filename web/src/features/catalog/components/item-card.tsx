@@ -29,17 +29,17 @@ export function ItemCard({ item, categoryName, groupCount, onOpen }: ItemCardPro
       </div>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
-          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600 uppercase dark:bg-muted dark:text-muted-foreground">
+          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-3xs font-bold text-slate-600 uppercase dark:bg-muted dark:text-muted-foreground">
             {displayCode(item)}
           </span>
           {item.badge && (
-            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-3xs font-bold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
               {BADGE_LABELS[item.badge]}
             </span>
           )}
         </div>
         <p className="truncate text-sm font-bold text-slate-900 dark:text-foreground">{item.name}</p>
-        <p className="truncate text-[11px] text-slate-500 dark:text-muted-foreground">{facts}</p>
+        <p className="truncate text-2xs text-slate-500 dark:text-muted-foreground">{facts}</p>
         <p className="font-mono text-sm font-bold text-emerald-700 dark:text-emerald-400">{priceLabel(item)}</p>
       </div>
       <Pencil className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-emerald-600" />

@@ -260,7 +260,7 @@ export function CloseShiftDialog({ shift: rawShift, isOpen, onClose }: CloseShif
                         autoFocus
                       />
                     ) : (
-                      <p className="text-[11px] text-muted-foreground italic px-1">
+                      <p className="text-2xs text-muted-foreground italic px-1">
                         Không yêu cầu ghi chú cho lý do này
                       </p>
                     )}

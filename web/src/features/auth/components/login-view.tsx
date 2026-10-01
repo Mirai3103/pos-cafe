@@ -94,10 +94,10 @@ export function LoginView() {
           {/* Staff Login Code input */}
           <div className="mb-4 w-full max-w-[340px] sm:max-w-[360px]">
             <div className="mb-1.5 flex items-center justify-between px-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
                 Mã nhân viên:
               </span>
-              <span className="font-mono text-[10px] text-muted-foreground">Ví dụ: QL01, TN01</span>
+              <span className="font-mono text-3xs text-muted-foreground">Ví dụ: QL01, TN01</span>
             </div>
             <Input
               value={loginCode}

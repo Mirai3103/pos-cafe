@@ -103,7 +103,7 @@ export function PinPad({
         aria-label="Xóa toàn bộ mã PIN"
       >
         <span className="text-xl font-bold leading-none">C</span>
-        <span className="mt-0.5 font-sans text-[10px] font-medium text-rose-600 dark:text-rose-400">
+        <span className="mt-0.5 font-sans text-3xs font-medium text-rose-600 dark:text-rose-400">
           Xóa hết
         </span>
       </button>
@@ -126,7 +126,7 @@ export function PinPad({
         aria-label="Xóa 1 ký tự"
       >
         <Delete className="size-6 text-foreground" />
-        <span className="mt-0.5 font-sans text-[10px] font-medium text-muted-foreground">
+        <span className="mt-0.5 font-sans text-3xs font-medium text-muted-foreground">
           Lùi 1 số
         </span>
       </button>

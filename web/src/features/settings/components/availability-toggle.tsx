@@ -42,7 +42,7 @@ export function StockSwitch({ checked, label, onChange }: StockSwitchProps): Rea
           </span>
         </span>
       </button>
-      <span className={cn("font-mono text-[10px] font-semibold", checked ? "text-emerald-700" : "text-rose-700")}>
+      <span className={cn("font-mono text-3xs font-semibold", checked ? "text-emerald-700" : "text-rose-700")}>
         {checked ? "ON" : "OFF"}
       </span>
     </div>

@@ -26,12 +26,12 @@ function Thumbnail({ card }: { card: StockCardData }): ReactElement {
 
 function StatusBadge({ available }: { available: boolean }): ReactElement {
   return available ? (
-    <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
+    <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-2xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
       <span>Còn hàng</span>
     </span>
   ) : (
-    <span className="flex items-center gap-1 rounded-full border border-rose-200 bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-400">
+    <span className="flex items-center gap-1 rounded-full border border-rose-200 bg-rose-100 px-2.5 py-1 text-2xs font-bold text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-400">
       <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
       <span>Tạm hết</span>
     </span>
@@ -57,7 +57,7 @@ export function StockCard({ card, onToggle }: StockCardProps): ReactElement {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <h4 className="truncate text-sm font-bold leading-snug text-slate-900 dark:text-foreground">{card.name}</h4>
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-400 dark:bg-muted">
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-3xs font-semibold text-slate-400 dark:bg-muted">
                 {card.code}
               </span>
             </div>
@@ -66,7 +66,7 @@ export function StockCard({ card, onToggle }: StockCardProps): ReactElement {
                 {card.priceVnd === null ? "—" : formatVND(card.priceVnd)}
               </span>
               <span className="text-slate-300">·</span>
-              <span className="truncate text-[11px] text-slate-500 dark:text-muted-foreground">{detail}</span>
+              <span className="truncate text-2xs text-slate-500 dark:text-muted-foreground">{detail}</span>
             </div>
             <div className="mt-1.5">
               <StatusBadge available={card.available} />

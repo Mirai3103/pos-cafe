@@ -40,7 +40,7 @@ function StatCard({ label, value, hint, icon, tone }: StatCardProps): ReactEleme
   return (
     <div className={cn("flex items-center justify-between rounded-2xl border bg-card p-4 shadow-card", t.card)}>
       <div>
-        <span className={cn("text-[11px] font-bold tracking-wider uppercase", t.label)}>{label}</span>
+        <span className={cn("text-2xs font-bold tracking-wider uppercase", t.label)}>{label}</span>
         <div className={cn("mt-0.5 font-mono text-2xl font-bold", t.value)}>{value}</div>
         <span className={cn("text-xs", t.hint)}>{hint}</span>
       </div>
@@ -81,7 +81,7 @@ export function AvailabilityStats({ summary, restoreCount, onRestore }: Availabi
         tone="bad"
       />
       <div className="flex flex-col justify-center gap-2 rounded-2xl border border-slate-200 bg-card p-3.5 shadow-card dark:border-border">
-        <span className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">Thao tác kho nhanh</span>
+        <span className="text-2xs font-bold tracking-wider text-slate-400 uppercase">Thao tác kho nhanh</span>
         <button
           type="button"
           onClick={onRestore}

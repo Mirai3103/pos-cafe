@@ -79,10 +79,10 @@ export function QueueColumn({
                 {unitCount}
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">{config.subtitle}</p>
+            <p className="text-2xs text-slate-500 mt-0.5">{config.subtitle}</p>
           </div>
         </div>
-        <span className="hidden sm:inline-flex font-mono text-[10px] bg-white text-slate-500 px-2 py-1 rounded-md border border-slate-200 font-medium">
+        <span className="hidden sm:inline-flex font-mono text-3xs bg-white text-slate-500 px-2 py-1 rounded-md border border-slate-200 font-medium">
           {config.tagText}
         </span>
       </div>
@@ -97,7 +97,7 @@ export function QueueColumn({
             <h4 className="text-xs font-bold text-slate-700">
               {filterActive ? "Không có món trong nhóm này" : config.emptyTitle}
             </h4>
-            <p className="text-[11px] text-slate-400 max-w-[24ch] leading-relaxed">
+            <p className="text-2xs text-slate-400 max-w-[24ch] leading-relaxed">
               {filterActive ? "Thử chọn nhóm món khác hoặc chọn Tất cả." : config.emptySubtitle}
             </p>
           </div>

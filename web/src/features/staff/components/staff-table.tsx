@@ -36,13 +36,13 @@ export function StaffTable({ rows, selfId, onEdit, onResetPin, onToggle }: Staff
               <tr key={row.id} className={cn("border-b border-slate-100 last:border-0 dark:border-border", !row.enabled && "opacity-60")}>
                 <td className="px-4 py-3 font-semibold text-slate-900 dark:text-foreground">
                   {row.displayName}
-                  {self && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Bạn</span>}
+                  {self && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-2xs font-bold text-emerald-700">Bạn</span>}
                 </td>
                 <td className="px-4 py-3 font-mono text-slate-700 dark:text-foreground">{row.loginCode}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
                     {row.roles.map((role) => (
-                      <span key={role} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-700 dark:border-border dark:bg-muted dark:text-foreground">
+                      <span key={role} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-2xs font-bold text-slate-700 dark:border-border dark:bg-muted dark:text-foreground">
                         {ROLE_LABELS[role]}
                       </span>
                     ))}
