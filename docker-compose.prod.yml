@@ -1,0 +1,65 @@
+name: pos-cafe-prod
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: pos-cafe-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cafe_pos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-cafe_pos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - pos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pos-cafe-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgres://${POSTGRES_USER:-cafe_pos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cafe_pos}?sslmode=disable
+      MEDIA_DIR: /app/data/media
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+    ports:
+      - "${APP_HOST_BIND:-127.0.0.1}:${APP_PORT:-8088}:8080"
+    volumes:
+      - media_data:/app/data/media
+    networks:
+      - pos-network
+
+  seed:
+    image: oven/bun:1-alpine
+    profiles: ["tools"]
+    working_dir: /app
+    volumes:
+      - .:/app:ro
+      - media_data:/app/data/media
+    environment:
+      POS_API_BASE: http://app:8080/api/v1
+      DATABASE_URL: postgres://${POSTGRES_USER:-cafe_pos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cafe_pos}?sslmode=disable
+      MEDIA_DIR: /app/data/media
+    networks:
+      - pos-network
+    command: ["bun", "run", "scripts/dev-seed.ts"]
+
+volumes:
+  postgres_data:
+  media_data:
+
+networks:
+  pos-network:
+    name: pos-cafe-network

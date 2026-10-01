@@ -1,5 +1,5 @@
 .PHONY: help run build build-web build-app test test-integration test-integration-fast test-db-clean test-all coverage fmt vet lint vuln check sqlc swagger tidy clean dev-seed \
-	docker-up docker-down docker-logs db-wait
+	docker-up docker-down docker-logs db-wait docker-prod-build docker-prod-up docker-prod-down docker-prod-seed
 
 # Single source of truth for the integration-test database.
 TEST_DATABASE_URL   ?= postgres://cafe_pos:cafe_pos_dev@localhost:5432/cafe_pos_test?sslmode=disable
@@ -98,3 +98,17 @@ clean: ## Remove build artifacts
 
 dev-seed: ## Reset dev DB and seed full demo data (staff, tables, menu, images) via the running API
 	cd web && bun run ../scripts/dev-seed.ts
+
+## --- Production Docker orchestration ---
+
+docker-prod-build: ## Build the production Docker image
+	docker compose -f docker-compose.prod.yml build
+
+docker-prod-up: ## Start production containers in the background
+	docker compose -f docker-compose.prod.yml up -d
+
+docker-prod-down: ## Stop production containers
+	docker compose -f docker-compose.prod.yml down
+
+docker-prod-seed: ## Execute containerized database reset and seed
+	docker compose -f docker-compose.prod.yml --profile tools run --rm seed
