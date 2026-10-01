@@ -13,16 +13,17 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppKdsRouteImport } from './routes/_app/kds'
+import { Route as AppManageRouteImport } from './routes/_app/manage'
 import { Route as AppNoAccessRouteImport } from './routes/_app/no-access'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppShiftRouteImport } from './routes/_app/shift'
 import { Route as AppTablesRouteImport } from './routes/_app/tables'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthWorkspaceRouteImport } from './routes/auth/workspace'
-import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
-import { Route as AppSettingsAvailabilityRouteImport } from './routes/_app/settings/availability'
-import { Route as AppSettingsCatalogRouteImport } from './routes/_app/settings/catalog'
-import { Route as AppSettingsStaffRouteImport } from './routes/_app/settings/staff'
+import { Route as AppManageIndexRouteImport } from './routes/_app/manage/index'
+import { Route as AppManageAvailabilityRouteImport } from './routes/_app/manage/availability'
+import { Route as AppManageCatalogRouteImport } from './routes/_app/manage/catalog'
+import { Route as AppManageStaffRouteImport } from './routes/_app/manage/staff'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -41,6 +42,11 @@ const AppHistoryRoute = AppHistoryRouteImport.update({
 const AppKdsRoute = AppKdsRouteImport.update({
   id: '/kds',
   path: '/kds',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppManageRoute = AppManageRouteImport.update({
+  id: '/manage',
+  path: '/manage',
   getParentRoute: () => AppRoute,
 } as any)
 const AppNoAccessRoute = AppNoAccessRouteImport.update({
@@ -73,72 +79,75 @@ const AuthWorkspaceRoute = AuthWorkspaceRouteImport.update({
   path: '/auth/workspace',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+const AppManageIndexRoute = AppManageIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppSettingsRoute,
+  getParentRoute: () => AppManageRoute,
 } as any)
-const AppSettingsAvailabilityRoute = AppSettingsAvailabilityRouteImport.update({
+const AppManageAvailabilityRoute = AppManageAvailabilityRouteImport.update({
   id: '/availability',
   path: '/availability',
-  getParentRoute: () => AppSettingsRoute,
+  getParentRoute: () => AppManageRoute,
 } as any)
-const AppSettingsCatalogRoute = AppSettingsCatalogRouteImport.update({
+const AppManageCatalogRoute = AppManageCatalogRouteImport.update({
   id: '/catalog',
   path: '/catalog',
-  getParentRoute: () => AppSettingsRoute,
+  getParentRoute: () => AppManageRoute,
 } as any)
-const AppSettingsStaffRoute = AppSettingsStaffRouteImport.update({
+const AppManageStaffRoute = AppManageStaffRouteImport.update({
   id: '/staff',
   path: '/staff',
-  getParentRoute: () => AppSettingsRoute,
+  getParentRoute: () => AppManageRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/history': typeof AppHistoryRoute
   '/kds': typeof AppKdsRoute
+  '/manage': typeof AppManageRouteWithChildren
   '/no-access': typeof AppNoAccessRoute
-  '/settings': typeof AppSettingsRouteWithChildren
+  '/settings': typeof AppSettingsRoute
   '/shift': typeof AppShiftRoute
   '/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/workspace': typeof AuthWorkspaceRoute
-  '/settings/availability': typeof AppSettingsAvailabilityRoute
-  '/settings/catalog': typeof AppSettingsCatalogRoute
-  '/settings/staff': typeof AppSettingsStaffRoute
-  '/settings/': typeof AppSettingsIndexRoute
+  '/manage/availability': typeof AppManageAvailabilityRoute
+  '/manage/catalog': typeof AppManageCatalogRoute
+  '/manage/staff': typeof AppManageStaffRoute
+  '/manage/': typeof AppManageIndexRoute
 }
 export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
   '/kds': typeof AppKdsRoute
   '/no-access': typeof AppNoAccessRoute
+  '/settings': typeof AppSettingsRoute
   '/shift': typeof AppShiftRoute
   '/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/workspace': typeof AuthWorkspaceRoute
   '/': typeof AppIndexRoute
-  '/settings/availability': typeof AppSettingsAvailabilityRoute
-  '/settings/catalog': typeof AppSettingsCatalogRoute
-  '/settings/staff': typeof AppSettingsStaffRoute
-  '/settings': typeof AppSettingsIndexRoute
+  '/manage/availability': typeof AppManageAvailabilityRoute
+  '/manage/catalog': typeof AppManageCatalogRoute
+  '/manage/staff': typeof AppManageStaffRoute
+  '/manage': typeof AppManageIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/_app/history': typeof AppHistoryRoute
   '/_app/kds': typeof AppKdsRoute
+  '/_app/manage': typeof AppManageRouteWithChildren
   '/_app/no-access': typeof AppNoAccessRoute
-  '/_app/settings': typeof AppSettingsRouteWithChildren
+  '/_app/settings': typeof AppSettingsRoute
   '/_app/shift': typeof AppShiftRoute
   '/_app/tables': typeof AppTablesRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/workspace': typeof AuthWorkspaceRoute
   '/_app/': typeof AppIndexRoute
-  '/_app/settings/availability': typeof AppSettingsAvailabilityRoute
-  '/_app/settings/catalog': typeof AppSettingsCatalogRoute
-  '/_app/settings/staff': typeof AppSettingsStaffRoute
-  '/_app/settings/': typeof AppSettingsIndexRoute
+  '/_app/manage/availability': typeof AppManageAvailabilityRoute
+  '/_app/manage/catalog': typeof AppManageCatalogRoute
+  '/_app/manage/staff': typeof AppManageStaffRoute
+  '/_app/manage/': typeof AppManageIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -146,35 +155,38 @@ export interface FileRouteTypes {
     | '/'
     | '/history'
     | '/kds'
+    | '/manage'
     | '/no-access'
     | '/settings'
     | '/shift'
     | '/tables'
     | '/auth/login'
     | '/auth/workspace'
-    | '/settings/availability'
-    | '/settings/catalog'
-    | '/settings/staff'
-    | '/settings/'
+    | '/manage/availability'
+    | '/manage/catalog'
+    | '/manage/staff'
+    | '/manage/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/history'
     | '/kds'
     | '/no-access'
+    | '/settings'
     | '/shift'
     | '/tables'
     | '/auth/login'
     | '/auth/workspace'
     | '/'
-    | '/settings/availability'
-    | '/settings/catalog'
-    | '/settings/staff'
-    | '/settings'
+    | '/manage/availability'
+    | '/manage/catalog'
+    | '/manage/staff'
+    | '/manage'
   id:
     | '__root__'
     | '/_app'
     | '/_app/history'
     | '/_app/kds'
+    | '/_app/manage'
     | '/_app/no-access'
     | '/_app/settings'
     | '/_app/shift'
@@ -182,10 +194,10 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/workspace'
     | '/_app/'
-    | '/_app/settings/availability'
-    | '/_app/settings/catalog'
-    | '/_app/settings/staff'
-    | '/_app/settings/'
+    | '/_app/manage/availability'
+    | '/_app/manage/catalog'
+    | '/_app/manage/staff'
+    | '/_app/manage/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -222,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/kds'
       fullPath: '/kds'
       preLoaderRoute: typeof AppKdsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/manage': {
+      id: '/_app/manage'
+      path: '/manage'
+      fullPath: '/manage'
+      preLoaderRoute: typeof AppManageRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/no-access': {
@@ -266,60 +285,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthWorkspaceRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/settings/': {
-      id: '/_app/settings/'
+    '/_app/manage/': {
+      id: '/_app/manage/'
       path: '/'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof AppSettingsIndexRouteImport
-      parentRoute: typeof AppSettingsRoute
+      fullPath: '/manage/'
+      preLoaderRoute: typeof AppManageIndexRouteImport
+      parentRoute: typeof AppManageRoute
     }
-    '/_app/settings/availability': {
-      id: '/_app/settings/availability'
+    '/_app/manage/availability': {
+      id: '/_app/manage/availability'
       path: '/availability'
-      fullPath: '/settings/availability'
-      preLoaderRoute: typeof AppSettingsAvailabilityRouteImport
-      parentRoute: typeof AppSettingsRoute
+      fullPath: '/manage/availability'
+      preLoaderRoute: typeof AppManageAvailabilityRouteImport
+      parentRoute: typeof AppManageRoute
     }
-    '/_app/settings/catalog': {
-      id: '/_app/settings/catalog'
+    '/_app/manage/catalog': {
+      id: '/_app/manage/catalog'
       path: '/catalog'
-      fullPath: '/settings/catalog'
-      preLoaderRoute: typeof AppSettingsCatalogRouteImport
-      parentRoute: typeof AppSettingsRoute
+      fullPath: '/manage/catalog'
+      preLoaderRoute: typeof AppManageCatalogRouteImport
+      parentRoute: typeof AppManageRoute
     }
-    '/_app/settings/staff': {
-      id: '/_app/settings/staff'
+    '/_app/manage/staff': {
+      id: '/_app/manage/staff'
       path: '/staff'
-      fullPath: '/settings/staff'
-      preLoaderRoute: typeof AppSettingsStaffRouteImport
-      parentRoute: typeof AppSettingsRoute
+      fullPath: '/manage/staff'
+      preLoaderRoute: typeof AppManageStaffRouteImport
+      parentRoute: typeof AppManageRoute
     }
   }
 }
 
-interface AppSettingsRouteChildren {
-  AppSettingsAvailabilityRoute: typeof AppSettingsAvailabilityRoute
-  AppSettingsCatalogRoute: typeof AppSettingsCatalogRoute
-  AppSettingsStaffRoute: typeof AppSettingsStaffRoute
-  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+interface AppManageRouteChildren {
+  AppManageAvailabilityRoute: typeof AppManageAvailabilityRoute
+  AppManageCatalogRoute: typeof AppManageCatalogRoute
+  AppManageStaffRoute: typeof AppManageStaffRoute
+  AppManageIndexRoute: typeof AppManageIndexRoute
 }
 
-const AppSettingsRouteChildren: AppSettingsRouteChildren = {
-  AppSettingsAvailabilityRoute: AppSettingsAvailabilityRoute,
-  AppSettingsCatalogRoute: AppSettingsCatalogRoute,
-  AppSettingsStaffRoute: AppSettingsStaffRoute,
-  AppSettingsIndexRoute: AppSettingsIndexRoute,
+const AppManageRouteChildren: AppManageRouteChildren = {
+  AppManageAvailabilityRoute: AppManageAvailabilityRoute,
+  AppManageCatalogRoute: AppManageCatalogRoute,
+  AppManageStaffRoute: AppManageStaffRoute,
+  AppManageIndexRoute: AppManageIndexRoute,
 }
 
-const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
-  AppSettingsRouteChildren,
+const AppManageRouteWithChildren = AppManageRoute._addFileChildren(
+  AppManageRouteChildren,
 )
 
 interface AppRouteChildren {
   AppHistoryRoute: typeof AppHistoryRoute
   AppKdsRoute: typeof AppKdsRoute
+  AppManageRoute: typeof AppManageRouteWithChildren
   AppNoAccessRoute: typeof AppNoAccessRoute
-  AppSettingsRoute: typeof AppSettingsRouteWithChildren
+  AppSettingsRoute: typeof AppSettingsRoute
   AppShiftRoute: typeof AppShiftRoute
   AppTablesRoute: typeof AppTablesRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -328,8 +348,9 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppHistoryRoute: AppHistoryRoute,
   AppKdsRoute: AppKdsRoute,
+  AppManageRoute: AppManageRouteWithChildren,
   AppNoAccessRoute: AppNoAccessRoute,
-  AppSettingsRoute: AppSettingsRouteWithChildren,
+  AppSettingsRoute: AppSettingsRoute,
   AppShiftRoute: AppShiftRoute,
   AppTablesRoute: AppTablesRoute,
   AppIndexRoute: AppIndexRoute,

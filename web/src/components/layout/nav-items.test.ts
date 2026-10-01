@@ -12,14 +12,14 @@ const labels = (held: string[]) => visibleNavItems(held).map((i) => i.label);
 
 describe("visibleNavItems", () => {
   it("shows everything to a manager", () => {
-    expect(labels(MANAGER)).toEqual(["Bán hàng", "Sơ đồ bàn", "Bếp KDS", "Ca làm việc", "Lịch sử", "Cài đặt"]);
+    expect(labels(MANAGER)).toEqual(["Bán hàng", "Sơ đồ bàn", "Bếp KDS", "Ca làm việc", "Lịch sử", "Quản lý", "Cài đặt"]);
   });
 
   it("hides the kitchen from a cashier", () => {
-    expect(labels(CASHIER)).toEqual(["Bán hàng", "Sơ đồ bàn", "Ca làm việc", "Lịch sử", "Cài đặt"]);
+    expect(labels(CASHIER)).toEqual(["Bán hàng", "Sơ đồ bàn", "Ca làm việc", "Lịch sử", "Quản lý", "Cài đặt"]);
   });
 
-  it("gives a barista the kitchen and settings; history stays unguarded until slice 8", () => {
-    expect(labels(BARISTA)).toEqual(["Bếp KDS", "Lịch sử", "Cài đặt"]);
+  it("gives a barista the kitchen, manage, and settings; history stays unguarded until slice 8", () => {
+    expect(labels(BARISTA)).toEqual(["Bếp KDS", "Lịch sử", "Quản lý", "Cài đặt"]);
   });
 });

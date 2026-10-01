@@ -7,6 +7,7 @@ import {
   summarizeBulkOutcomes,
   NEXT_STATE,
   CORRECT_TARGET,
+  hasNewUnits,
 } from "./board";
 import type { PreparationQueueUnitResponse, PreparationBulkAdvanceOutcome } from "@/api/generated/models";
 
@@ -166,5 +167,23 @@ describe("summarizeBulkOutcomes", () => {
 
   it("tolerates an empty list", () => {
     expect(summarizeBulkOutcomes([])).toEqual({ succeeded: 0, failed: 0 });
+  });
+});
+
+describe("hasNewUnits", () => {
+  it("stays quiet on the first load", () => {
+    expect(hasNewUnits(null, [u({ id: "a" })])).toBe(false);
+  });
+
+  it("rings for a queued unit the last poll did not have", () => {
+    expect(hasNewUnits(new Set(["a"]), [u({ id: "a" }), u({ id: "b" })])).toBe(true);
+  });
+
+  it("stays quiet when a known unit is corrected back to the queue", () => {
+    expect(hasNewUnits(new Set(["a"]), [u({ id: "a", state: "QUEUED" })])).toBe(false);
+  });
+
+  it("ignores units that arrive outside the queued column", () => {
+    expect(hasNewUnits(new Set(), [u({ id: "a", state: "READY" })])).toBe(false);
   });
 });

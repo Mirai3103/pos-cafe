@@ -3,7 +3,7 @@ import { CatalogView } from "@/features/catalog/components/catalog-view";
 import { parseCatalogView, type CatalogViewKey } from "@/features/catalog/lib/views";
 import { requireCapability } from "@/lib/guards";
 
-export const Route = createFileRoute("/_app/settings/catalog")({
+export const Route = createFileRoute("/_app/manage/catalog")({
   validateSearch: (search: Record<string, unknown>): { view?: CatalogViewKey } => ({
     view: parseCatalogView(search.view),
   }),

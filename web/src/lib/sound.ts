@@ -1,26 +1,13 @@
-import * as React from "react";
-
-const SOUND_STORAGE_KEY = "pos_sound_enabled";
+import { usePreferencesStore } from "@/stores/use-preferences-store";
 
 let sharedAudioCtx: AudioContext | null = null;
-let memorySoundEnabled: boolean | null = null;
 
 export function getSoundEnabled(): boolean {
-  try {
-    const val = localStorage.getItem(SOUND_STORAGE_KEY);
-    return val === null ? (memorySoundEnabled ?? true) : val === "true";
-  } catch {
-    return memorySoundEnabled ?? true;
-  }
+  return usePreferencesStore.getState().soundEnabled;
 }
 
 export function setSoundEnabled(enabled: boolean): void {
-  memorySoundEnabled = enabled;
-  try {
-    localStorage.setItem(SOUND_STORAGE_KEY, String(enabled));
-  } catch {
-    // Storage access may be restricted
-  }
+  usePreferencesStore.getState().setSoundEnabled(enabled);
 }
 
 export function getAudioContext(): AudioContext | null {
@@ -112,20 +99,44 @@ export function playErrorBuzz(): void {
   }
 }
 
+/**
+ * New order on the Preparation Queue: two-tone bell (659Hz -> 880Hz) ported
+ * from design-system/pos-cafe/pages/kds.html. Gated by its own preference, not
+ * by tap feedback, so muting key clicks never silences the kitchen.
+ */
+export function playNewOrderChime(): void {
+  if (!usePreferencesStore.getState().newOrderChime) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [659, 880].forEach((freq, idx) => {
+      const at = now + idx * 0.18;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, at);
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(0.2, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.35);
+    });
+  } catch {
+    // Ignore sound playback errors
+  }
+}
+
 /** React hook for listening and toggling sound feedback state */
 export function useSound() {
-  const [enabled, setEnabledState] = React.useState<boolean>(getSoundEnabled);
+  const enabled = usePreferencesStore((s) => s.soundEnabled);
 
-  const toggle = React.useCallback(() => {
-    setEnabledState((prev) => {
-      const next = !prev;
-      setSoundEnabled(next);
-      if (next) {
-        playTapChirp();
-      }
-      return next;
-    });
-  }, []);
+  const toggle = () => {
+    setSoundEnabled(!enabled);
+    if (!enabled) playTapChirp();
+  };
 
   return { enabled, toggle };
 }

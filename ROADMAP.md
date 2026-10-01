@@ -70,6 +70,10 @@ re-plannable multi-command form save (ADR-062).
 ships the "Nhân viên" tab and one Go command, `PATCH /staff/{id}`, that changes a
 Staff Identity's name, login code, and roles atomically (ADR-063). It records the
 missing staff Audit Events as backlog BA-6.
+The admin area those three slices built is now "Quản lý" at `/manage`; `/settings`
+("Cài đặt") holds per-device preferences (theme, zoom, sound, the KDS new-order
+chime, build and server status) kept in localStorage. Print settings join it once
+the receipt boundary is decided.
 
 Six vertical slices ship: `auth`, `catalog`, `tables`, `shift`, `sales`,
 `preparation`. Sixty-six architecture decisions are recorded.

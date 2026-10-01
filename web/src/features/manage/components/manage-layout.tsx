@@ -5,7 +5,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { useSessionStore } from "@/stores/use-session-store";
 import { PLANNED_TAB_HINT, permittedTabs, visiblePlannedTabs } from "../lib/tabs";
 
-export interface SettingsLayoutProps {
+export interface ManageLayoutProps {
   /** Rendered after a tab's label, keyed by the tab's route or planned-tab key. */
   counters?: Partial<Record<string, ReactNode>>;
 }
@@ -13,7 +13,7 @@ export interface SettingsLayoutProps {
 const TAB_BASE =
   "flex h-12 min-h-[48px] shrink-0 items-center whitespace-nowrap gap-2.5 rounded-xl px-4 py-2 text-xs select-none transition sm:text-sm";
 
-export function SettingsLayout({ counters = {} }: SettingsLayoutProps): ReactElement {
+export function ManageLayout({ counters = {} }: ManageLayoutProps): ReactElement {
   const capabilities = useSessionStore((s) => s.capabilities);
   const navigate = useNavigate();
   const tabs = permittedTabs(capabilities);
@@ -33,7 +33,7 @@ export function SettingsLayout({ counters = {} }: SettingsLayoutProps): ReactEle
     <div className="flex h-full w-full flex-col bg-slate-50 dark:bg-background">
       <div className="w-full shrink-0 border-b border-slate-200 bg-card px-4 py-2 sm:px-6 dark:border-border">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 overflow-x-auto">
-          <nav role="tablist" aria-label="Cài đặt" className="flex items-center gap-2 sm:gap-3">
+          <nav role="tablist" aria-label="Quản lý" className="flex items-center gap-2 sm:gap-3">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
